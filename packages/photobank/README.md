@@ -42,6 +42,34 @@ checks everything the approved schema does except the signature, so this step ca
 rule nobody had already checked. The hand-written way — a record typed into `drafts/<sector>.json`,
 a `git mv` — still works and is what the tool automates.
 
+## Replacing an approved photograph under its own id
+
+Since 6 November 2026 (sprint 34 día 7), for the nine of `restaurante-bar` that ADR 0035 sends back
+to be regenerated at 1600 × 1072:
+
+`pnpm photos:replace <old-id> <draft-id> --by <name>`
+
+**Why not `photos:approve`.** Approving mints: the draft keeps the id `photos:intake` gave it. But a
+saved document names its photograph by file — `src: "muestra-restaurante-bar.03.webp"`, `sample:
+"restaurante-bar.03"` — and the editor fetches the bytes by that id before every download. A new
+photograph under a new id, with the old one retired, would leave every saved site that used it
+undownloadable. So the reviewed draft is written **under the old record's `id` and `file`**, and
+everything else is the draft's: size, bytes, `alt` (written again for the new frame), origin with its
+new `generated` and prompt, the licence as re-read, and a review with the name given and today's date.
+The bytes go by `git mv -f` over the old file, so the draft has to be in git first, as for an
+approval. It refuses a draft under the floor on its own account: the id it writes is still exempt.
+
+**What a replacement does not reach.** A site saved in an owner's browser before the replacement keeps
+the bytes it already stored, and its document keeps the `alt` the generator wrote then — which a
+gallery also shows as the caption under the photograph — so the new photograph has to show what the
+old `alt` says. The editor asks for a photograph by `sampleUrl`
+(`apps/editor/src/editor/samplePhotos.ts`), whose version the replacement moves, so no browser is
+handed the old bytes from its cache under the new record.
+
+**On the ninth** the tool prints that nothing is left under the floor: `FLOOR_EXEMPT_IDS`,
+`FLOOR_EXEMPTION_FAILS_FROM` and their two tests in `test/bank.test.ts` are deleted in that same pull
+request. The sheet for the nine, photograph by photograph, is `docs/tasks/las-nueve-fotos.md`.
+
 ### The first approved image changes what the editor says
 
 **Three sentences in `apps/editor/src/locales/es.json` were made true on 29 September 2026 by

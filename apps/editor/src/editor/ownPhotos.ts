@@ -6,7 +6,7 @@ import { imageSourcesOf, type RetorikaDocument } from "@retorika/schema";
  * The mirror of `samplePhotos.ts`'s `listSampleRefs`, which lists the other kind, and the division
  * is the document's own: `sample` absent means the owner put it there, `sample` naming a bank id
  * means we did, and `sample` naming the catalog's marker means nobody has yet. Only the first kind
- * goes to the account — a bank photograph is our bytes, immutable, already served by
+ * goes to the account — a bank photograph is our bytes, reviewed, already served by
  * `/api/muestras/[id]`, and uploading a copy per owner would be paying to store what everybody
  * already shares (ADR 0037 §2).
  *

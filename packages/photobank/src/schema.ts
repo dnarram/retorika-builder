@@ -33,15 +33,25 @@ export const MAX_IMAGE_BYTES = 200 * 1024;
 export const MIN_COVER_WIDTH = 1344;
 export const MIN_COVER_HEIGHT = 896;
 
+/** Under the floor on either side — the one comparison the schema, `photos:intake` and
+ * `photos:replace` all make. */
+export function isUnderTheFloor(image: { width: number; height: number }): boolean {
+  return image.width < MIN_COVER_WIDTH || image.height < MIN_COVER_HEIGHT;
+}
+
 /**
  * The nine of `restaurante-bar`, approved on 8 October 2026 under the old reading and allowed to
  * stay until they are regenerated at 1600 x 1072 (ADR 0035, David's decision).
  *
  * They stay published in the meantime because a sector holds zero photographs or at least eight:
  * emptying it would put the grey marker back on every restaurante-bar site until the new batch is
- * signed. The regenerated ones take new ids — approving a photograph mints an id and never changes
- * a file in place — so this list is what *permitted* these nine, and it is spent the moment no
- * record in the bank is under the floor.
+ * signed. **The regenerated ones take these same ids** (sprint 34 día 7, the plan's decision 8):
+ * a saved document names its photograph by file, so `pnpm photos:replace` writes each reviewed
+ * draft under the old id and file rather than minting a new one. This list is what *permitted*
+ * the nine undersized, and it is spent the moment no record in the bank is under the floor — the
+ * tool says so on the ninth, and this list, `FLOOR_EXEMPTION_FAILS_FROM` and their two tests in
+ * `bank.test.ts` go in that same pull request. `photos:replace` checks the floor itself, because
+ * the id it writes is still on this list when it does.
  */
 export const FLOOR_EXEMPT_IDS: ReadonlySet<string> = new Set([
   "restaurante-bar.01",
@@ -151,16 +161,11 @@ function withRecordChecks<
       })
       // No `path`: the failure can be either dimension, and naming one of them would send a reader to
       // the wrong number half the time. The message carries both.
-      .refine(
-        (record) =>
-          FLOOR_EXEMPT_IDS.has(record.id) ||
-          (record.width >= MIN_COVER_WIDTH && record.height >= MIN_COVER_HEIGHT),
-        {
-          message:
-            `smaller than the ${MIN_COVER_WIDTH}x${MIN_COVER_HEIGHT} floor the full-width cover ` +
-            `asks for (ADR 0035); regenerate it at 1600x1072`,
-        },
-      )
+      .refine((record) => FLOOR_EXEMPT_IDS.has(record.id) || !isUnderTheFloor(record), {
+        message:
+          `smaller than the ${MIN_COVER_WIDTH}x${MIN_COVER_HEIGHT} floor the full-width cover ` +
+          `asks for (ADR 0035); regenerate it at 1600x1072`,
+      })
   );
 }
 

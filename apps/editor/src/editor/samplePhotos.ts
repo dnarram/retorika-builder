@@ -1,4 +1,5 @@
 import { PLACEHOLDER_SAMPLE_ID } from "@retorika/catalog";
+import { type ImageRecord, recordById } from "@retorika/photobank";
 import { flattenElements, type RetorikaDocument } from "@retorika/schema";
 
 /**
@@ -15,6 +16,26 @@ import { flattenElements, type RetorikaDocument } from "@retorika/schema";
  * at more length: `vitest.config.ts` gives `apps/editor` a node project with no DOM, so a component
  * cannot be unit-tested here at all. What can be tested lives here.
  */
+
+/**
+ * Where the editor asks for a bank photograph's bytes: the route, the id, and a version the record
+ * names.
+ *
+ * `/api/muestras/<id>` answers as immutable for a year, and **an id's bytes change once**: when
+ * `pnpm photos:replace` puts a regenerated photograph under the old id, so that every document that
+ * names it still downloads (sprint 34 día 7). The version is the record's review date and byte
+ * count, which a replacement always writes anew, so a browser holding the old bytes asks for a new
+ * address rather than showing them for the rest of the year. The route reads the id and never the
+ * version. An id the bank does not know gets no version, and the route's 404.
+ */
+export function sampleUrl(
+  id: string,
+  lookup: (id: string) => ImageRecord | undefined = recordById,
+): string {
+  const path = `/api/muestras/${encodeURIComponent(id)}`;
+  const record = lookup(id);
+  return record ? `${path}?v=${record.review.date}-${record.bytes}` : path;
+}
 
 export interface SampleRef {
   /** The bank id — what `/api/muestras/<id>` takes, and what the document's `sample` field says. */

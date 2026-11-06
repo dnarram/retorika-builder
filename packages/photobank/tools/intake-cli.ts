@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { parseArgs } from "node:util";
-import { bankFileSchema, draftBankFileSchema } from "../src/schema.ts";
+import { bankFileSchema, draftBankFileSchema, isUnderTheFloor } from "../src/schema.ts";
 import { IntakeRefusal, intake } from "./intake.ts";
 
 /**
@@ -74,7 +74,7 @@ async function main(): Promise<number> {
       : { sector: values.sector, images: [] };
     // The bank file is parsed too, so an intake into a sector whose bank is broken fails here
     // rather than at approval.
-    bankFileSchema.parse(
+    const bank = bankFileSchema.parse(
       JSON.parse(readFileSync(join(ROOT, "bank", `${values.sector}.json`), "utf8")),
     );
     mkdirSync(join(ROOT, "drafts", "photos"), { recursive: true });
@@ -94,7 +94,13 @@ async function main(): Promise<number> {
     );
     console.log("  for the reviewer, which no test can check:");
     for (const line of result.forTheReviewer) console.log(`    - ${line}`);
-    console.log(`  then: pnpm photos:approve ${result.record.id} --by <name>`);
+    // While the sector holds photographs under the floor, a new one is meant to take one of their
+    // places under its id (`photos:replace`, ADR 0035's note of sprint 34 día 7), not to join them.
+    const underFloor = bank.images.filter(isUnderTheFloor).map((image) => image.id);
+    if (underFloor.length > 0) {
+      console.log(`  then: pnpm photos:replace <old-id> ${result.record.id} --by <name>`);
+      console.log(`    under the floor, and waiting for theirs: ${underFloor.join(", ")}`);
+    } else console.log(`  then: pnpm photos:approve ${result.record.id} --by <name>`);
     return 0;
   } catch (error) {
     if (error instanceof IntakeRefusal) {

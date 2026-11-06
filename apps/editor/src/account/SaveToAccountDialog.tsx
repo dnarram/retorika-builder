@@ -165,7 +165,7 @@ export function SaveToAccountDialog({
      * the bytes are still in this browser, so the honest report is «saved, and this many photographs
      * did not make it», which is what the owner can act on.
      *
-     * Only the owner's own. A bank photograph is ours, immutable and already served by
+     * Only the owner's own. A bank photograph is ours, reviewed and already served by
      * `/api/muestras/[id]`; `listOwnPhotoSrcs` is what draws that line, out of the document's own
      * `sample` field rather than out of the shape of a file name.
      */

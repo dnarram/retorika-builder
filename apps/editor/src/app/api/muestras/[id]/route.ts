@@ -52,9 +52,10 @@ export async function GET(
     headers: {
       "Content-Type": "image/webp",
       "Content-Length": String(bytes.byteLength),
-      // A bank photograph is immutable: its id names a reviewed file that never changes in place,
-      // because approving a new one mints a new id. Safe to cache hard, and worth it — the editor
-      // asks for these on every load of a generated site.
+      // Immutable per address, and worth it — the editor asks for these on every load of a
+      // generated site. An id's bytes do change once, when `photos:replace` puts a regenerated
+      // photograph under it (sprint 34 día 7); the editor asks by `sampleUrl`, whose version the
+      // replacement moves, so no browser keeps the old bytes under the new record.
       "Cache-Control": "public, max-age=31536000, immutable",
     },
   });

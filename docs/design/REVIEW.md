@@ -7642,3 +7642,68 @@ la línea (`::after` sin contenido), desmarcar la fija se la lleva sin dejar la 
 `renderer:deps`, `size` (el script, 0,8 KB, sin un byte nuevo), `secrets:scope` y `schema:guard` (la forma
 cambió con su migración, su prueba y su versión) en verde. **`a11y` local: 1661.** **Lighthouse y los
 tres motores: 26.** **e2e filtrado de cabecera** (sprints 30–34): 30 caminatas, 198 s.
+
+### Día 7 — firmas y fotos (PR de `feat/firmas-y-fotos`)
+
+**Las firmas**: [`docs/decisions/signing-2026-11.md`](../decisions/signing-2026-11.md), **veintiséis
+filas** — 0042, 0043 y de la 0045 a la 0068; el plan decía 24 porque la 0067 y la 0068 se escribieron
+en este sprint. Por ADR: lo que decide en una frase, lo añadido después con su fecha (la de su título o,
+si no la lleva, la del commit que la añadió), lo decidido por delegación —la 0052 y la 0053 el 25 de
+octubre, con «Actua como experto y decide lo mejor…»; la nota del día 4 del 32 en la 0062, el 4 de
+noviembre, con «Se el mejor experto de UX…»— y qué cambia al firmar: la línea de estado, ningún código.
+Cómo se firma: tu instrucción escrita por ADR o por lote, que desarrollo registra con tus palabras y su
+fecha en la forma de la 0037 y la 0040, un commit por lote que también las quita de las listas de
+pendientes. Cuatro lotes sugeridos (el editor, la letra, la cabecera, la página publicada), hechos para
+que cada cadena de enmiendas se firme junta. **Ninguna cambia de estado en esta PR: desarrollo no
+firma.**
+
+**Las fotos**: `pnpm photos:replace <id-viejo> <id-borrador> --by <nombre>`
+(`packages/photobank/tools/replace.ts`). Escribe el borrador revisado **con el `id` y el `file` de la
+vieja**, y con su tamaño, bytes, `alt`, origen, licencia y una revisión con nombre y fecha; mueve los
+bytes con `git mv -f` sobre el fichero viejo (un `git mv` a secas se niega, el destino existe); y se
+niega a una foto bajo el suelo **por su cuenta**, porque el id que escribe sigue exento cuando lo hace y
+el esquema la dejaría pasar. Al terminar dice cuáles quedan bajo el suelo; con la novena, que se borren
+en esa PR `FLOOR_EXEMPT_IDS`, la fecha y sus dos pruebas. `photos:intake` dejaba como siguiente paso
+`photos:approve`, que habría sumado una décima foto en vez de sustituir: mientras el sector tenga fotos
+bajo el suelo, nombra `photos:replace` y cuáles esperan.
+
+**La prueba del plan**, en `apps/editor/test/download.test.ts`, sobre una copia del banco real y con la
+herramienta real: un documento guardado con `muestra-restaurante-bar.03.webp` se descarga tras sustituir
+la `.03`, y el ZIP lleva los bytes nuevos bajo `assets/muestra-restaurante-bar.03.webp`. Seis pruebas de
+la herramienta en `packages/photobank/test/replace.test.ts` (el registro, que el `src` y el `sample` del
+documento resuelven a los bytes nuevos, lo que queda bajo el suelo, el `git mv -f` en un repositorio de
+verdad, el suelo con un id exento, las negativas).
+
+**Dos cosas que encontró el día, las dos por el id compartido:**
+
+1. **`/api/muestras/<id>` se sirve `immutable` durante un año**, con un comentario que decía por qué
+   era seguro: «su id nombra un fichero que nunca cambia». Con la sustitución cambia una vez, y un
+   navegador que ya la pidió seguiría enseñando la vieja un año. El editor pide ahora cada foto por
+   `sampleUrl` (`apps/editor/src/editor/samplePhotos.ts`): la ruta, el id y `?v=<fecha de revisión>-<bytes>`,
+   que la sustitución siempre cambia. La ruta no lee la versión. Los tres comentarios que llamaban
+   «inmutable» a una foto del banco dicen ahora «revisada».
+2. **El `alt` de una foto del banco es también el pie visible bajo ella en la galería**, y el generador
+   lo copia en el documento. Una web guardada conserva el texto de hoy: **la foto nueva tiene que
+   enseñar lo que dice el `alt` viejo**. La hoja de las nueve lo pone en la lista de revisión, y es el
+   coste con nombre de la pregunta abierta de los platos (sustituir la `.04` o la `.05` por otra escena
+   dejaría en las webs guardadas un pie que habla de una paellera).
+
+**La hoja de regeneración**: [`docs/tasks/las-nueve-fotos.md`](../tasks/las-nueve-fotos.md), para David.
+Por foto: lo que enseña, su prompt grabado, la semilla de su original —cada PNG de la raíz emparejado
+píxel a píxel con su foto del banco—, qué mirar; el tamaño objetivo 1600 × 1072, el modelo y su
+licencia a releer, la lista de revisión y los comandos. La pregunta abierta de si el banco puede enseñar
+un plato reconocible (la `.04` y la `.05`), con su coste. Y los 16 PNG de la raíz: nueve son los
+originales de las aprobadas y siete alternativas no aprobadas; ninguno llega al suelo; tres salidas, la
+recomendada sacarlos del repositorio a un archivo tuyo; **no se borran sin tu palabra**. La ADR 0035
+gana una nota: las nueve vuelven bajo sus propios ids (la decisión 8 del plan, que aprobaste el 5 de
+noviembre).
+
+**Saboteos**, cada uno visto en rojo y deshecho por script: el borrador conserva su id → tres pruebas
+de la herramienta y la de la descarga («no bank image "restaurante-bar.03"»); sin la comprobación del
+suelo → la del id exento; `git mv` sin `-f` → la del repositorio; `sampleUrl` sin versión → sus dos
+pruebas y la de la landing.
+
+**Suites.** `typecheck`, `lint`, `test` (3733, diez más), invariantes, golden (cero cambios),
+`renderer:deps`, `size`, `secrets:scope` y `schema:guard` (sin cambio de forma) en verde. Sin `a11y`
+ni Lighthouse: la salida del renderer no cambia. **e2e completa** —cada web generada pide ahora sus fotos
+por otra dirección—: 291 verdes y 1 omitida, 1270 s.

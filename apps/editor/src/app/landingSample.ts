@@ -2,6 +2,7 @@ import { type Answers, EMPTY_ANSWERS, generate, VARIANTS } from "@retorika/gener
 import { render } from "@retorika/renderer";
 import { flattenElements } from "@retorika/schema";
 import { withPhotoUrls } from "../editor/previewDocument.ts";
+import { sampleUrl } from "../editor/samplePhotos.ts";
 
 /**
  * **The landing's hero is a real web, built by the thing the landing is selling.**
@@ -55,7 +56,8 @@ const HERO_ANSWERS: Answers = {
  * photographs the way the ZIP will (`muestra-restaurante-bar.03.webp`), and a relative name inside
  * an `iframe srcDoc` resolves against *this* page's URL — so without the swap the hero would show
  * the one thing worse than no photograph, which is a broken one. `/api/muestras/<id>` is public and
- * immutable-cached, which is the whole reason it can serve a landing.
+ * immutable-cached, which is the whole reason it can serve a landing — by `sampleUrl`, whose version
+ * moves when a photograph is replaced under its id.
  *
  * The fonts need no swap: the renderer emits `url("fonts/<file>")`, which resolves against the
  * editor's own origin, where `app/fonts/[file]/route.ts` answers — the fix sprint 13 made for the
@@ -70,7 +72,7 @@ export function landingSampleHtml(): string {
       for (const element of flattenElements(section.content)) {
         const value = element.value;
         if (value?.kind !== "image" || value.sample === undefined) continue;
-        photoUrls.set(value.src, `/api/muestras/${value.sample}`);
+        photoUrls.set(value.src, sampleUrl(value.sample));
       }
     }
   }
