@@ -145,6 +145,16 @@ jobs:
       - if: steps.playwright-cache.outputs.cache-hit == 'true'
         run: pnpm exec playwright install-deps chromium
 
+      # The letter as Linux draws it (sprint 34 día 3, David's decision): every glyph of the shipped
+      # faces at every size the bar takes, which `pnpm fonts:advances` folds into the glyph table's
+      # widest. Before the suite, so a red suite still leaves the measure behind; the file a run
+      # uploads is the one committed as `scripts/glyph-measurements/linux.json`.
+      - run: pnpm fonts:measure
+      - uses: actions/upload-artifact@v4
+        with:
+          name: glyph-measurements-linux
+          path: scripts/glyph-measurements/linux.json
+
       # axe (serious/critical, and every contrast finding, measured or not) and horizontal
       # overflow at 320/768/1280, over the three sets issue #25 split this into: geometry,
       # contrast/fonts, and long text.

@@ -7363,3 +7363,123 @@ caminatas en verde.
 (solo `//` y `*` al inicio), y la palabra en el nombre de una constante no cuenta por ir en mayúsculas;
 la prueba de la estimación del sprint 33 («one line, a logo») se plegaba a 768 por el logo sin tamaño
 (160 px) y medía la barra del móvil con su fila: ahora el logo lleva su 2 × 2.
+
+### Día 3 — la auditoría con el pliegue (PR de `test/la-auditoria-con-el-pliegue`)
+
+**La auditoría aprende el pliegue.** Con las etiquetas del teaser, la barra de casi toda la matriz se
+pliega (a 766, 926, 987 o 1100 px según la combinación), así que la forma ancha entre 721 y 1023 se
+habría medido sobre casi nada: la matriz gana **un gemelo de etiquetas cortas** (`audit-short/…`, las
+«Carta», «Fotos», «Reservar» y «El Corte» de `shortLabelled`, que no pliegan) y pasa a **306
+documentos**. Entra **la comprobación 11** (la barra no mide más que sus líneas, o es la del móvil) en
+reposo y en el lienzo, y cada documento se mide además **a su propio N y a N + 1**: la hoja a lo ancho
+de una tableta, y la tira en el ancho más justo que tiene. Saboteo: con la 11 forzada, rojo en reposo
+a 988 y a 1101 y en el lienzo a 1280, y nunca en un ancho plegado.
+
+**La pasada entera, en los tres motores**: 306 × 3 = 918 combinaciones, 6 197 s, de una vez.
+**Ninguna barra partida, en ningún motor ni a ningún ancho**: la comprobación 11 en verde en las 918.
+Las notas permitidas, las del cierre del 33 (lo que cuelga de `--rb-header-h` en el lienzo: «Ir a…» a
+0,5–1 px a 1280). **Doce estados en rojo, un solo hallazgo, y era del instrumento**: la comprobación 7
+(la fija a 600 px, sin mover la página) a 1101 en las cinco combinaciones fijas con columna (dos en
+Firefox), «la sección se movió 599» o 575. A 1101 × 900 esa página **solo tiene 599 px para bajar**
+(575 bajo la transparente, que va fuera del flujo): la comprobación suponía 600 y leyó el final de la
+página como un salto. Ahora compara con lo que la página bajó, medido (y exige al menos 300): las seis
+combinaciones en verde en los tres motores. **Saboteo**, por script: sin el margen que compensa la
+condensación, a 1101 «la sección se movió 599, la página bajó 583», en rojo.
+
+**Las pruebas que el día 1 dejó leyendo un ancho, una a una** (plan, día 3):
+
+| Prueba | Su contenido | Qué hace ahora |
+|---|---|---|
+| `columns()` a 1280 y 1247 | `cabecera-con-marca` con logo, columnas a los dos lados: pliega a 980 | Sigue con ese contenido y **mide** que la barra no es la del móvil (`menu: false`) |
+| `columns()` a 1024 y 1023 | la columna de páginas a la derecha: pliega a 917 | Igual: a 1023 la barra ancha, medida |
+| Nueva, `columns()` plegada | el teaser con las secciones en columna: pliega a 1100 | A 1024 y a 1100, «Menú» y ninguna columna; a 1101, la columna (ADR 0067 §3). Saboteo: la columna desde 1024 → a 1024 una columna junto a «Menú», en rojo |
+| `menu-keyboard` a 1023 | `menu-y-paginas`: N = 720 | Sigue; el `where` de cada parada ya mide qué barra se recorre |
+| La estimación a 768 | las dieciséis formas, etiquetas cortas: N = 720 | Asevera además que la tira está dibujada. Saboteo: dos etiquetas de veinte letras → «the strip is drawn» en rojo en los tres motores |
+
+**La verdad, con la letra de la web y el visitante de Windows** (lo que el día 2 dejó debido).
+`openHtml` sirve ya las fuentes de la página — las de la galería desde su paquete `@fontsource`, los
+mismos bytes que el publicador, y la propia desde `fixtures/fonts/` — y falla si una cara declarada no
+carga: hasta hoy ninguna suite había medido una página con la letra con la que se publica. La prueba de
+la verdad gana **las cuarenta familias servidas**, cada una como titular y cuerpo, con cuatro aspectos
+(liso, logo, mayúsculas, pequeño) y las tres escalas en rotación. **Y mide al visitante para el que se
+escribe la estimación**: la fórmula reserva los 15 px de una barra de scroll clásica (Windows, Linux),
+y los navegadores de las pruebas no dibujan ninguna (Playwright lanza Chromium con `--hide-scrollbars`
+y macOS las superpone): la verdad del día 2 era la de un visitante sin carril, y 15 px de cada holgura
+eran del de Windows. Ahora la bisección corre en un Chromium que conserva sus barras, con una de 15 px
+de estilo, y el carril se mide antes que nada.
+
+**Y la verdad encontró un defecto de la tabla.** Con la letra servida, una sonda de 38 etiquetas
+reales en las 40 familias dio etiquetas **más anchas dibujadas que estimadas** más allá del 3 %:
+«TERRAZA» en Cormorant Garamond negrita, un 4,8 %; «Contacto» en Fredoka, un 2,5 %. No era el kerning:
+la palabra mide exactamente la suma de sus glifos dibujados uno a uno. **Era la tabla**: el generador
+medía diez copias de cada glifo, y una letra repetida llama a las formas que la fuente guarda para las
+repeticiones — la «f» en veintitrés familias, la «t» en tres, la «R» y la «T» de Cormorant, la «l» y la
+«j» de Fredoka, el «--» de Manrope —: **63 de los 9 600 avances, cortos hasta 0,15 em**. Una barra con
+esas letras podía partirse antes del pliegue. Ahora el generador mide un glifo, y **una prueba nueva**
+sostiene cada avance contra el glifo que su cara dibuja solo, a 1000 px — en rojo con la tabla vieja,
+desde la «f» de Alegreya.
+
+**Lo que enseñó el Linux del CI, y lo que decidió David.** La primera vuelta de la PR en CI puso en rojo
+dos pruebas. Una era de la prueba: el caso plegado de `columns()` leía `main` 1009 a 1024, porque la
+cabecera del móvil guarda el carril de la barra de scroll (`scrollbar-gutter: stable`, ADR 0065) y en
+Linux ese carril ocupa 15 px; ahora resta el carril que mide. **La otra era de verdad: Poppins, pequeño,
+escala compacta, se partía a 722 con el pliegue en 720.** Una sonda en el propio CI lo explicó: el Linux
+del CI dibuja **cada glifo en píxeles enteros** (57 600 de 57 600), casi todas las familias al más
+cercano (±0,5 px por glifo), y **Poppins en negrita con *hinting***: hasta 1,95 px por glifo sobre
+macOS, un 3,5 % más ancha a 13,125 px y un 3,6–6,1 % en sus letras de 13 a 16 px. Ninguna fórmula que
+probé cumplía a la vez «nunca corta», el 3 % y los 40 px. **David decidió** (palabra por palabra en la
+nota del día 3 de la ADR 0067):
+
+1. **La tabla guarda, por familia, peso y tamaño de la barra, el máximo medido en macOS (tres motores) y
+   en el Linux del CI**: «que Linux dibuje más ancho deja de ser una fórmula y pasa a ser un dato».
+   `pnpm fonts:measure` mide cada glifo solo a los seis tamaños de la barra en la máquina donde corre y
+   escribe `scripts/glyph-measurements/<plataforma>.json`; el job `a11y-size` la corre antes de la suite y
+   sube la de Linux como artefacto; `pnpm fonts:advances` pliega las dos en `BAR_EXCESS` (lo que cada
+   glifo añade a su em en cada tamaño, en dieciseisavos de píxel), sin navegador. Una prueba sostiene la
+   tabla al menos tan ancha como lo que dibuja la máquina, en cada tamaño, aquí y en CI. Las dos sondas
+   de Linux salieron idénticas: la medida es determinista.
+2. **La puerta es «nunca se parte», en Mac y en Linux, en las 60 webs**; la holgura se imprime y el
+   umbral que la vigila sube a 60 px: «los 40 px no eran una regla, eran una expectativa mía con el dato
+   de ayer». Una familia que pase de 60 se mira sola; el margen no se infla para todas.
+3. **Hepta Slab en mayúsculas a escala amplia, la que se miró sola**: con la tabla de las dos máquinas,
+   su línea real de unos 1 159 px se estimaba en unos 1 207, por encima de la medida de 1 200, y la
+   fórmula decía «siempre»: «Menú» a cualquier ancho para una barra que cabe desde 1 318. No era
+   *hinting* (Linux la dibuja 1 px más estrecha): en mayúsculas el kerning no devuelve casi nada y el
+   3 % entero era holgura. **David decidió un margen medido por caja**: 3 % en minúsculas y 1,5 % en
+   mayúsculas, **derivados por la prueba** — sobre las 38 etiquetas × 40 familias × dos pesos, el
+   kerning más ancho medido es **1,88 % en minúsculas** (Yanone Kaffeesatz, Linux) y **1,28 % en
+   mayúsculas** (Montserrat «IR A…», macOS); la prueba lo imprime y falla si pasa del margen, y el margen
+   de la tabla es el suelo de David o lo medido redondeado al medio punto, lo que sea mayor. Una familia
+   no servida conserva el 3 % en las dos cajas. Y **el precipicio de la medida queda con nombre** en la
+   ADR, con la condición para el día 4: cuando la estimación pase la medida por menos de un 5 %, el aviso
+   dirá «por muy poco: quitando N caracteres cabe en pantallas anchas», no «a ningún ancho».
+
+| Sobre la verdad con carril | macOS | Linux del CI |
+|---|---|---|
+| Las 40 familias servidas: las 32 cuya barra pliega pasado 720 | 20–35 px | 14–36 px |
+| … y las 8 cuya línea cabe desde 721 (estimadas en 720–742) | — | — |
+| El teaser en las tres parejas y `cabecera-con-marca` (cuerpo en pila de sistema) | 79–127 px | 47–140 px |
+
+**Nunca por debajo, en ninguno de los dos.** Una golden se mueve, leída entera: `cabecera-con-marca`,
+de 797 a 801 en sus tres líneas `@media`, porque su marca en EB Garamond negrita toma ahora la letra más
+ancha de las dos máquinas. La matriz de la auditoría usa pilas de sistema y su caída no cambia: sus N
+son los mismos que midió la pasada. **Saboteos**: el margen de mayúsculas a 1 % → «1,27 % en Montserrat
+«IR A…»», en rojo; la fila de Poppins negrita a 13,125 px a cero y su «a» una centésima más estrecha →
+en rojo en esa fila (con solo la «a» más estrecha la prueba sigue en verde, y con razón: el exceso de
+Linux la cubre en este Mac).
+
+**Suites.** `typecheck`, `lint`, `test` (3693), invariantes, golden (una, leída), `renderer:deps`,
+`size` (el script, 0,8 KB) y `schema:guard` (sin cambio de forma) en verde. **`a11y` local: 1661**
+(1617 del día 2 + las 40 familias + la tabla a 1000 px + la tabla en cada tamaño + el kerning + el caso
+plegado de `columns()`), con la letra servida en todas sus páginas por primera vez y ningún hallazgo
+nuevo por ella. En una vuelta anterior, dos tiempos agotados de 400–525 s contra un límite de 60: el Mac,
+en batería de madrugada, se durmió dentro de la pasada (`pmset`: reposos de 340 y 904 s pese a
+`caffeinate -i`); con `-i -m`, la pasada entera en verde. e2e local no se corre: ni el editor ni el
+paquete cambian (el CI lo corre en cada vuelta de la PR).
+
+**Lo que costó**: que Playwright lance Chromium con `--hide-scrollbars` (y que macOS superponga las
+suyas) no lo decía nada: la verdad de una fórmula que reserva un carril se medía sin carril. Una barra
+de scroll con estilo ocupa su ancho en todas las plataformas y el `@media` la sigue contando, que es
+exactamente la de Windows. Una tabla «medida» puede estar mal por el método: diez copias de un glifo no
+son una etiqueta. Y una letra medida en una sola máquina es la letra de esa máquina: lo que CI dibuja
+solo se sabe midiéndolo en CI, y el artefacto de una ejecución es la forma de traerlo.

@@ -267,6 +267,8 @@ describe("the two menus, with a keyboard and nothing else", () => {
    * **A menu in a rail is walked in its rail, and in the bar where the rail falls** (ADR 0060). The
    * bar keeps a copy of every menu a rail holds; at 1280 that copy is out of the tab order, and at
    * 1023 the rail's is — the same claim as the narrow copy above, for the copies the places add.
+   * `menu-y-paginas`'s words hold their line from 721 up (ADR 0067: its N is the phone's 720), and
+   * each stop's `where` is the measure of which bar was walked (sprint 34 día 3).
    */
   it("walks the rails' copies at 1280 and the bar's at 1023, never both", async () => {
     const placed: Header = { pages: { position: "left" }, sections: { position: "right" } };
