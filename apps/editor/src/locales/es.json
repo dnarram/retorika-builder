@@ -261,6 +261,8 @@
   "editor.menuPanel.stickyTransparent": "Sobre la portada, la barra se fija solo si el navegador del visitante ejecuta el script, y al bajar toma el fondo de la página.",
   "editor.menuPanel.stickyGlass": "Al bajar, la barra se estrecha y se vuelve translúcida, con la página difuminada detrás. En el lienzo se ve en reposo.",
   "editor.menuPanel.stickySolid": "Al bajar, la barra se estrecha y gana una sombra. En el lienzo se ve en reposo.",
+  "editor.menuPanel.progress": "Muestra cuánto se ha leído",
+  "editor.menuPanel.progressNote": "Al publicar, una línea en el borde de la barra crece a medida que se baja. En el lienzo no se ve.",
   "editor.menuPanel.hairline": "Línea bajo la cabecera",
   "editor.menuPanel.hairlineNote": "Una línea muy fina, en un tono suave del color del texto.",
   "editor.menuPanel.notes.sectionsMarked": "Al publicar, el menú de secciones marca la sección que se está viendo mientras se baja. En el lienzo no se marca.",

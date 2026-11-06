@@ -38,10 +38,12 @@ import {
   menuStatusText,
   pagesPositionPatch,
   phoneSpan,
+  progressPatch,
   SCHEME_TOKENS,
   schemeSwatch,
   sectionsMobilePatch,
   sectionsPositionPatch,
+  stickyPatch,
 } from "../src/editor/headerState.ts";
 import { DESKTOP_LAYOUT_WIDTH } from "../src/editor/overflowCheck.ts";
 import es from "../src/locales/es.json" with { type: "json" };
@@ -677,6 +679,8 @@ describe("what a fixed bar turns into once scrolled, as the panel says it (sprin
       // Sprint 34 día 4: the canvas folded under the fold, and a column past the canvas's width.
       "editor.menuPanel.notes.foldedCanvas",
       "editor.menuPanel.notes.columnBeyondCanvas",
+      // Sprint 34 día 6: the line of how much has been read (ADR 0068).
+      "editor.menuPanel.progressNote",
     ] as const) {
       // Every one says what the canvas shows, so none promises the canvas what it does not draw.
       expect(es[key], key).toMatch(/lienzo/);
@@ -831,5 +835,34 @@ describe("what the owner is told of a bar that folds (sprint 34 día 4)", () => 
     ] as const) {
       expect(es[key], key).not.toMatch(/\d/);
     }
+  });
+});
+
+/**
+ * **«Muestra cuánto se ha leído»** (ADR 0068, sprint 34 día 6; David's decision 5): a fixed bar's
+ * option, written as the key's presence; taking the fixed bar away takes the line with it in the same
+ * patch, so nothing the panel no longer offers stays behind — and the schema refuses it alone anyway.
+ */
+describe("the line of how much has been read, as the panel writes it (sprint 34 día 6)", () => {
+  const doc = fixture("cabecera-con-marca");
+
+  it("turns on as `true` and off as the key's absence, beside a fixed bar", () => {
+    const fixed = setHeader(doc, stickyPatch(true));
+    expect(headerStateFor(fixed, undefined).progress).toBe(false);
+    const lined = setHeader(fixed, progressPatch(true));
+    expect(lined.header?.progress).toBe(true);
+    expect(headerStateFor(lined, undefined).progress).toBe(true);
+    const off = setHeader(lined, progressPatch(false));
+    expect(off.header).not.toHaveProperty("progress");
+    expect(off.header).toEqual(fixed.header);
+  });
+
+  it("goes with the fixed bar in the same patch, one step", () => {
+    const lined = setHeader(setHeader(doc, stickyPatch(true)), progressPatch(true));
+    const unfixed = setHeader(lined, stickyPatch(false));
+    expect(unfixed.header?.sticky).toBe(false);
+    expect(unfixed.header).not.toHaveProperty("progress");
+    // Without the patch's second key the document could not be saved: the schema refuses the line.
+    expect(() => setHeader(lined, { sticky: false })).toThrow(/progress/);
   });
 });

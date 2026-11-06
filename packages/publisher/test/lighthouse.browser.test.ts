@@ -414,13 +414,16 @@ describe("Part 8.5 — Lighthouse over a sample site, the three compositions", (
   }, 120_000);
 
   it(`a fixed header with a logo: performance and accessibility at ${FLOOR * 100} or more`, async () => {
-    const bundle = brandSite();
+    // And since sprint 34 día 6 with the line of how much has been read on (ADR 0068): a transform
+    // driven by the root's scroll, which the plan asked to be measured on this subject.
+    const bundle = brandSite({ progress: true });
     const index = new TextDecoder().decode(
       bundle.files.find((file) => file.path === "index.html")?.contents ?? new Uint8Array(),
     );
     // The subject is what it says: the bar fixed, the logo in it, the script after it.
     expect(index).toContain('<header class="rb-header"');
     expect(index).toContain('data-sticky=""');
+    expect(index).toContain('data-progress=""');
     expect(index).toMatch(/<img [^>]*class="rb-logo"[^>]*src="assets\/logo\.png"/);
     expect(index).toContain("<script>");
     const measured = await measure("cabecera-con-marca · fija, con logo", bundle);

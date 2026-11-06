@@ -49,7 +49,8 @@ function fixture(name: string): RetorikaDocument {
   return entry.document;
 }
 
-/** A site with everything that moves: a rail, «Ir a…», the bar's button, and sections to reveal. */
+/** A site with everything that moves: a rail, «Ir a…», the bar's button, sections to reveal, and
+ * since sprint 34 día 6 a fixed bar with its line of how much has been read (ADR 0068). */
 function everything(): RetorikaDocument {
   const doc = fixture("cabecera-con-marca");
   return parseDocument({
@@ -58,6 +59,8 @@ function everything(): RetorikaDocument {
       ...doc.header,
       pages: { shown: true, position: "left" },
       sections: { shown: true, position: "fold", mobile: "fold" },
+      sticky: true,
+      progress: true,
     },
   });
 }
@@ -92,6 +95,9 @@ describe("the published page's motion", () => {
       "transition: transform var(--rb-fast) var(--rb-ease), box-shadow var(--rb-fast) var(--rb-ease)",
       "transition: padding var(--rb-fast) var(--rb-ease), margin var(--rb-fast) var(--rb-ease), background-color var(--rb-fast) var(--rb-ease), box-shadow var(--rb-fast) var(--rb-ease)",
       "transition: transform var(--rb-fast) var(--rb-ease)",
+      // The line of how much has been read (ADR 0068, sprint 34 día 6), driven by the root's scroll.
+      "animation: rb-progress auto linear both",
+      "animation-timeline: scroll(root)",
       "transition: text-decoration-color var(--rb-fast) var(--rb-ease), box-shadow var(--rb-fast) var(--rb-ease), background-color var(--rb-fast) var(--rb-ease)",
       "animation: rb-fold-in var(--rb-base) var(--rb-ease) backwards",
       "transition: transform var(--rb-fast) var(--rb-ease)",
@@ -173,9 +179,16 @@ describe("the published page's motion", () => {
     );
   });
 
-  it("gives the canvas the numbers and none of the movement: the two sheets differ in two blocks alone", () => {
-    for (const name of ["menu-y-paginas", "cover-and-services"]) {
-      const doc = fixture(name);
+  it("gives the canvas the numbers and none of the movement: the two sheets differ in three blocks alone", () => {
+    const lined = parseDocument({
+      ...fixture("menu-y-paginas"),
+      header: { sticky: true, progress: true },
+    });
+    for (const [name, doc] of [
+      ["menu-y-paginas", fixture("menu-y-paginas")],
+      ["cover-and-services", fixture("cover-and-services")],
+      ["menu-y-paginas with the line", lined],
+    ] as const) {
       const published = buildCss(doc, "html");
       const canvas = buildCss(doc, "dom");
       // The page's motion block: from the keyframes to the end of the lift's hover block.
@@ -189,6 +202,14 @@ describe("the published page's motion", () => {
       if (anchors !== -1) {
         trimmed = trimmed.slice(0, anchors) + trimmed.slice(trimmed.indexOf("\n}\n", anchors) + 3);
       }
+      // The line of how much has been read (ADR 0068), when the bar carries it: the third block.
+      const line = trimmed.indexOf(
+        "@media (prefers-reduced-motion: no-preference) {\n  @supports (animation-timeline: scroll(root)) {",
+      );
+      if (line !== -1) {
+        trimmed = trimmed.slice(0, line) + trimmed.slice(trimmed.indexOf("\n}\n", line) + 3);
+      }
+      expect(line !== -1, name).toBe(name.endsWith("with the line"));
       expect(trimmed, name).toBe(canvas);
       expect(canvas, name).toContain("--rb-fast: 200ms");
     }

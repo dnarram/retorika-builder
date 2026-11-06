@@ -7579,3 +7579,66 @@ asevera 721); «Menú» fuera de los agarres → la caminata en rojo esperando u
 renderer se toca), `size` (el script, 0,8 KB), `secrets:scope` y `schema:guard` (sin cambio de forma) en
 verde. **e2e filtrado de cabecera** (sprints 30–34): 29 caminatas en verde, 191 s. e2e completa no se
 corre: el paquete no cambia y la puerta de descarga tampoco.
+
+### Día 6 — la línea de progreso (PR de `feat/la-linea-de-progreso`, ADR 0068, esquema 1.18.0)
+
+**La decisión 5 de David al abrir el sprint**: la línea que dice cuánto se ha leído es una opción del
+dueño, apagada, con tres condiciones — solo con la barra fija y su clave se va con ella; el generador no
+la enciende; decorativa y dentro de la barra — y su ajuste 3 al aprobar: **`scroll(root)` escrito**.
+
+**El esquema** (1.18.0, migración `0019`): `header.progress` es `true` o no está, y un refinamiento
+**lo rechaza sin `sticky: true`**: el estado que nadie ve no se puede guardar. `up` sella y no mueve nada
+(ninguna web del corpus la lleva, contado); `down` quita la clave y deja la barra fija. Ida y vuelta
+probada, la instantánea regenerada, `schema:guard` conforme.
+
+**El renderer, solo en la web publicada**: `data-progress` en la cabecera y su `::after` — 2 px al pie
+de la barra, `transform: scaleX()` de 0 a 1 sobre `animation-timeline: scroll(root)`, sin maquetación y
+por tanto sin CLS —, en el primario sobre `surface` y la transparente, en `surface` sobre las de color,
+dentro de `prefers-reduced-motion: no-preference` y de `@supports (animation-timeline: scroll(root))`,
+vacía antes de su animación (un motor que no la mueve no dibuja una barra llena). Ninguna donde la fija
+suelta sobre la fila del móvil, ninguna bajo una barra plegada a nada. El lienzo no lleva
+`animation-timeline` (la lección del 32), y las dos hojas difieren ahora en **tres bloques** donde la
+barra lleva la línea; el vocabulario cerrado del movimiento gana sus dos declaraciones. Goldens sin
+cambios: ninguna web del corpus la lleva.
+
+**El editor**: «Muestra cuánto se ha leído» solo bajo «Se queda arriba al bajar», con su nota («Al
+publicar, una línea en el borde de la barra crece a medida que se baja. En el lienzo no se ve.»);
+desmarcar la fija se lleva la línea **en el mismo parche** (`stickyPatch`), un paso que «Deshacer»
+devuelve entero. El generador no escribe ni la línea ni la fija, en ningún sector ni acción (prueba).
+
+**Medido en los tres motores**, el ZIP real abierto desde el disco a 1280 (`engines.browser.test.ts`):
+
+| Motor | `scroll(root)` | Con movimiento | Con movimiento reducido |
+|---|---|---|---|
+| Chromium 153 | sí | `animation-timeline` calculado `scroll(root)`; la línea 0 arriba y 1 abajo | ninguna línea |
+| WebKit 26.6 | sí | ídem | ninguna |
+| Firefox 155 | no | ninguna línea (ni llena) | ninguna |
+
+Y la barra mide lo mismo con la línea que sin ella, en los tres.
+
+**Saboteos**, cada uno visto en rojo y deshecho por script: `scroll()` en lugar de `scroll(root)` → la
+prueba de la hoja; la línea también en el lienzo → la del lienzo y la de los tres bloques; desmarcar la
+fija sin quitar la línea → la del parche; el refinamiento quitado → la de la migración que la rechaza.
+**Caminata** nueva: la casilla no existe sin la fija, aparece apagada con su nota, el lienzo no dibuja
+la línea (`::after` sin contenido), desmarcar la fija se la lleva sin dejar la clave en la sesión,
+«Deshacer» devuelve las dos, y el ZIP lleva el atributo y la regla con `scroll(root)`.
+
+**Lighthouse**, perfil móvil, contra el cierre del 33; el sujeto de la barra fija lleva la línea encendida:
+
+| Sujeto | Rendimiento | Accesibilidad | Buenas prácticas | SEO | LCP | CLS |
+|---|---|---|---|---|---|---|
+| v1 image-right | 99 | 100 | 100 | 100 | 1,80 s (1,80) | 0,003 (0,003) |
+| v2 image-background | 98 | 100 | 100 | 100 | 2,40 s (2,33) | 0,003 (0,003) |
+| v3 image-left | 98 | 100 | 100 | 100 | 2,33 s (2,33) | 0,003 (0,003) |
+| letra propia `.ttf` | 99 | 100 | 100 | 100 | 1,80 s (1,80) | 0,000 (0,000) |
+| **cabecera fija con logo, con la línea** | 100 | 100 | 100 | 100 | 1,35 s (1,35) | 0,002 (0,002) |
+| cabecera en columnas | 100 | 100 | 100 | 100 | 1,35 s (1,35) | 0,004 (0,004) |
+| página por ficha | 100 | 100 | 100 | 100 | 0,90 s (0,90) | 0,000 (0,000) |
+
+**La línea no mueve nada**: el sujeto que la lleva da las mismas cifras que sin ella. El LCP de v2 sube
+70 ms con la misma nota de 98; v2 no lleva cabecera fija ni línea, y es la variación del simulador.
+
+**Suites.** `typecheck`, `lint`, `test` (3723, catorce más), invariantes, golden (cero cambios),
+`renderer:deps`, `size` (el script, 0,8 KB, sin un byte nuevo), `secrets:scope` y `schema:guard` (la forma
+cambió con su migración, su prueba y su versión) en verde. **`a11y` local: 1661.** **Lighthouse y los
+tres motores: 26.** **e2e filtrado de cabecera** (sprints 30–34): 30 caminatas, 198 s.

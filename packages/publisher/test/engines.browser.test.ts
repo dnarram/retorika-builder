@@ -85,8 +85,7 @@ const dirs: string[] = [];
 const transitions: string[] = [];
 
 /** The site's ZIP, extracted into a fresh directory; the directory. */
-function extracted(name: string): string {
-  const document = fixture(name);
+function extracted(name: string, document: RetorikaDocument = fixture(name)): string {
   const assets = new Map<string, Uint8Array>();
   for (const source of imageSourcesOf(document)) {
     if (source.src.startsWith("data:")) continue;
@@ -107,8 +106,33 @@ function extracted(name: string): string {
   return site;
 }
 
+/** What the line of how much has been read is, in the page in front of us (ADR 0068). */
+type Line = {
+  supported: boolean;
+  content: string;
+  timeline: string;
+  scale: number | null;
+  header: number;
+};
+const LINE = `(() => {
+  const header = document.querySelector("header.rb-header");
+  const after = getComputedStyle(header, "::after");
+  const m = /^matrix\\(([^,]+),/.exec(after.transform);
+  return {
+    supported: CSS.supports("animation-timeline: scroll(root)"),
+    content: after.content,
+    timeline: after.animationTimeline,
+    scale: after.transform === "none" ? null : m ? Number(m[1]) : null,
+    header: header.getBoundingClientRect().height,
+  };
+})()`;
+const lines: string[] = [];
+
 afterAll(() => {
   for (const dir of dirs) rmSync(dir, { recursive: true, force: true });
+  process.stdout.write(
+    `engines.browser — the line of how much has been read:\n  ${lines.join("\n  ")}\n`,
+  );
   // To stdout directly, like the skips: the run is silent by default.
   process.stdout.write(
     `engines.browser — a link followed from file://, transitioned:\n  ${transitions.join("\n  ")}\n`,
@@ -127,6 +151,61 @@ for (const [name, type] of ENGINES) {
   }
 
   describe.skipIf(!present)(`${name}`, () => {
+    /**
+     * **The line of how much has been read** (ADR 0068, sprint 34 día 6; David's adjustment 3): the
+     * real ZIP of `cabecera-con-marca` with its bar fixed and the line on, from disk, at 1280. Where
+     * the engine has scroll timelines the line's computed timeline is **`scroll(root)`, written
+     * out** — `scroll()` would follow the nearest scroller and stand still the day an ancestor had
+     * `overflow` — it is empty at the top and whole at the bottom, and it adds nothing to the bar's
+     * height; where the engine has none there is no line at all, rather than a full one; and for a
+     * visitor who asked for less movement there is none in any engine.
+     */
+    for (const motion of [true, false]) {
+      it(`draws the line of how much has been read where it can, ${motion ? "with motion" : "under reduce"}`, async () => {
+        const base = fixture("cabecera-con-marca");
+        const document = parseDocument({
+          ...base,
+          header: { ...base.header, sticky: true, progress: true },
+        });
+        const dir = extracted("cabecera-con-marca", document);
+        const plain = extracted(
+          "cabecera-con-marca",
+          parseDocument({ ...base, header: { ...base.header, sticky: true } }),
+        );
+        const browser = await type.launch();
+        try {
+          const context = await browser.newContext({
+            viewport: { width: 1280, height: 700 },
+            reducedMotion: motion ? "no-preference" : "reduce",
+          });
+          const page = await context.newPage();
+          await page.goto(`file://${join(plain, "index.html")}`, { waitUntil: "load" });
+          const without = await page.evaluate<Line>(LINE);
+          await page.goto(`file://${join(dir, "index.html")}`, { waitUntil: "load" });
+          const top = await page.evaluate<Line>(LINE);
+          await page.evaluate("window.scrollTo(0, document.documentElement.scrollHeight)");
+          await page.waitForTimeout(300);
+          const bottom = await page.evaluate<Line>(LINE);
+          lines.push(
+            `${name} ${browser.version()}, ${motion ? "motion" : "reduce"}: scroll(root) ${top.supported}, ` +
+              `timeline ${top.timeline}, scale ${top.scale} → ${bottom.scale}`,
+          );
+          // Inside the bar: the same height with the line and without it.
+          expect(top.header).toBeCloseTo(without.header, 3);
+          if (motion && top.supported) {
+            expect(top.content).not.toBe("none");
+            expect(top.timeline).toBe("scroll(root)");
+            expect(top.scale ?? 1).toBeLessThan(0.02);
+            expect(bottom.scale ?? 0).toBeGreaterThan(0.98);
+          } else {
+            expect(top.content, "a line where none may be drawn").toBe("none");
+          }
+        } finally {
+          await browser.close();
+        }
+      });
+    }
+
     for (const site of SITES) {
       for (const motion of [true, false]) {
         it(`opens ${site} from file:// and follows a link with nothing failing, ${motion ? "with motion" : "under reduce"}`, async () => {

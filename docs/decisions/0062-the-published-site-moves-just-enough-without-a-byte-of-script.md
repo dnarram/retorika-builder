@@ -274,3 +274,13 @@ What this means for each piece of §1–§3:
   `document.fonts` in Chromium and Firefox and **only by the console in WebKit** («Not allowed to
   load local resource»), which is why the test listens to both.
 
+
+## Note — sprint 34 día 6: the list gains the fixed bar's line (ADR 0068)
+
+The closed list of what the published page moves (`motion.test.ts`) gains one entry, by
+[ADR 0068](0068-the-fixed-bar-can-say-how-much-has-been-read.md): **the line of how much has been read**,
+at the foot of a fixed bar whose owner turned it on — `animation: rb-progress auto linear both` and
+`animation-timeline: scroll(root)`, inside this ADR's `prefers-reduced-motion: no-preference` and a
+feature query. §7 stays true of what it governs — the page's own motion has no switch —; this one is the
+owner's, off by default, and the visitor's preference still governs it. And §5's two sheets — the
+published page's and the canvas's — now differ in three blocks where the bar carries the line.

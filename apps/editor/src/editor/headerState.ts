@@ -132,6 +132,8 @@ export interface HeaderState {
   actionLeavesMenu: boolean;
   layout: HeaderLayout;
   sticky: boolean;
+  /** «Muestra cuánto se ha leído» (ADR 0068): the line at the foot of a fixed bar. */
+  progress: boolean;
   hairline: boolean;
   sectionsMobile: SectionsOnMobile;
   /** A fixed bar lets go on a phone, because the sections' row is under it there (día 2). */
@@ -332,6 +334,7 @@ export function headerStateFor(doc: RetorikaDocument, pageId: string | undefined
     actionLeavesMenu,
     layout: settings.layout,
     sticky: settings.sticky,
+    progress: settings.progress,
     hairline: settings.hairline,
     sectionsMobile: settings.sectionsMobile,
     phoneRow: headerPhoneRow(doc, settings),
@@ -498,6 +501,21 @@ export function pagesPositionPatch(
 }
 
 /** «La marca y el botón van con el menú de páginas» on or off; off drops the key. */
+/**
+ * «Se queda arriba al bajar» on or off — **and off takes the line of how much has been read with it,
+ * in the same patch** (ADR 0068, David's condition a): the line lives on a fixed bar, the schema
+ * refuses it alone, and a key the panel no longer offers must not stay behind where nobody can see
+ * it. One patch is one step of history, so «Deshacer» brings both back together.
+ */
+export function stickyPatch(sticky: boolean): Partial<Header> {
+  return sticky ? { sticky } : { sticky, progress: undefined };
+}
+
+/** «Muestra cuánto se ha leído» on or off; off drops the key (ADR 0068). */
+export function progressPatch(on: boolean): Partial<Header> {
+  return { progress: on ? true : undefined };
+}
+
 export function brandWithPagesPatch(on: boolean): Partial<Header> {
   return { brandWithPages: on ? true : undefined };
 }
