@@ -1175,10 +1175,11 @@ describe("the header's widths", () => {
       if (entry.name === "cabecera-con-marca") {
         // «Taberna Santo Domingo» in bold with its logo, two pages in Charter — a family the
         // product does not ship, counted at the fallback: the widest of macOS's and Linux's
-        // letters, to the pixel — and the button: 77 px over 720 by the glyphs' sum, where the bar
-        // itself breaks at 720 on this Mac (the bisection in `header.browser.test.ts`). The one
-        // golden the fold moved.
-        expect(widths, entry.name).toEqual({ phone: 797, rails: 1024, over: 0 });
+        // letters, to the pixel — and the button: 81 px over 720 by the glyphs' sum, where the bar
+        // itself breaks at 720 on this Mac and on CI's Linux (the bisection in
+        // `header.browser.test.ts`). The one golden the fold moved: 797 on día 2, 801 since día 3,
+        // when the brand's EB Garamond bold took the widest of the two machines' letters.
+        expect(widths, entry.name).toEqual({ phone: 801, rails: 1024, over: 0 });
       } else {
         expect(widths, entry.name).toEqual({ phone: 720, rails: 1024, over: 0 });
       }

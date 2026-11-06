@@ -15,7 +15,14 @@ import {
   tokenPx,
 } from "@retorika/schema";
 import { safeUrl } from "./escape.ts";
-import { FALLBACK_ADVANCES, GLYPH_ADVANCES } from "./glyphAdvances.ts";
+import {
+  BAR_EXCESS,
+  BAR_EXCESS_DIGITS,
+  FALLBACK_ADVANCES,
+  GLYPH_ADVANCES,
+  GLYPHS,
+  KERNING_MARGINS,
+} from "./glyphAdvances.ts";
 import es from "./locales/es.json" with { type: "json" };
 import {
   hasMenu,
@@ -197,13 +204,6 @@ function twoRailsFrom(widths: HeaderWidths): number {
     : Math.max(TWO_RAILS_FOLD_WIDTH, widths.rails);
 }
 
-/**
- * **A label's width is the sum of its glyphs' advances** (`glyphAdvances.ts`, David's decision of
- * sprint 34 día 2) in the first family of the stack, at the weight, plus the bar's letter-spacing in
- * capitals (0.06 em a character) and a margin for kerning, which the advances leave out. A glyph the
- * table did not measure counts as the widest the family has: an estimate may run long, never short.
- */
-export const KERNING_MARGIN = 1.03;
 /** A logo stored without its size (before 1.16.0) is counted this many times as wide as its 40 px. */
 export const UNSIZED_LOGO_ASPECT = 4;
 /** The lane a classic scroll bar takes, which a `@media` width counts and the bar's padding does
@@ -212,13 +212,27 @@ export const SCROLLBAR_LANE = 15;
 /** The page's measure, `--rb-measure` in `build.ts`: the widest the bar's content box gets. */
 const MEASURE = 1200;
 
+/** Where each glyph's digit sits in a row of `BAR_EXCESS`. */
+const GLYPH_INDEX = new Map(GLYPHS.map((glyph, i) => [glyph, i]));
+
 /**
- * A label's width in px at `size` in the first family of a stack — the table's, or the fallback for
- * a family the product does not ship — at a weight, as the bar draws it (capitals, if so). **A
- * fallback glyph is rounded up to the pixel**: the system letters it stands for are hinted, and a
- * hinted glyph's advance is a whole pixel at 16 px on Linux, where the table's em was measured at
- * 100 px without. CI found it on the first run of the day's PR: a `system-ui` bar drawn 1–2 px past
- * the whole margin, which on a bar of fifty glyphs the rounding alone explains.
+ * **A label's width is the sum of its glyphs' advances** (`glyphAdvances.ts`, David's decision of
+ * sprint 34 día 2) in the first family of the stack, at the weight, plus the bar's letter-spacing in
+ * capitals (0.06 em a character) and a margin for kerning, which the advances leave out. A glyph the
+ * table did not measure counts as the widest the family has: an estimate may run long, never short.
+ *
+ * **The kerning margin is measured, per case** (`KERNING_MARGINS`, David's decision of día 3): 3 % in
+ * lower case, 1.5 % in capitals, or the widest kerning any machine measured if that is wider. In
+ * capitals kerning gives back next to nothing and the 3 % was all slack — enough to carry Hepta Slab
+ * at the generous scale past the measure, and a bar that fits from 1 318 px to «Menú» at every width.
+ * A family the product does not ship has no kerning measured, and keeps the lower case's, the wider.
+ *
+ * **A shipped face at a size the bar takes adds what the widest machine measured** (`BAR_EXCESS`,
+ * David's decision of sprint 34 día 3): at 13.125 px Linux draws Poppins at least 3.5 % wider than
+ * macOS — a hinted glyph is a whole pixel there — and the fold estimated from macOS alone let that
+ * bar break 2 px past it on CI. **Every other glyph is rounded up to the pixel**: a fallback one, since
+ * the system letters it stands for are hinted on Linux (sprint 34 día 2, CI's first run: a `system-ui`
+ * bar 1–2 px past the whole margin), and a shipped one at a size nobody measured, for the same reason.
  */
 function labelPx(
   label: string,
@@ -231,12 +245,24 @@ function labelPx(
   const shipped = GLYPH_ADVANCES[family];
   const advances = (shipped ?? FALLBACK_ADVANCES)[weight];
   const widest = Math.max(...Object.values(advances));
+  const excess = shipped
+    ? BAR_EXCESS[family]?.[weight]?.[String(Math.round(size * 1000) / 1000)]
+    : undefined;
+  const over = (glyph: string): number => {
+    if (excess === undefined) return 0;
+    const at = GLYPH_INDEX.get(glyph);
+    const digits = at === undefined ? [...excess] : [excess[at] ?? ""];
+    const n = Math.max(...digits.map((d) => BAR_EXCESS_DIGITS.indexOf(d)));
+    if (n < 0) throw new Error(`labelPx: no excess for «${glyph}» in ${family} ${weight} ${size}`);
+    return n / 16;
+  };
   const glyphs = [...(upper ? label.toUpperCase() : label)];
   const sum = glyphs.reduce((total, glyph) => {
-    const em = advances[glyph] ?? widest;
-    return total + (shipped ? em * size : Math.ceil(em * size));
+    const px = (advances[glyph] ?? widest) * size;
+    return total + (excess === undefined ? Math.ceil(px) : px + over(glyph));
   }, 0);
-  return sum * KERNING_MARGIN + (upper ? 0.06 * size * glyphs.length : 0);
+  const margin = shipped && upper ? KERNING_MARGINS.upper : KERNING_MARGINS.lower;
+  return sum * margin + (upper ? 0.06 * size * glyphs.length : 0);
 }
 
 /** The text of a node, its own and its children's. */

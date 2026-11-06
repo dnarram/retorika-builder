@@ -7408,46 +7408,78 @@ y macOS las superpone): la verdad del día 2 era la de un visitante sin carril, 
 eran del de Windows. Ahora la bisección corre en un Chromium que conserva sus barras, con una de 15 px
 de estilo, y el carril se mide antes que nada.
 
-**Y la verdad encontró un defecto de la tabla, el más grave del día.** Con la letra servida, una sonda
-de 38 etiquetas reales en las 40 familias dio etiquetas **más anchas dibujadas que estimadas** más allá
-del 3 %: «TERRAZA» en Cormorant Garamond negrita, un 4,8 %; «Contacto» en Fredoka, un 2,5 %. No era el
-kerning: la palabra mide exactamente la suma de sus glifos dibujados uno a uno. **Era la tabla**: el
-generador medía diez copias de cada glifo, y una letra repetida llama a las formas que la fuente guarda
-para las repeticiones — la «f» en veintitrés familias, la «t» en tres, la «R» y la «T» de Cormorant, la
-«l» y la «j» de Fredoka, el «--» de Manrope —: **63 de los 9 600 avances, cortos hasta 0,15 em**. Una barra con esas letras podía
-partirse antes del pliegue, que es justo el defecto que el pliegue existe para impedir. Ahora el
-generador mide un glifo, la tabla está regenerada (unas 120 entradas se mueven: esas 63 y milésimas de
-redondeo) y **una prueba nueva** sostiene cada avance contra el glifo que su cara dibuja solo, a 1000 px
-— en rojo con la tabla vieja, desde la «f» de Alegreya. **Con la tabla bien, el kerning medido**: la
-etiqueta más ensanchada por él, un 1,7 % (Yanone Kaffeesatz, «Opiniones»); el 3 % de David lo cubre con
-holgura y se queda. Ninguna golden cambia: ni `cabecera-con-marca` ni la matriz de la auditoría (pilas
-de sistema) llevan las letras afectadas en la barra.
+**Y la verdad encontró un defecto de la tabla.** Con la letra servida, una sonda de 38 etiquetas
+reales en las 40 familias dio etiquetas **más anchas dibujadas que estimadas** más allá del 3 %:
+«TERRAZA» en Cormorant Garamond negrita, un 4,8 %; «Contacto» en Fredoka, un 2,5 %. No era el kerning:
+la palabra mide exactamente la suma de sus glifos dibujados uno a uno. **Era la tabla**: el generador
+medía diez copias de cada glifo, y una letra repetida llama a las formas que la fuente guarda para las
+repeticiones — la «f» en veintitrés familias, la «t» en tres, la «R» y la «T» de Cormorant, la «l» y la
+«j» de Fredoka, el «--» de Manrope —: **63 de los 9 600 avances, cortos hasta 0,15 em**. Una barra con
+esas letras podía partirse antes del pliegue. Ahora el generador mide un glifo, y **una prueba nueva**
+sostiene cada avance contra el glifo que su cara dibuja solo, a 1000 px — en rojo con la tabla vieja,
+desde la «f» de Alegreya.
 
-| Sobre la verdad con carril | Holgura |
-|---|---|
-| Las 40 familias servidas: las 31 cuya barra pliega pasado 720 | 14–38 px, nunca por debajo |
-| … y las 9 cuya línea cabe desde 721 | estimadas en 720–728 |
-| El teaser en las tres parejas (cuerpo en una pila de sistema) | 47–127 px |
-| `cabecera-con-marca` (cuerpo en Charter) | 77 px |
+**Lo que enseñó el Linux del CI, y lo que decidió David.** La primera vuelta de la PR en CI puso en rojo
+dos pruebas. Una era de la prueba: el caso plegado de `columns()` leía `main` 1009 a 1024, porque la
+cabecera del móvil guarda el carril de la barra de scroll (`scrollbar-gutter: stable`, ADR 0065) y en
+Linux ese carril ocupa 15 px; ahora resta el carril que mide. **La otra era de verdad: Poppins, pequeño,
+escala compacta, se partía a 722 con el pliegue en 720.** Una sonda en el propio CI lo explicó: el Linux
+del CI dibuja **cada glifo en píxeles enteros** (57 600 de 57 600), casi todas las familias al más
+cercano (±0,5 px por glifo), y **Poppins en negrita con *hinting***: hasta 1,95 px por glifo sobre
+macOS, un 3,5 % más ancha a 13,125 px y un 3,6–6,1 % en sus letras de 13 a 16 px. Ninguna fórmula que
+probé cumplía a la vez «nunca corta», el 3 % y los 40 px. **David decidió** (palabra por palabra en la
+nota del día 3 de la ADR 0067):
 
-**Para David, una lectura que es suya** (nota del día 3 en la ADR 0067): la cota de 40 px se lee sobre
-el visitante con carril. Sobre la verdad del día 2, sin carril, las mismas cuarenta quedan en 29–53 px y
-cinco pasan de 40 — cuatro en mayúsculas (Hepta Slab a escala amplia, 53; Libre Caslon Text, Syne,
-Montserrat), donde el kerning no devuelve nada y el 3 % entero de una línea larga es holgura, y Literata
-a escala amplia. Cumplir 40 sin carril en la línea más larga que admite la medida exigiría bajar el
-margen al 2 % (15 + 24 a 1 200 px): tres décimas sobre el kerning más ancho medido y nada para una
-etiqueta que nadie midió. Si la lee al revés, el término que cede es el margen, y moverlo es suyo.
+1. **La tabla guarda, por familia, peso y tamaño de la barra, el máximo medido en macOS (tres motores) y
+   en el Linux del CI**: «que Linux dibuje más ancho deja de ser una fórmula y pasa a ser un dato».
+   `pnpm fonts:measure` mide cada glifo solo a los seis tamaños de la barra en la máquina donde corre y
+   escribe `scripts/glyph-measurements/<plataforma>.json`; el job `a11y-size` la corre antes de la suite y
+   sube la de Linux como artefacto; `pnpm fonts:advances` pliega las dos en `BAR_EXCESS` (lo que cada
+   glifo añade a su em en cada tamaño, en dieciseisavos de píxel), sin navegador. Una prueba sostiene la
+   tabla al menos tan ancha como lo que dibuja la máquina, en cada tamaño, aquí y en CI. Las dos sondas
+   de Linux salieron idénticas: la medida es determinista.
+2. **La puerta es «nunca se parte», en Mac y en Linux, en las 60 webs**; la holgura se imprime y el
+   umbral que la vigila sube a 60 px: «los 40 px no eran una regla, eran una expectativa mía con el dato
+   de ayer». Una familia que pase de 60 se mira sola; el margen no se infla para todas.
+3. **Hepta Slab en mayúsculas a escala amplia, la que se miró sola**: con la tabla de las dos máquinas,
+   su línea real de unos 1 159 px se estimaba en unos 1 207, por encima de la medida de 1 200, y la
+   fórmula decía «siempre»: «Menú» a cualquier ancho para una barra que cabe desde 1 318. No era
+   *hinting* (Linux la dibuja 1 px más estrecha): en mayúsculas el kerning no devuelve casi nada y el
+   3 % entero era holgura. **David decidió un margen medido por caja**: 3 % en minúsculas y 1,5 % en
+   mayúsculas, **derivados por la prueba** — sobre las 38 etiquetas × 40 familias × dos pesos, el
+   kerning más ancho medido es **1,88 % en minúsculas** (Yanone Kaffeesatz, Linux) y **1,28 % en
+   mayúsculas** (Montserrat «IR A…», macOS); la prueba lo imprime y falla si pasa del margen, y el margen
+   de la tabla es el suelo de David o lo medido redondeado al medio punto, lo que sea mayor. Una familia
+   no servida conserva el 3 % en las dos cajas. Y **el precipicio de la medida queda con nombre** en la
+   ADR, con la condición para el día 4: cuando la estimación pase la medida por menos de un 5 %, el aviso
+   dirá «por muy poco: quitando N caracteres cabe en pantallas anchas», no «a ningún ancho».
 
-**Suites.** `typecheck`, `lint`, `test` (3693), invariantes, golden (cero cambios), `renderer:deps`,
-`size` (el script, 0,8 KB) y `schema:guard` (sin cambio de forma) en verde. **`a11y` local: 1659**
-(1617 del día 2 + las 40 familias + la prueba de la tabla + el caso plegado de `columns()`), con la
-letra servida en todas sus páginas por primera vez y ningún hallazgo nuevo por ella. En la primera
-vuelta, dos tiempos agotados de 400–525 s contra un límite de 60: el Mac, en batería de madrugada, se
-durmió dentro de la pasada (`pmset`: reposos de 340 y 904 s pese a `caffeinate -i`); las dos, solas, en
-verde. e2e no se corre: ni el editor ni el paquete cambian.
+| Sobre la verdad con carril | macOS | Linux del CI |
+|---|---|---|
+| Las 40 familias servidas: las 32 cuya barra pliega pasado 720 | 20–35 px | 14–36 px |
+| … y las 8 cuya línea cabe desde 721 (estimadas en 720–742) | — | — |
+| El teaser en las tres parejas y `cabecera-con-marca` (cuerpo en pila de sistema) | 79–127 px | 47–140 px |
+
+**Nunca por debajo, en ninguno de los dos.** Una golden se mueve, leída entera: `cabecera-con-marca`,
+de 797 a 801 en sus tres líneas `@media`, porque su marca en EB Garamond negrita toma ahora la letra más
+ancha de las dos máquinas. La matriz de la auditoría usa pilas de sistema y su caída no cambia: sus N
+son los mismos que midió la pasada. **Saboteos**: el margen de mayúsculas a 1 % → «1,27 % en Montserrat
+«IR A…»», en rojo; la fila de Poppins negrita a 13,125 px a cero y su «a» una centésima más estrecha →
+en rojo en esa fila (con solo la «a» más estrecha la prueba sigue en verde, y con razón: el exceso de
+Linux la cubre en este Mac).
+
+**Suites.** `typecheck`, `lint`, `test` (3693), invariantes, golden (una, leída), `renderer:deps`,
+`size` (el script, 0,8 KB) y `schema:guard` (sin cambio de forma) en verde. **`a11y` local: 1661**
+(1617 del día 2 + las 40 familias + la tabla a 1000 px + la tabla en cada tamaño + el kerning + el caso
+plegado de `columns()`), con la letra servida en todas sus páginas por primera vez y ningún hallazgo
+nuevo por ella. En una vuelta anterior, dos tiempos agotados de 400–525 s contra un límite de 60: el Mac,
+en batería de madrugada, se durmió dentro de la pasada (`pmset`: reposos de 340 y 904 s pese a
+`caffeinate -i`); con `-i -m`, la pasada entera en verde. e2e local no se corre: ni el editor ni el
+paquete cambian (el CI lo corre en cada vuelta de la PR).
 
 **Lo que costó**: que Playwright lance Chromium con `--hide-scrollbars` (y que macOS superponga las
 suyas) no lo decía nada: la verdad de una fórmula que reserva un carril se medía sin carril. Una barra
 de scroll con estilo ocupa su ancho en todas las plataformas y el `@media` la sigue contando, que es
-exactamente la de Windows. Y una tabla «medida» puede estar mal por el método: diez copias de un glifo
-no son una etiqueta.
+exactamente la de Windows. Una tabla «medida» puede estar mal por el método: diez copias de un glifo no
+son una etiqueta. Y una letra medida en una sola máquina es la letra de esa máquina: lo que CI dibuja
+solo se sabe midiéndolo en CI, y el artefacto de una ejecución es la forma de traerlo.

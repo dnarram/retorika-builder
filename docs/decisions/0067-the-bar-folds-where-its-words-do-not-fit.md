@@ -165,7 +165,7 @@ to 797.
 - Days 3 to 5: the audit with the fold; the owner told; «Menú» as a grip.
 - Day by day in `docs/design/REVIEW.md`, sprint 34 día 2.
 
-## Note — sprint 34 día 3: the table measures the glyph a label carries, and the truth is the visitor's
+## Note — sprint 34 día 3: the table measures the glyph a label carries, on every machine, and the gate is that the bar never wraps
 
 **The table was short where fonts keep forms for repeats.** `scripts/generate-glyph-advances.ts`
 measured each glyph as ten copies of it, and a run of one letter is not a label: it calls up the
@@ -174,39 +174,63 @@ ligatures and alternates a font keeps for repeats — a run of «f» in twenty-t
 short, up to 0.15 em, and the estimate ran under the line it was meant to hold: Cormorant Garamond's
 «TERRAZA» in capitals 5 % narrower than drawn, which the 3 % of §2 does not cover. Found when the
 truth test drew the shipped families in their own letter for the first time. The generator measures
-one glyph now, the table is regenerated (about 120 entries move: those 63 and the thousandths of a
-rounding), and `header.browser.test.ts` holds every advance against the glyph its face draws alone
-at 1000 px — red on the old table, at Alegreya's «f» first.
+one glyph now, and `header.browser.test.ts` holds every advance against the glyph its face draws
+alone at 1000 px — red on the old table, at Alegreya's «f» first.
 
-**With the table right, the kerning margin is measured, and it stays.** Thirty-eight real labels — the
-corpus's and the catalog's words, «Inicio», «Menú», «Ir a…», two of twenty letters — in every shipped
-family, at both weights, in lower case and in capitals with the bar's letter-spacing, drawn with
-kerning against the table's sum: the widest is 1.7 % over (Yanone Kaffeesatz, «Opiniones»), and the
-median of each face's widest is 1.000. Kerning narrows a line far more often than it widens one; the
-3 % covers the widening with room.
-
-**The truth is now the visitor's the estimate is written for.** The estimate keeps a classic scroll
+**The truth is the visitor's the estimate is written for.** The estimate keeps a classic scroll
 bar's 15 px out of the width (§2). The browsers the tests launch draw none — Playwright passes
 `--hide-scrollbars`, and macOS overlays its own — so the truth of día 2 was a visitor with no lane,
-15 px more lenient than the one the formula covers, and 15 px of every slack it printed were the
-Windows visitor's. The bisection runs in a Chromium that keeps its scroll bars, with one of 15 px
-styled in (a styled bar takes its width out of the layout on every platform, and a `@media` width
-still counts it), and the lane is measured before anything else. And `openHtml` serves the page's
-faces, failing a page whose declared face does not load.
+and 15 px of every slack it printed were the Windows visitor's. The bisection runs in a Chromium that
+keeps its scroll bars, with one of 15 px styled in (a styled bar takes its width out of the layout on
+every platform, and a `@media` width still counts it), and the lane is measured before anything else.
+And `openHtml` serves the page's faces, failing a page whose declared face does not load.
 
-| Over the truth with a lane (día 3) | Slack |
-|---|---|
-| The forty shipped families, each as heading and body, four looks and three scales rotated: the 31 whose bar folds past 720 | 14–38 px, never under |
-| … and the nine whose line fits from 721 | estimated at 720–728 |
-| The teaser on the three pairs (a system stack in the body) | 47–127 px |
-| `cabecera-con-marca` (Charter in the body) | 77 px |
+**Linux's letter is data, not a formula** (David, día 3). The first CI run of the day's PR found
+Poppins, small, at the compact scale, breaking at 722 under a fold of 720: CI's Linux draws every
+glyph as a whole pixel (57 600 of 57 600 measured), most families to the nearest (±0.5 px a glyph,
+±2 % on a word), and **Poppins in bold hinted, up to 1.95 px a glyph over macOS — at 13.125 px at
+least 3.5 % wider, and 3.6–6.1 % on its letters from 13 to 16 px**. His decision: the table holds,
+per family, weight and size the bar takes, the widest measured on macOS (Chromium, Firefox, WebKit)
+and on CI's Linux (Chromium). `pnpm fonts:measure` draws every glyph alone at the six sizes on the
+machine it runs on and writes `scripts/glyph-measurements/<platform>.json`; CI's a11y-size job runs it
+and uploads Linux's; `pnpm fonts:advances` folds both into `BAR_EXCESS` — what each glyph adds to its
+em at each size, in 16ths of a pixel — with no browser. A test holds the table at least as wide as
+what the machine draws, at every size, here and on CI, so a letter that outgrows the measure goes red
+before a bar wraps. A family the product does not ship keeps the fallback, each glyph to the pixel.
 
-**Recorded for David: the 40 px is read over the visitor with a lane.** Over the truth of día 2, with
-no lane, the same forty run 29–53 px, and five pass 40 — four in capitals (Hepta Slab at the generous
-scale, 53; Libre Caslon Text, Syne, Montserrat), where kerning takes nothing back and the whole 3 % of
-a long line is slack (36 px of a line of 1 200), and Literata at the generous scale. Holding 40 over
-a lane-less truth on the longest line the measure allows would take the margin down to 2 % (15 + 24
-at 1 200 px): three tenths of a point over the widest kerning measured, and nothing for a label nobody
-measured. His bound was set against the family factors' 90–130 px, with no lane in sight; the reading
-here is that it measures the estimate against the bar it protects, with the 3 % he chose. If he reads
-it the other way, the margin is the term that gives, and it is his to move.
+**The kerning margins are measured, per case, and the test derives them** (David, día 3, on Hepta
+Slab: «el 1,5 % no es una constante suelta: la prueba conservadora lo deriva»). Thirty-eight real
+labels — the corpus's and the catalog's words, «Inicio», «Menú», «Ir a…», two of twenty letters —
+in every shipped family and weight, drawn whole with kerning against their glyphs drawn alone, in
+lower case and in capitals with the bar's letter-spacing (taken out of both sides): the widest is
+**1.88 % in lower case** (Yanone Kaffeesatz, Linux) and **1.28 % in capitals** (Montserrat «IR A…»,
+macOS). The margin of each case is David's floor — 3 % in lower case, 1.5 % in capitals — or the
+widest measured, rounded up to the half point, whichever is wider (`KERNING_MARGINS`, in the table);
+the test prints the widest every run and fails past the margin, and a new family that kerns wider
+raises it in the PR that says so. A family the product does not ship keeps the lower case's 3 % in
+both cases, since nobody measured its kerning.
+
+**The gate: the bar never wraps, on macOS and on Linux, in the sixty sites** (David, día 3: «los 40 px
+no eran una regla, eran una expectativa mía con el dato de ayer»). The slack is printed every run, and
+the bound that watches it is **60 px** for a site whose two families the product ships, the margins
+untouched: a family past 60 is looked at by itself — its hinting, its capitals — and the margin is
+never widened for all of them.
+
+| Over the truth with a lane | macOS | CI's Linux |
+|---|---|---|
+| The forty shipped families: the 32 whose bar folds past 720 | 20–35 px | 14–36 px |
+| … and the 8 whose line fits from 721 (estimated at 720–742) | — | — |
+| The teaser on the three pairs, and `cabecera-con-marca` (a system stack in the body) | 79–127 px | 47–140 px |
+
+Never under, on either. `cabecera-con-marca` moves from 797 to 801: its brand, EB Garamond in bold,
+takes the widest of the two machines' letters.
+
+**The measure's cliff, by name** (David, día 3). A line estimated over the measure (1 200 px) never
+fits by the estimate, so `headerWidths` answers «always» (§3) — even where the real line fits by a few
+pixels. Before the capitals' margin, Hepta Slab in capitals at the generous scale did exactly that: a
+real line of about 1 159 px, fitting from a window of 1 318, estimated at about 1 207, and «Menú» at
+every width. The margin of 1.5 % brings it to 1 352 (35 px over the truth on macOS, 36 on Linux); the
+cliff stays for a line truly that close to the measure. **Día 4's warning says it**: where the estimate
+passes the measure by under 5 %, «por muy poco: quitando N caracteres cabe en pantallas anchas», and
+not «a ningún ancho» alone — «es la diferencia entre un dueño que acorta una etiqueta y uno que no
+entiende por qué su web de escritorio lleva el menú del móvil».

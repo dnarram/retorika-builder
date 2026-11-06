@@ -13,7 +13,15 @@ import {
 import { type Header, parseDocument, type RetorikaDocument } from "@retorika/schema";
 import { buildTheme, GALLERY_FAMILIES, PALETTES, SCALES, TYPE_PAIRS } from "@retorika/tokens";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { GLYPH_ADVANCES } from "../src/glyphAdvances.ts";
+import {
+  BAR_EXCESS,
+  BAR_EXCESS_DIGITS,
+  BAR_SIZES,
+  GLYPH_ADVANCES,
+  GLYPHS,
+  KERNING_LABELS,
+  KERNING_MARGINS,
+} from "../src/glyphAdvances.ts";
 import { SCROLLBAR_LANE } from "../src/header.ts";
 import { headerWidths, render, SHIPPABLE_FAMILIES } from "../src/index.ts";
 import { headerCase, openHtml } from "./browser-fixtures.ts";
@@ -1692,8 +1700,15 @@ describe("the bar's estimate against the bar it measures (sprint 33 día 6)", ()
  * overlay ones — so the truth of día 2 was a visitor with no lane, and 15 px of every slack were the
  * Windows visitor's. The bisection now runs in a Chromium that keeps its scroll bars, with one of 15 px
  * styled in (`withLane`), and the lane is measured before anything else. And the page's faces are
- * served (`openHtml`, día 3), so the forty families the product ships are drawn in their own letter:
- * the sites David's 40 px bound is for, which none of the twenty of día 2 was.
+ * served (`openHtml`, día 3), so the forty families the product ships are drawn in their own letter,
+ * which none of the twenty of día 2 was.
+ *
+ * **The gate is that the bar never wraps, here and on CI's Linux** (David, día 3, when Linux drew
+ * Poppins 3.5 % wider than macOS and the estimate fell 2 px short there): «los 40 px no eran una regla,
+ * eran una expectativa mía con el dato de ayer». The slack is printed every run, and the bound that
+ * watches it is 60 px for a site whose two families the product ships, with the 3 % of kerning
+ * untouched: a family past 60 is looked at by itself — its hinting, its capitals — and the margin is
+ * never widened for all of them.
  */
 describe("the fold's estimate is never under the width the bar breaks at (sprint 34 día 2)", () => {
   /** A Chromium that draws scroll bars, for the truth below. */
@@ -1796,7 +1811,7 @@ describe("the fold's estimate is never under the width the bar breaks at (sprint
     ),
     // **The forty families the product ships** (sprint 34 día 3), each as the heading and the body —
     // the brand and the button at 700, the entries at 400 — over the teaser's own words, with its
-    // faces served: the sites David's 40 px bound is for, which none of the twenty above is. The look
+    // faces served: the sites the 60 px bound is for, which none of the twenty above is. The look
     // and the scale rotate over them, so every family is drawn and each look meets ten of them.
     ...GALLERY_FAMILIES.map((row, i): [string, RetorikaDocument] => {
       const look = LOOKS[i % LOOKS.length];
@@ -1821,7 +1836,7 @@ describe("the fold's estimate is never under the width the bar breaks at (sprint
     }),
   ];
 
-  /** Whether both of the bar's families are in the glyph table: the 40 px expectation is for them.
+  /** Whether both of the bar's families are in the glyph table: the 60 px bound is for them.
    * A family the product does not ship is counted at the fallback — the widest of six system stacks,
    * glyph by glyph — and may run longer, by design; it only has to come out at or over the truth
    * (`cabecera-con-marca`'s body is Charter: 40 over, 48 of them on the fallback and the margin). */
@@ -1833,7 +1848,7 @@ describe("the fold's estimate is never under the width the bar breaks at (sprint
     );
 
   for (const [name, doc] of sites) {
-    const bound = shipped(doc) ? ", by under 40 px" : " (a family the product does not ship)";
+    const bound = shipped(doc) ? ", by under 60 px" : " (a family the product does not ship)";
     it(`${name}: the estimate is at or over the truth${bound}`, async () => {
       const { truth, faces } = await truthOf(doc);
       // Drawn in its own letter, or the bound measured nothing: a shipped family's faces are on the
@@ -1849,7 +1864,7 @@ describe("the fold's estimate is never under the width the bar breaks at (sprint
         `fold ${name}: truth ${truth}, estimate ${phone}, slack ${phone - truth}\n`,
       );
       expect(phone, `${name}: truth ${truth}`).toBeGreaterThanOrEqual(truth);
-      if (shipped(doc)) expect(phone - truth, `${name}: slack`).toBeLessThan(40);
+      if (shipped(doc)) expect(phone - truth, `${name}: slack`).toBeLessThan(60);
     });
   }
 
@@ -1907,6 +1922,144 @@ describe("the fold's estimate is never under the width the bar breaks at (sprint
         return out;
       }, GLYPH_ADVANCES);
       expect(off, off.join("\n")).toEqual([]);
+    } finally {
+      await page.context().close();
+    }
+  });
+
+  /**
+   * **And at every size the bar takes, never narrower than this machine draws** (David's decision of
+   * día 3: the table holds the widest measured on macOS and on CI's Linux). The table's advance there
+   * — the em by the size, and what `BAR_EXCESS` adds from the widest machine measured — against each
+   * glyph drawn alone, kerning off, here: on this Mac, and on CI's Linux, where the measure of día 3
+   * found Poppins 3.5 % wider at 13.125 px. A machine whose letter outgrows the measure — a new
+   * engine, a new hinting — goes red here before any bar wraps, and `pnpm fonts:measure` on it is what
+   * brings its letter in.
+   */
+  it("holds at every bar size at least what this machine draws", async () => {
+    const rows = Object.entries(GLYPH_ADVANCES).flatMap(([family, weights]) =>
+      ([400, 700] as const).flatMap((weight) =>
+        BAR_SIZES.map((size) => {
+          const excess = BAR_EXCESS[family]?.[weight]?.[String(size)];
+          if (excess === undefined) throw new Error(`no excess for ${family} ${weight} ${size}`);
+          const table = GLYPHS.map(
+            (g, i) =>
+              (weights[weight][g] ?? 0) * size + BAR_EXCESS_DIGITS.indexOf(excess[i] ?? "") / 16,
+          );
+          return { family, weight, size, table };
+        }),
+      ),
+    );
+    const rules = SHIPPABLE_FAMILIES.flatMap(({ family, faces }) =>
+      faces.map(
+        (face) =>
+          `@font-face { font-family: "${family}"; font-weight: ${face.weight}; src: url("fonts/${face.file}") format("woff2"); }`,
+      ),
+    );
+    const html = `<!doctype html><html><head><meta charset="utf-8"><style>${rules.join("\n")}
+      body { margin: 0; } span { white-space: pre; display: inline-block; }
+      </style></head><body></body></html>`;
+    const page = await openHtml(browser, html, 1280, "bar sizes");
+    try {
+      const wider = await page.evaluate(
+        ({ rows, glyphs }) => {
+          const out: string[] = [];
+          for (const { family, weight, size, table } of rows) {
+            const host = document.createElement("div");
+            host.style.cssText = `font-family: "${family}"; font-weight: ${weight}; font-size: ${size}px; font-kerning: none;`;
+            const spans = glyphs.map((g) => {
+              const span = document.createElement("span");
+              span.textContent = g;
+              host.append(span);
+              return span;
+            });
+            document.body.append(host);
+            spans.forEach((span, i) => {
+              const drawn = span.getBoundingClientRect().width;
+              const held = table[i] ?? 0;
+              if (drawn > held + 0.001) {
+                out.push(
+                  `${family} ${weight} ${size}px «${glyphs[i]}»: drawn ${drawn}, table ${held.toFixed(4)}`,
+                );
+              }
+            });
+            host.remove();
+          }
+          return out;
+        },
+        { rows, glyphs: [...GLYPHS] },
+      );
+      expect(wider, wider.slice(0, 40).join("\n")).toEqual([]);
+    } finally {
+      await page.context().close();
+    }
+  });
+
+  /**
+   * **Kerning never widens a label past the table's margin, on this machine** (David's decision of
+   * día 3: «el 1,5 % no es una constante suelta: la prueba conservadora lo deriva»). Every label the
+   * margins were measured over, in every shipped family and weight, drawn whole with kerning against
+   * its glyphs drawn alone, at 100 px — in lower case, and in capitals with the bar's letter-spacing,
+   * taken out of both sides since the renderer adds it exactly. The widest of each case is printed
+   * every run; past its margin, the table's margin has to rise, and the PR that raises it says so.
+   */
+  it("never lets kerning widen a label past the table's margin, in lower case or in capitals", async () => {
+    const rules = SHIPPABLE_FAMILIES.flatMap(({ family, faces }) =>
+      faces.map(
+        (face) =>
+          `@font-face { font-family: "${family}"; font-weight: ${face.weight}; src: url("fonts/${face.file}") format("woff2"); }`,
+      ),
+    );
+    const html = `<!doctype html><html><head><meta charset="utf-8"><style>${rules.join("\n")}
+      body { margin: 0; font-size: 100px; } span { white-space: pre; display: inline-block; }
+      </style></head><body></body></html>`;
+    const page = await openHtml(browser, html, 1280, "kerning");
+    try {
+      const widest = await page.evaluate(
+        ({ families, labels }) => {
+          const out = { lower: { ratio: 0, at: "" }, upper: { ratio: 0, at: "" } };
+          for (const family of families) {
+            for (const weight of [400, 700]) {
+              for (const kase of ["lower", "upper"] as const) {
+                const upper = kase === "upper";
+                for (const label of labels) {
+                  const text = upper ? label.toUpperCase() : label;
+                  const host = document.createElement("div");
+                  host.style.cssText = `font-family: "${family}"; font-weight: ${weight};${upper ? " letter-spacing: 6px;" : ""}`;
+                  const whole = document.createElement("span");
+                  whole.textContent = text;
+                  host.append(whole);
+                  const alone = [...text].map((g) => {
+                    const span = document.createElement("span");
+                    span.style.fontKerning = "none";
+                    span.textContent = g;
+                    host.append(span);
+                    return span;
+                  });
+                  document.body.append(host);
+                  const spacing = upper ? 6 * [...text].length : 0;
+                  const sum = alone.reduce((t, span) => t + span.getBoundingClientRect().width, 0);
+                  const ratio = (whole.getBoundingClientRect().width - spacing) / (sum - spacing);
+                  if (ratio > out[kase].ratio) {
+                    out[kase] = { ratio, at: `${family} ${weight} «${text}»` };
+                  }
+                  host.remove();
+                }
+              }
+            }
+          }
+          return out;
+        },
+        { families: Object.keys(GLYPH_ADVANCES), labels: [...KERNING_LABELS] },
+      );
+      for (const kase of ["lower", "upper"] as const) {
+        process.stdout.write(
+          `kerning ${kase}: widest ${(100 * (widest[kase].ratio - 1)).toFixed(2)} % at ${widest[kase].at}, margin ${(100 * (KERNING_MARGINS[kase] - 1)).toFixed(1)} %\n`,
+        );
+        expect(widest[kase].ratio, `${kase}: ${widest[kase].at}`).toBeLessThanOrEqual(
+          KERNING_MARGINS[kase],
+        );
+      }
     } finally {
       await page.context().close();
     }
