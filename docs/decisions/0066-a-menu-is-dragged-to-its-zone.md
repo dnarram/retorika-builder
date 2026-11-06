@@ -206,3 +206,44 @@ is red.
 generated site — and the walk asserts that the bar given back measures the strip to a pixel. And
 «Ir a…»'s pill is drawn from the bar **without** the sections' row when the sections are the menu
 carried: the estimate counts the row on a page that draws one, and the row leaves with the drop.
+
+## Note — sprint 34 día 5: «Menú» is a grip, and the header's own fold is not the phone view
+
+**David's condition on opening sprint 34** (5 November 2026, his third answer): «el gesto existe a
+cualquier ancho del lienzo, y lo que cambia con el ancho son las zonas, nunca el agarre». Recorded by
+development, which does not sign.
+
+Since ADR 0067 a bar whose words do not fit one line is the phone's header up to its own width, and a
+desktop canvas laid out under that width — a 1024 window with a panel lays the page out at 887
+(ADR 0061), under most sites' fold — draws «Menú» where the strip was. «What this does not do» above
+said the gesture does not exist in the phone view, and `zonesFor` read the *header's* phone width to
+know it: so under the fold the row's ground armed nothing, and the pages' menu, behind «Menú», had no
+grip at all. Día 2 of sprint 34 measured exactly that and left it to this day.
+
+**The view decides, not the fold.** `zonesFor` is empty in the phone view — the sections' breakpoint
+of 720, which does not move — and full at every width of the desktop canvas: the words a drop writes
+under the fold are the same words, a side writes the column, which stands from its own width, and
+the panel says where (ADR 0067's note of día 4: «y la columna se pliega en la barra», «hasta N px»).
+**And «Menú»'s `summary` is the pages' grip**, as «Ir a…»'s is the sections' (§1): held and carried
+past the threshold, the pages' three zones; pressed without moving, the click that opens the sheet —
+the two states of §1, and `justDragged` swallows only the drag's own release, so a drop never opens
+the sheet. The open hand over it in the desktop view, under the same media query as the other grips.
+Where the sections are hidden on the phone, the folded header has no sections' grip: the panel is
+the way, as it is for a menu that is not drawn. The panel says the grip where it applies: «Así, el
+menú de páginas se arrastra cogiéndolo por «Menú»; pulsado sin mover, abre la hoja», under the note
+that the canvas is folded.
+
+**The key legend follows the document's widths** (sprint 34 día 1 left it here): its rule to stand
+clear of a column was written once per frame from the renderer's constants, and since ADR 0067 a
+column stands from just above the fold, past 1024 where the words ask it. The rule is a chrome
+`<style>` of its own (`placeKeysLegend`), written from `headerWidths` after every patch and rewritten
+only when the widths change; a bar that never fits has no column and no rule.
+
+Measured by two walks: sprint 33 día 5's «bajo el suelo de legibilidad» turned back — the row's ground
+at 887 draws the five zones, the right side lit, the drop writes `sections.position = "right"` and the
+panel says both columns fold here — and «sprint 34 día 5»: a page's label of twenty letters folds the
+generated site past 1024 and the legend's rule says `min-width: N + 1`; at 887 «Menú» is drawn with
+the open hand, carried over the left side it lights the zone, the drop writes the column and opens no
+sheet; pressed without moving the sheet opens and Escape closes it; at 1280 the strip is whole and the
+column stands. Sabotaged: `zonesFor` back to a width of the header's, two unit tests red; «Menú» out
+of the grips, the walk red waiting for a zone.

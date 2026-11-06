@@ -148,9 +148,14 @@ export function MenuPanel({
   // **Why the bar folds, under «Dónde va»** (sprint 34 día 4, ADR 0067): by its weight — tablets, or
   // the desktop site carrying the phone's menu — and, where the canvas lays the page out at or under
   // the fold, that the canvas shows «Menú» too and from which width it is seen whole.
+  // And, with the canvas folded and a «Menú» drawn, that «Menú» is the pages' grip (sprint 34 día 5).
+  const foldedCanvas = foldedCanvasNote(state.fold, layoutWidth, device);
   const foldNotes = [
     state.fold === undefined ? null : foldNoteText(state.fold),
-    foldedCanvasNote(state.fold, layoutWidth, device),
+    foldedCanvas,
+    foldedCanvas !== null && state.pagesMenu.drawn
+      ? es["editor.menuPanel.notes.foldedCanvasDrag"]
+      : null,
   ].flatMap((note) =>
     note === null
       ? []

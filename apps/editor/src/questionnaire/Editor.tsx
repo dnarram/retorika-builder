@@ -12,8 +12,8 @@ import {
 import catalogEs from "@retorika/catalog/locales/es" with { type: "json" };
 import {
   buildCss,
+  headerWidths,
   ownFontsFor,
-  RAIL_FOLD_WIDTH,
   render,
   sectionMenuEntries,
   TWO_RAILS_FOLD_WIDTH,
@@ -1864,6 +1864,7 @@ export function Editor({
     // The chrome follows the page (día 3): after every patch, structural or not, because a text
     // that grew moved the gap below it and a section that arrived has no verbs yet.
     const redrawMs = redrawChrome(iframeDoc);
+    placeKeysLegend(iframeDoc);
     readingPoint.current = null;
     // Another page starts at the top (sprint 26 día 4): the one rule of the reading position that
     // is left, the document being never replaced and so never restored. The same page, patched,
@@ -6288,11 +6289,14 @@ export function Editor({
    * stand. Zones and ghost are chrome in `<body>` (`chrome()`, so a patch neither morphs nor
    * duplicates them), fixed in the frame's own pixels. **None of this exists in the phone view**:
    * `zonesFor` is empty under the phone's width, so a press there arms nothing, and the grab cursor
-   * is under the same media query.
+   * is under the same media query. **The header's own fold is not the phone view** (sprint 34 día 5,
+   * ADR 0067): a desktop canvas laid out under the width the bar's words fold at draws «Menú», and
+   * «Menú»'s summary is the pages' grip there, as «Ir a…»'s is the sections' — past the threshold the
+   * zones of that width, under it the click that opens the sheet.
    */
   function wireMenuDrag(iframeDoc: Document) {
     const GRIPS =
-      "nav.rb-nav[data-part], .rb-rail[data-side], .rb-nav-row, details.rb-nav-fold > summary";
+      "nav.rb-nav[data-part], .rb-rail[data-side], .rb-nav-row, details.rb-nav-fold > summary, details.rb-nav-narrow > summary";
     interface MenuDrag {
       menu: Menu;
       grip: HTMLElement;
@@ -6320,11 +6324,14 @@ export function Editor({
       true,
     );
 
-    /** The menu a grip belongs to: a `nav` by its part; the row and «Ir a…» are the sections'; a
-     * rail with two navs, the one nearest the press. */
+    /** The menu a grip belongs to: a `nav` by its part; the row and «Ir a…» are the sections',
+     * «Menú» the pages' (sprint 34 día 5); a rail with two navs, the one nearest the press. */
     const menuOfGrip = (grip: HTMLElement, at: Point): Menu | null => {
       if (grip.classList.contains("rb-nav")) return menuOf(grip.dataset["part"]);
-      if (grip.classList.contains("rb-nav-row") || grip.tagName === "SUMMARY") return "sections";
+      if (grip.tagName === "SUMMARY") {
+        return grip.parentElement?.classList.contains("rb-nav-narrow") ? "pages" : "sections";
+      }
+      if (grip.classList.contains("rb-nav-row")) return "sections";
       let nearest: { menu: Menu; distance: number } | null = null;
       for (const nav of grip.querySelectorAll<HTMLElement>("nav.rb-nav[data-part]")) {
         const menu = menuOf(nav.dataset["part"]);
@@ -7336,6 +7343,7 @@ export function Editor({
     // The chrome's lengths are divided by it from its first paint (ADR 0053).
     writeZoom(iframeDoc);
     wireInteractions(iframeDoc);
+    placeKeysLegend(iframeDoc);
     focusLineAfterChange(iframeDoc);
     // The reading point while the width is still (`steadyReading`): every scroll the person makes, and
     // none of the ones a settling width makes.
@@ -7405,6 +7413,38 @@ export function Editor({
       steadyReading.current = readingPointOf(iframeDoc);
     };
     widthSettling.current = view.requestAnimationFrame(tick);
+  }
+
+  /**
+   * **The key legend clear of a rail** (ADR 0060, David's adjustment 3 on approving sprint 31): a
+   * column fixed at the left edge is where the legend sits, so with a rail standing there it goes to
+   * the right, and with two standing it goes to the middle, between them. Read from the header's own
+   * `data-rails` and **the widths this document's rails stand from** — `headerWidths`, which writes
+   * the renderer's `@media` (sprint 34 día 5: since the fold of ADR 0067 a rail stands from just
+   * above the fold, past 1024 where the bar's words ask it) — never from a measurement. With two
+   * rails, between the two widths only the pages' rail stands, so it is the pages' side that counts
+   * there. Written once per document into a chrome `<style>` of its own, after every patch, and
+   * rewritten only when the widths change; a bar that never fits has no rail and no rule.
+   */
+  function placeKeysLegend(iframeDoc: Document) {
+    const widths = headerWidths(docNow.current);
+    const rules =
+      widths.rails === "none"
+        ? ""
+        : [
+            `@media (min-width: ${widths.rails}px) {`,
+            '  .rb-header[data-rails=left] ~ .rb-keys, .rb-header[data-rails="left right"][data-pages=left] ~ .rb-keys {',
+            `    left: auto; right: ${screenPx(12)}; } }`,
+            `@media (min-width: ${Math.max(TWO_RAILS_FOLD_WIDTH, widths.rails)}px) {`,
+            '  .rb-header[data-rails="left right"] ~ .rb-keys { left: 50%; right: auto; transform: translateX(-50%); } }',
+          ].join("\n");
+    let style = iframeDoc.getElementById("rb-keys-place") as HTMLStyleElement | null;
+    if (!style) {
+      style = chrome(iframeDoc, "style");
+      style.id = "rb-keys-place";
+      iframeDoc.head.appendChild(style);
+    }
+    if (style.textContent !== rules) style.textContent = rules;
   }
 
   function wireInteractions(iframeDoc: Document) {
@@ -7544,19 +7584,8 @@ export function Editor({
       "  background: #0F172A; color: #FFFFFF; pointer-events: none;",
       `  font: 500 ${screenPx(12)}/1.45 ${UI_FONT}; box-shadow: ${CHROME_SCALE.shadow2}; }`,
       ".rb-keys span:first-child { font-weight: 700; letter-spacing: 0.02em; }",
-      /*
-       * **Clear of a rail** (ADR 0060, David's adjustment 3 on approving sprint 31): a column fixed
-       * at the left edge is where the legend sits, so with a rail standing there it goes to the right,
-       * and with two standing it goes to the middle, between them. Read from the header's own
-       * `data-rails` and the widths the rails stand from — the renderer's constants, which write its
-       * `@media` — never from a measurement. With two rails, between the two widths only the pages'
-       * rail stands, so it is the pages' side that counts there.
-       */
-      `@media (min-width: ${RAIL_FOLD_WIDTH}px) {`,
-      '  .rb-header[data-rails=left] ~ .rb-keys, .rb-header[data-rails="left right"][data-pages=left] ~ .rb-keys {',
-      `    left: auto; right: ${screenPx(12)}; } }`,
-      `@media (min-width: ${TWO_RAILS_FOLD_WIDTH}px) {`,
-      '  .rb-header[data-rails="left right"] ~ .rb-keys { left: 50%; right: auto; transform: translateX(-50%); } }',
+      // **Clear of a rail**: the legend's place beside a standing column is written per document,
+      // from the widths its rails stand from — `placeKeysLegend`, after every patch.
       // Inset within the section, not hung outside it like the corner handles: the cover is
       // the first section, with no room above it, and a button hanging above the top of the
       // page there would sit outside the iframe's own visible area — covered by whatever the
@@ -7951,9 +7980,11 @@ export function Editor({
       // every grip of the gesture, the entries keeping the pointer a link has, and only where the
       // gesture exists — the desktop view; the phone's bar is not dragged. `rb-dragging` above makes
       // every cursor the closed hand while it lasts.
+      // **And «Menú»'s summary** (sprint 34 día 5): the pages' grip where the bar's words fold it
+      // under the canvas's width (ADR 0067) — the desktop view, at any width of it, never the phone's.
       `@media (min-width: ${NARROWEST_DESKTOP}px) {`,
       "  .rb-header .rb-nav[data-part], .rb-header .rb-rail, .rb-header .rb-nav-row,",
-      "  .rb-header .rb-nav-fold > summary { cursor: grab; }",
+      "  .rb-header .rb-nav-fold > summary, .rb-header .rb-nav-narrow > summary { cursor: grab; }",
       "  .rb-header .rb-nav[data-part] a { cursor: pointer; } }",
       // The element being moved, while it is being moved: dimmed, so the ghost is what the eye
       // follows. It keeps its place in the grid — see `wireDragging` on why it does not follow the

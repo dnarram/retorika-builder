@@ -105,6 +105,23 @@ describe("zonesFor", () => {
     expect(zonesFor("sections", placesOf(doc), 720)).toEqual([]);
     expect(zonesFor("sections", placesOf(doc), 721)).toHaveLength(5);
   });
+
+  it("keeps every zone under the header's own fold, which is not the phone view (sprint 34 día 5)", () => {
+    // Labels of twenty letters in capitals, at the generous scale, fold the bar well past 887 — the
+    // canvas of a 1024 window with a panel (ADR 0061).
+    const folded = parseDocument({
+      ...setHeader(doc, { look: { uppercase: true } }),
+      theme: { ...doc.theme, "size.body": "1.0625rem", "space.xl": "72px" },
+      pages: doc.pages.map((p, i) => (i === 0 ? p : { ...p, menuLabel: "Reservas para grupos" })),
+    });
+    const state = headerStateFor(folded, undefined);
+    if (state.phoneWidth === "always" || state.phoneWidth < 887) {
+      throw new Error(`the fold is ${state.phoneWidth}, not past 887`);
+    }
+    expect(zonesFor("pages", state, 887).map((z) => z.zone)).toEqual(["bar", "left", "right"]);
+    expect(zonesFor("sections", state, 887)).toHaveLength(5);
+    expect(zonesFor("pages", state, 720)).toEqual([]);
+  });
 });
 
 describe("zoneRects", () => {
