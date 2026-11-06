@@ -55,7 +55,58 @@ const DEJAVU_FACES = [
 const ascii = Array.from({ length: 0x7f - 0x20 }, (_, i) => String.fromCharCode(0x20 + i));
 const GLYPHS = [...ascii, ..."áéíóúüñÁÉÍÓÚÜÑ¿¡…«»—–€ºª·"];
 const WEIGHTS = [400, 700] as const;
-/** The digits of `BAR_EXCESS`: 0 to 63 32nds of a pixel. */
+/**
+ * **The labels the kerning margins are measured over** (David's decision of sprint 34 día 3: «el 1,5 %
+ * no es una constante suelta»): the corpus's and the catalog's words, «Inicio», «Menú», «Ir a…», two
+ * of twenty letters and a few that kern hard. Each is drawn whole, with kerning, against the sum of
+ * its glyphs drawn alone; the widest ratio, per case, is what kerning can add to a label.
+ */
+const KERNING_LABELS = [
+  "Taberna Santo Domingo",
+  "Qué ponemos",
+  "Dónde",
+  "Contacto",
+  "Menú",
+  "Servicios",
+  "Inicio",
+  "Dónde estamos",
+  "Barbería El Corte",
+  "Nuestra carta",
+  "Fotos de la casa",
+  "Reservas para grupos",
+  "Carta del día",
+  "Vinos de la casa",
+  "Raciones",
+  "Postres",
+  "Menú de grupos",
+  "Terraza",
+  "Reservar",
+  "Carta",
+  "Fotos",
+  "Pide cita",
+  "Horario",
+  "Precios",
+  "Equipo",
+  "Opiniones",
+  "Tratamientos",
+  "Fisioterapia Avanzada",
+  "Ir a…",
+  "Llámanos",
+  "Tarifas",
+  "Talleres",
+  "Visítanos",
+  "Yoga y Pilates",
+  "Wifi gratis",
+  "El Corte",
+  "Ávila",
+  "Tú y yo",
+];
+/** The floors David set: 3 % in lower case (día 2), 1.5 % in capitals with the bar's letter-spacing
+ * (día 3). A margin is the floor or the widest kerning measured, rounded up to the half point,
+ * whichever is wider — a new family that kerns wider raises it, and `pnpm fonts:advances` says so. */
+const KERNING_FLOORS = { lower: 1.03, upper: 1.015 } as const;
+
+/** The digits of `BAR_EXCESS`: 0 to 63 16ths of a pixel. */
 const ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_-";
 
 /** The sizes the bar draws its words at: `size.body` of every scale, and 0.875 of it when small —
@@ -85,6 +136,10 @@ interface Measurement {
   system?: Record<string, Record<string, string>>;
   /** macOS only: the shipped faces at 100 px in Chromium alone, which the em table is. */
   chromium100?: Record<string, Record<string, string>>;
+  /** The labels kerning was measured over, and per family and weight the widest ratio of a label
+   * drawn whole to its glyphs drawn alone (the letter-spacing taken out of both), per case. */
+  labels: string[];
+  kerning: Record<string, Record<string, { lower: number; upper: number }>>;
 }
 
 const row = (widths: number[]) => widths.join(",");
@@ -155,6 +210,8 @@ body{margin:0;line-height:1} span{white-space:pre;display:inline-block}</style><
     engines: [],
     glyphs: GLYPHS.join(""),
     faces: {},
+    labels: KERNING_LABELS,
+    kerning: {},
   };
   const widest: Record<string, number[]> = {};
   for (const [name, type] of engines) {
@@ -233,6 +290,51 @@ body{margin:0;line-height:1} span{white-space:pre;display:inline-block}</style><
         }
       }
     }
+    /** Each label whole, with kerning, against the sum of its glyphs alone, at 100 px: the widest
+     * ratio, with the capitals' letter-spacing (0.06 em a glyph, after each one) out of both sides,
+     * since the renderer adds it exactly and the margin is over the glyphs alone. */
+    const kern = (family: string, weight: number, upper: boolean) =>
+      page.evaluate(
+        ({ family, weight, upper, labels }) => {
+          const style = `font-family:"${family}";font-weight:${weight};font-size:100px;${upper ? "letter-spacing:6px;" : ""}`;
+          let widest = 0;
+          for (const label of labels) {
+            const text = upper ? label.toUpperCase() : label;
+            const host = document.createElement("div");
+            host.style.cssText = style;
+            const whole = document.createElement("span");
+            whole.textContent = text;
+            host.append(whole);
+            const alone = [...text].map((g) => {
+              const span = document.createElement("span");
+              span.style.fontKerning = "none";
+              span.textContent = g;
+              host.append(span);
+              return span;
+            });
+            document.body.append(host);
+            const spacing = upper ? 6 * [...text].length : 0;
+            const sum = alone.reduce((t, span) => t + span.getBoundingClientRect().width, 0);
+            const ratio = (whole.getBoundingClientRect().width - spacing) / (sum - spacing);
+            widest = Math.max(widest, ratio);
+            host.remove();
+          }
+          return widest;
+        },
+        { family, weight, upper, labels: KERNING_LABELS },
+      );
+    for (const { family } of FONT_GALLERY) {
+      for (const weight of WEIGHTS) {
+        const lower = await kern(family, weight, false);
+        const upper = await kern(family, weight, true);
+        out.kerning[family] ??= {};
+        const was = out.kerning[family][weight];
+        out.kerning[family][weight] = {
+          lower: Math.max(lower, was?.lower ?? 0),
+          upper: Math.max(upper, was?.upper ?? 0),
+        };
+      }
+    }
     if (mac && name === "chromium") {
       out.system = {};
       for (const { name: stackName, stack } of systems) {
@@ -275,6 +377,31 @@ function write(): void {
   );
   const { chromium100, system } = mac;
   if (!chromium100 || !system) throw new Error("fonts:advances: darwin.json has no 100 px rows");
+  for (const m of [mac, linux]) {
+    if (JSON.stringify(m.labels) !== JSON.stringify(KERNING_LABELS) || !m.kerning) {
+      throw new Error(`fonts:advances: ${m.platform}.json measured other labels; measure again`);
+    }
+  }
+
+  // **The kerning margins**: per case, the floor David set or the widest kerning any machine
+  // measured, rounded up to the half point, whichever is wider.
+  const margins = { lower: 0, upper: 0 };
+  const worst: Record<"lower" | "upper", string> = { lower: "", upper: "" };
+  for (const kase of ["lower", "upper"] as const) {
+    let widest = 0;
+    for (const m of [mac, linux]) {
+      for (const [family, weights] of Object.entries(m.kerning)) {
+        for (const [weight, ratio] of Object.entries(weights)) {
+          if (ratio[kase] > widest) {
+            widest = ratio[kase];
+            worst[kase] =
+              `${(100 * (widest - 1)).toFixed(2)} % (${family} ${weight}, ${m.platform})`;
+          }
+        }
+      }
+    }
+    margins[kase] = Math.max(KERNING_FLOORS[kase], Math.ceil(widest * 200 - 1e-9) / 200);
+  }
 
   // The em table, as día 2 measured it: macOS's Chromium at 100 px, to the thousandth.
   const em = (u: number) => Math.round((u / 64) * 10) / 1000;
@@ -302,8 +429,9 @@ function write(): void {
   }
 
   // **At the bar's sizes, the widest any machine drew**, written as what it adds to `em × size`, in
-  // 32nds of a pixel rounded up, one character a glyph: the table stays a table of em, and a size
-  // the bar takes reads its excess. Never under the em, since the em is what macOS draws.
+  // 16ths of a pixel rounded up, one character a glyph: the table stays a table of em, and a size
+  // the bar takes reads its excess. Never under the em, since the em is what macOS draws. 16ths and
+  // not finer: Linux's hinted Poppins draws a bold glyph up to 1.95 px over macOS's.
   const excess: Record<string, Record<number, Record<string, string>>> = {};
   let most = 0;
   for (const { family } of FONT_GALLERY) {
@@ -318,9 +446,9 @@ function write(): void {
         const ems = table[family]?.[weight] ?? [];
         excess[family][weight][key] = GLYPHS.map((g, i) => {
           const drawn = Math.max(a[i] ?? 0, b[i] ?? 0) / 64;
-          const over = Math.max(0, Math.ceil((drawn - (ems[i] ?? 0) * size) * 32 - 1e-6));
+          const over = Math.max(0, Math.ceil((drawn - (ems[i] ?? 0) * size) * 16 - 1e-6));
           if (over >= ALPHABET.length) {
-            throw new Error(`fonts:advances: ${what} «${g}» is ${over / 32} px over its em`);
+            throw new Error(`fonts:advances: ${what} «${g}» is ${over / 16} px over its em`);
           }
           most = Math.max(most, over);
           return ALPHABET[over];
@@ -340,7 +468,7 @@ function write(): void {
     "// `GLYPH_ADVANCES` is in em, as macOS's Chromium draws one copy of each glyph at 100 px with",
     "// kerning off, to the thousandth. `BAR_EXCESS` is what each glyph adds to that at the sizes the",
     "// bar takes, from the widest any measured machine drew — Linux's hinted letter, at 13.125 px,",
-    "// draws Poppins 3.5 % wider than macOS (sprint 34 día 3) — in 32nds of a pixel, one character of",
+    "// draws Poppins 3.5 % wider than macOS (sprint 34 día 3) — in 16ths of a pixel, one character of",
     "// `BAR_EXCESS_DIGITS` a glyph, in `GLYPHS`'s order. `FALLBACK_ADVANCES` is the 95th percentile,",
     "// glyph by glyph, over the three type pairs' six system stacks and DejaVu Sans and Serif, Linux's",
     "// letter for them: what a family the product does not ship — a system stack, an owner's own",
@@ -356,6 +484,12 @@ function write(): void {
     `export const GLYPHS: readonly string[] = ${JSON.stringify(GLYPHS)};`,
     `export const BAR_SIZES: readonly number[] = ${JSON.stringify(BAR_SIZES)};`,
     `export const BAR_EXCESS_DIGITS = ${JSON.stringify(ALPHABET)};`,
+    "",
+    "/** The labels kerning was measured over, and the margin it leaves per case: the floor (3 % in",
+    " * lower case, 1.5 % in capitals with the bar's letter-spacing) or the widest kerning measured,",
+    ` * rounded up to the half point. Widest measured: lower case ${worst.lower}; capitals ${worst.upper}. */`,
+    `export const KERNING_LABELS: readonly string[] = ${JSON.stringify(KERNING_LABELS)};`,
+    `export const KERNING_MARGINS = ${JSON.stringify(margins)} as const;`,
     "",
     "export const GLYPH_ADVANCES: Readonly<Record<string, FamilyAdvances>> = {",
     ...Object.entries(table).map(
@@ -381,6 +515,7 @@ function write(): void {
   writeFileSync(target, lines.join("\n"));
   console.log(
     `glyph advances: ${FONT_GALLERY.length} families, ${GLYPHS.length} glyphs, ` +
-      `${BAR_SIZES.length} bar sizes, at most ${most / 32} px over the em → ${target}`,
+      `${BAR_SIZES.length} bar sizes, at most ${most / 16} px over the em; kerning margins ` +
+      `${JSON.stringify(margins)} (widest: lower ${worst.lower}, capitals ${worst.upper}) → ${target}`,
   );
 }
