@@ -102,6 +102,8 @@ export interface HeaderSettings {
   logo: HeaderLogo | undefined;
   action: HeaderAction | undefined;
   sticky: boolean;
+  /** The line of how much has been read (ADR 0068): only ever on a fixed bar. */
+  progress: boolean;
   hairline: boolean;
   background: HeaderBackground;
   align: "start" | "center" | "end";
@@ -134,6 +136,7 @@ export function headerSettings(doc: RetorikaDocument): HeaderSettings {
     logo: header.brand?.logo,
     action: header.action,
     sticky: header.sticky ?? false,
+    progress: header.sticky === true && header.progress === true,
     hairline: header.hairline ?? true,
     background: header.look?.background ?? "surface",
     align: header.look?.align ?? (layout === "brand-left" ? "end" : "center"),
@@ -722,6 +725,7 @@ function lookAttributes(doc: RetorikaDocument, settings: HeaderSettings): Record
     ...(settings.uppercase ? { "data-uppercase": "" } : {}),
     ...(settings.hoverUnderline ? { "data-hover": "" } : {}),
     ...(settings.sticky ? { "data-sticky": "" } : {}),
+    ...(settings.progress ? { "data-progress": "" } : {}),
     ...(settings.hairline ? {} : { "data-hairline": "none" }),
     ...(headerPhoneRow(doc, settings) ? { "data-phone-row": "" } : {}),
   };
@@ -966,6 +970,7 @@ function headerStyleCss(doc: RetorikaDocument): string[] {
 export function headerCss(doc: RetorikaDocument, target: "html" | "dom"): string[] {
   if (!headerDrawn(doc)) return [];
   const widths = headerWidths(doc);
+  const settings = headerSettings(doc);
   return [
     // The skip link: off-screen until it has focus, and then the first thing on the page. `top`
     // rather than a clip, so the one transition it makes is the one a sighted keyboard user sees.
@@ -1229,6 +1234,7 @@ export function headerCss(doc: RetorikaDocument, target: "html" | "dom"): string
     `    background: color-mix(in srgb, var(--color-ink) ${Math.round(GLASS_MIX * 100)}%, transparent);`,
     "    -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }",
     "}",
+    ...progressCss(settings, widths, target),
     ...railCss(doc, widths),
     ...foldCss(doc, widths),
     ...headerStyleCss(doc),
@@ -1424,11 +1430,63 @@ function usesFold(settings: HeaderSettings): boolean {
  * the bar's height inside it — the disclosure's `top` — reads the height the bar really has even
  * where no script measures it, as in the editor's canvas; what lies outside it gets its own zero.
  */
-function collapseBar(header: string): string[] {
+function collapseBar(header: string, progress: boolean): string[] {
   return [
     `  ${header} { --rb-header-h: 0px; padding: 0; margin-bottom: 0; border-bottom: 0; background: transparent; box-shadow: none; }`,
     `  ${header}[data-sticky] ~ main [data-section] { scroll-margin-top: 0; }`,
     `  ${header}[data-bg=transparent] + main > .rb-section:first-child { padding-top: var(--space-xl); }`,
+    // No line under a bar of no height (ADR 0068): it would lie across the top of the page.
+    ...(progress ? [`  ${header}::after { display: none; }`] : []),
+  ];
+}
+
+/**
+ * **The line of how much has been read** (ADR 0068, sprint 34 día 6; David's decision 5 and his
+ * adjustment 3 approving the sprint): two pixels at the foot of a fixed bar, growing from the left as
+ * the page is read — a `transform: scaleX()` driven by the root's scroll, so nothing is laid out and
+ * nothing moves (no CLS), and no script: the published page's one script is the header's, and this
+ * asks nothing of it.
+ *
+ * - **`scroll(root)`, written out**, never `scroll()`: the nearest scroller is the root today, and the
+ *   day an ancestor of the bar had `overflow` the line would stand still with nothing turning red
+ *   (David's adjustment 3; `engines.browser.test.ts` reads the computed value).
+ * - **Only for somebody who has not asked for less movement**, and only where the browser has scroll
+ *   timelines (`@supports`): elsewhere no line at all — the line is empty before its animation, so an
+ *   engine that cannot drive it shows nothing rather than a full bar.
+ * - **In the primary over `surface` and the transparent bar, in `surface` over the coloured ones**,
+ *   as the indicator under the current entry is.
+ * - **Inside the bar, never under it** (David's condition c): absolute at its foot, so the phone's bar
+ *   keeps its 72 px. **Decorative**: a pseudo-element with no text is in no accessibility tree — no
+ *   landmark, no `progressbar` with a value.
+ * - **Not where the fixed bar lets go** — over the sections' row on a phone, the bar is in the flow and
+ *   a line of how far it has scrolled would be drawn under something that scrolled away — **nor where
+ *   the bar collapses to nothing** (`collapseBar`).
+ * - **For the published page only** (`target`): the canvas carries no `animation-timeline`, the lesson
+ *   of sprint 32 día 1 on functions that break the canvas by their mere presence, and the canvas is
+ *   still anyway (ADR 0051 §3). The panel says the canvas does not show it.
+ */
+function progressCss(
+  settings: HeaderSettings,
+  widths: HeaderWidths,
+  target: "html" | "dom",
+): string[] {
+  if (target !== "html" || !settings.progress) return [];
+  return [
+    "@media (prefers-reduced-motion: no-preference) {",
+    "  @supports (animation-timeline: scroll(root)) {",
+    '    .rb-header[data-sticky][data-progress]::after { content: ""; position: absolute; left: 0; right: 0;',
+    "      bottom: 0; height: 2px; background: var(--color-primary); transform: scaleX(0);",
+    "      transform-origin: left; pointer-events: none; animation: rb-progress auto linear both;",
+    "      animation-timeline: scroll(root); }",
+    "    .rb-header[data-progress]:is([data-bg=primary], [data-bg=secondary], [data-bg=ink])::after {",
+    "      background: var(--color-surface); }",
+    "    @keyframes rb-progress { from { transform: scaleX(0); } to { transform: scaleX(1); } }",
+    // The phone's block, nested: its own `@media` and brace indented to sit inside this one.
+    ...toPhone(widths, [
+      "      .rb-header[data-progress][data-phone-row]::after { display: none; }",
+    ]).map((line) => (line.startsWith("@media") || line === "}" ? `    ${line}` : line)),
+    "  }",
+    "}",
   ];
 }
 
@@ -1513,7 +1571,10 @@ function railCss(doc: RetorikaDocument, widths: HeaderWidths): string[] {
     `    --rb-rail-l: ${RAIL_WIDTH}px; }`,
     `  .rb-header[data-rails~=right], .rb-header[data-rails~=right] ~ main { margin-right: ${RAIL_WIDTH}px;`,
     `    --rb-rail-r: ${RAIL_WIDTH}px; }`,
-    ...collapseBar('.rb-header[data-layout][data-bar=none]:not([data-rails="left right"])'),
+    ...collapseBar(
+      '.rb-header[data-layout][data-bar=none]:not([data-rails="left right"])',
+      settings.progress,
+    ),
     "}",
     // Two rails, too narrow for both: the sections' rail falls into the bar, and its side's margin
     // with it.
@@ -1532,7 +1593,10 @@ function railCss(doc: RetorikaDocument, widths: HeaderWidths): string[] {
         ]
       : []),
     `${both} {`,
-    ...collapseBar('.rb-header[data-layout][data-bar=none][data-rails="left right"]'),
+    ...collapseBar(
+      '.rb-header[data-layout][data-bar=none][data-rails="left right"]',
+      settings.progress,
+    ),
     "}",
   ];
 }
@@ -1609,7 +1673,7 @@ function foldCss(doc: RetorikaDocument, widths: HeaderWidths): string[] {
       "    box-shadow: 0 8px 24px -16px var(--color-ink); }",
       `  .rb-header${coloured} .rb-nav-fold > :is(summary, .rb-nav) { border: 0; }`,
       // Nothing left in the bar but the disclosure, and no rail: the bar is no height from here.
-      ...collapseBar(".rb-header[data-layout][data-bar=none]:not([data-rails])"),
+      ...collapseBar(".rb-header[data-layout][data-bar=none]:not([data-rails])", settings.progress),
     ]),
     ...(usesRail(settings) && widths.rails !== "none"
       ? [

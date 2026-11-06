@@ -144,62 +144,72 @@ export const headerActionSchema = z.discriminatedUnion("kind", [
 ]);
 export type HeaderAction = z.infer<typeof headerActionSchema>;
 
-export const headerSchema = z.strictObject({
-  /** The pages menu. `shown` absent means the derivation ADR 0043 fixed: the threshold of three,
-   * waived once the owner has curated. Present, it is the owner's word and the threshold is silent. */
-  pages: z
-    .strictObject({
-      shown: z.boolean().optional(),
-      position: z.enum(PAGES_POSITIONS).optional(),
-    })
-    .optional(),
-  /** The sections menu of the page being drawn — same reading of `shown`. A `position` kept while
-   * `shown` is false is a preference the owner made, and stays for when the menu comes back. */
-  sections: z
-    .strictObject({
-      shown: z.boolean().optional(),
-      position: z.enum(SECTIONS_POSITIONS).optional(),
-      mobile: z.enum(SECTIONS_ON_MOBILE).optional(),
-    })
-    .optional(),
-  /** «La marca y el botón van con el menú de páginas» (ADR 0060): with the pages menu in a rail, the
-   * brand and the button go into that rail too. Honoured only where the pages menu is drawn in a
-   * rail; anywhere else the brand stays in the bar, and a key that does nothing is not an error. */
-  brandWithPages: z.boolean().optional(),
-  /** One destination drawn as a button, with the same words its menu entry would have. The
-   * destination leaves the menu it would otherwise sit in: one destination, one place. */
-  action: headerActionSchema.optional(),
-  layout: z.enum(HEADER_LAYOUTS).optional(),
-  /** The business name and its logo, linking home. The logo's `alt` is derived from `siteName` at
-   * render time and never stored, so a renamed business does not leave a stale word behind. */
-  brand: z
-    .strictObject({
-      name: z.boolean().optional(),
-      logo: headerLogoSchema.optional(),
-    })
-    .optional(),
-  sticky: z.boolean().optional(),
-  hairline: z.boolean().optional(),
-  look: z
-    .strictObject({
-      background: z.enum(HEADER_BACKGROUNDS).optional(),
-      align: z.enum(HEADER_ALIGNMENTS).optional(),
-      gap: z.enum(HEADER_GAPS).optional(),
-      uppercase: z.boolean().optional(),
-      hoverUnderline: z.boolean().optional(),
-      size: z.enum(HEADER_SIZES).optional(),
-    })
-    .optional(),
-  /** Rule 6 for the header's parts: the same five properties an element takes, each a reference
-   * or a marked exception. */
-  style: z
-    .strictObject(
-      Object.fromEntries(
-        HEADER_PARTS.map((part) => [part, elementStyleSchema.optional()]),
-      ) as Record<HeaderPart, z.ZodOptional<typeof elementStyleSchema>>,
-    )
-    .optional(),
-});
+export const headerSchema = z
+  .strictObject({
+    /** The pages menu. `shown` absent means the derivation ADR 0043 fixed: the threshold of three,
+     * waived once the owner has curated. Present, it is the owner's word and the threshold is silent. */
+    pages: z
+      .strictObject({
+        shown: z.boolean().optional(),
+        position: z.enum(PAGES_POSITIONS).optional(),
+      })
+      .optional(),
+    /** The sections menu of the page being drawn — same reading of `shown`. A `position` kept while
+     * `shown` is false is a preference the owner made, and stays for when the menu comes back. */
+    sections: z
+      .strictObject({
+        shown: z.boolean().optional(),
+        position: z.enum(SECTIONS_POSITIONS).optional(),
+        mobile: z.enum(SECTIONS_ON_MOBILE).optional(),
+      })
+      .optional(),
+    /** «La marca y el botón van con el menú de páginas» (ADR 0060): with the pages menu in a rail, the
+     * brand and the button go into that rail too. Honoured only where the pages menu is drawn in a
+     * rail; anywhere else the brand stays in the bar, and a key that does nothing is not an error. */
+    brandWithPages: z.boolean().optional(),
+    /** One destination drawn as a button, with the same words its menu entry would have. The
+     * destination leaves the menu it would otherwise sit in: one destination, one place. */
+    action: headerActionSchema.optional(),
+    layout: z.enum(HEADER_LAYOUTS).optional(),
+    /** The business name and its logo, linking home. The logo's `alt` is derived from `siteName` at
+     * render time and never stored, so a renamed business does not leave a stale word behind. */
+    brand: z
+      .strictObject({
+        name: z.boolean().optional(),
+        logo: headerLogoSchema.optional(),
+      })
+      .optional(),
+    sticky: z.boolean().optional(),
+    /** «Muestra cuánto se ha leído» (ADR 0068, schema 1.18.0): a line at the foot of a fixed bar
+     * that grows as the page is read. Only with `sticky` — the refinement below refuses it alone, so
+     * the state nobody can see is a state nobody can save — and only ever `true`: off is the key's
+     * absence. */
+    progress: z.literal(true).optional(),
+    hairline: z.boolean().optional(),
+    look: z
+      .strictObject({
+        background: z.enum(HEADER_BACKGROUNDS).optional(),
+        align: z.enum(HEADER_ALIGNMENTS).optional(),
+        gap: z.enum(HEADER_GAPS).optional(),
+        uppercase: z.boolean().optional(),
+        hoverUnderline: z.boolean().optional(),
+        size: z.enum(HEADER_SIZES).optional(),
+      })
+      .optional(),
+    /** Rule 6 for the header's parts: the same five properties an element takes, each a reference
+     * or a marked exception. */
+    style: z
+      .strictObject(
+        Object.fromEntries(
+          HEADER_PARTS.map((part) => [part, elementStyleSchema.optional()]),
+        ) as Record<HeaderPart, z.ZodOptional<typeof elementStyleSchema>>,
+      )
+      .optional(),
+  })
+  .refine((header) => header.progress === undefined || header.sticky === true, {
+    message: "header.progress is only for a fixed bar (sticky: true)",
+    path: ["progress"],
+  });
 export type Header = z.infer<typeof headerSchema>;
 
 /** Where a label lives: on a section, or on a page. */

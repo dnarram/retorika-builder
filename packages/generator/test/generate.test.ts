@@ -830,3 +830,36 @@ describe("the sector's own word for an entry (David's adjustment 6)", () => {
     }
   });
 });
+
+/**
+ * **The line of how much has been read is the owner's alone** (ADR 0068, David's condition b): no
+ * generated site carries it, nor the fixed bar it would need — every sector, every main action, every
+ * variant. A new site is born with its bar in the flow and no line, and the owner turns either on.
+ */
+describe("the generator never turns the line on (sprint 34 día 6)", () => {
+  it("writes no `progress` and no `sticky` in any header it generates", () => {
+    let sites = 0;
+    for (const sector of SECTOR_IDS) {
+      for (const mainAction of ["call", "book", "message", "email", "visit"] as const) {
+        for (const site of generateVariants(
+          answers({
+            businessName: "Taberna Santo Domingo",
+            sector,
+            mainAction,
+            services: ["Comidas", "Cenas"],
+            address: "Calle Mayor, 1, Ronda",
+            bookingLink: "https://reservas.example.com/taberna",
+            phone: "600111222",
+            email: "hola@example.com",
+            whatsapp: "600111222",
+          }),
+        )) {
+          sites += 1;
+          expect(site.document.header?.progress, `${sector} ${mainAction}`).toBeUndefined();
+          expect(site.document.header?.sticky, `${sector} ${mainAction}`).toBeUndefined();
+        }
+      }
+    }
+    expect(sites).toBeGreaterThan(0);
+  });
+});

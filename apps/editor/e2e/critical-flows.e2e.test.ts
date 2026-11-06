@@ -25967,3 +25967,89 @@ describe("sprint 34 día 5 — «Menú» es agarre", () => {
     }
   }, 300_000);
 });
+
+/**
+ * **Sprint 34 día 6 — la línea de progreso** (ADR 0068; decisión 5 de David al abrir el sprint). La
+ * casilla «Muestra cuánto se ha leído» solo existe con «Se queda arriba al bajar» marcado; desmarcar
+ * la fija se lleva la línea en el mismo paso, sin dejar la clave huérfana; nace apagada; y el ZIP la
+ * lleva: el atributo en la barra y la regla que lee `scroll(root)`. En el lienzo no se dibuja, y la nota
+ * lo dice.
+ */
+describe("sprint 34 día 6 — la línea de progreso", () => {
+  it("la casilla aparece y desaparece con la fija, y el ZIP lleva la línea", async () => {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 950 } });
+    const studio = await context.newPage();
+    try {
+      await intoTheCanvas(studio);
+      const frame = studio.frameLocator(PREVIEW).first();
+      await studio.getByRole("button", { name: "Menú", exact: true }).click();
+      const panel = studio.getByRole("complementary", { name: "La cabecera de tu web" });
+      await expect(panel).toBeVisible();
+      const sticky = panel.getByRole("checkbox", { name: "Se queda arriba al bajar" });
+      const progress = panel.getByRole("checkbox", { name: "Muestra cuánto se ha leído" });
+
+      // 1. A new site: no fixed bar, so no line to offer.
+      await expect(sticky).not.toBeChecked();
+      await expect(progress).toHaveCount(0);
+
+      // 2. Fixed: the box appears, off, with what it does and that the canvas does not show it.
+      await sticky.check();
+      await expect(progress).toBeVisible();
+      await expect(progress).not.toBeChecked();
+      await expect(
+        panel.getByText(
+          "Al publicar, una línea en el borde de la barra crece a medida que se baja. En el lienzo no se ve.",
+        ),
+      ).toBeVisible();
+      await progress.check();
+      await expect(frame.locator("header.rb-header[data-progress]")).toHaveCount(1);
+      // The canvas draws no line: no content on the bar's `::after`.
+      expect(
+        await frame
+          .locator("header.rb-header")
+          .evaluate((el) => getComputedStyle(el, "::after").content),
+      ).toBe("none");
+
+      // 3. Unfixed: the box goes, and the line with it — one step, no key left behind.
+      await sticky.uncheck();
+      await expect(progress).toHaveCount(0);
+      await expect(frame.locator("header.rb-header[data-progress]")).toHaveCount(0);
+      await expect
+        .poll(() =>
+          studio.evaluate(() => {
+            const session = JSON.parse(localStorage.getItem("retorika.session.v1") ?? "{}") as {
+              openIndex?: number;
+              documents?: { header?: Record<string, unknown> }[];
+            };
+            const header = session.documents?.[session.openIndex ?? -1]?.header ?? {};
+            return { sticky: header["sticky"], progress: "progress" in header };
+          }),
+        )
+        .toEqual({ sticky: false, progress: false });
+      // «Deshacer» brings both back together.
+      await studio.getByRole("button", { name: "Deshacer", exact: true }).click();
+      await expect(sticky).toBeChecked();
+      await expect(progress).toBeChecked();
+      await panel.getByRole("button", { name: "Cerrar la cabecera" }).click();
+
+      // 4. The ZIP carries it: the bar's attribute and the rule that reads the root's scroll.
+      await studio.getByRole("button", { name: "Descargar" }).click();
+      const anyway = studio.getByRole("button", { name: "Descargar igualmente" });
+      await anyway.waitFor();
+      const [download] = await Promise.all([studio.waitForEvent("download"), anyway.click()]);
+      const dir = mkdtempSync(join(tmpdir(), "retorika-e2e-sprint34-dia6-"));
+      const zipPath = join(dir, download.suggestedFilename());
+      await download.saveAs(zipPath);
+      const zip = new Uint8Array(readFileSync(zipPath));
+      const text = listZipEntries(zip)
+        .filter((entry) => /\.(html|css)$/.test(entry))
+        .map((entry) => new TextDecoder().decode(extractFileBytes(zip, entry)))
+        .join("\n");
+      expect(text).toContain('data-progress=""');
+      expect(text).toContain("animation-timeline: scroll(root);");
+      expect(text).toContain("@keyframes rb-progress");
+    } finally {
+      await context.close();
+    }
+  }, 300_000);
+});

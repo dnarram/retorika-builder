@@ -2094,13 +2094,13 @@ describe("1.17.0 — each menu has its place", () => {
     };
   }
 
-  it("is registered, and it is the one the chain ends at", () => {
+  it("is registered", () => {
+    // The end of the chain until 1.18.0; the end is asserted by the step that is the end.
     expect(step("1.17.0").version).toBe("1.17.0");
-    expect(SCHEMA_VERSION).toBe("1.17.0");
   });
 
   it("turns the own row into a position and moves nothing else", () => {
-    const migrated = migrateToCurrent(before());
+    const migrated = upTo(before(), "1.17.0");
     expect(migrated["schemaVersion"]).toBe("1.17.0");
     expect(migrated["header"]).toEqual({
       sections: { shown: true, mobile: "hidden", position: "row" },
@@ -2111,16 +2111,16 @@ describe("1.17.0 — each menu has its place", () => {
 
   it("drops a shared row without a word in its place: the bar is what absent means", () => {
     const shared = { ...before(), header: { sections: { shown: true, row: "shared" } } };
-    expect(migrateToCurrent(shared)["header"]).toEqual({ sections: { shown: true } });
+    expect(upTo(shared, "1.17.0")["header"]).toEqual({ sections: { shown: true } });
   });
 
   it("seals a document with no row, and migrating a migrated document changes nothing", () => {
     const { header: _, ...headless } = before();
-    expect(migrateToCurrent(headless)).toEqual({ ...headless, schemaVersion: "1.17.0" });
+    expect(upTo(headless, "1.17.0")).toEqual({ ...headless, schemaVersion: "1.17.0" });
     const once = migrateToCurrent(before());
     expect(migrateToCurrent(once)).toEqual(once);
     const current = after();
-    expect(migrateToCurrent(current)).toEqual(current);
+    expect(migrateToCurrent(current)).toEqual({ ...current, schemaVersion: SCHEMA_VERSION });
     expect(() => parseDocument(current)).not.toThrow();
   });
 
@@ -2136,7 +2136,7 @@ describe("1.17.0 — each menu has its place", () => {
       sections: { shown: true },
       brand: { name: true },
     });
-    const row = down?.(migrateToCurrent(before())) ?? {};
+    const row = down?.(upTo(before(), "1.17.0")) ?? {};
     expect(row["header"]).toEqual({
       sections: { shown: true, mobile: "hidden", row: "own" },
       brand: { name: true },
@@ -2146,12 +2146,12 @@ describe("1.17.0 — each menu has its place", () => {
   it("round-trips a document with a row of its own, one with no header, and one with empty menus", () => {
     const down = step("1.17.0").down;
     const input = before();
-    expect(down?.(migrateToCurrent(input))).toEqual(input);
+    expect(down?.(upTo(input, "1.17.0"))).toEqual(input);
     const { header: _, ...headless } = input;
-    expect(down?.(migrateToCurrent(headless))).toEqual(headless);
+    expect(down?.(upTo(headless, "1.17.0"))).toEqual(headless);
     // An empty object the document already held is not this step's to tidy away.
     const empty = { ...input, header: { pages: {}, sections: {} } };
-    expect(down?.(migrateToCurrent(empty))).toEqual(empty);
+    expect(down?.(upTo(empty, "1.17.0"))).toEqual(empty);
     // And a header that held only what 1.16.0 cannot keep goes with it.
     expect(
       down?.({ ...after(), header: { pages: { position: "right" }, brandWithPages: true } }),
@@ -2173,5 +2173,99 @@ describe("1.17.0 — each menu has its place", () => {
       expect(raw.header.sections.position, file).toBe("row");
     }
     expect(placed).toBe(1);
+  });
+});
+
+/**
+ * `0019` — the fixed bar can say how much has been read (ADR 0068, sprint 34 día 6): `header.progress`
+ * may be `true` beside `sticky: true`. `up` seals and moves nothing; a document nobody touched
+ * round-trips exactly; what the «Menú» panel writes parses, and the line alone — without the fixed
+ * bar — does not; `down` drops the line and keeps the bar.
+ */
+describe("1.18.0 — the fixed bar says how much has been read", () => {
+  /** A 1.17.0 site whose bar stays at the top. */
+  function before(): Record<string, unknown> {
+    return {
+      schemaVersion: "1.17.0",
+      id: "doc-progreso",
+      siteName: "Taberna Santo Domingo",
+      theme,
+      collections: [],
+      header: { sticky: true, brand: { name: true } },
+      pages: [
+        {
+          id: "home",
+          slug: "index",
+          title: "Taberna Santo Domingo",
+          sections: [
+            {
+              id: "sec-cover",
+              preset: { catalogId: "cover", variantId: "image-right" },
+              source: "catalog",
+              layout: null,
+              content: [],
+            },
+          ],
+        },
+      ],
+    };
+  }
+  /** The same site at 1.18.0 with the line on, as the panel writes it. */
+  const after = () => ({
+    ...before(),
+    schemaVersion: "1.18.0",
+    header: { sticky: true, progress: true, brand: { name: true } },
+  });
+
+  it("is registered, and it is the one the chain ends at", () => {
+    expect(step("1.18.0").version).toBe("1.18.0");
+    expect(SCHEMA_VERSION).toBe("1.18.0");
+  });
+
+  it("seals a 1.17.0 document and moves nothing, because the key is optional", () => {
+    const migrated = upTo(before(), "1.18.0");
+    expect(migrated).toEqual({ ...before(), schemaVersion: "1.18.0" });
+    expect(Object.hasOwn(migrated["header"] as object, "progress")).toBe(false);
+    expect(() => parseDocument(migrated)).not.toThrow();
+    const once = migrateToCurrent(before());
+    expect(migrateToCurrent(once)).toEqual(once);
+  });
+
+  it("parses the line beside a fixed bar, and refuses it alone, or as anything but true", () => {
+    expect(() => parseDocument(after())).not.toThrow();
+    const alone = { ...after(), header: { progress: true, brand: { name: true } } };
+    expect(() => parseDocument(alone)).toThrow(/progress/);
+    const unfixed = { ...after(), header: { sticky: false, progress: true } };
+    expect(() => parseDocument(unfixed)).toThrow(/progress/);
+    const off = { ...after(), header: { sticky: true, progress: false } };
+    expect(() => parseDocument(off)).toThrow();
+  });
+
+  /** **`down` is lossy, and this is the loss, named:** the line goes, the fixed bar stays. */
+  it("takes the line away on the way down and keeps the fixed bar", () => {
+    const down = step("1.18.0").down;
+    expect(down, "1.18.0 has no `down`").toBeDefined();
+    const back = down?.(after()) ?? {};
+    expect(back["schemaVersion"]).toBe("1.17.0");
+    expect(back["header"]).toEqual({ sticky: true, brand: { name: true } });
+  });
+
+  it("round-trips a document with no line, and one with no header", () => {
+    const down = step("1.18.0").down;
+    const input = before();
+    expect(down?.(migrateToCurrent(input))).toEqual(input);
+    const { header: _, ...headless } = input;
+    expect(down?.(migrateToCurrent(headless))).toEqual(headless);
+  });
+
+  it("is the claim it rests on: no corpus fixture carries the line", () => {
+    const corpus = readdirSync(DOCUMENTS_DIR).filter((file) => file.endsWith(".json"));
+    expect(corpus.length).toBeGreaterThan(0);
+    for (const file of corpus) {
+      const raw = JSON.parse(readFileSync(join(DOCUMENTS_DIR, file), "utf8")) as {
+        header?: Record<string, unknown>;
+      };
+      expect(raw.header?.["progress"], file).toBeUndefined();
+    }
   });
 });

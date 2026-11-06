@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "1.17.0",
+  "schemaVersion": "1.18.0",
   "document": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
@@ -418,6 +418,10 @@
           },
           "sticky": {
             "type": "boolean"
+          },
+          "progress": {
+            "type": "boolean",
+            "const": true
           },
           "hairline": {
             "type": "boolean"

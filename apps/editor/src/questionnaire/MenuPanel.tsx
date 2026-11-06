@@ -42,10 +42,12 @@ import {
   PHONE_BUTTON_MAX,
   pagesPositionPatch,
   phoneSpan,
+  progressPatch,
   type SectionRow,
   schemeSwatch,
   sectionsMobilePatch,
   sectionsPositionPatch,
+  stickyPatch,
 } from "../editor/headerState.ts";
 import {
   PANEL_WIDTH,
@@ -460,7 +462,7 @@ export function MenuPanel({
         <Check
           label={es["editor.menuPanel.sticky"]}
           checked={state.sticky}
-          onChange={(sticky) => onSetHeader({ sticky })}
+          onChange={(sticky) => onSetHeader(stickyPatch(sticky))}
           notes={[
             // What it turns into once scrolled, read from the renderer's own list (`scrolledLook`).
             state.scrolledLook === "glass"
@@ -470,6 +472,16 @@ export function MenuPanel({
             ...(state.transparent ? [es["editor.menuPanel.stickyTransparent"]] : []),
           ]}
         />
+        {/* The line of how much has been read (ADR 0068): offered only with the fixed bar, which is
+            where it lives (David's condition a); off by default, also for a new site (condition b). */}
+        {state.sticky ? (
+          <Check
+            label={es["editor.menuPanel.progress"]}
+            checked={state.progress}
+            onChange={(on) => onSetHeader(progressPatch(on))}
+            notes={[es["editor.menuPanel.progressNote"]]}
+          />
+        ) : null}
         <Check
           label={es["editor.menuPanel.hairline"]}
           checked={state.hairline}

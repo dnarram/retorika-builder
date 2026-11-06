@@ -1305,3 +1305,86 @@ describe("the header's widths", () => {
     expect(headerWidths(withLabels(["Carta", "Fotos"])).over).toBe(0);
   });
 });
+
+/**
+ * **The line of how much has been read** (ADR 0068, sprint 34 día 6; David's decision 5 and his
+ * adjustment 3): a fixed bar's option, drawn by the bar's own `::after` on the published page alone —
+ * driven by `scroll(root)` written out, under `prefers-reduced-motion: no-preference` and a feature
+ * query, empty before its animation, and nowhere the bar lets go or collapses. That it really grows is
+ * the engines' business (`engines.browser.test.ts`); this holds the sheet and the markup.
+ */
+describe("the line of how much has been read", () => {
+  const pages = [{ id: "p-carta", slug: "carta", title: "Carta" }];
+  const lined = site(2, pages, { sticky: true, progress: true });
+  const BLOCK = [
+    "@media (prefers-reduced-motion: no-preference) {",
+    "  @supports (animation-timeline: scroll(root)) {",
+    '    .rb-header[data-sticky][data-progress]::after { content: ""; position: absolute; left: 0; right: 0;',
+    "      bottom: 0; height: 2px; background: var(--color-primary); transform: scaleX(0);",
+    "      transform-origin: left; pointer-events: none; animation: rb-progress auto linear both;",
+    "      animation-timeline: scroll(root); }",
+    "    .rb-header[data-progress]:is([data-bg=primary], [data-bg=secondary], [data-bg=ink])::after {",
+    "      background: var(--color-surface); }",
+    "    @keyframes rb-progress { from { transform: scaleX(0); } to { transform: scaleX(1); } }",
+  ].join("\n");
+
+  it("marks a fixed bar that carries it, and no other", () => {
+    expect(draw(lined).querySelector("header")?.hasAttribute("data-progress")).toBe(true);
+    const fixed = site(2, pages, { sticky: true });
+    expect(draw(fixed).querySelector("header")?.hasAttribute("data-progress")).toBe(false);
+    expect(render(fixed, "html").css).not.toContain("rb-progress");
+    // The schema refuses the line without the fixed bar; the renderer would draw none anyway.
+    const alone = site(2, pages, { progress: true } as RetorikaDocument["header"]);
+    expect(draw(alone).querySelector("header")?.hasAttribute("data-progress")).toBe(false);
+    expect(render(alone, "html").css).not.toContain("rb-progress");
+  });
+
+  it("is written for the published page, inside both queries, reading the root's scroll by name", () => {
+    const css = render(lined, "html").css;
+    expect(css).toContain(BLOCK);
+    expect(css).not.toMatch(/animation-timeline:\s*scroll\(\)/);
+    // In the primary over surface and the transparent bar, in surface over the coloured ones.
+    expect(BLOCK).toContain("background: var(--color-primary)");
+  });
+
+  it("is not in the canvas's sheet at all", () => {
+    const canvas = buildCss(lined, "dom");
+    expect(canvas).not.toContain("rb-progress");
+    expect(canvas).not.toContain("scroll(root)");
+    expect(canvas).not.toContain("data-progress");
+  });
+
+  it("is not drawn where the fixed bar lets go over the phone's row, nor under a collapsed bar", () => {
+    // The sections' row on a phone: the bar lets go there (sprint 31 día 6), and so does the line.
+    const css = render(lined, "html").css;
+    expect(css).toContain(
+      "    @media (max-width: 720px) {\n      .rb-header[data-progress][data-phone-row]::after { display: none; }\n    }",
+    );
+    // A bar with nothing left, every menu and the brand in columns: no height, so no line.
+    const columns = site(2, pages, {
+      sticky: true,
+      progress: true,
+      pages: { shown: true, position: "left" },
+      sections: { shown: true, position: "left" },
+      brandWithPages: true,
+    });
+    expect(draw(columns).querySelector("header")?.getAttribute("data-bar")).toBe("none");
+    expect(render(columns, "html").css).toContain(
+      '  .rb-header[data-layout][data-bar=none]:not([data-rails="left right"])::after { display: none; }',
+    );
+    // Without the line, the collapse writes what it always wrote.
+    const { progress: _, ...unlined } = columns.header ?? {};
+    expect(render({ ...columns, header: unlined }, "html").css).not.toMatch(
+      /data-bar=none[^{]*::after \{ display: none; \}/,
+    );
+  });
+
+  it("adds no height to the bar, and no line of the bar's estimate", () => {
+    const fixed = site(2, pages, { sticky: true });
+    const strip = (css: string) => css.slice(0, css.indexOf("@media (prefers-reduced-motion"));
+    // The estimate of the bar's lines (`--rb-bar-h`) is the same with the line and without it.
+    const height = (css: string) => css.match(/--rb-bar-h: [^;]+;/g);
+    expect(height(render(lined, "html").css)).toEqual(height(render(fixed, "html").css));
+    expect(strip(render(lined, "html").css)).toBe(strip(render(fixed, "html").css));
+  });
+});
