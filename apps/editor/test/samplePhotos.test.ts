@@ -1,6 +1,6 @@
 import { blankSection, GALLERY_ID, PLACEHOLDER_SAMPLE_ID } from "@retorika/catalog";
 import { EMPTY_ANSWERS, generateVariants, SECTOR_IDS } from "@retorika/generator";
-import { hasSamplePhotos } from "@retorika/photobank";
+import { hasSamplePhotos, type ImageRecord, recordById } from "@retorika/photobank";
 import {
   flattenElements,
   insertSection,
@@ -9,7 +9,7 @@ import {
   setElementImageSrc,
 } from "@retorika/schema";
 import { describe, expect, it } from "vitest";
-import { listSampleRefs } from "../src/editor/samplePhotos.ts";
+import { listSampleRefs, sampleUrl } from "../src/editor/samplePhotos.ts";
 
 /**
  * Which photographs the app has to fetch bytes for.
@@ -233,5 +233,36 @@ describe("a document that does reference the bank", () => {
       ],
     });
     expect(listSampleRefs(twice)).toHaveLength(1);
+  });
+});
+
+describe("sampleUrl — where the bytes are asked for (sprint 34 día 7)", () => {
+  const record = recordById("restaurante-bar.03");
+
+  it("names the id and the record's version, and asks the same address while the record stands", () => {
+    expect(record, "restaurante-bar.03 is not in the bank").toBeDefined();
+    if (!record) return;
+    const url = sampleUrl(record.id);
+    expect(url).toBe(`/api/muestras/restaurante-bar.03?v=${record.review.date}-${record.bytes}`);
+    // Stable, or the year-long cache would be worth nothing.
+    expect(sampleUrl(record.id)).toBe(url);
+  });
+
+  it("asks a new address once `photos:replace` has written new bytes under the same id", () => {
+    // The record a replacement writes: same id and file, a new review and new bytes. A browser that
+    // cached the old ones must not be handed them again by an unchanged address.
+    if (!record) return;
+    const replaced: ImageRecord = {
+      ...record,
+      width: 1600,
+      height: 1072,
+      bytes: record.bytes + 1,
+      review: { ...record.review, date: "2026-11-30" },
+    };
+    expect(sampleUrl(record.id, () => replaced)).not.toBe(sampleUrl(record.id));
+  });
+
+  it("gives an id the bank does not know no version, and the route its 404", () => {
+    expect(sampleUrl("no-existe")).toBe("/api/muestras/no-existe");
   });
 });

@@ -171,3 +171,24 @@ keeping identical.
 What shipped on 9 October was `FLOOR_EXEMPTION_FAILS_FROM`, in `packages/photobank/src/schema.ts`.
 Nobody noticed for a fortnight, which is the seventh instance of the thing the paragraph above the
 Consequences counts six of.
+
+## Note — sprint 34 día 7: the nine come back under their own ids (6 November 2026)
+
+Approving the sprint 34 plan on 5 November 2026, David approved its decision 8: **the regenerated
+photographs take the ids of the ones they replace.** The circuit above is unchanged — a record in
+`drafts/`, a person's review against the list, the `git mv` that is the review — and only its last
+step differs: `pnpm photos:replace <old-id> <draft-id> --by <name>` writes the reviewed draft under
+the old record's `id` and `file`, with the draft's size, bytes, `alt`, origin, licence and a new
+review. The reason is the documents already saved: each names its photograph by file
+(`muestra-restaurante-bar.03.webp`) and the editor fetches it by id before every download, so a new
+id with the old one retired would make every saved site that used it undownloadable.
+
+What this decision did not change: the floor and the ceiling, the date (the exemption still fails
+from 1 December 2026), and the remedy. The tool refuses a draft under the floor on its own account,
+since the id it writes is still on the exempt list when it does; and on the ninth it says so, and
+`FLOOR_EXEMPT_IDS`, `FLOOR_EXEMPTION_FAILS_FROM` and their two tests go in that same pull request.
+The sheet for regenerating them, photograph by photograph, is
+[`docs/tasks/las-nueve-fotos.md`](../tasks/las-nueve-fotos.md). One consequence found while building
+it: `/api/muestras/<id>` is cached as immutable for a year, which was true while an id's bytes never
+changed; the editor now asks by an address that carries the record's version (`sampleUrl`), so a
+replaced photograph is not served stale from a cache.

@@ -50,9 +50,11 @@ describe("the landing's sample site", () => {
   it("asks the public route for every photograph, and leaves no bundle-relative name behind", () => {
     const sources = [...html.matchAll(/<img[^>]+src="([^"]+)"/g)].map((match) => match[1] ?? "");
     expect(sources.length, "the sample carries no photograph at all").toBeGreaterThan(0);
-    for (const src of sources) expect(src).toMatch(/^\/api\/muestras\/[\w.-]+$/);
+    for (const src of sources) expect(src).toMatch(/^\/api\/muestras\/[\w.-]+\?v=[\w.-]+$/);
     // And nothing anywhere else in the document still names a bank file directly.
-    expect(html.replace(/\/api\/muestras\/[\w.-]+/g, "")).not.toMatch(/muestra-[\w.-]+\.webp/);
+    expect(html.replace(/\/api\/muestras\/[\w.-]+(\?v=[\w.-]+)?/g, "")).not.toMatch(
+      /muestra-[\w.-]+\.webp/,
+    );
   });
 
   /**

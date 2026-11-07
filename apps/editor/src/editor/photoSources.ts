@@ -17,7 +17,7 @@ import { listSampleRefs } from "./samplePhotos.ts";
  */
 
 export type PhotoSource =
-  /** Ours, immutable, shared by every owner of this sector. `id` is the bank id. */
+  /** Ours, reviewed, shared by every owner of this sector. `id` is the bank id. */
   | { kind: "bank"; id: string; src: string }
   /** The owner's, in their own folder of the bucket. */
   | { kind: "account"; src: string };

@@ -86,6 +86,7 @@ import {
 } from "../editor/photos.ts";
 import { withFontUrls, withPhotoUrls } from "../editor/previewDocument.ts";
 import { record } from "../editor/probe.ts";
+import { sampleUrl } from "../editor/samplePhotos.ts";
 import { useMediaQuery } from "../editor/viewport.ts";
 import es from "../locales/es.json" with { type: "json" };
 import { type DeleteToast, Editor, type SectionOffer } from "./Editor.tsx";
@@ -1012,7 +1013,7 @@ export function Variants({
   /** Our bytes, by bank id. `null` for any answer that is not a photograph, which the caller
    * turns into the blocking gate rather than a broken image. */
   const bankBytes = useCallback(async (id: string): Promise<Uint8Array | null> => {
-    const response = await fetch(`/api/muestras/${encodeURIComponent(id)}`);
+    const response = await fetch(sampleUrl(id));
     if (!response.ok) return null;
     return new Uint8Array(await response.arrayBuffer());
   }, []);

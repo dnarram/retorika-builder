@@ -1,7 +1,9 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, renameSync } from "node:fs";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { inflateRawSync } from "node:zlib";
 import { EMPTY_ANSWERS, generate, VARIANTS } from "@retorika/generator";
+import { bankFileSchema } from "@retorika/photobank";
 import { readSampleBytes } from "@retorika/photobank/server";
 import {
   addOwnFont,
@@ -12,6 +14,8 @@ import {
 } from "@retorika/schema";
 import { withFamily, withOwnFont } from "@retorika/tokens";
 import { beforeEach, describe, expect, it } from "vitest";
+import { bankCopyWithDraft, DRAFT_BYTES } from "../../../packages/photobank/test/bank-copy.ts";
+import { replace } from "../../../packages/photobank/tools/replace.ts";
 import { POST } from "../src/app/api/download/route.ts";
 import { PUBLIC_BYTES_LIMIT } from "../src/app/api/publicGuard.ts";
 
@@ -20,7 +24,7 @@ import { PUBLIC_BYTES_LIMIT } from "../src/app/api/publicGuard.ts";
  * validator of the format itself, which is `packages/publisher/test/zip.test.ts`'s job.
  * Walks the central directory from the end, same as unzip does.
  */
-function extractFile(bytes: Uint8Array, path: string): string {
+function extractBytes(bytes: Uint8Array, path: string): Uint8Array {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const eocd = bytes.length - 22;
   const count = view.getUint16(eocd + 10, true);
@@ -39,11 +43,15 @@ function extractFile(bytes: Uint8Array, path: string): string {
       const localExtraLength = view.getUint16(localOffset + 28, true);
       const dataStart = localOffset + 30 + localNameLength + localExtraLength;
       const raw = bytes.subarray(dataStart, dataStart + compressedSize);
-      return decoder.decode(method === 8 ? inflateRawSync(raw) : raw);
+      return method === 8 ? new Uint8Array(inflateRawSync(raw)) : raw;
     }
     at += 46 + nameLength + extraLength + commentLength;
   }
   throw new Error(`"${path}" not found in the ZIP`);
+}
+
+function extractFile(bytes: Uint8Array, path: string): string {
+  return new TextDecoder().decode(extractBytes(bytes, path));
 }
 
 // Every request here comes from no address at all, so they share the «unknown» bucket — and this
@@ -525,7 +533,8 @@ describe("POST /api/download", () => {
   });
   describe("the owner's own photo", () => {
     /** The cover of a real document, pointed at a file rather than the inline placeholder. */
-    function withPhoto(src: string): RetorikaDocument {
+    /** The cover's photograph named `src` — and, for a bank photograph, its `sample` id too. */
+    function withPhoto(src: string, sample?: string): RetorikaDocument {
       const page = REAL_DOCUMENT.pages[0];
       if (!page) throw new Error("no page in the fixture");
       return {
@@ -540,7 +549,10 @@ describe("POST /api/download", () => {
                     ...section,
                     content: section.content.map((element) =>
                       element.value?.kind === "image"
-                        ? { ...element, value: { ...element.value, src } }
+                        ? {
+                            ...element,
+                            value: { ...element.value, src, ...(sample ? { sample } : {}) },
+                          }
                         : element,
                     ),
                   },
@@ -609,6 +621,41 @@ describe("POST /api/download", () => {
       );
       expect(response.status).toBe(400);
       expect(await response.text()).toContain(sample.src);
+    });
+
+    it("still downloads a document saved with `muestra-restaurante-bar.03.webp` after `photos:replace` put a new photograph under that id", async () => {
+      // Sprint 34 día 7, the plan's decision 8. A saved document names its photograph by file, and
+      // the editor fetches the bytes by the `sample` id before every download — so the regenerated
+      // photograph takes the old id, and this is the site that must not stop downloading. Run on a
+      // copy of the real bank, with the real tool.
+      const { root } = bankCopyWithDraft();
+      replace({
+        oldId: "restaurante-bar.03",
+        draftId: "restaurante-bar.10",
+        by: "dnr",
+        today: "2026-11-06",
+        root,
+        move: renameSync,
+      });
+      const bank = bankFileSchema.parse(
+        JSON.parse(readFileSync(join(root, "bank", "restaurante-bar.json"), "utf8")),
+      ).images;
+      // `/api/muestras/[id]`, step for step: the lookup, then the bytes the record names.
+      const lookup = (id: string) => bank.find((image) => image.id === id);
+      const bytes = readSampleBytes("restaurante-bar.03", join(root, "bank", "photos"), lookup);
+
+      const saved = withPhoto("muestra-restaurante-bar.03.webp", "restaurante-bar.03");
+      const response = await POST(
+        request({ document: saved }, [{ src: "muestra-restaurante-bar.03.webp", bytes }]),
+      );
+      expect(response.status).toBe(200);
+      const zip = new Uint8Array(await response.arrayBuffer());
+      expect(Buffer.from(extractBytes(zip, "assets/muestra-restaurante-bar.03.webp"))).toEqual(
+        DRAFT_BYTES,
+      );
+      expect(extractFile(zip, "index.html")).toContain(
+        'src="assets/muestra-restaurante-bar.03.webp"',
+      );
     });
 
     it("refuses a document that names a photo the request did not send", async () => {
