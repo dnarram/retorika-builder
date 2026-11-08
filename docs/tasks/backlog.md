@@ -12,7 +12,52 @@ drift, and the facilitator's script already says findings go to the decision the
 a separate document nobody reads again». So an item with an ADR points at the ADR; an item with
 an issue points at the issue; and only the things with no other home are described here at all.
 
-Last reviewed: 5 November 2026, **closing sprint 33 — «los menús se ven bien y se arrastran».** David
+Last reviewed: 8 November 2026, **closing sprint 34 — «la barra nunca se parte».** David decided what
+sprint 33 had measured: a bar whose words do not fit one line **folds into the phone's header** under a
+width of each document's own, estimated from the words it draws, with no upper bound — «always» where
+it never fits; the owner is told in the panel and, from 1024, in the download review; «Menú» becomes a
+grip; and two more things entered, a reading-progress line for the fixed bar and a day for signatures
+and photographs. Eight days in eight PRs (#350–#356 and the close), six decisions of his before
+planning, three adjustments approving, two decisions on día 3 and one on día 4. What changed for
+somebody visiting a site: **the bar never wraps** — the audit, 306 documents × three engines at seven
+widths and at each document's own N and N + 1, found no wrapped bar
+([ADR 0067](../decisions/0067-the-bar-folds-where-its-words-do-not-fit.md), días 1–3); a fixed bar can
+carry a two-pixel line that grows as the page is read, an owner's option, off
+([ADR 0068](../decisions/0068-the-fixed-bar-can-say-how-much-has-been-read.md), schema 1.18.0, día 6).
+For the owner: the panel and the download say until which width the bar folds and how many characters
+are over (día 4); «Menú» is dragged like any other menu (día 5); the ADRs to sign have one document and
+the nine photographs another, with a tool that puts each new one under the old one's id (día 7). Of
+the corpus's ZIP, three files changed — the pages of `cabecera-con-marca`, by their fold. The record is
+`docs/design/REVIEW.md`, sprint 34.
+
+**What sprint 34 leaves open** — the full text, with every number, is the last section of REVIEW's
+sprint 34:
+
+1. **Twenty-six signatures**: 0042, 0043, 0045–0068, all `proposed`, **with their pack**,
+   [`docs/decisions/signing-2026-11.md`](../decisions/signing-2026-11.md): what each decides, what was
+   added after, what was decided by delegation, four batches and how a signature is recorded.
+2. **The nine photographs**: the exemption fails on **1 December 2026**. Their sheet,
+   [`docs/tasks/las-nueve-fotos.md`](las-nueve-fotos.md), and `pnpm photos:replace`, which writes each
+   regenerated one under the old id so that saved sites still download (ADR 0035's note of sprint 34).
+   Two questions of David's in the sheet: whether the bank may show a recognisable dish (`.04`, `.05`;
+   ADR 0039's question, now with the cost of the old caption that saved sites keep), and what to do
+   with the sixteen root PNGs (never deleted without his word).
+3. **A decision of David's, measured** (row «Sprint 34 día 4» below): whether the catalog's neutral
+   entries are shortened at source.
+4. **The button inside «Menú» on a phone** (his decision 4; row «Sprint 33 día 6», item 2): a day, and
+   it changes every saved site with a button.
+5. **Opened, with their cost, unchanged**: a zone «bajo la portada» (now schema 1.19.0) and the real
+   editor in Firefox and WebKit.
+6. **The iPhone list of PR #250** gains the progress line (desktop WebKit 26.6 draws it; no iPhone has
+   shown it); the sheet's lock stays first.
+7. **Closed by this sprint**: the bar line that wrapped over a transparent cover (row «Sprint 33 día 6»,
+   item 1: the bar folds now, and the audit finds none wrapped) and the reading-progress line (ADR 0068).
+8. **Noted, still not fixed**: the observer's `rootMargin` (sprint 32, item 8 below), and the measure's
+   cliff ADR 0067 names: a line estimated just over 1200 gives «always» though the real one fits by a
+   few pixels — the download review says «por muy poco» there.
+9. **Sprint 35 unplanned.**
+
+The review before that: 5 November 2026, **closing sprint 33 — «los menús se ven bien y se arrastran».** David
 asked for three things, by priority: a defect alone and first (in the canvas's phone view «Menú» opened
 an endless dark sheet); a systematic audit of how the two menus look, by matrix, in the canvas and in the
 ZIP, in three engines; and dragging the two menus to their place. Seven days in eight PRs (#342–#348,
@@ -42,9 +87,10 @@ sprint 33:
    - **A zone «bajo la portada»** for a menu: a word more in `SECTIONS_POSITIONS` and its zone (ADR
      0060 §1: a word is a zone or it is nothing) — schema 1.18.0 and its migration, the renderer, its
      phone derivation and the matrices: **1–1.5 days**.
-   - **A reading-progress line in the fixed bar** (`animation-timeline: scroll(root)`, CSS only, under
+   - ~~**A reading-progress line in the fixed bar** (`animation-timeline: scroll(root)`, CSS only, under
      `prefers-reduced-motion: no-preference` and `@supports`): **half a day**, with the engines that
-     lack scroll timelines drawing no line.
+     lack scroll timelines drawing no line.~~ **Built on sprint 34 día 6**, an owner's option, off
+     ([ADR 0068](../decisions/0068-the-fixed-bar-can-say-how-much-has-been-read.md), schema 1.18.0).
    - **The real editor in Firefox and WebKit** (the audit opens the canvas's document there, not the
      editor): a harness of its own, **a day**.
 6. **Closed by this sprint**: locking the body's scroll under the sheet (día 1, struck below); the
@@ -180,8 +226,12 @@ the page 508 px under the sheet; with it, 0.
 
 **Sprint 33 día 6 — what that day measured and leaves open.**
 
-1. **A bar whose words do not fit its line covers a transparent cover's first words, and no estimate
-   can know it.** Measured in Chromium over the teaser's own labels (a logo, «Nuestra carta», «Fotos de
+1. ~~**A bar whose words do not fit its line covers a transparent cover's first words, and no estimate
+   can know it.**~~ **Closed on sprint 34 by David's first decision of 5 November 2026**: a bar whose
+   words do not fit one line folds into the phone's header below a width estimated from its words
+   ([ADR 0067](../decisions/0067-the-bar-folds-where-its-words-do-not-fit.md)), so no line of entries
+   wraps — the audit at the sprint's close, 306 documents in three engines, found none. What follows is
+   the record of what it measured. Measured in Chromium over the teaser's own labels (a logo, «Nuestra carta», «Fotos de
    la casa», «Contacto», «Dónde estamos»): a one-line bar wraps at 768 in every layout but the stacked
    one, and with a transparent bar and a logo the cover's first words lie 4.8 px under it (6.6 compact,
    **50.1 at the generous scale**, where the bar wraps at 1024 too); 548 of 4 320 measured states wrap,

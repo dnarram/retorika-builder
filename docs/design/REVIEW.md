@@ -7707,3 +7707,114 @@ pruebas y la de la landing.
 `renderer:deps`, `size`, `secrets:scope` y `schema:guard` (sin cambio de forma) en verde. Sin `a11y`
 ni Lighthouse: la salida del renderer no cambia. **e2e completa** —cada web generada pide ahora sus fotos
 por otra dirección—: 291 verdes y 1 omitida, 1270 s.
+
+### Día 8 — colchón y cierre (PR de `test/el-cierre-del-sprint-34`)
+
+**Nada de los días 1 a 7 quedó corto**: lo que cada día dejó al siguiente lo cerró el siguiente (los
+anchos del cromo del día 1, el día 5; la verdad con la letra servida del día 2, el día 3; la condición
+de «por muy poco» del día 3, el día 4). El cierre mide, compara y escribe.
+
+**El ZIP contra el inicio del sprint** (`5f6ab71`, el cierre del 33), construyendo los 22 documentos del
+corpus con el publicador de cada árbol (la receta del cierre del 32, `build-corpus.mts`):
+
+- cambian **3 de 123 ficheros: las tres páginas de `cabecera-con-marca`**, y ninguno más. Las otras 21
+  webs —las otras tres con cabecera incluidas, cuyas palabras caben desde 721— salen byte a byte
+  iguales, y letras, fotos, favicon, `robots.txt` y `sitemap.xml` también;
+- **seis líneas en total, todas `@media`**: su pliegue pasa de 720 a 801 en sus tres bloques (`max-width:
+  801px` el móvil de la cabecera, `min-width: 802px` los dos de ancho). Es la web cuya marca, «Taberna
+  Santo Domingo» en EB Garamond negrita con su logo, no cabe en una línea a 768 (ADR 0067; 797 el día 2,
+  801 desde la tabla de las dos máquinas del día 3);
+- **ningún cambio de marcado**, y nada de la línea de progreso: ninguna web del corpus la lleva;
+- **el script, sin un byte de diferencia**: el mismo hash en las diez páginas que lo llevan, 829 B gzip.
+
+**Lo que se pidió medir al cierre**, recogido de los días:
+
+| Medida | Resultado |
+|---|---|
+| La auditoría, al cerrar (los tres motores, 306 documentos con el gemelo de etiquetas cortas) | **306 combinaciones por motor, 918 en total, ningún estado en rojo**, 6 173 s; las únicas notas, la permitida del cierre del 33: la `y` de «Ir a…» en el lienzo a 1280, 0,5 px (504) o 1 px (212) |
+| Ninguna barra partida | la comprobación 11 en verde en las 918 — los siete anchos de la auditoría (320, 390, 768, 1024, 1247, 1280, 1680) más N y N + 1 de cada documento en el ZIP, y 1280 y 320 en el lienzo |
+| La estimación contra la verdad, con carril y con la letra servida (día 3) | **nunca por debajo**; sobre las 40 familias servidas, 20–35 px de holgura en macOS y 14–36 en el Linux del CI; en pila de sistema, 47–140 |
+| El kerning, derivado por la prueba (día 3) | el más ancho, 1,88 % en minúsculas y 1,28 % en mayúsculas, bajo los márgenes de 3 % y 1,5 % |
+| Quién pliega al nacer (día 4) | 588 de 1 800 webs recién generadas pliegan en tableta (725–905 px, media 803): lo dice el panel, la descarga no |
+| La línea de progreso (día 6), el ZIP desde el disco a 1280 | Chromium 153 y WebKit 26.6 leen `scroll(root)`, 0 arriba y 1 abajo; Firefox 155 no dibuja ninguna; con movimiento reducido, ninguna; la barra mide lo mismo con ella |
+| Una foto sustituida (día 7) | un documento guardado con `muestra-restaurante-bar.03.webp` se descarga con los bytes nuevos |
+| El peso | páginas con cabecera 6,1–6,5 KB (6,1–6,4 al cierre del 33), `cabecera-con-marca` 17,8 KB propios de 28, el script 0,8 KB de 2 |
+
+**Lighthouse**, los sujetos en el perfil móvil, contra el cierre del 33:
+
+| Sujeto | Rendimiento | Accesibilidad | Buenas prácticas | SEO | LCP | CLS |
+|---|---|---|---|---|---|---|
+| v1 image-right | 99 | 100 | 100 | 100 | 1,80 s (1,80) | 0,003 (0,003) |
+| v2 image-background | 98 | 100 | 100 | 100 | 2,40 s (2,33) | 0,000 (0,003) |
+| v3 image-left | 98 | 100 | 100 | 100 | 2,33 s (2,33) | 0,003 (0,003) |
+| letra propia `.ttf` | 99 | 100 | 100 | 100 | 1,80 s (1,80) | 0,000 (0,000) |
+| cabecera fija con logo, con la línea | 100 | 100 | 100 | 100 | 1,35 s (1,35) | 0,002 (0,002) |
+| cabecera en columnas | 100 | 100 | 100 | 100 | 1,35 s (1,35) | 0,004 (0,004) |
+| página por ficha | 100 | 100 | 100 | 100 | 0,90 s (0,90) | 0,000 (0,000) |
+
+**Las mismas notas que al cierre del 33, una por una**, y ninguna composición por debajo de 98. El LCP
+de v2 da 2,40 s como el día 6, con la misma nota: v2 no lleva ni el pliegue a ese ancho (el perfil
+móvil es la cabecera del móvil en toda web) ni la línea, y es la variación del simulador; su CLS sale
+esta vez en 0,000.
+
+**Suites del cierre**, una tras otra y nada en paralelo:
+
+| Suite | Resultado |
+|---|---|
+| `pnpm audit:menus` | 306 × 3 motores, 0 en rojo, 6 173 s (153 × 3 y 2 640 s al cierre del 33: el gemelo de etiquetas cortas y N y N + 1 de cada documento) |
+| `pnpm test` | 3733 en verde, 176 ficheros (3685 al cierre del 33) |
+| `typecheck`, `lint` | en verde; los avisos de siempre |
+| invariantes, golden, `renderer:deps` | en verde |
+| `schema:guard 5f6ab71..HEAD` | la forma cambió y lleva su migración, su prueba y su versión: 1.18.0, la `0019` (el plan decía «la 0018»: esa es la de 1.17.0, del sprint 31) |
+| `secrets:scope` | 126 módulos, 30 de cliente, ninguno cruza |
+| `size` | 27 de 27 dentro, el script en 0,8 KB |
+| `test:a11y` local | 1661 en verde, 117 s (1147 al cierre del 33: la comprobación 11 sobre la matriz y su gemelo, la verdad con las 40 familias y la tabla en cada tamaño) |
+| `pnpm lighthouse` | 26 de 26: los 7 sujetos y lo medido desde `file://` en los tres motores, la línea de progreso incluida |
+| e2e completa | **291 verdes y 1 omitida, 1272 s, a la primera**, con `caffeinate -i -m` (288 al cierre del 33) |
+
+**Lo que el sprint encontró sin buscarlo**, por día:
+
+1. **Una tabla medida puede estar mal por el método**: diez copias de un glifo llaman a las formas que
+   la fuente guarda para las repeticiones, y 63 de los 9 600 avances salían cortos hasta 0,15 em (día 3).
+2. **El Linux del CI dibuja cada glifo en píxeles enteros**, y Poppins negrita con *hinting* un 3,5 % más
+   ancha que en macOS: la letra de una máquina es la de esa máquina (día 3).
+3. **Playwright lanza Chromium con `--hide-scrollbars`**: la verdad de una fórmula que reserva el carril
+   de Windows se medía sin carril (día 3).
+4. **La comprobación 7 de la auditoría suponía 600 px para bajar** en una página que solo tenía 599
+   (día 3).
+5. **Un tercio de las webs nuevas pliegan en tableta** por las entradas neutras del catálogo, y una nota
+   del panel decía que una columna pasado 1280 «se ve siempre» en un lienzo que nunca maqueta a más de
+   1280 (día 4).
+6. **`/api/muestras/<id>` se cacheaba un año como inmutable**, y **el `alt` de una foto del banco es el
+   pie visible de la galería**, copiado en cada documento (día 7).
+
+### Lo que el sprint 34 deja abierto
+
+1. **Veintiséis firmas**: 0042, 0043 y de la 0045 a la 0068, todas `proposed`, **con su paquete**:
+   [`docs/decisions/signing-2026-11.md`](../decisions/signing-2026-11.md) — qué decide cada una, lo
+   añadido después, lo decidido por delegación, cuatro lotes y cómo se registra tu firma. La 0067 y la
+   0068 son de este sprint; la 0060, la 0062 y la 0066 llevan notas suyas, y la 0035 (aceptada) una.
+2. **Las nueve fotografías a 1600 × 1072**: la exención **falla desde el 1 de diciembre de 2026, dentro
+   de 23 días**. Su hoja, [`docs/tasks/las-nueve-fotos.md`](../tasks/las-nueve-fotos.md), y
+   `pnpm photos:replace`, que las pone bajo sus propios ids. Dos preguntas tuyas en la hoja: si el banco
+   puede enseñar un plato reconocible (la `.04` y la `.05`, con el coste del pie que se queda en las
+   webs guardadas) y qué hacer con los 16 PNG de la raíz (no se borran sin tu palabra).
+3. **Una decisión tuya, medida** (backlog, «Sprint 34 día 4»): si las entradas neutras del catálogo
+   («Dónde estamos», «Servicios») se acortan en origen; cambiaría el menú de toda web guardada que
+   conserva la palabra del catálogo.
+4. **El botón dentro de «Menú» en el móvil** (tu decisión 4, backlog «Sprint 33 día 6»): un día, y
+   cambia toda web guardada con botón.
+5. **Abiertas en el backlog, con su coste**: la zona «bajo la portada» (ahora esquema 1.19.0, su
+   migración, el renderer, su móvil y las matrices: 1–1,5 días) y el editor real en Firefox y WebKit (un
+   arnés propio, un día).
+6. **La lista del iPhone (PR #250)** gana la línea de progreso: WebKit 26.6 de escritorio la dibuja, un
+   iPhone no se ha mirado. El bloqueo de la hoja sigue lo primero.
+7. **Cerradas por el sprint**: la línea de la barra que se partía sobre una portada transparente (backlog
+   «Sprint 33 día 6», punto 1): la barra ya no se parte, se pliega; y la línea de progreso, que el 33
+   dejó con su coste (ADR 0068).
+8. **Anotado, sin arreglar**: el `rootMargin` del observador, como al cierre del 32; y el precipicio de
+   la medida, con nombre en la ADR 0067: una línea estimada justo por encima de 1200 da «siempre» aunque
+   la real quepa por unos píxeles, y el aviso lo dice («por muy poco: quitando N caracteres…»).
+9. **Del sprint 33 y anteriores, sin tocar**: lo que lista el backlog, incluidas las decisiones de
+   diseño que esperan su confirmación.
+10. **El sprint 35, sin planificar.**
