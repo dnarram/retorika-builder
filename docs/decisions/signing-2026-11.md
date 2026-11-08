@@ -39,9 +39,10 @@ would sign a rule the product no longer follows. The batches below keep those ch
    decision, and this is the signature.
 3. **One commit per batch**, `docs(adr): ADRs NNNN–NNNN accepted by David, recorded at his
    instruction`, its body quoting your words and the date — as `0dd5722` did for ADR 0040. The same
-   commit strikes them from the lists that name them as pending: the latest «Lo que este sprint deja
-   a David» in `docs/design/REVIEW.md`, the backlog's two mentions of 0042 and 0043 as unsigned,
-   and this file's row.
+   commit strikes them from the lists that name them as pending: the latest «Lo que el sprint N deja
+   abierto» in `docs/design/REVIEW.md` and the backlog's head, the backlog's two mentions of 0042 and
+   0043 as unsigned, the signatures row of `docs/tasks/lo-que-falta-para-el-primer-euro.md`, and this
+   file's row.
 4. **If you want one changed rather than signed**, that is a new decision: development writes it as
    a dated amendment with your words, and you sign the amended text, or not.
 

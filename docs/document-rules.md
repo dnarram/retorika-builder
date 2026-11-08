@@ -191,6 +191,34 @@ sheet holds the page still.**
   `breakpoints` and no byte of script. The phone's bar is close-set there too (día 6). The schema
   stayed at 1.17.0 the whole sprint.
 
+**What sprint 34 added (closing it, 8 November 2026): the bar folds where its words do not fit, and a
+fixed bar can say how much has been read.**
+
+- **Rule 7: the fold is still the header's own phone derivation, now under a width of each
+  document's** ([ADR 0067](decisions/0067-the-bar-folds-where-its-words-do-not-fit.md)). The phone's
+  whole header — «Menú», the sheet, the sections' phone choice — is drawn below a width read off the
+  words the bar draws (`headerWidths(doc)`: the advance of every glyph per family and weight, gaps,
+  brand, logo, button, a scrollbar's lane), 720 when they fit as before, more when they do not, and
+  `always` — the phone block with no `@media` at all — where they never fit the measure. **That width
+  is derived and never stored**: no field holds it, and it moves when a label, a family or the brand
+  does. It is still the header's own `@media`, never `breakpoints`: the document keeps its one
+  breakpoint at 720 for the sections, an owner's patch never moves a menu, and the rails stand from
+  `max(1024, N + 1)` (ADR 0060 §3, amended). In the canvas the header's fold is not the phone view:
+  the zones of a drag exist at every desktop width (ADR 0066's note of día 5).
+- **Rule 6: `header.progress` is an owner's choice, not an exact value**
+  ([ADR 0068](decisions/0068-the-fixed-bar-can-say-how-much-has-been-read.md)). Since 1.18.0 (migration
+  `0019`) the header may carry `progress: true`, refused without `sticky: true` so the state nobody
+  can see cannot be saved; the generator never writes it. It is a preference, like `sticky` itself:
+  its colour is a reference (`primary`, or `surface` over a coloured bar), and its two pixels and its
+  timeline, `scroll(root)`, are engine constants in the renderer, the same for every site that turns
+  it on.
+- **Rule 5 keeps its reading.** The line is the bar's own pseudo-element, with no text, no role and no
+  place on any grid; nothing with content floats above the site.
+- **What it moved, counted.** The schema once (1.17.0 → 1.18.0, `up` seals and moves nothing: no saved
+  site carries the key). The corpus's ZIP against the sprint's start (`5f6ab71`): three files of 123,
+  the three pages of `cabecera-con-marca`, by three `@media` lines — its fold at 801 instead of 720 —
+  and nothing else; the script byte for byte the same.
+
 ## The role vocabulary, v1
 
 Nine roles and one container:
