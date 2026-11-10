@@ -256,11 +256,13 @@ function addressKey(sectionId: string, elementId: string): string {
 }
 
 /**
- * What the delete toast (ADR 0014) shows: a name and whether it stays until dismissed. `Variants`
- * decides `persistent` — it is the one holding the undo history `wasSectionEverEdited` reads —
- * and owns the timer that clears a non-persistent toast, since that has to survive this
- * component unmounting if the user leaves the editor mid-toast.
+ * **The class a piece of the canvas's chrome arrives with** (sprint 35 día 3): the insert menu, the
+ * composition and escalation popups, the text bar and the section's verbs fade in, their boxes still
+ * (the sheet says why). Put on only when somebody opened the thing — never when the same thing is
+ * drawn again after a patch, which every edit does to all of them.
  */
+const ARRIVES = "rb-arrives";
+
 /**
  * **The notice after a delete leaves as it arrived** (sprint 35 día 2): it rises into place
  * (`ui-rise-in`) and, when it goes — «Deshacer», its own cross, or its time running out — a copy
@@ -268,19 +270,17 @@ function addressKey(sectionId: string, elementId: string): string {
  * ref is the same on every render, and React calls its cleanup once, when the notice is removed,
  * in the instant before the node leaves the page.
  */
-/**
- * **The class a piece of the canvas's chrome arrives with** (sprint 35 día 3): the insert menu, the
- * composition and escalation popups, the text bar and the section's verbs grow in from where they
- * were pressed. Put on only when somebody opened the thing — never when the same thing is drawn
- * again after a patch, which every edit does to all of them.
- */
-const ARRIVES = "rb-arrives";
-
 function leavesAsNotice(node: HTMLDivElement | null): (() => void) | undefined {
   if (!node) return undefined;
   return () => leave(node, "toast");
 }
 
+/**
+ * What the delete toast (ADR 0014) shows: a name and whether it stays until dismissed. `Variants`
+ * decides `persistent` — it is the one holding the undo history `wasSectionEverEdited` reads —
+ * and owns the timer that clears a non-persistent toast, since that has to survive this
+ * component unmounting if the user leaves the editor mid-toast.
+ */
 export interface DeleteToast {
   sectionName: string;
   persistent: boolean;
@@ -8369,23 +8369,24 @@ export function Editor({
       `  outline-offset: ${screenPx(1)}; }`,
       /*
        * **The canvas's chrome arrives and leaves** (sprint 35 día 3). What somebody opens — the
-       * insert menu, a composition or escalation popup, the text bar, a section's verbs — grows in
-       * over `--ui-fast` from the edge it was opened from, by the `scale` property, which composes
-       * with the `transform` a popup is centred by. What they close shrinks away in half that, as a
-       * copy (`editor/leaving.ts`): its words painted rather than written, so nothing finds it. The
-       * zone that receives a dragged menu acknowledges it once — a ring that grows and fades, the
-       * canvas's one pulse — and the label that followed the hand fades instead of vanishing.
+       * insert menu, a composition or escalation popup, the text bar, a section's verbs — fades in
+       * over `--ui-fast`. What they close shrinks away in half that, from the edge it was opened
+       * from, as a copy (`editor/leaving.ts`): its words painted rather than written, so nothing
+       * finds it. The zone that receives a dragged menu acknowledges it once — a ring that grows
+       * and fades, the canvas's one pulse — and the label that followed the hand fades instead of
+       * vanishing.
+       *
+       * **What arrives does not move: a thing about to be pressed must not move under the hand.**
+       * The plan said these would grow in from `scale(0.96)`, and it was measured twice that they
+       * must not: a growing box is an unstable target. Playwright retried its press on a verb three
+       * times while the cluster grew, scrolling the frame to a new alignment each time (1948 → 862
+       * → 1412 → 1962) and leaving the section 14 px off; on CI's Linux the same happened to «Sí»
+       * in a growing escalation offer, 224 px off. A person pressing in those 120 ms would land on
+       * a button still growing. So everything that arrives fades with its box still from the first
+       * frame; only what leaves, which nobody can press, shrinks.
        */
-      `@keyframes rb-arrive { from { opacity: 0; scale: 0.96; } }`,
+      "@keyframes rb-arrive { from { opacity: 0; } }",
       `.rb-arrives { animation: rb-arrive ${CHROME_SCALE.fast} ${CHROME_SCALE.ease} backwards; }`,
-      // **The verbs arrive by opacity alone: a target about to be pressed does not move under the
-      // hand.** They are drawn where the pointer already is, and the next press is very often on
-      // one of them. A growing box is an unstable target — measured, Playwright retried its press
-      // on «Campos» three times, scrolling the frame to a new alignment each time, and the section
-      // ended 14 px off — and a person's press during the 120 ms would land on a button still
-      // growing. A popup is read before it is pressed, so it keeps its scale.
-      "@keyframes rb-arrive-still { from { opacity: 0; } }",
-      ".rb-actions.rb-arrives { animation-name: rb-arrive-still; }",
       ".rb-actions, .rb-compositions { transform-origin: top right; }",
       ".rb-menu { transform-origin: top center; }",
       `@keyframes rb-leave { to { opacity: 0; scale: 0.96; } }`,
@@ -8436,7 +8437,7 @@ export function Editor({
       "  .rb-tip { transition-duration: 0.01ms; transition-delay: 0s; }",
       "  .rb-handmade-in { animation-duration: 0.01ms; }",
       "  .rb-line-add { transition-duration: 0.01ms; }",
-      "  .rb-arrives, .rb-actions.rb-arrives { animation-duration: 0.01ms; }",
+      "  .rb-arrives { animation-duration: 0.01ms; }",
       '  [data-leaving="popup"], [data-leaving="zone"] { animation-duration: 0.01ms; }',
       // Never started for somebody who asked for less movement (`canSlide`); flattened here too, so
       // the promise does not rest on one check.
