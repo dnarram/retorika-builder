@@ -8378,6 +8378,14 @@ export function Editor({
        */
       `@keyframes rb-arrive { from { opacity: 0; scale: 0.96; } }`,
       `.rb-arrives { animation: rb-arrive ${CHROME_SCALE.fast} ${CHROME_SCALE.ease} backwards; }`,
+      // **The verbs arrive by opacity alone: a target about to be pressed does not move under the
+      // hand.** They are drawn where the pointer already is, and the next press is very often on
+      // one of them. A growing box is an unstable target — measured, Playwright retried its press
+      // on «Campos» three times, scrolling the frame to a new alignment each time, and the section
+      // ended 14 px off — and a person's press during the 120 ms would land on a button still
+      // growing. A popup is read before it is pressed, so it keeps its scale.
+      "@keyframes rb-arrive-still { from { opacity: 0; } }",
+      ".rb-actions.rb-arrives { animation-name: rb-arrive-still; }",
       ".rb-actions, .rb-compositions { transform-origin: top right; }",
       ".rb-menu { transform-origin: top center; }",
       `@keyframes rb-leave { to { opacity: 0; scale: 0.96; } }`,
@@ -8428,7 +8436,7 @@ export function Editor({
       "  .rb-tip { transition-duration: 0.01ms; transition-delay: 0s; }",
       "  .rb-handmade-in { animation-duration: 0.01ms; }",
       "  .rb-line-add { transition-duration: 0.01ms; }",
-      "  .rb-arrives { animation-duration: 0.01ms; }",
+      "  .rb-arrives, .rb-actions.rb-arrives { animation-duration: 0.01ms; }",
       '  [data-leaving="popup"], [data-leaving="zone"] { animation-duration: 0.01ms; }',
       // Never started for somebody who asked for less movement (`canSlide`); flattened here too, so
       // the promise does not rest on one check.
