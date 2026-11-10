@@ -35,7 +35,13 @@
  * left standing over the editor.
  */
 
-export type LeavingKind = "panel" | "dialog" | "toast";
+/**
+ * What is leaving. The first three are the editor's (`globals.css` styles their exits); `popup`
+ * and `zone` are the canvas chrome's (sprint 35 día 3), styled by the sheet the editor injects into
+ * the frame, which `globals.css` cannot reach: a menu, a bar or a ghost shrinking away, and the zone
+ * that received a menu acknowledging it once.
+ */
+export type LeavingKind = "panel" | "dialog" | "toast" | "popup" | "zone";
 
 /** Longer than the longest exit (`--ui-fast`, 120 ms) with room for a slow frame, and short enough
  * that a copy left by an animation that never ran is gone before anybody could act on it. */
@@ -60,6 +66,52 @@ const FINDABLE = [
   "alt",
   "title",
 ];
+
+/**
+ * **The canvas's copies live in a closed shadow root** (sprint 35 día 3, found by the full e2e). In
+ * the canvas the chrome is found by its classes — by the walks (`.rb-menu-search`, `.rb-zone`) and,
+ * more to the point, by the editor itself: `drawGaps` looks for «the open menu» as `.rb-gap .rb-menu`
+ * to reopen it after a redraw, and would have reopened a closing menu's copy. A copy keeps its
+ * classes to be drawn, so here it is drawn where nothing can query it: inside a closed shadow root,
+ * on a host that takes no box (`display: contents`), styled by the frame's own chrome sheet adopted
+ * as a constructed stylesheet. The editor's copies (panel, dialog, notice) are found by roles and
+ * landmarks, which the attributes taken off already hide.
+ */
+// Not the zone: nothing in the editor queries a zone once the drop is done, and its one pulse is
+// what has to be measured from outside (an animation in a closed shadow root is in no
+// `document.getAnimations()`).
+const SHADOWED: ReadonlySet<LeavingKind> = new Set(["popup"]);
+
+const adopted = new WeakMap<Document, { text: string; sheet: CSSStyleSheet }>();
+
+/** The document's chrome stylesheets as one constructed sheet, rebuilt only when they change. */
+function chromeSheetOf(doc: Document): CSSStyleSheet {
+  const text = [...doc.querySelectorAll<HTMLStyleElement>("style[data-rb-chrome]")]
+    .map((style) => style.textContent ?? "")
+    .join("\n");
+  const cached = adopted.get(doc);
+  if (cached?.text === text) return cached.sheet;
+  // The frame's own constructor: a document adopts only sheets made in its own realm.
+  const realm = doc.defaultView as unknown as { CSSStyleSheet: typeof CSSStyleSheet };
+  const sheet = new realm.CSSStyleSheet();
+  sheet.replaceSync(text);
+  adopted.set(doc, { text, sheet });
+  return sheet;
+}
+
+function shadowHost(doc: Document, ghost: HTMLElement, kind: LeavingKind): HTMLElement {
+  const host = doc.createElement("div");
+  // Chrome, so a patch arriving during the exit keeps it (`patchCanvas` never discards chrome).
+  host.setAttribute("data-rb-chrome", "1");
+  host.setAttribute("data-leaving-host", kind);
+  host.setAttribute("aria-hidden", "true");
+  host.setAttribute("inert", "");
+  host.style.display = "contents";
+  const shadow = host.attachShadow({ mode: "closed" });
+  shadow.adoptedStyleSheets = [chromeSheetOf(doc)];
+  shadow.append(ghost);
+  return host;
+}
 
 /** Where a text node is content rather than words on the page, and must stay a text node. */
 const RAW_TEXT = new Set(["TEXTAREA", "OPTION", "SCRIPT", "STYLE", "TITLE"]);
@@ -137,7 +189,7 @@ export function ghostOf(
   for (const heavy of ghost.querySelectorAll("iframe, video, audio")) heavy.remove();
   wordsAsPaint(ghost);
 
-  ghost.classList.remove("ui-enter-right", "ui-rise-in");
+  ghost.classList.remove("ui-enter-right", "ui-rise-in", "rb-arrives");
   ghost.setAttribute("data-leaving", kind);
   ghost.setAttribute("aria-hidden", "true");
   ghost.setAttribute("inert", "");
@@ -174,6 +226,8 @@ export function leave(
   const { ghost, scrolled } = ghostOf(element, kind);
 
   queueMicrotask(() => {
+    /** What is on the page for the exit: the copy, or the host whose shadow holds it. */
+    let shown: HTMLElement = ghost;
     if (element.isConnected) return; // a rehearsal, or a node that moved rather than left
     if (within && !within.isConnected) return; // the whole screen went, not this node
     if (kind === "panel") {
@@ -194,7 +248,9 @@ export function leave(
       element.ownerDocument.body.append(ghost);
     } else {
       if (!parent?.isConnected) return; // what held it left with it, and took the place with it
-      parent.insertBefore(ghost, next && next.parentNode === parent ? next : null);
+      const placed = SHADOWED.has(kind) ? shadowHost(element.ownerDocument, ghost, kind) : ghost;
+      shown = placed;
+      parent.insertBefore(placed, next && next.parentNode === parent ? next : null);
     }
     for (const entry of scrolled) {
       entry.copy.scrollTop = entry.top;
@@ -206,7 +262,7 @@ export function leave(
       if (done) return;
       done = true;
       clearTimeout(timer);
-      ghost.remove();
+      shown.remove();
     };
     const timer = setTimeout(finish, LEAVING_FALLBACK_MS);
     // Its own end only: a dialog's card ends its exit inside the backdrop's, and that event

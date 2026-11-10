@@ -711,13 +711,27 @@ async function settledIn(frame: Frame): Promise<void> {
  * on it would hang the walk until its timeout.
  */
 function everythingWithAnEnd(): Promise<unknown> {
-  return Promise.all(
-    document
+  // **And every exit copy gone** (sprint 35 día 3). The canvas draws a closing menu's copy inside a
+  // closed shadow root (`editor/leaving.ts`), so no query can find it — and its animation is in no
+  // `getAnimations()` either. Its host is on the page, marked, until the exit ends (at most the
+  // copy's 250 ms fallback); bounded here at a second so a stray host cannot hang a walk.
+  const copiesGone = new Promise<void>((resolve) => {
+    const started = performance.now();
+    const look = () => {
+      if (!document.querySelector("[data-leaving-host]") || performance.now() - started > 1_000) {
+        resolve();
+      } else requestAnimationFrame(look);
+    };
+    look();
+  });
+  return Promise.all([
+    copiesGone,
+    ...document
       .getAnimations()
       .filter((animation) => animation.effect?.getTiming().iterations !== Infinity)
       .filter((animation) => animation.timeline === document.timeline)
       .map((animation) => animation.finished.catch(() => undefined)),
-  );
+  ]);
 }
 
 /**
@@ -26713,6 +26727,286 @@ describe("sprint 35 día 2 — lo que llega se va", () => {
       expect(seen.length, "no copy was drawn at all, so nothing was proved").toBeGreaterThan(0);
       const stood = (seen.at(-1) ?? 0) - (seen[0] ?? 0);
       expect(stood, `the copy stood ${Math.round(stood)} ms`).toBeLessThan(400);
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+});
+
+/**
+ * **Sprint 35 día 3 — las herramientas del lienzo se mueven.** Sections slide into their new places
+ * through the canvas document's own view transition (David's adjustment 1); what somebody opens in
+ * the canvas grows in from where it was pressed and what they close shrinks away; a dropped element
+ * settles into its cell; the zone that receives a dragged menu acknowledges it once. Each walk
+ * samples every frame of the canvas's document — its `getAnimations()` lists the transition's
+ * pseudo-elements, which is how «it slid» and «the page around it did not fade» are told apart.
+ */
+describe("sprint 35 día 3 — las herramientas del lienzo se mueven", () => {
+  type Moving = {
+    groups: number;
+    rootFades: number;
+    copies: number;
+    arriving: number;
+    zonePulses: number[];
+  };
+
+  /** Every frame of the canvas from now until everything with an end has ended: how many section
+   * groups are travelling, whether the page's own picture fades, how many exit copies and
+   * arrivals there are. */
+  async function canvasFrames(page: Page, act: () => Promise<void>): Promise<Moving[]> {
+    const frame = page.frameLocator(PREVIEW).first();
+    await frame.locator(":root").evaluate(() => {
+      const w = window as unknown as { __cf: unknown[]; __cfOn: boolean };
+      w.__cf = [];
+      w.__cfOn = true;
+      const tick = () => {
+        const running = document
+          .getAnimations()
+          .filter((animation) => animation.playState === "running");
+        const pseudo = (animation: Animation) =>
+          (animation.effect as KeyframeEffect | null)?.pseudoElement ?? "";
+        w.__cf.push({
+          groups: running.filter((a) => pseudo(a).startsWith("::view-transition-group(rb-s-"))
+            .length,
+          rootFades: running.filter((a) => /::view-transition-(old|new)\(root\)/.test(pseudo(a)))
+            .length,
+          // The canvas's copies are in closed shadow roots; their hosts are what the page holds.
+          copies: document.querySelectorAll("[data-leaving], [data-leaving-host]").length,
+          arriving: running.filter((a) =>
+            (a.effect as KeyframeEffect | null)?.target?.classList?.contains("rb-arrives"),
+          ).length,
+          // The zone's acknowledgement: the iteration count of each of its running animations.
+          zonePulses: running
+            .filter((a) =>
+              (a.effect as KeyframeEffect | null)?.target?.matches?.('[data-leaving="zone"]'),
+            )
+            .map((a) => Number(a.effect?.getTiming().iterations)),
+        });
+        if (w.__cfOn) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    });
+    await act();
+    await motionSettled(page);
+    await frame
+      .locator(":root")
+      .evaluate(
+        () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))),
+      );
+    return frame.locator(":root").evaluate(() => {
+      const w = window as unknown as { __cf: Moving[]; __cfOn: boolean };
+      w.__cfOn = false;
+      return w.__cf;
+    });
+  }
+
+  /** The page's sections, in order, and where each one sits on the page. */
+  const sectionsNow = (page: Page) =>
+    page
+      .frameLocator(PREVIEW)
+      .first()
+      .locator(":root")
+      .evaluate(() =>
+        [...document.querySelectorAll<HTMLElement>("[data-section]")].map((section) => ({
+          id: section.dataset["section"],
+          top: Math.round(section.getBoundingClientRect().top + window.scrollY),
+          height: Math.round(section.getBoundingClientRect().height),
+        })),
+      );
+
+  const moveUp = (page: Page, id: string) =>
+    page
+      .frameLocator(PREVIEW)
+      .first()
+      .locator(`[data-section="${id}"] .rb-actions [data-action="move-up"]`)
+      .click();
+
+  it("con movimiento: la sección sube deslizándose, sin fundir la página, y acaba donde sin movimiento; el menú de insertar llega y se va", async () => {
+    const page = await (
+      await browser.newContext({ viewport: { width: 1440, height: 900 } })
+    ).newPage();
+    try {
+      await intoTheCanvas(page);
+      await motionSettled(page);
+      const frame = page.frameLocator(PREVIEW).first();
+
+      // 1. The verbs arrive when a section is chosen.
+      const choosing = await canvasFrames(page, () =>
+        frame.locator('[data-section="sec-services"]').click({ position: { x: 20, y: 20 } }),
+      );
+      expect(
+        choosing.some((f) => f.arriving > 0),
+        "the verbs appeared rather than arriving",
+      ).toBe(true);
+
+      // 2. Up: the sections on screen travel, the page around them does not fade.
+      const before = await sectionsNow(page);
+      const sliding = await canvasFrames(page, () => moveUp(page, "sec-services"));
+      expect(
+        sliding.some((f) => f.groups > 0),
+        "the sections jumped instead of sliding",
+      ).toBe(true);
+      expect(Math.max(...sliding.map((f) => f.rootFades)), "the whole page faded").toBe(0);
+      const slid = await sectionsNow(page);
+      expect(slid.map((s) => s.id)).toEqual([
+        before[1]?.id,
+        before[0]?.id,
+        ...before.slice(2).map((s) => s.id),
+      ]);
+
+      // 3. The same move with reduced motion lands every section in exactly the same place.
+      await page.getByRole("button", { name: "Deshacer", exact: true }).click();
+      await expect
+        .poll(async () => (await sectionsNow(page)).map((s) => s.id))
+        .toEqual(before.map((s) => s.id));
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      await frame.locator('[data-section="sec-services"]').click({ position: { x: 20, y: 20 } });
+      const still = await canvasFrames(page, () => moveUp(page, "sec-services"));
+      expect(
+        still.some((f) => f.groups > 0),
+        "it slid with reduced motion",
+      ).toBe(false);
+      expect(await sectionsNow(page)).toEqual(slid);
+      await page.emulateMedia({ reducedMotion: "no-preference" });
+
+      // 4. The insert menu grows in from its pill, and shrinks away when closed — as a copy that is
+      //    gone by the end and that nothing finds meanwhile.
+      const opening = await canvasFrames(page, () => frame.locator(".rb-pill").first().click());
+      expect(
+        opening.some((f) => f.arriving > 0),
+        "the menu appeared rather than arriving",
+      ).toBe(true);
+      await expect(frame.locator(".rb-menu")).toHaveCount(1);
+      const closing = await canvasFrames(page, () => page.keyboard.press("Escape"));
+      expect(
+        closing.some((f) => f.copies > 0),
+        "the menu was not seen to go",
+      ).toBe(true);
+      expect(closing.at(-1)?.copies, "the menu's copy was left standing").toBe(0);
+      await expect(frame.locator(".rb-menu")).toHaveCount(0);
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+
+  it("con movimiento: un elemento soltado se asienta en su celda, y la zona que recibe un menú lo acusa una vez", async () => {
+    const page = await (
+      await browser.newContext({ viewport: { width: 1440, height: 950 } })
+    ).newPage();
+    try {
+      await intoTheCanvas(page);
+      await studioToolsOn(page);
+      const frame = page.frameLocator(PREVIEW).first();
+
+      // The escalation offer grows in from the verb that opened it.
+      await frame.locator('[data-section="sec-cover"]').click({ position: { x: 20, y: 20 } });
+      await motionSettled(page);
+      const offer = await canvasFrames(page, () =>
+        frame.locator('.rb-action[aria-label="Diseñar a mano"]').first().click(),
+      );
+      expect(
+        offer.some((f) => f.arriving > 0),
+        "the offer appeared rather than arriving",
+      ).toBe(true);
+      await escalated(frame, () => frame.locator(".rb-escalate-yes").click());
+      await waitForBankPhoto(frame);
+
+      // An element with a catalog column of room to its right, dragged there and let go.
+      const placed = await placedIn(frame, "sec-cover");
+      const taken = (column: number, row: number) =>
+        placed.some(
+          (other) =>
+            column < other.column + other.columnSpan &&
+            other.column <= column &&
+            row < other.row + other.rowSpan &&
+            other.row <= row,
+        );
+      const mover = placed.find(
+        (element) =>
+          element.column + element.columnSpan + FINE_PER_COLUMN - 1 <= 96 &&
+          !taken(element.column + element.columnSpan, element.row),
+      );
+      expect(mover, "no element has room to its right").toBeDefined();
+      const subject = frame.locator(`[data-section="sec-cover"] [data-id="${mover?.id}"]`);
+      const grab = await pointIn(subject);
+      await page.mouse.move(grab.x, grab.y);
+      await page.mouse.down();
+      await page.mouse.move(grab.x + 137, grab.y + 30, { steps: 10 });
+      await page.mouse.up();
+      // Read at once, before anything waits: the element is travelling into its cell.
+      await expect
+        .poll(
+          () =>
+            subject.evaluate((el) =>
+              el
+                .getAnimations()
+                .some((animation) =>
+                  ((animation.effect as KeyframeEffect | null)?.getKeyframes() ?? []).some(
+                    (keyframe) => "translate" in keyframe,
+                  ),
+                ),
+            ),
+          { timeout: 2_000, intervals: [0, 16, 16, 16, 16] },
+        )
+        .toBe(true);
+      await motionSettled(page);
+      expect(await subject.evaluate((el) => el.getAnimations().length)).toBe(0);
+      expect(await placedIn(frame, "sec-cover"), "the drop wrote nothing").not.toEqual(placed);
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+
+  it("con movimiento: la zona que recibe un menú lo acusa una sola vez, y el rótulo se funde", async () => {
+    const page = await (
+      await browser.newContext({ viewport: { width: 1440, height: 950 } })
+    ).newPage();
+    try {
+      const frame = await placedSite(page, {
+        pages: { shown: true, position: "bar" },
+        sections: { shown: true, position: "row" },
+      });
+      await motionSettled(page);
+      const { at } = await frameOnScreen(page);
+      await carry(page, await rowGround(frame), at(120, 500), false);
+      await expect(frame.locator('.rb-zone[data-zone="left"][data-hot]')).toHaveCount(1);
+      const dropped = await canvasFrames(page, () => page.mouse.up());
+      expect(
+        dropped.some((f) => f.copies > 0),
+        "nothing acknowledged the drop",
+      ).toBe(true);
+      expect(dropped.at(-1)?.copies, "a copy was left standing").toBe(0);
+      // Once: the zone's ring runs a single iteration, and only one of them.
+      const pulses = dropped.flatMap((f) => f.zonePulses);
+      expect(pulses.length, "the receiving zone did not pulse").toBeGreaterThan(0);
+      expect([...new Set(pulses)], "the zone pulsed more than once").toEqual([1]);
+      await expect.poll(() => positionOf(page, "sections")).toBe("left");
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+
+  it("con movimiento reducido: nada se desliza, nada crece ni se va con copias, y todo llega a su sitio", async () => {
+    const page = await (
+      await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: "reduce" })
+    ).newPage();
+    try {
+      await intoTheCanvas(page);
+      await motionSettled(page);
+      const frame = page.frameLocator(PREVIEW).first();
+      await frame.locator('[data-section="sec-services"]').click({ position: { x: 20, y: 20 } });
+      const before = await sectionsNow(page);
+      const moving = await canvasFrames(page, () => moveUp(page, "sec-services"));
+      expect(moving.some((f) => f.groups > 0)).toBe(false);
+      expect((await sectionsNow(page)).map((s) => s.id)[0]).toBe(before[1]?.id);
+      await canvasFrames(page, () => frame.locator(".rb-pill").first().click());
+      await expect(frame.locator(".rb-menu")).toHaveCount(1);
+      const closing = await canvasFrames(page, () => page.keyboard.press("Escape"));
+      expect(
+        closing.some((f) => f.copies > 0),
+        "a copy was drawn with reduced motion",
+      ).toBe(false);
+      await expect(frame.locator(".rb-menu")).toHaveCount(0);
     } finally {
       await page.context().close();
     }

@@ -19,7 +19,9 @@ describe("the canvas is still", () => {
   };
 
   it("flattens every section animation, and scrolls without smoothing", () => {
-    expect(CANVAS_STILLNESS).toContain("main > .rb-section > * { animation: none !important; }");
+    expect(CANVAS_STILLNESS).toContain(
+      "main > .rb-section > :not([data-rb-chrome]) { animation: none !important; }",
+    );
     expect(CANVAS_STILLNESS).toContain("html { scroll-behavior: auto !important; }");
   });
 
@@ -33,7 +35,7 @@ describe("the canvas is still", () => {
     );
     expect(sectionRules.length).toBeGreaterThan(0);
     for (const selector of sectionRules) {
-      // A child of a section: `main > .rb-… > …`, which `main > .rb-section > *` reaches.
+      // A child of a section: `main > .rb-… > …`, which `main > .rb-section > :not(chrome)` reaches.
       expect(selector, selector).toMatch(/^main > \.rb-(section|cover)[^ ]* > /);
     }
   });

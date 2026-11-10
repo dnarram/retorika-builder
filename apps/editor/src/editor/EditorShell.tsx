@@ -283,23 +283,6 @@ export type RailItemId =
   | "collections";
 
 /**
- * **A resting rail item has no box, and that is the change.**
- *
- * Every item used to sit in its own 46px square with a visible 1px border, selected or not — seven
- * boxes down the edge of the screen at the time (eight items since sprint 30 added «Menú»), each one
- * drawing attention it had not earned, and a selected state that amounted to "the box turns blue". Boxing what is not chosen is the habit that dates a
- * toolbar faster than any colour does.
- *
- * Now the square is drawn **only** when the item is chosen or the pointer is on it, so the rail at
- * rest is icons and words, and the one box that exists means something. The geometry
- * REVIEW.md records — 80px rail, 46×46 target — is untouched: this is paint, not layout, and the
- * press target is the same size it always was.
- *
- * The chosen item carries three cues, not one: the brand surface, the brand ink, and the rule down
- * the rail's inner edge drawn by `RailButton`. One of the three is enough on its own, which is
- * what keeps it legible to someone who cannot separate the blue from the grey.
- */
-/**
  * **The slot's hold on the panel it shows, so a panel that goes is seen to go** (sprint 35 día 2).
  *
  * It renders its panel and nothing else — no box of its own, so the row keeps exactly the children
@@ -333,6 +316,25 @@ function PanelHost({
   return <>{children}</>;
 }
 
+/**
+ * **A resting rail item has no box, and that is the change.**
+ *
+ * Every item used to sit in its own 46px square with a visible 1px border, selected or not — seven
+ * boxes down the edge of the screen at the time (eight items since sprint 30 added «Menú»), each one
+ * drawing attention it had not earned, and a selected state that amounted to "the box turns blue". Boxing what is not chosen is the habit that dates a
+ * toolbar faster than any colour does.
+ *
+ * Now the square is drawn **only** when the item is chosen or the pointer is on it, so the rail at
+ * rest is icons and words, and the one box that exists means something. The geometry
+ * REVIEW.md records — 80px rail, 46×46 target — is untouched: this is paint, not layout, and the
+ * press target is the same size it always was.
+ *
+ * The chosen item carries more than one cue: the brand surface and the rule down the rail's inner
+ * edge — one mark for the whole rail since sprint 35 día 2, sliding from item to item (`rail-mark`
+ * in the shell) — and the label's weight and deep blue, which stay on the item. Any of them is
+ * enough on its own, which is what keeps it legible to someone who cannot separate the blue from
+ * the grey.
+ */
 function RailIcon({ icon, active }: { icon: keyof typeof RAIL_ICONS; active: boolean }) {
   return (
     <span
