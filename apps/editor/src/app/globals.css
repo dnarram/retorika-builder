@@ -451,6 +451,12 @@
   animation: ui-rise-out var(--ui-fast) var(--ui-ease) forwards;
 }
 
+/* The copy's words, painted rather than written (`wordsAsPaint` in `editor/leaving.ts`): the copy
+   has no text a locator, a label or the browser's find-in-page could take for the real thing. */
+[data-leaving-text]::before {
+  content: attr(data-leaving-text);
+}
+
 /**
  * **The mark at work** — the building screen's hammer and blocks (13 October 2026).
  *

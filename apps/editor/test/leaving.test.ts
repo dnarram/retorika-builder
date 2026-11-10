@@ -54,7 +54,9 @@ describe("the copy is decoration and nothing else", () => {
     const { ghost } = ghostOf(panel(), "panel");
     expect(ghost.tagName).toBe("DIV");
     expect(ghost.classList.contains("card")).toBe(true);
-    expect(ghost.querySelector("h2")?.textContent).toBe("El estilo de toda la web");
+    expect(ghost.querySelector("h2 [data-leaving-text]")?.getAttribute("data-leaving-text")).toBe(
+      "El estilo de toda la web",
+    );
   });
 
   it("cannot be found by anything the original could be found by", () => {
@@ -74,6 +76,16 @@ describe("the copy is decoration and nothing else", () => {
         `${attribute} survived on the copy`,
       ).toEqual([]);
     }
+  });
+
+  it("has no text anything can find, and keeps every word to paint", () => {
+    const { ghost } = ghostOf(panel(), "panel");
+    // The page's text, which is what a locator by text and find-in-page read: none in the copy.
+    expect(ghost.textContent?.trim()).toBe("");
+    const painted = [...ghost.querySelectorAll("[data-leaving-text]")].map((span) =>
+      span.getAttribute("data-leaving-text")?.trim(),
+    );
+    expect(painted).toEqual(expect.arrayContaining(["El estilo de toda la web", "Escala", "x"]));
   });
 
   it("does not replay its entrance, and drops what would load again", () => {

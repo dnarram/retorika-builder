@@ -13,9 +13,10 @@
  * **The copy is decoration and is made unable to be anything else.** Inert, hidden from assistive
  * technology, and blind to the pointer, so a click during its 120 ms lands on what is underneath and
  * a keyboard never reaches it. Every attribute something could find it by — `id`, `data-testid`,
- * `name`, `role`, the ARIA references — is taken off, and a landmark root (`<aside>`, a named
- * `<section>`) is rebuilt as a `<div>`, so for the length of the exit there is never a second
- * panel, a second dialog or a second «Descargar igualmente» to be found. That last one is not
+ * `name`, `role`, the ARIA references, a placeholder — is taken off, its words are painted rather
+ * than written (`wordsAsPaint`), and a landmark root (`<aside>`, a named `<section>`) is rebuilt as
+ * a `<div>`, so for the length of the exit there is never a second panel, a second dialog, a second
+ * «Descargar igualmente» or a second «Spectral» to be found. That last one is not
  * hypothetical: a walk in `critical-flows.e2e.test.ts` passes the download warnings by pressing
  * that button whenever it is visible (the inventory of sprint 35 día 1).
  *
@@ -55,7 +56,37 @@ const FINDABLE = [
   "autofocus",
   "tabindex",
   "data-initial-focus",
+  "placeholder",
+  "alt",
+  "title",
 ];
+
+/** Where a text node is content rather than words on the page, and must stay a text node. */
+const RAW_TEXT = new Set(["TEXTAREA", "OPTION", "SCRIPT", "STYLE", "TITLE"]);
+
+/**
+ * **The copy carries no text, and still shows every word** (sprint 35 día 2, found by the full
+ * e2e). `aria-hidden` keeps a copy out of every role a reader or a test asks for, but not out of the
+ * page's *text*: a locator by text, a label found by its words, the browser's own find-in-page all
+ * read the DOM's text nodes, and for the copy's 120 ms the font the owner had just chosen was on the
+ * page twice — «Spectral» in the panel and «Spectral» in the chooser leaving it. So every text node
+ * of the copy becomes an empty `<span>` that paints its words with `::before` (`globals.css`): drawn
+ * the same, found by nothing that reads text.
+ */
+function wordsAsPaint(root: HTMLElement): void {
+  const doc = root.ownerDocument;
+  const walker = doc.createTreeWalker(root, 4 /* NodeFilter.SHOW_TEXT */);
+  const texts: Text[] = [];
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) texts.push(node as Text);
+  for (const text of texts) {
+    const parent = text.parentElement;
+    if (!parent || text.data.trim() === "") continue;
+    if (RAW_TEXT.has(parent.tagName) || parent.namespaceURI !== root.namespaceURI) continue;
+    const paint = doc.createElement("span");
+    paint.setAttribute("data-leaving-text", text.data);
+    text.replaceWith(paint);
+  }
+}
 
 interface Scrolled {
   copy: Element;
@@ -104,6 +135,7 @@ export function ghostOf(
   }
   // A frame or a player would load again for an exit nobody is watching it for.
   for (const heavy of ghost.querySelectorAll("iframe, video, audio")) heavy.remove();
+  wordsAsPaint(ghost);
 
   ghost.classList.remove("ui-enter-right", "ui-rise-in");
   ghost.setAttribute("data-leaving", kind);
