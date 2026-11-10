@@ -8,6 +8,7 @@ import {
   type BrowserContext,
   chromium,
   expect,
+  type Frame,
   type FrameLocator,
   type Locator,
   type Page,
@@ -303,6 +304,9 @@ interface BoxInSection {
 
 async function boxesInSection(frame: FrameLocator, sectionId: string): Promise<BoxInSection[]> {
   await fontsReady(frame);
+  // A drop settles into its cell from sprint 35 día 3, and a box read during the settle is where
+  // the element is travelling through, not where it was put.
+  await frameMotionSettled(frame);
   return frame.locator(`[data-section="${sectionId}"]`).evaluate((node) => {
     const section = node as HTMLElement;
     const outer = section.getBoundingClientRect();
@@ -623,6 +627,12 @@ function measured(node: NodeResult): string {
  * somebody turns off.
  */
 async function axeSerious(page: Page, where: string): Promise<void> {
+  // **Never a screen in motion** (sprint 35 día 1). axe weighs opacity into a text's colour, so a
+  // panel or a dialog read half-way through its entrance is a contrast failure in colours that are
+  // not in any stylesheet — measured twice already (sprint 31 día 3, sprint 33's `panelReady`), each
+  // time by a walk that had to learn to wait. Sprint 35 gives entrances and exits to everything
+  // that opens, so the wait moves in here, where no walk can forget it.
+  await motionSettled(page);
   const results = await new AxeBuilder({ page }).analyze();
   const lines = results.violations
     .filter((rule) => rule.impact === "serious" || rule.impact === "critical")
@@ -658,18 +668,65 @@ async function axeSerious(page: Page, where: string): Promise<void> {
  * question: what the caller needs to know is that everything with an end has reached it.
  */
 async function motionSettled(page: Page): Promise<void> {
-  await page.evaluate(() =>
-    Promise.all(
-      document
-        .getAnimations()
-        .filter((animation) => animation.effect?.getTiming().iterations !== Infinity)
-        // A cancelled animation rejects `finished` with an AbortError rather than resolving it,
-        // and a cancelled animation is not moving either. Found on sprint 28 day 6: at 1024 with
-        // «Estilo» open, pressing «Descargar» cancels one in flight, and this guard threw instead
-        // of answering.
-        .map((animation) => animation.finished.catch(() => undefined)),
-    ),
+  // **Every frame of the page, not only the editor's own document** (sprint 35 día 1): the canvas
+  // is an `<iframe>`, and the chrome drawn inside it — the text bar, the verbs, the zones, the bar
+  // over an escalated section — moves on the frame's clock, which the editor's `getAnimations()`
+  // never lists. Measured before this changed: an animation running in the canvas, and this
+  // returned at once.
+  await Promise.all(page.frames().map((frame) => settledIn(frame)));
+}
+
+/**
+ * One frame's settle, which survives the frame being replaced under it. The canvas swaps its
+ * document when the page's shape changes (`srcDoc`), and a frame that navigated while this waited
+ * has a new document whose own entrances are what is moving now — so it is asked again, a bounded
+ * number of times. A frame that is gone is not moving.
+ *
+ * A cancelled animation rejects `finished` with an AbortError rather than resolving it, and a
+ * cancelled animation is not moving either (`everythingWithAnEnd` catches it). Found on sprint 28
+ * day 6: at 1024 with «Estilo» open, pressing «Descargar» cancels one in flight, and the guard
+ * threw instead of answering.
+ */
+async function settledIn(frame: Frame): Promise<void> {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      await frame.evaluate(everythingWithAnEnd);
+      return;
+    } catch (error) {
+      if (frame.isDetached()) return;
+      if (!/Execution context was destroyed|Frame was detached/.test(String(error))) throw error;
+    }
+  }
+}
+
+/**
+ * What a settle waits for, run inside one document: every animation with an end, on that
+ * document's clock. Kept as one named function so `motionSettled` and `frameMotionSettled` cannot
+ * come to disagree about what «still moving» means.
+ *
+ * **Only the document's own clock** (sprint 35 día 1). A scroll-driven animation — the published
+ * page's sections rising as they come into view (ADR 0062 §1), the reading line of a fixed bar (ADR
+ * 0068), and from sprint 35 día 7 a panel's scroll shadow — moves when the page scrolls and is at
+ * rest whenever it does not; its `finished` promise never resolves while nobody scrolls, so waiting
+ * on it would hang the walk until its timeout.
+ */
+function everythingWithAnEnd(): Promise<unknown> {
+  return Promise.all(
+    document
+      .getAnimations()
+      .filter((animation) => animation.effect?.getTiming().iterations !== Infinity)
+      .filter((animation) => animation.timeline === document.timeline)
+      .map((animation) => animation.finished.catch(() => undefined)),
   );
+}
+
+/**
+ * **Nothing in the canvas is still moving** (sprint 35 día 1): `motionSettled`'s twin for a frame
+ * that is known only by its locator. The canvas is another document, so what moves in it — the
+ * chrome's own entrances and settles — is in its own `getAnimations()`, never in the editor's.
+ */
+async function frameMotionSettled(frame: FrameLocator): Promise<void> {
+  await frame.locator(":root").evaluate(everythingWithAnEnd);
 }
 
 /**
@@ -3146,6 +3203,7 @@ describe("sprint 9 día 4 — la barra flotante", () => {
         await target.click();
         const open = frame.locator(".rb-toolbar");
         await expect(open, `no toolbar in ${id}`).toHaveCount(1);
+        await frameMotionSettled(frame);
         const placement = await open.evaluate((el) => {
           const section = el.parentElement as HTMLElement;
           const bar = el.getBoundingClientRect();
@@ -3224,7 +3282,9 @@ describe("sprint 9 día 5 — medidas, espaciado y la excepción marcada", () =>
       // position, which is what this assertion going red taught.
       await expect(frame.locator(".rb-toolbar-exact")).toHaveCount(3);
 
-      // Every control reachable inside the frame, at the width where it was not.
+      // Every control reachable inside the frame, at the width where it was not — once the bar
+      // has arrived, which from sprint 35 día 3 it does by growing.
+      await frameMotionSettled(frame);
       const reach = await frame.locator(".rb-toolbar").evaluate((bar) => {
         const section = bar.parentElement as HTMLElement;
         const last = bar.querySelector(".rb-toolbar-group:last-child") as HTMLElement;
@@ -3721,6 +3781,7 @@ describe("sprint 9 día 7 — colchón: la barra no traga un clic que era para o
 
       const bar = frame.locator(".rb-toolbar");
       const body = frame.locator('[data-section="sec-contact"] [data-id="el-contact-body"]');
+      await motionSettled(studio);
       const [barBox, bodyBox, frameBox] = await Promise.all([
         bar.boundingBox(),
         body.boundingBox(),
@@ -14639,6 +14700,8 @@ describe("sprint 20 día 2 — el grupo de verbos se mueve, con un asa", () => {
 
       await frame.locator('[data-section="sec-services"]').click();
       await expect(frame.locator(".rb-actions")).toHaveCount(1);
+      // The verbs arrive from sprint 35 día 3, and the hand presses where the grip has landed.
+      await motionSettled(walker);
       const before = await placed(walker);
       const box = await frame.locator('.rb-actions [data-action="grip"]').boundingBox();
       const from = {
@@ -14649,6 +14712,7 @@ describe("sprint 20 día 2 — el grupo de verbos se mueve, con un asa", () => {
       await walker.mouse.down();
       await walker.mouse.move(from.x - 100, from.y + 60, { steps: 6 });
       await walker.mouse.up();
+      await motionSettled(walker);
       const after = await placed(walker);
 
       // Se movió hacia donde fue la mano y se quedó dentro de su sección, que es lo que se puede
@@ -14692,7 +14756,10 @@ describe("sprint 20 día 3 — la barra flotante se mueve, y recuerda el desplaz
    * cuatro medidas de una cuenta sumaba su error. Las cajas, restadas de la de su contenedor,
    * dan lo mismo que `offsetTop` sin el redondeo.
    */
-  function bar(page: Page, selector: string) {
+  async function bar(page: Page, selector: string) {
+    // The bar grows in from where it was opened from sprint 35 día 3; read mid-entrance its box is
+    // scaled about the point it grows from, and these readings are held to a pixel.
+    await motionSettled(page);
     return page
       .frameLocator(PREVIEW)
       .first()
@@ -16186,6 +16253,8 @@ describe("sprint 24 día 6 — la letra se elige por su nombre", () => {
    * «Hecho» past the bottom edge, and a dialog whose exit is under the fold is a dialog without one.
    */
   async function fitsTheWindow(page: Page, dialog: Locator): Promise<void> {
+    // A dialog arrives rising from sprint 35 día 2: on its way it is lower than where it rests.
+    await motionSettled(page);
     const viewport = page.viewportSize();
     if (!viewport) throw new Error("no viewport");
     const box = await dialog.boundingBox();
@@ -20674,8 +20743,9 @@ describe("sprint 27 día 3 — la barra que muere", () => {
    * Playwright's own `boundingBox` cannot answer it: it reports where the element is, scrolled
    * into view or not.
    */
-  const barOnScreen = (page: Page) =>
-    page.evaluate(() => {
+  const barOnScreen = async (page: Page) => {
+    await motionSettled(page);
+    return page.evaluate(() => {
       const doc = document.querySelector<HTMLIFrameElement>("iframe")?.contentDocument;
       const win = doc?.defaultView;
       const bar = doc?.querySelector(".rb-toolbar");
@@ -20691,6 +20761,7 @@ describe("sprint 27 día 3 — la barra que muere", () => {
         scrollY: Math.round(win.scrollY),
       };
     });
+  };
 
   it("tres clics: una sección, un texto de otra, y la barra se dibuja donde se puede pulsar", async () => {
     const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
@@ -21346,8 +21417,9 @@ describe("sprint 27 día 7 — el cromo mide lo que mide", () => {
    * which is `zoomOf` in `Editor.tsx`, measured from outside so the walk does not take the
    * editor's word for it.
    */
-  const onScreen = (page: Page) =>
-    page.evaluate(() => {
+  const onScreen = async (page: Page) => {
+    await motionSettled(page);
+    return page.evaluate(() => {
       const frameEl = document.querySelector("iframe");
       const doc = frameEl?.contentDocument;
       const win = doc?.defaultView;
@@ -21419,6 +21491,7 @@ describe("sprint 27 día 7 — el cromo mide lo que mide", () => {
         guide: r ? Math.round(Math.min(r.width, r.height) * zoom * 100) / 100 : null,
       };
     });
+  };
 
   /** The cover designed by hand, the tools on, in whatever window the context opened. */
   async function handDesignedCover(page: Page): Promise<FrameLocator> {
@@ -22167,6 +22240,7 @@ describe("sprint 28 día 3 — Escape en un campo de píxeles exactos", () => {
       const exact = frame.locator('.rb-toolbar-exact[aria-label^="Tamaño"]');
       const size = () => headline.evaluate((el) => getComputedStyle(el).fontSize);
       const press = async (locator: Locator) => {
+        await motionSettled(page);
         const box = await locator.boundingBox();
         if (!box) throw new Error("nothing drawn to press");
         await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
@@ -22653,6 +22727,8 @@ describe("sprint 29 día 5 — la fuente de la marca, de la subida al ZIP", () =
     try {
       const dialog = await upToTheDeclaration(studio);
       await expect(dialog.getByLabel("Nombre con el que viajará")).toHaveValue("Karla 2");
+      // At rest: from sprint 35 día 2 a dialog arrives rising, lower on its way than where it stays.
+      await motionSettled(studio);
       const box = await dialog.boundingBox();
       expect(box).not.toBeNull();
       if (box) {
@@ -25088,6 +25164,7 @@ describe("sprint 33 día 4 — un menú se arrastra a su zona", () => {
 
       // 6. A press that does not move keeps its old meaning: an entry navigates, the nav's ground
       //    chooses the header and opens «Menú».
+      await motionSettled(page);
       const second = await entries.nth(1).boundingBox();
       const secondTitle = ((await entries.nth(1).textContent()) ?? "").trim();
       if (!second) throw new Error("no second entry");
@@ -25178,6 +25255,8 @@ async function frameOnScreen(page: Page) {
 
 /** A point on the screen of an element's box, at fractions of it. */
 async function pointIn(locator: Locator, fx = 0.5, fy = 0.5) {
+  // A box read while its owner arrives or settles is a point the hand presses beside it.
+  await motionSettled(locator.page());
   const box = await locator.boundingBox();
   if (!box) throw new Error("not drawn, so it cannot be held");
   return { x: box.x + box.width * fx, y: box.y + box.height * fy };
@@ -25694,6 +25773,7 @@ describe("sprint 33 día 6 — un menú se coge también por su entrada", () => 
 
       // 3. Pressed on the entry without moving: the canvas goes to that page, as it always did.
       const title = ((await entry.textContent()) ?? "").trim();
+      await motionSettled(page);
       const still = await entry.boundingBox();
       if (!still) throw new Error("the entry is not drawn");
       await page.mouse.click(still.x + still.width / 2, still.y + still.height / 2);
@@ -26052,4 +26132,157 @@ describe("sprint 34 día 6 — la línea de progreso", () => {
       await context.close();
     }
   }, 300_000);
+});
+
+/**
+ * **Sprint 35 día 1 — el arnés espera a lo que se mueve, también dentro del lienzo.**
+ *
+ * Sprint 35 gives the editor exits, dialogs that arrive and leave, popups that grow from where they
+ * were pressed and drops that settle, and most of that moves **inside the canvas**, which is another
+ * document: `motionSettled` asked the editor's own page what was in flight and never the frame, so a
+ * text bar half-way through its entrance would have been measured as if it had arrived. And day 7
+ * puts a scroll-driven animation in a panel, whose `finished` promise never resolves while nobody
+ * scrolls — waiting on it would hang the walk until its timeout. These two walks are the harness's
+ * own guard: the first proves the wait reaches the frame and does not hang; the second reads the
+ * canvas's own stylesheet from the browser — a second source, independent of the parser in
+ * `motionBudget.test.ts` — and proves every movement in it stops for somebody who asked for less.
+ */
+describe("sprint 35 día 1 — el arnés espera a lo que se mueve", () => {
+  it("espera a lo que se mueve dentro del lienzo, y no a lo que solo sigue al scroll", async () => {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    const page = await context.newPage();
+    try {
+      await intoTheCanvas(page);
+      const frame = page.frameLocator(PREVIEW).first();
+
+      /** Two animations on a probe in the frame: 600 ms on the clock, and one tied to the frame's
+       * scroll, which no amount of waiting finishes. The clock one is kept on `window` because a
+       * finished animation without fill leaves `getAnimations()`, and «finished» is what is read. */
+      const start = () =>
+        frame.locator(":root").evaluate(() => {
+          const probe = document.createElement("div");
+          document.body.append(probe);
+          const clock = probe.animate([{ opacity: 1 }, { opacity: 0.5 }], { duration: 600 });
+          const Scroll = (
+            window as unknown as {
+              ScrollTimeline: new (options: { source: Element }) => AnimationTimeline;
+            }
+          ).ScrollTimeline;
+          const timeline = new Scroll({ source: document.documentElement });
+          probe.animate([{ transform: "none" }, { transform: "translateX(1px)" }], { timeline });
+          (window as unknown as { rbClock: Animation }).rbClock = clock;
+        });
+      const clockState = () =>
+        frame
+          .locator(":root")
+          .evaluate(() => (window as unknown as { rbClock: Animation }).rbClock.playState);
+      /** A wait that hangs is a red walk in five seconds, not a timeout in two minutes. */
+      const bounded = async (wait: Promise<void>, what: string) => {
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        try {
+          await Promise.race([
+            wait,
+            new Promise<never>((_, reject) => {
+              timer = setTimeout(() => reject(new Error(`${what} waited on the scroll`)), 5_000);
+            }),
+          ]);
+        } finally {
+          clearTimeout(timer);
+        }
+      };
+
+      for (const [what, wait] of [
+        ["motionSettled", () => motionSettled(page)],
+        ["frameMotionSettled", () => frameMotionSettled(frame)],
+      ] as const) {
+        await start();
+        expect(await clockState(), `${what}: the probe did not start`).toBe("running");
+        await bounded(wait(), what);
+        expect(await clockState(), `${what} returned while the frame still moved`).toBe("finished");
+      }
+    } finally {
+      await context.close();
+    }
+  }, 120_000);
+
+  it("con movimiento reducido, nada del cromo del lienzo recorre nada", async () => {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    const page = await context.newPage();
+    try {
+      await intoTheCanvas(page);
+      const frame = page.frameLocator(PREVIEW).first();
+
+      /** Every rule of the chrome's own stylesheets that moves, read by the browser, and what a
+       * probe carrying its class computes: the longest of its transition and animation durations,
+       * in milliseconds. Only rules whose selector is a single class can be probed this way — every
+       * one that moves is, today, and the count says so. */
+      const durations = () =>
+        frame.locator(":root").evaluate(() => {
+          const out: Record<string, number> = {};
+          const sheets = [...document.querySelectorAll<HTMLStyleElement>("style[data-rb-chrome]")];
+          const moving = new Set<string>();
+          for (const sheet of sheets) {
+            for (const rule of sheet.sheet?.cssRules ?? []) {
+              if (!(rule instanceof CSSStyleRule)) continue;
+              const style = rule.style;
+              const moves =
+                (style.transitionProperty !== "" && style.transitionProperty !== "none") ||
+                (style.transition !== "" && style.transition !== "none") ||
+                (style.animationName !== "" && style.animationName !== "none") ||
+                (style.animation !== "" && !style.animation.startsWith("none"));
+              if (!moves) continue;
+              for (const selector of rule.selectorText.split(",")) {
+                const name = selector.trim();
+                if (/^\.[\w-]+$/.test(name)) moving.add(name.slice(1));
+              }
+            }
+          }
+          const seconds = (value: string) =>
+            Math.max(
+              0,
+              ...value.split(",").map((part) => {
+                const text = part.trim();
+                return text.endsWith("ms")
+                  ? Number.parseFloat(text) / 1000
+                  : Number.parseFloat(text);
+              }),
+            );
+          for (const name of moving) {
+            const probe = document.createElement("div");
+            probe.className = name;
+            document.body.append(probe);
+            const computed = getComputedStyle(probe);
+            out[name] =
+              Math.max(seconds(computed.transitionDuration), seconds(computed.animationDuration)) *
+              1000;
+            probe.remove();
+          }
+          return out;
+        });
+
+      const moving = await durations();
+      expect(
+        Object.keys(moving).length,
+        "the walk found no moving chrome to probe",
+      ).toBeGreaterThanOrEqual(5);
+      for (const name of ["rb-action", "rb-tip", "rb-pill", "rb-handmade-in", "rb-line-add"]) {
+        // The control that must move: read without the preference, every one of them does.
+        expect(moving[name], `.${name} does not move even without the preference`).toBeGreaterThan(
+          50,
+        );
+      }
+
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      const still = await durations();
+      expect(Object.keys(still).sort()).toEqual(Object.keys(moving).sort());
+      // All of them in one list, so a red names every selector the block forgot at once.
+      expect(
+        Object.entries(still)
+          .filter(([, ms]) => ms > 1)
+          .map(([name, ms]) => `.${name} still moves for ${ms} ms with reduced motion`),
+      ).toEqual([]);
+    } finally {
+      await context.close();
+    }
+  }, 120_000);
 });

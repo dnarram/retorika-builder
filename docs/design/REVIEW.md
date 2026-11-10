@@ -7818,3 +7818,101 @@ esta vez en 0,000.
 9. **Del sprint 33 y anteriores, sin tocar**: lo que lista el backlog, incluidas las decisiones de
    diseño que esperan su confirmación.
 10. **El sprint 35, sin planificar.**
+
+## Sprint 35 — «El editor se mueve, y la marca tiene tamaño y sitio» (desde el 10 de noviembre de 2026)
+
+David, con la #357 fusionada y redesplegada, pide dos cosas: **«modernizar el aspecto visual del editor
+con más movimiento y apariencia de movimiento y modernidad en las herramientas ya implementadas. Quiero
+interactividad»**, y que **el logo y el nombre del negocio se puedan editar en tamaño y en sitio** desde
+«Menú», con las mejoras de interactividad que un experto vea oportunas. Sus tres respuestas al plan:
+**tres tamaños con nombre** (logo pequeño, normal y grande, 28, 40 y 56 px, con «normal» el de hoy;
+nombre en cuerpo, subtítulo o título de la escala), **tres sitios en la línea de la marca** (al
+principio, en medio, al final; enmienda la negativa de la ADR 0060) y **el gesto** (la marca es agarre y
+el borde del logo se estira por sus tamaños; enmienda la 0066). Tres ajustes al aprobar: las secciones se
+deslizan con **View Transitions** del documento del lienzo y no con un FLIP a mano, medido antes con
+veinte secciones; **el panel que se va no empuja el lienzo dos veces** (la ranura fija su ancho al
+instante y el saliente sale en `position: absolute`); y **previsualizar al pasar, elegir al pulsar** en
+los segmentos de la marca y de la barra, como cromo y nunca como parche. El plan está en la memoria del
+proyecto (`project-sprint-35-plan`).
+
+### Día 1, primero y solo — el presupuesto llega al editor (PR de `test/el-presupuesto-del-editor`)
+
+Un cambio de arnés va primero y solo: el techo y las esperas antes de que nada se mueva más.
+
+**El presupuesto de contención, ampliado al editor.** El del sprint 22 se escribió para las tres
+pantallas que tocaba —la portada de la aplicación, las cinco preguntas, las propuestas— y el editor quedó
+fuera porque en él solo llegaba un panel. Desde hoy rige también allí, con las mismas palabras:
+
+- **Nada en bucle** en el armazón, el kit de paneles, `Editor.tsx`, cada `*Panel.tsx` y cada diálogo,
+  **encontrados por nombre**, de modo que el noveno panel entra en el presupuesto el día que se escribe.
+  La pantalla de construcción queda fuera a propósito: su marca es una de las tres animaciones que pueden
+  girar, mientras se escribe el ZIP.
+- **Nada pasa de 200 ms** —utilidades de `globals.css` resueltas a sus números, estilos en línea, clases
+  de Tailwind—, **salvo una, con nombre y fichero**: `ui-reflow` en el armazón, los 260 ms del lienzo al
+  pulsar «Ver en móvil». Una excepción que deje de usarse se borra.
+- **El pulso no tiene regla propia, y se dice por qué**: el único de la aplicación, `ui-ring-once`, tarda
+  1,2 s y queda fuera del editor por su sola duración. Saboteado con dos en un panel, la regla «un pulso
+  como mucho» no llegaba nunca a fallar: fallaba antes la de los 200 ms. El pulso del lienzo (el día 3,
+  la zona que recibe una suelta) responde al techo del marco.
+- **La hoja que el editor inyecta en el lienzo, leída como CSS**: sus literales, con los valores de
+  `CHROME_SCALE` puestos. Nada infinito, nada por encima de 200 ms, ninguna propiedad de maquetación
+  animada (salvo `rb-handmade-in`, que es `ui-enter-up` llevado al marco y abre sitio bajando lo de
+  debajo), y **todo selector que se mueve, aplanado por el bloque de movimiento reducido después de
+  declararse**.
+
+**Esa última regla era falsa el día que se escribió, y el plan decía lo contrario** («hoy pasa verde con
+lo que hay»). El marco es otro documento: el bloque `!important` de `globals.css` no lo alcanza, y el del
+lienzo gana solo por llegar después, porque una consulta de medios no suma peso. Estaba en mitad de la
+hoja: **la barra «Diseñada a mano» (`.rb-handmade-in`, declarada más abajo con la forma abreviada
+`animation:`) seguía llegando en 180 ms con movimiento reducido**, medido en Chromium; y **el «Añadir» de
+las líneas (`.rb-line-add`) nunca estuvo en la lista**. El bloque pasa al final de la hoja y la lista
+gana `.rb-line-add`. Es lo único que cambia a la vista, y solo para quien pide menos movimiento; nada
+llega a una web publicada (goldens sin un byte de cambio).
+
+**El arnés espera dentro del lienzo.** `motionSettled` preguntaba al documento del editor qué seguía en
+marcha y **nunca al del lienzo**, donde vive casi todo lo que el sprint va a mover (la barra de texto,
+los verbos, las zonas, la barra de la sección escalada): medido, volvía al instante con una animación en
+curso dentro del marco. Ahora pregunta a **todos los marcos de la página**, sobrevive a un marco que se
+sustituye mientras espera, y **solo a las animaciones del reloj del documento**: una que sigue al scroll
+—las secciones que suben al verse (ADR 0062 §1), la línea de lectura (ADR 0068) y, el día 7, la sombra
+de un panel— no termina mientras nadie baja, y esperarla colgaría la caminata. `frameMotionSettled` es su
+gemelo para un marco conocido por su localizador.
+
+**Las caminatas que leen cajas justo después de algo que el sprint animará.** Un inventario por guion
+(un «disparo» —abrir o cerrar un panel, un diálogo, el aviso de deshacer, un menú emergente, una
+suelta, un verbo de sección— seguido de una lectura sin reintento) dio 86 líneas; revisadas una a una,
+la mayoría no mide nada que se mueva (`placedIn` lee el estilo en línea, `overflowing` compara texto con
+caja, que se transforman juntos). **La espera entra en siete ayudantes**, donde ninguna caminata la puede
+olvidar —`axeSerious` (axe pesa la opacidad en el color del texto: ya costó dos veces), `boxesInSection`,
+`pointIn`, los dos lectores de la barra de texto, `onScreen` del sprint 27 y `fitsTheWindow`— y **en
+línea en 8 caminatas**: la barra de texto recién abierta, el agarre de los verbos, el diálogo de la fuente
+propia a 390 y dos entradas pulsadas tras «Deshacer». En total, una espera nueva o ampliada alcanza a
+**47 de las caminatas que había. Ninguna aserción cambia.**
+
+**Lo que el inventario deja dicho para los días 2 y 3**, porque se ve en las caminatas y no en el plan:
+
+1. **La copia que se va sale del árbol de accesibilidad al instante** (`inert` y `aria-hidden`): una
+   caminata pasa avisos pulsando «Descargar igualmente» mientras esté visible, y durante el cruce de
+   paneles dos `<aside>` romperían todo localizador estricto como `locator("aside")`.
+2. **El fondo de un diálogo que se va no recibe el puntero**: las caminatas que pulsan con
+   `page.mouse` donde algo está dibujado no esperan como espera `click()`.
+3. **Durante una transición de vista, una pulsación cruda cae en la raíz**: tras un parche que mueve
+   secciones, quien pulse con `page.mouse` tiene que esperar (`pointIn` ya espera).
+
+**Una caminata nueva, «sprint 35 día 1 — el arnés espera a lo que se mueve»**, con dos pruebas, las dos
+**en rojo antes y en verde después**: una animación de 600 ms dentro del marco se espera, con
+`motionSettled` y con `frameMotionSettled`, y una que sigue al scroll no se espera (acotada a 5 s, para
+que un cuelgue sea un rojo y no un tiempo agotado); y **la hoja del cromo del lienzo, leída por el propio
+navegador** —segunda fuente, independiente del lector de `motionBudget.test.ts`—, no recorre nada con
+movimiento reducido, y sin la preferencia sí (el control que tiene que moverse).
+
+**Saboteos**, cada uno deshecho por guion: el arnés solo en el marco principal (rojo, «returned while the
+frame still moved»); sin el filtro del reloj (rojo, «waited on the scroll»); `.rb-line-add` fuera del
+bloque (rojas la caminata y la prueba unitaria); una regla de `.rb-pill` después del bloque (rojo, «is
+flattened before its transition is declared»); 300 ms en un panel; `animate-spin`; `ui-reveal` en un
+panel; un `@keyframes` con `width`; una transición de `top`; 300 ms en el marco. **Lo que costó**: la
+inversa del saboteo del filtro falló porque lo había aplicado sustituyendo por la cadena vacía, que no se
+puede buscar; se repuso a mano, se comprobó con el tamaño del diff, y el guion marca ahora lo que quita.
+
+**Suites.** `typecheck`, `lint`, `test` (3772, 39 más), invariantes (27), golden (26, cero cambios).
+**e2e completa antes de tocar nada: 291 verdes y 1 omitida, 1267 s.** Después: **293 verdes y 1 omitida, 1282 s, a la primera** — las 291 de antes y las 2 nuevas, 15 s más.
