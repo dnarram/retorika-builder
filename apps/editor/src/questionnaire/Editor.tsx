@@ -143,6 +143,7 @@ import {
 } from "../editor/EditorShell.tsx";
 import { GUIDE_ZONE, type Guide, guidesFor, type Rect } from "../editor/guides.ts";
 import { HANDLE_TOUCH, handlesFor } from "../editor/handles.ts";
+import { headerPreviewer } from "../editor/headerPreview.ts";
 import { headerStateFor, headerStylePatch } from "../editor/headerState.ts";
 import { ACCEPTED_IMAGE_ACCEPT } from "../editor/imageBytes.ts";
 import { leave } from "../editor/leaving.ts";
@@ -949,6 +950,9 @@ export function Editor({
    * and the promotion went with the route.
    */
   const frame = useRef<HTMLIFrameElement>(null);
+  /** The «Menú» panel's preview on the canvas's bar (sprint 35 día 5): one per canvas, reading the
+   * live document at each call. */
+  const headerPreview = useMemo(() => headerPreviewer(() => frame.current?.contentDocument), []);
   /**
    * Which element the floating toolbar is on, across what every edit does to the canvas: a patch
    * and the redraw that reopens the bar (`settleToolbar`).
@@ -9009,6 +9013,7 @@ export function Editor({
             onSetMenuLabel={onSetMenuLabel}
             onSetPageInMenu={onSetPageInMenu}
             onSetSectionInMenu={onSetSectionInMenu}
+            preview={headerPreview}
             onClose={() => showRail("sections")}
           />
         ) : effectiveRail === "share" ? (

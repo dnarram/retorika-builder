@@ -95,3 +95,21 @@ dimension of the matrix, and the menu audit does not change.
 Schema 1.19.0 shares migration `0020` with ADR 0069. `headerNodes` draws the bare pages' menu for
 «en medio» on a one-line bar; `railCss` hides it where the pages stand in a rail; the phone hides it
 with the strip. The editor's half is días 5 and 6 of sprint 35.
+
+## Note — sprint 35 día 5: what the panel writes, and what `align` still moves
+
+Two facts the panel's day measured, recorded here because §1 and §3 are read for them:
+
+- **The panel writes the word the owner presses, the layout's own included.** `brandPlacePatch`
+  keeps «Al principio» pressed on a one-line bar rather than dropping it as the absence it equals,
+  as a chosen alignment is kept (`lookPatch`): absent is the layout's place, so a dropped «start»
+  would move the brand to the centre the day the owner stacks the bar. The plan had the absence
+  dropped; this is the deviation, and the reason.
+- **Under `end` and `center` the strip's `align` is inert, and the sections' row's is not.** The row
+  is a line of its own (`.rb-nav-row`, `justify-content` by `data-align`), and the brand's rules do
+  not touch it; the panel's note under «Dónde van los enlaces» says which of the two it is.
+
+The panel previews each word on hover by its attribute (David's adjustment 3), **except «En medio» on
+a one-line bar, to or from**: there the pages' menu moves in the markup (§2), which no attribute
+draws, and a hover that showed something else than the press would write is the canvas promising
+what the page does not do. Recorded by development.

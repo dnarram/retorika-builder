@@ -8175,3 +8175,62 @@ golden (27: los cuatro movidos y el nuevo), `renderer:deps`, `size` (el script e
 «marca-grande · fija, logo grande, nombre en título» da 100 / 100 / 100 / 100 con LCP 1,35 s y CLS 0,001,
 los mismos números que «fija, con logo» (LCP 1,35, CLS 0,002): las palabras no cuestan nada medible.
 **e2e completa, a la primera: 301 verdes y 1 omitida, 1344 s.**
+
+### Día 5 — el panel de la marca (PR de `feat/el-panel-de-la-marca`)
+
+**Tres filas en «Menú», bajo el logo.** «Tamaño del logo» (Pequeño / Normal / Grande) aparece con un
+logo; «Tamaño del nombre» (Normal / Mediano / Grande) con el nombre marcado; «Dónde va la marca» (Al
+principio / En medio / Al final) mientras haya marca. Son el `Segments` de siempre, radios que las
+flechas recorren. La muestra del logo lo dibuja a la altura que lo dibuja la página, no a `max-h-10`.
+
+**Las frases leen el número que dibuja la página.** `headerStateFor` gana `brand` (tamaño, sitio,
+altura en escritorio y en el móvil, logo apaisado, marca en columna), leído de `headerSettings` y de
+`logoDrawnPx`, nuevo en el renderer: la expresión de la hoja evaluada contra el `space.sm` del tema.
+«Se ve a 40 píxeles» pasa a «Se ve a {px}», y con «Grande» el móvil dice el suyo (55 en la escala por
+defecto). El nombre en «Grande» dice que en el móvil se ve mediano; un tamaño propio dice que «Más
+pequeña» no lo toca; «En medio» y «Al final» dicen lo que hacen en el móvil; con la marca en columna,
+desde qué ancho; y bajo «Dónde van los enlaces», que con la marca en medio o al final los enlaces de la
+barra van junto a ella y la alineación solo mueve la fila de secciones.
+
+**Previsualizar al pasar, elegir al pulsar** (ajuste 3). `headerPreview.ts` escribe en la barra del
+lienzo, como cromo, el atributo que dibuja la opción bajo el ratón, y lo devuelve al salir. Tres
+reglas: un parche gana (si el atributo ya no es el que se escribió, no se devuelve nada); pulsar
+olvida la previsualización en vez de devolverla; una sola a la vez. Solo con ratón, nunca con el
+teclado ni el dedo. Vale para los tres segmentos de la marca y, de paso, para alineación, separación
+y tamaño de la barra. **«En medio» en una barra de una línea no se previsualiza, ni hacia ni desde**:
+allí el menú de páginas se mueve en el marcado (ADR 0070 §2) y ningún atributo lo dibuja, y una
+previsualización que enseña otra cosa que la pulsación sería el lienzo prometiendo lo que la página no
+hace. La barra de `--rb-bar-h` no se recalcula durante la previsualización: el hueco de una portada
+transparente puede quedar corto ese instante, y vuelve con la pulsación.
+
+**El estado que nadie ve no se guarda, y el panel ya no lo deja atrás.** Hasta hoy, quitar el logo
+dejaba `logoSize` y desmarcar el nombre dejaba `nameSize`, que el esquema rechaza. Ahora
+`logoRemovedPatch` y `brandNamePatch` se los llevan en el mismo parche, un solo paso que «Deshacer»
+devuelve entero; `logoPatch` cambia el fichero y conserva el tamaño.
+
+**Una desviación del plan, con su razón.** El plan borraba `place` cuando igualaba la ausencia del
+diseño. El panel escribe la palabra pulsada, como guarda una alineación elegida: «Al principio» borrado
+en una barra de una línea pasaría al centro el día que el dueño la apilara. Queda en una nota fechada
+de la ADR 0070, junto al hecho de que la alineación sigue moviendo la fila de secciones.
+
+**Lo que encontró la caminata: el aviso de descarga culpaba a las etiquetas.** Con el nombre en
+«Grande», la barra de la web generada se pliega hasta 1130 px y el aviso decía «acorta alguna
+etiqueta». Ahora `foldWarning` mide la misma barra con la marca a «Normal» y, solo si así cabe antes,
+lo dice en el panel y en la descarga: «Con el logo y el nombre a tamaño «Normal», cabría en una línea
+desde {width} px». Un logo más pequeño, que pliega antes, no se nombra.
+
+**Pruebas.** `headerState`: nueve nuevas (estado del renderer, píxeles en el móvil, parches que borran
+en «Normal», sitio guardado al apilar, tamaño que se va con su logo o su nombre, logo cambiado que
+conserva el tamaño, el pliegue que se mueve con el tamaño, la marca nombrada solo cuando cuenta, notas
+del móvil). `headerPreview`: seis. Renderer: `logoDrawnPx` contra la expresión, 56 / 55 / 47.
+Caminata «sprint 35 día 5»: subir un logo; pasar por «Grande» y ver el lienzo a 56 / 40 sin que se
+mueva la serie de edición; salir y volver a 40; **«Deshacer» deshace la subida, el paso anterior al
+paso del ratón**; pulsar escribe y salir no lo deshace; «En medio» escrito y sin previsualizar «Al
+principio»; la alineación previsualizada y devuelta; el ZIP con `data-logo-size="lg"` y
+`data-brand-place="center"`; cambiar el logo conserva «Grande»; quitarlo se lleva la fila, y un
+«Deshacer» lo devuelve todo. **Saboteos**, todos en rojo: altura fija en 40; quitar el logo sin su
+tamaño; desmarcar el nombre sin su tamaño; «keep» ignorado; la previsualización escrita como parche (la
+serie de edición se mueve: 4 → 5); la marca nunca nombrada en el pliegue.
+
+**Suites.** `typecheck`, `lint` (73 avisos, los de `main`), `test` (3835), invariantes (27), golden
+byte a byte (27), `secrets:scope`. **e2e completa, a la primera: 302 verdes y 1 omitida, 1334 s** (la caminata nueva incluida).

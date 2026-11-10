@@ -55,6 +55,7 @@ export {
   headerWidths,
   homeMenuLabel,
   LOGO_HEIGHTS,
+  logoDrawnPx,
   logoHeightCss,
   PHONE_BAR_MAX,
   phoneAt,

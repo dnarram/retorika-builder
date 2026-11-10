@@ -1,7 +1,8 @@
 "use client";
 
-import { TWO_RAILS_FOLD_WIDTH } from "@retorika/renderer";
+import { PHONE_BAR_MAX, TWO_RAILS_FOLD_WIDTH } from "@retorika/renderer";
 import {
+  BRAND_NAME_SIZES,
   HEADER_ALIGNMENTS,
   HEADER_BACKGROUNDS,
   HEADER_GAPS,
@@ -10,6 +11,7 @@ import {
   type HeaderAction,
   type HeaderLayout,
   type HeaderPart,
+  LOGO_SIZES,
   MENU_LABEL_MAX,
   MENU_LABEL_MIN,
   type MenuLabelTarget,
@@ -21,9 +23,11 @@ import {
   SECTIONS_POSITIONS,
   type SectionsPosition,
 } from "@retorika/schema";
-import { useEffect, useId, useRef, useState } from "react";
+import { type PointerEvent, useEffect, useId, useRef, useState } from "react";
+import type { HeaderPreview, HeaderPreviewer } from "../editor/headerPreview.ts";
 import {
   brandNamePatch,
+  brandPlacePatch,
   brandWithPagesPatch,
   columnCardNote,
   columnNote,
@@ -33,11 +37,13 @@ import {
   headerExact,
   headerStateFor,
   headerStylePatch,
+  logoSizePatch,
   lookPatch,
   type MenuBlock,
   type MenuMode,
   menuModePatch,
   menuStatusText,
+  nameSizePatch,
   type PageRow,
   PHONE_BUTTON_MAX,
   pagesPositionPatch,
@@ -103,8 +109,13 @@ export interface MenuPanelProps {
   onSetMenuLabel: (target: MenuLabelTarget, label: string | null) => void;
   onSetPageInMenu: (pageId: string, inMenu: boolean) => void;
   onSetSectionInMenu: (sectionId: string, inMenu: boolean) => void;
+  /** The canvas's bar, previewed by attribute while a segment is under the mouse (David's
+   * adjustment 3 on sprint 35): absent where there is no canvas to preview on. */
+  preview?: HeaderPreviewer;
   onClose: () => void;
 }
+
+const PLACES = ["start", "center", "end"] as const;
 
 const LAYOUTS: readonly HeaderLayout[] = ["brand-left", "centered", "stacked"];
 const MODES: readonly MenuMode[] = ["auto", "always", "never"];
@@ -137,11 +148,38 @@ export function MenuPanel({
   onSetMenuLabel,
   onSetPageInMenu,
   onSetSectionInMenu,
+  preview,
   onClose,
 }: MenuPanelProps) {
   const headingId = useId();
   const groupId = useId();
   const state = headerStateFor(doc, pageId);
+  // A panel closed with the mouse still on a segment never sees the pointer leave: put the bar back.
+  useEffect(() => () => preview?.end("restore"), [preview]);
+  const oneLine = state.layout !== "stacked";
+  // «En medio» on a one-line bar moves the pages' menu in the markup (ADR 0070 §2), which no attribute
+  // does: it is not previewed, to or from, so the canvas never shows on hover what a press would not.
+  const placePreview = (place: (typeof PLACES)[number]): HeaderPreview | null =>
+    oneLine && (place === "center" || state.brand.place === "center")
+      ? null
+      : { attribute: "data-brand-place", value: place };
+  const placeNote = state.brand.inRail
+    ? es["editor.menuPanel.placeRail"].replace("{width}", String(state.pagesFoldWidth))
+    : !oneLine
+      ? es["editor.menuPanel.placeStacked"]
+      : state.brand.place === "center"
+        ? es["editor.menuPanel.placeCenter"]
+        : state.brand.place === "end"
+          ? es["editor.menuPanel.placeEnd"]
+          : null;
+  // Under «Dónde van los enlaces»: with the brand in the middle or at the end, the strip keeps beside
+  // it and the alignment moves only the sections' row, when there is one (ADR 0070 §3).
+  const alignBesideBrand =
+    state.brand.shown && oneLine && !state.brand.inRail && state.brand.place !== "start"
+      ? state.sectionsPosition === "row" && state.sections !== null
+        ? es["editor.menuPanel.alignBesideBrandRow"]
+        : es["editor.menuPanel.alignBesideBrand"]
+      : null;
   const chosenAction = state.actionChoices.find((choice) => choice.key === state.actionKey);
   // The cards' twin on the canvas (ADR 0066): said once, under the first «Dónde va» drawn, and only
   // in the desktop view — the phone's canvas has no zones and its place is «En el móvil».
@@ -215,10 +253,15 @@ export function MenuPanel({
             <span
               data-testid="logo-swatch"
               style={{ background: state.barBackground }}
-              className="flex h-14 w-20 shrink-0 items-center justify-center rounded-ui-sm border border-ui-border"
+              className="flex h-[68px] min-w-20 shrink-0 items-center justify-center rounded-ui-sm border border-ui-border px-1.5"
             >
               {logoUrl === undefined ? null : (
-                <img src={logoUrl} alt="" className="max-h-10 max-w-[64px] object-contain" />
+                <img
+                  src={logoUrl}
+                  alt=""
+                  style={{ height: `${state.brand.logoPx}px` }}
+                  className="w-auto max-w-[112px] object-contain"
+                />
               )}
             </span>
           )}
@@ -245,15 +288,86 @@ export function MenuPanel({
         <p className={noteClass}>
           {state.logoSrc === undefined
             ? es["editor.menuPanel.logoNone"]
-            : es["editor.menuPanel.logoShown"]}
+            : es["editor.menuPanel.logoShown"].replace("{px}", String(state.brand.logoPx))}
         </p>
+        {/* The logo's size (ADR 0069), offered with a logo: the sentence above says the pixels the
+            page draws, and on a phone the large one is what the bar has room for. */}
+        {state.logoSrc === undefined ? null : (
+          <>
+            <Segments
+              name={`${groupId}-logo-size`}
+              label={es["editor.menuPanel.logoSize"]}
+              options={LOGO_SIZES}
+              value={state.brand.logoSize}
+              labelOf={(size) => es[`editor.menuPanel.logoSize.${size}`]}
+              onSelect={(size) => onSetHeader(logoSizePatch(doc, size))}
+              preview={(size) => ({
+                attribute: "data-logo-size",
+                value: size === "md" ? null : size,
+              })}
+              previewer={preview}
+            />
+            {state.brand.logoPhonePx < state.brand.logoPx ? (
+              <p className={noteClass}>
+                {es["editor.menuPanel.logoShownPhone"]
+                  .replace("{px}", String(state.brand.logoPhonePx))
+                  .replace("{max}", String(PHONE_BAR_MAX))}
+              </p>
+            ) : null}
+            {state.brand.logoSize === "lg" && state.brand.logoWide ? (
+              <p className={noteClass}>{es["editor.menuPanel.logoWide"]}</p>
+            ) : null}
+          </>
+        )}
         {logoFaint ? (
           <p className="m-0 text-[12px] leading-snug text-[#92400E]">
             {es["editor.menuPanel.logoFaint"]}
           </p>
         ) : null}
+        {/* The name's size (ADR 0069), offered with the name: the scale's own three sizes. */}
+        {state.brandName ? (
+          <>
+            <Segments
+              name={`${groupId}-name-size`}
+              label={es["editor.menuPanel.nameSize"]}
+              options={BRAND_NAME_SIZES}
+              value={state.brand.nameSize}
+              labelOf={(size) => es[`editor.menuPanel.nameSize.${size}`]}
+              onSelect={(size) => onSetHeader(nameSizePatch(doc, size))}
+              preview={(size) => ({
+                attribute: "data-name-size",
+                value: size === "body" ? null : size,
+              })}
+              previewer={preview}
+            />
+            {state.brand.nameSize === "heading" ? (
+              <p className={noteClass}>
+                {es["editor.menuPanel.nameSizePhone"].replace("{max}", String(PHONE_BAR_MAX))}
+              </p>
+            ) : null}
+            {state.brand.nameSize !== "body" && state.look.size === "small" ? (
+              <p className={noteClass}>{es["editor.menuPanel.nameSizeSmall"]}</p>
+            ) : null}
+          </>
+        ) : null}
+        {/* Where the brand sits in its line (ADR 0070), offered while there is a brand to place. */}
+        {state.brand.shown ? (
+          <>
+            <Segments
+              name={`${groupId}-brand-place`}
+              label={es["editor.menuPanel.place"]}
+              options={PLACES}
+              value={state.brand.place}
+              labelOf={(place) => es[`editor.menuPanel.place.${place}`]}
+              onSelect={(place) => onSetHeader(brandPlacePatch(doc, place))}
+              preview={placePreview}
+              previewer={preview}
+            />
+            {placeNote === null ? null : <p className={noteClass}>{placeNote}</p>}
+          </>
+        ) : null}
         <p className={noteClass}>
-          {state.brandName || state.logoSrc !== undefined
+          {state.brand.shown
             ? es["editor.menuPanel.brandNote"]
             : es["editor.menuPanel.brandNothing"]}
         </p>
@@ -561,7 +675,10 @@ export function MenuPanel({
           value={state.look.align}
           labelOf={(align) => es[`editor.menuPanel.align.${align}`]}
           onSelect={(align) => onSetHeader(lookPatch(doc, { align }))}
+          preview={(align) => ({ attribute: "data-align", value: align })}
+          previewer={preview}
         />
+        {alignBesideBrand === null ? null : <p className={noteClass}>{alignBesideBrand}</p>}
         <Segments
           name={`${groupId}-gap`}
           label={es["editor.menuPanel.gap"]}
@@ -569,6 +686,8 @@ export function MenuPanel({
           value={state.look.gap}
           labelOf={(gap) => es[`editor.menuPanel.gap.${gap}`]}
           onSelect={(gap) => onSetHeader(lookPatch(doc, { gap }))}
+          preview={(gap) => ({ attribute: "data-gap", value: gap })}
+          previewer={preview}
         />
         <Segments
           name={`${groupId}-size`}
@@ -577,6 +696,8 @@ export function MenuPanel({
           value={state.look.size}
           labelOf={(size) => es[`editor.menuPanel.size.${size}`]}
           onSelect={(size) => onSetHeader(lookPatch(doc, { size }))}
+          preview={(size) => ({ attribute: "data-size", value: size })}
+          previewer={preview}
         />
         <Check
           label={es["editor.menuPanel.uppercase"]}
@@ -815,6 +936,13 @@ function ModeSwitch({
 }
 
 /** A short row of radios with its name above it — alignment, gap, size. */
+/**
+ * A closed choice as a row of segments. **With `preview` and a `previewer`, each option under the
+ * mouse shows itself on the canvas's bar before it is pressed** (David's adjustment 3 on sprint 35):
+ * the attribute it is drawn by, written as chrome and put back on leaving; a press forgets the
+ * preview and writes the document. Only for a mouse — a touch has no hover, and a press there is the
+ * choice — and never from the keyboard, where the arrows already choose.
+ */
 function Segments<T extends string>({
   name,
   label,
@@ -822,6 +950,8 @@ function Segments<T extends string>({
   value,
   labelOf,
   onSelect,
+  preview,
+  previewer,
 }: {
   name: string;
   label: string;
@@ -829,6 +959,8 @@ function Segments<T extends string>({
   value: T;
   labelOf: (option: T) => string;
   onSelect: (option: T) => void;
+  preview?: (option: T) => HeaderPreview | null;
+  previewer?: HeaderPreviewer | undefined;
 }) {
   return (
     <div role="radiogroup" aria-label={label}>
@@ -842,7 +974,19 @@ function Segments<T extends string>({
             name={name}
             label={labelOf(option)}
             checked={value === option}
-            onSelect={() => onSelect(option)}
+            onSelect={() => {
+              previewer?.end("keep");
+              onSelect(option);
+            }}
+            {...(previewer && preview
+              ? {
+                  onHover: (on: boolean) => {
+                    const shown = on ? preview(option) : null;
+                    if (shown) previewer.show(shown);
+                    else previewer.end("restore");
+                  },
+                }
+              : {})}
           />
         ))}
       </div>
@@ -961,14 +1105,26 @@ function Segment({
   label,
   checked,
   onSelect,
+  onHover,
 }: {
   name: string;
   label: string;
   checked: boolean;
   onSelect: () => void;
+  onHover?: (on: boolean) => void;
 }) {
   return (
     <label
+      {...(onHover
+        ? {
+            onPointerEnter: (event: PointerEvent) => {
+              if (event.pointerType === "mouse") onHover(true);
+            },
+            onPointerLeave: (event: PointerEvent) => {
+              if (event.pointerType === "mouse") onHover(false);
+            },
+          }
+        : {})}
       className={`relative flex min-h-9 cursor-pointer items-center justify-center px-1.5 py-1 text-center text-[12px] leading-tight ${
         checked ? `${panelRowSelected} font-semibold text-ui-brand-deep` : `${panelRow} text-ui-ink`
       }`}

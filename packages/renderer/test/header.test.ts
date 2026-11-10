@@ -7,6 +7,7 @@ import {
   headerPlaces,
   headerSettings,
   LOGO_HEIGHTS,
+  logoDrawnPx,
   RAIL_FOLD_WIDTH,
   RAIL_WIDTH,
   TWO_RAILS_FOLD_WIDTH,
@@ -1209,6 +1210,19 @@ describe("the bar's estimate", () => {
     ).toBe(
       "calc(2 * var(--space-md) + max(56px, 1.3 * var(--size-subheading)) + var(--space-md) + 2 * var(--space-sm) + 1.3 * var(--size-body) + 1px)",
     );
+  });
+
+  it("says in pixels what the stylesheet's expression draws: 56, 55 and 47 for the three paddings", () => {
+    const withPad = (pad: string) => ({ ...theme, "space.sm": pad }) as Theme;
+    expect([6, 8, 12].map((pad) => logoDrawnPx("lg", true, withPad(`${pad}px`)))).toEqual([
+      56, 55, 47,
+    ]);
+    // `min(56px, calc(71px - 2 * var(--space-sm)))`, read by hand at the default padding.
+    expect(logoDrawnPx("lg", true, withPad("8px"))).toBe(Math.min(56, 71 - 16));
+    for (const size of ["sm", "md", "lg"] as const) {
+      expect(logoDrawnPx(size, false, withPad("12px"))).toBe(LOGO_HEIGHTS[size]);
+    }
+    expect(logoDrawnPx("md", true, withPad("12px"))).toBe(40);
   });
 
   it("derives the phone's brand: the large logo cut to the bar's room, the heading at the subheading's size", () => {

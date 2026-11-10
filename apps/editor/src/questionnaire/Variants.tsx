@@ -60,6 +60,7 @@ import {
   wasPlacementEverMoved,
   wasSectionEverEdited,
 } from "../editor/documentHistory.ts";
+import { logoPatch, logoRemovedPatch } from "../editor/headerState.ts";
 import {
   clearFontFiles,
   type FontFileHandle,
@@ -1206,13 +1207,11 @@ export function Variants({
       next.set(variant, forVariant);
       return next;
     });
-    const brand = histories[variant]?.present.document.header?.brand ?? {};
+    const current = histories[variant]?.present.document;
+    if (!current) return;
     const { width, height } = result.logo;
-    dispatch({
-      type: "setHeader",
-      variant,
-      patch: { brand: { ...brand, logo: { src, width, height } } },
-    });
+    // The brand keeps everything else, its size among it (ADR 0069): a new file is not a new size.
+    dispatch({ type: "setHeader", variant, patch: logoPatch(current, { src, width, height }) });
     if (!(await savePhoto(photoScope(variant), src, result.logo.bytes))) {
       setSaveStatus("unsaved");
     }
@@ -1222,14 +1221,10 @@ export function Variants({
    * unreferenced; the account's reconciliation removes its object on the next accepted save, since
    * the document no longer names it. A brand with nothing left in it drops its key. */
   function handleRemoveLogo(variant: number) {
-    const brand = histories[variant]?.present.document.header?.brand;
-    if (!brand?.logo) return;
-    const { logo: _, ...rest } = brand;
-    dispatch({
-      type: "setHeader",
-      variant,
-      patch: { brand: Object.keys(rest).length === 0 ? undefined : rest },
-    });
+    const current = histories[variant]?.present.document;
+    if (!current?.header?.brand?.logo) return;
+    // The logo's size goes with it (ADR 0069 §2): the schema refuses a size for no logo.
+    dispatch({ type: "setHeader", variant, patch: logoRemovedPatch(current) });
   }
 
   /**

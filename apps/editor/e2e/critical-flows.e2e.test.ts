@@ -27012,3 +27012,154 @@ describe("sprint 35 día 3 — las herramientas del lienzo se mueven", () => {
     }
   }, 180_000);
 });
+
+/**
+ * **Sprint 35 día 5 — el panel de la marca** (ADR 0069 and 0070; David's adjustment 3). The logo's
+ * size, the name's and the brand's place are three rows of «Menú», and each option under the mouse
+ * shows itself on the canvas's bar before it is pressed — as chrome, never as a step of history: the
+ * proof is that «Deshacer» right after a hover undoes the upload before it, and nothing else. A press
+ * writes the document; changing the logo keeps its size; removing it takes the size and its row with
+ * it, in one step «Deshacer» brings back whole; and the ZIP carries the attributes the canvas drew.
+ */
+describe("sprint 35 día 5 — el panel de la marca", () => {
+  it("previsualiza al pasar sin dejar paso de historial, elige al pulsar, y el tamaño sigue al logo", async () => {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 950 } });
+    const studio = await context.newPage();
+    const dir = mkdtempSync(join(tmpdir(), "retorika-e2e-brand-panel-"));
+    try {
+      await intoTheCanvas(studio);
+      const frame = studio.frameLocator(PREVIEW).first();
+      const bar = frame.locator("header.rb-header");
+      const logo = bar.locator("img.rb-logo");
+      const logoHeight = () => logo.evaluate((el) => el.getBoundingClientRect().height);
+      // The panel scrolls inside itself and changes height as rows come and go: an option is
+      // brought into its view before its box is read, and then pressed where it is drawn.
+      const pointAt = async (target: Locator) => {
+        await target.scrollIntoViewIfNeeded();
+        return pointIn(target);
+      };
+
+      // 1. «Menú», and a logo uploaded from it: drawn at «Normal», and the row of its size appears.
+      await studio.getByRole("button", { name: "Menú", exact: true }).click();
+      const panel = studio.getByRole("complementary", { name: "La cabecera de tu web" });
+      await expect(panel).toBeVisible();
+      const logoSizes = panel.getByRole("radiogroup", { name: "Tamaño del logo" });
+      await expect(logoSizes).toHaveCount(0);
+      const [chooser] = await Promise.all([
+        studio.waitForEvent("filechooser"),
+        panel.getByRole("button", { name: "Subir tu logo" }).click(),
+      ]);
+      await chooser.setFiles(join(import.meta.dirname, "fixtures/logo.png"));
+      await expect(logo).toHaveCount(1);
+      await imageLoaded(logo);
+      await expect(logoSizes).toBeVisible();
+      await expect(logoSizes.getByRole("radio", { name: "Normal" })).toBeChecked();
+      await expect(
+        panel.getByText("Se ve a 40 píxeles de alto, sobre el fondo de la cabecera."),
+      ).toBeVisible();
+      await frameMotionSettled(frame);
+      const normal = await logoHeight();
+      const serial = await editSerialOf(studio);
+
+      // 2. The mouse over «Grande», not pressed: the canvas draws it large, and nothing is written.
+      const large = logoSizes.getByText("Grande", { exact: true });
+      const over = await pointAt(large);
+      await studio.mouse.move(over.x, over.y, { steps: 4 });
+      await expect(bar).toHaveAttribute("data-logo-size", "lg");
+      expect((await logoHeight()) / normal).toBeCloseTo(56 / 40, 1);
+      expect(await editSerialOf(studio), "a hover is not a patch").toBe(serial);
+      await expect(logoSizes.getByRole("radio", { name: "Normal" })).toBeChecked();
+
+      // Leaving puts the bar back as it was.
+      const away = await pointAt(panel.getByRole("heading", { name: "La cabecera de tu web" }));
+      await studio.mouse.move(away.x, away.y, { steps: 4 });
+      await expect(bar).not.toHaveAttribute("data-logo-size", /.*/);
+      expect(await logoHeight()).toBeCloseTo(normal, 0);
+      expect(await editSerialOf(studio)).toBe(serial);
+
+      // **No step of history**: «Deshacer» now undoes the upload, the step before the hover.
+      await studio.getByRole("button", { name: "Deshacer", exact: true }).click();
+      await expect(logo).toHaveCount(0);
+      await studio.getByRole("button", { name: "Rehacer", exact: true }).click();
+      await expect(logo).toHaveCount(1);
+      await imageLoaded(logo);
+
+      // 3. Pressed, it is written: the canvas draws it from the document now.
+      const pressAt = await pointAt(large);
+      await studio.mouse.click(pressAt.x, pressAt.y);
+      await expect(logoSizes.getByRole("radio", { name: "Grande" })).toBeChecked();
+      await expect(bar).toHaveAttribute("data-logo-size", "lg");
+      await expect(
+        panel.getByText("Se ve a 56 píxeles de alto, sobre el fondo de la cabecera."),
+      ).toBeVisible();
+      // Leaving after the press keeps it: the preview was forgotten, not put back.
+      await studio.mouse.move(away.x, away.y, { steps: 4 });
+      await expect(bar).toHaveAttribute("data-logo-size", "lg");
+      await expect.poll(() => storedSession(studio)).toContain('"logoSize":"lg"');
+
+      // 4. «En medio»: written, and on this one-line bar not previewed — the pages' menu moves in
+      //    the markup there, which no attribute draws (ADR 0070 §2). Hovering «Al principio» leaves
+      //    the canvas as the document says.
+      const places = panel.getByRole("radiogroup", { name: "Dónde va la marca" });
+      const middle = await pointAt(places.getByText("En medio", { exact: true }));
+      await studio.mouse.click(middle.x, middle.y);
+      await expect(bar).toHaveAttribute("data-brand-place", "center");
+      await expect(
+        panel.getByText("Entre el menú de páginas y el resto. En el móvil va al principio."),
+      ).toBeVisible();
+      const start = await pointAt(places.getByText("Al principio", { exact: true }));
+      await studio.mouse.move(start.x, start.y, { steps: 4 });
+      await expect(bar).toHaveAttribute("data-brand-place", "center");
+      await studio.mouse.move(away.x, away.y, { steps: 4 });
+
+      // 5. The bar's own segments preview the same way, «de paso»: the alignment of the links.
+      const align = panel.getByRole("radiogroup", { name: "Dónde van los enlaces" });
+      const alignBefore = await bar.getAttribute("data-align");
+      const other = alignBefore === "start" ? "Derecha" : "Izquierda";
+      const alignAt = await pointAt(align.getByText(other, { exact: true }));
+      await studio.mouse.move(alignAt.x, alignAt.y, { steps: 4 });
+      await expect(bar).toHaveAttribute("data-align", other === "Derecha" ? "end" : "start");
+      await studio.mouse.move(away.x, away.y, { steps: 4 });
+      await expect(bar).toHaveAttribute("data-align", alignBefore ?? "");
+
+      // 6. The ZIP carries what the canvas drew.
+      await studio.getByRole("button", { name: "Descargar" }).click();
+      const downloadAnyway = studio.getByRole("button", { name: "Descargar igualmente" });
+      await downloadAnyway.waitFor();
+      const [download] = await Promise.all([
+        studio.waitForEvent("download"),
+        downloadAnyway.click(),
+      ]);
+      const zipPath = join(dir, download.suggestedFilename());
+      await download.saveAs(zipPath);
+      const index = new TextDecoder().decode(
+        extractFileBytes(new Uint8Array(readFileSync(zipPath)), "index.html"),
+      );
+      expect(index).toMatch(/<header class="rb-header"[^>]* data-brand-place="center"/);
+      expect(index).toMatch(/<header class="rb-header"[^>]* data-logo-size="lg"/);
+
+      // 7. A new file keeps the size the owner chose.
+      const [change] = await Promise.all([
+        studio.waitForEvent("filechooser"),
+        panel.getByRole("button", { name: "Cambiar" }).click(),
+      ]);
+      await change.setFiles(join(import.meta.dirname, "fixtures/logo.png"));
+      await imageLoaded(logo);
+      await expect(logoSizes.getByRole("radio", { name: "Grande" })).toBeChecked();
+      await expect(bar).toHaveAttribute("data-logo-size", "lg");
+
+      // 8. «Quitar» takes the logo and its size, and the row goes; one «Deshacer» brings both.
+      await panel.getByRole("button", { name: "Quitar" }).click();
+      await expect(logo).toHaveCount(0);
+      await expect(logoSizes).toHaveCount(0);
+      await expect(bar).not.toHaveAttribute("data-logo-size", /.*/);
+      await expect.poll(() => storedSession(studio)).not.toContain('"logoSize"');
+      await studio.getByRole("button", { name: "Deshacer", exact: true }).click();
+      await expect(logo).toHaveCount(1);
+      await expect(logoSizes.getByRole("radio", { name: "Grande" })).toBeChecked();
+      await expect(bar).toHaveAttribute("data-logo-size", "lg");
+    } finally {
+      await context.close();
+    }
+  }, 240_000);
+});
