@@ -552,9 +552,12 @@ function transitionedProperties(body: string): string[] {
 /** Which kinds of movement a rule declares: a transition with a duration, an animation by name. */
 function movementsOf(body: string): ("transition" | "animation")[] {
   const kinds: ("transition" | "animation")[] = [];
-  if (/(?<![\w-])transition(-property|-duration)?\s*:\s*(?!none)/.test(body))
+  // `:(?!\s*none)` and not `:\s*(?!none)`: the second lets `\s*` give back its space, and the
+  // look-ahead then reads « none», which is not «none» — so `animation: none` counted as a movement
+  // (found on sprint 35 día 3, the day a rule in the frame first said `animation: none`).
+  if (/(?<![\w-])transition(-property|-duration)?\s*:(?!\s*none)/.test(body))
     kinds.push("transition");
-  if (/(?<![\w-])animation(-name)?\s*:\s*(?!none)/.test(body)) kinds.push("animation");
+  if (/(?<![\w-])animation(-name)?\s*:(?!\s*none)/.test(body)) kinds.push("animation");
   return kinds;
 }
 

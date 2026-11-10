@@ -347,7 +347,9 @@ describe("the section's verbs", () => {
   });
 
   it("are flattened for somebody who asked for less movement", () => {
-    const reduced = CANVAS.indexOf("prefers-reduced-motion");
+    // The rule itself, not the first mention: since sprint 35 día 3 the component also *asks* the
+    // preference (`matchMedia`, the drop's settle), earlier in the file than the stylesheet.
+    const reduced = CANVAS.indexOf("@media (prefers-reduced-motion: reduce)");
     const block = CANVAS.slice(reduced, reduced + 400);
     expect(block, "the verbs still animate under reduced motion").toContain(".rb-action");
     expect(block, "the word still fades under reduced motion").toContain(".rb-tip");

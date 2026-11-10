@@ -205,6 +205,14 @@ import {
   sectionKeyAction,
 } from "../editor/sectionKeys.ts";
 import { offersMatching } from "../editor/sectionSearch.ts";
+import {
+  canSlide,
+  SLIDING_CLASS,
+  sectionOrder,
+  shouldSlide,
+  slide,
+  slidingIds,
+} from "../editor/sectionSlide.ts";
 import { keepsItsOwnUndo, shortcutFor } from "../editor/shortcuts.ts";
 import { reviewLogo } from "../editor/styleReview.ts";
 import { insertedTextFor, liveFrameOf, offsetFor, textFrameOf } from "../editor/textEdits.ts";
@@ -260,6 +268,14 @@ function addressKey(sectionId: string, elementId: string): string {
  * ref is the same on every render, and React calls its cleanup once, when the notice is removed,
  * in the instant before the node leaves the page.
  */
+/**
+ * **The class a piece of the canvas's chrome arrives with** (sprint 35 día 3): the insert menu, the
+ * composition and escalation popups, the text bar and the section's verbs grow in from where they
+ * were pressed. Put on only when somebody opened the thing — never when the same thing is drawn
+ * again after a patch, which every edit does to all of them.
+ */
+const ARRIVES = "rb-arrives";
+
 function leavesAsNotice(node: HTMLDivElement | null): (() => void) | undefined {
   if (!node) return undefined;
   return () => leave(node, "toast");
@@ -986,6 +1002,18 @@ export function Editor({
    * David asked for exactly that assertion when he approved the sprint.
    */
   const keepChosenFocus = useRef(false);
+  /**
+   * **Where a dropped element was drawn when the hand let go** (sprint 35 día 3), so that once the
+   * patch has put it in its cell it can settle there from that point rather than jump. Taken by the
+   * next patch and only within a second of the drop; a drop that changed nothing leaves nothing.
+   */
+  const dropSettle = useRef<{
+    sectionId: string;
+    elementId: string;
+    left: number;
+    top: number;
+    at: number;
+  } | null>(null);
   /**
    * Which text should be **written in** again after this edit, if any — after the patch
    * (`settleWriting` reads it from the redraw; sprint 26 día 4).
@@ -1834,30 +1862,88 @@ export function Editor({
       record("patch", { ok: false, reason: "gesture", queued: true });
       return;
     }
+    const inputs = patchInputs();
+    const started = performance.now();
+    const fresh = renderFor(inputs);
+    const renderMs = performance.now() - started;
+    /*
+     * **A change of the sections' order slides** (sprint 35 día 3, David's adjustment 1): moved,
+     * inserted, duplicated or deleted, on the page already drawn. The patch then runs inside the
+     * canvas document's view transition, a frame from now — so with the inputs of that moment: if
+     * anything changed in between, it renders again rather than putting an older page over a newer
+     * one. Everything else, a typed letter first of all, is patched now, as it always was.
+     */
+    const before = sectionOrder(iframeDoc.body);
+    const after = sectionOrder(fresh);
+    if (
+      shouldSlide(before, after, patchedPageId.current === (inputs.pageId ?? null)) &&
+      canSlide(iframeDoc)
+    ) {
+      slide(iframeDoc, slidingIds(iframeDoc, before, after), () => {
+        const now = patchInputs();
+        if (samePatchInputs(now, inputs)) patchNow(iframeDoc, inputs, fresh, renderMs);
+        else {
+          const again = performance.now();
+          patchNow(iframeDoc, now, renderFor(now), performance.now() - again);
+        }
+      });
+      return;
+    }
+    patchNow(iframeDoc, inputs, fresh, renderMs);
+  }
+  /** What a patch is made of, read at the moment it is applied. */
+  function patchInputs() {
+    return {
+      doc: docNow.current,
+      photoUrls: photoUrlsNow.current,
+      fontUrls: fontUrlsNow.current,
+      pageId: pageIdNow.current,
+      previewEntryId: previewEntryIdNow.current,
+    };
+  }
+  function samePatchInputs(
+    a: ReturnType<typeof patchInputs>,
+    b: ReturnType<typeof patchInputs>,
+  ): boolean {
+    return (
+      a.doc === b.doc &&
+      a.photoUrls === b.photoUrls &&
+      a.fontUrls === b.fontUrls &&
+      a.pageId === b.pageId &&
+      a.previewEntryId === b.previewEntryId
+    );
+  }
+  function renderFor(inputs: ReturnType<typeof patchInputs>): DocumentFragment {
     if (inertDoc.current === null) {
       inertDoc.current = document.implementation.createHTMLDocument("");
     }
-    const pageId = pageIdNow.current;
-    const previewEntryId = previewEntryIdNow.current;
-    const display = withPhotoUrls(docNow.current, photoUrlsNow.current);
-    const options = {
+    const display = withPhotoUrls(inputs.doc, inputs.photoUrls);
+    return render(display, "dom", {
       entryHints: true,
-      ...(pageId === undefined ? {} : { pageId }),
-      ...(previewEntryId === undefined ? {} : { entryId: previewEntryId }),
+      ...(inputs.pageId === undefined ? {} : { pageId: inputs.pageId }),
+      ...(inputs.previewEntryId === undefined ? {} : { entryId: inputs.previewEntryId }),
       document: inertDoc.current,
-    };
+    });
+  }
+  function patchNow(
+    iframeDoc: Document,
+    inputs: ReturnType<typeof patchInputs>,
+    fresh: DocumentFragment,
+    renderMs: number,
+  ) {
+    const pageId = inputs.pageId;
+    const display = withPhotoUrls(inputs.doc, inputs.photoUrls);
     // The reading point, before anything moves (see `readingPoint`): only on the page already
     // drawn, and only once the page has been scrolled — at the top there is nothing to keep.
     readingPoint.current =
       patchedPageId.current === (pageId ?? null) ? readingPointOf(iframeDoc) : null;
-    const started = performance.now();
-    const fresh = render(display, "dom", options);
+    const started = performance.now() - renderMs;
     const cause = pendingCause.current;
     pendingCause.current = "edit";
     const report = patchCanvas(
       iframeDoc,
       fresh,
-      withFontUrls(buildCss(display, "dom"), fontUrlsNow.current),
+      withFontUrls(buildCss(display, "dom"), inputs.fontUrls),
       {
         cause,
         focused: iframeDoc.activeElement,
@@ -1896,7 +1982,33 @@ export function Editor({
         ?.scrollIntoView({ block: "start" });
     }
     record("patch", { ...report, cause, ms, redrawMs, pageChanged });
+    settleDrop(iframeDoc);
     bumpEdit(iframeDoc);
+  }
+  /**
+   * **A dropped element settles into its cell** (sprint 35 día 3). The patch has put it there; it
+   * is drawn for 120 ms from where the hand let go to where it now is, by the `translate` property —
+   * which composes with any `transform` the page gives it — through the element's own animation,
+   * which the harness and the reduced-motion preference both see. Nothing for somebody who asked
+   * for less movement: the element is in its cell, as it always was.
+   */
+  function settleDrop(iframeDoc: Document) {
+    const pending = dropSettle.current;
+    dropSettle.current = null;
+    if (!pending || performance.now() - pending.at > 1_000) return;
+    if (iframeDoc.defaultView?.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+    const el = iframeDoc.querySelector<HTMLElement>(
+      `[data-section="${CSS.escape(pending.sectionId)}"] [data-id="${CSS.escape(pending.elementId)}"]`,
+    );
+    if (!el) return;
+    const now = el.getBoundingClientRect();
+    const dx = pending.left - now.left;
+    const dy = pending.top - now.top;
+    if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) return;
+    el.animate([{ translate: `${dx}px ${dy}px` }, { translate: "0px 0px" }], {
+      duration: Number.parseFloat(CHROME_SCALE.fast),
+      easing: CHROME_SCALE.ease,
+    });
   }
   /**
    * **Every piece of chrome, drawn again from the page as it now is** (ADR 0051 §5, día 3): the
@@ -2607,6 +2719,7 @@ export function Editor({
           list[action.index]?.focus();
           return;
         }
+        leave(panel, "popup");
         panel.remove();
         compositionMenuOpen.current = false;
         // Back to the button that opened it, which is the half that makes Escape a way out rather
@@ -3131,6 +3244,7 @@ export function Editor({
       );
       if (!target || compositionMenuOpen.current) return;
       const offer = escalateOffer(sectionId);
+      offer.classList.add(ARRIVES);
       target.appendChild(offer);
       anchorPopup(offer, target);
       compositionMenuOpen.current = true;
@@ -3157,6 +3271,10 @@ export function Editor({
 
       const sectionId = target.dataset.section;
       if (!sectionId) return;
+      // The verbs arrive when the chosen section changes (sprint 35 día 3) — never when the same
+      // section is drawn again after a patch, which is every edit: a cluster growing in on every
+      // letter would be motion for nothing.
+      const arriving = selectedSection.current !== sectionId;
       selectedSection.current = sectionId;
       /*
        * Choosing with the mouse moves the keyboard's place too, so Tab-ing back into the canvas
@@ -3183,7 +3301,7 @@ export function Editor({
       const index = sectionsNow().indexOf(target);
 
       const actions = chrome(iframeDoc, "div");
-      actions.className = "rb-actions";
+      actions.className = arriving ? `rb-actions ${ARRIVES}` : "rb-actions";
       /*
        * **`group` and not `toolbar`.** The WAI-ARIA toolbar pattern promises a keyboard a
        * particular contract: one Tab stop for the whole thing, and the arrows moving between the
@@ -3235,11 +3353,13 @@ export function Editor({
             (button) => {
               const open = target.querySelector(".rb-compositions");
               if (open) {
+                leave(open, "popup");
                 open.remove();
                 compositionMenuOpen.current = false;
                 return;
               }
               const menu = compositionMenu(sectionId, compositions);
+              menu.classList.add(ARRIVES);
               target.appendChild(menu);
               anchorPopup(menu, target);
               compositionMenuOpen.current = true;
@@ -3264,11 +3384,13 @@ export function Editor({
             (button) => {
               const open = target.querySelector(".rb-escalate");
               if (open) {
+                leave(open, "popup");
                 open.remove();
                 compositionMenuOpen.current = false;
                 return;
               }
               const offer = escalateOffer(sectionId);
+              offer.classList.add(ARRIVES);
               target.appendChild(offer);
               anchorPopup(offer, target);
               compositionMenuOpen.current = true;
@@ -3487,7 +3609,10 @@ export function Editor({
       const target = event.target as Element | null;
       if (typeof target?.closest === "function" && target.closest(".rb-compositions, .rb-actions"))
         return;
-      for (const menu of iframeDoc.querySelectorAll(".rb-compositions")) menu.remove();
+      for (const menu of iframeDoc.querySelectorAll(".rb-compositions")) {
+        leave(menu, "popup");
+        menu.remove();
+      }
       compositionMenuOpen.current = false;
     });
 
@@ -3677,7 +3802,10 @@ export function Editor({
      * already chosen where they are going, and moving focus for them would be taking it back.
      */
     function closeMenus(returnTo?: HTMLElement) {
-      for (const menu of iframeDoc.querySelectorAll(".rb-menu")) menu.remove();
+      for (const menu of iframeDoc.querySelectorAll(".rb-menu")) {
+        leave(menu, "popup");
+        menu.remove();
+      }
       if (returnTo?.isConnected) returnTo.focus();
     }
 
@@ -3815,6 +3943,7 @@ export function Editor({
         closeMenus();
         if (open) return;
         const panel = menu(index, pill);
+        panel.classList.add(ARRIVES);
         row.appendChild(panel);
         /*
          * **It opens with the cursor already in the search field** (sprint 17 day 6), which is the
@@ -3886,7 +4015,10 @@ export function Editor({
   function attachDocument(iframeDoc: Document) {
     // A click anywhere closes the «Añadir sección» menu — the pill's own click stops propagation.
     iframeDoc.addEventListener("click", () => {
-      for (const menu of iframeDoc.querySelectorAll(".rb-menu")) menu.remove();
+      for (const menu of iframeDoc.querySelectorAll(".rb-menu")) {
+        leave(menu, "popup");
+        menu.remove();
+      }
     });
   }
 
@@ -4176,6 +4308,9 @@ export function Editor({
      * because a re-wire removes the bar in order to draw it again, and must not forget. */
     const dismiss = () => {
       toolbarOn.current = null;
+      // The person closed it, so it is seen to go (sprint 35 día 3); `close` alone is also how a
+      // bar is drawn again after a patch, which must not play an exit.
+      for (const bar of iframeDoc.querySelectorAll(".rb-toolbar")) leave(bar, "popup");
       close();
     };
 
@@ -4428,6 +4563,9 @@ export function Editor({
      * DOM selection that is nowhere while a button is focused.
      */
     const open = (el: HTMLElement, held = false) => {
+      // Which text the bar was on, read before anything closes: a bar opening on another text
+      // arrives; the same bar drawn again after a patch does not.
+      const was = toolbarOn.current;
       close();
       const section = el.closest<HTMLElement>("[data-section]");
       const sectionId = section?.dataset.section;
@@ -4443,7 +4581,10 @@ export function Editor({
       const current = styleFor(docNow.current, address);
 
       const bar = chrome(iframeDoc, "div");
-      bar.className = "rb-toolbar";
+      bar.className =
+        was?.sectionId === sectionId && was.elementId === elementId
+          ? "rb-toolbar"
+          : `rb-toolbar ${ARRIVES}`;
       bar.setAttribute("role", "toolbar");
       bar.setAttribute("aria-label", es["editor.toolbar.label"]);
       /**
@@ -6506,10 +6647,14 @@ export function Editor({
     const release = () => {
       if (!drag) return;
       const { dragging, menu, hot } = drag;
+      // Read before `clear` takes the zones away (sprint 35 día 3): the zone that receives the menu
+      // acknowledges it once, and the label that followed the hand fades instead of vanishing.
+      const outcome = dragging ? dropOutcome(menu, hot, docNow.current) : null;
+      if (outcome?.kind === "write") leave(iframeDoc.querySelector(".rb-zone[data-hot]"), "zone");
+      if (dragging) leave(iframeDoc.querySelector(".rb-menu-ghost"), "popup");
       clear();
-      if (!dragging) return;
+      if (!dragging || outcome === null) return;
       justDragged = true;
-      const outcome = dropOutcome(menu, hot, docNow.current);
       if (outcome.kind !== "write") return;
       propsNow.current.onSetHeader(outcome.patch);
       announce(dropText(menu, outcome.zone));
@@ -6949,7 +7094,10 @@ export function Editor({
       for (const guide of section.querySelectorAll(".rb-guide")) guide.remove();
       iframeDoc.documentElement.classList.remove("rb-dragging");
       flushQueuedPatch.current();
-      for (const ghost of iframeDoc.querySelectorAll(".rb-ghost")) ghost.remove();
+      for (const ghost of iframeDoc.querySelectorAll(".rb-ghost")) {
+        leave(ghost, "popup");
+        ghost.remove();
+      }
     };
 
     delegate(iframeDoc, "pointerdown", "[data-id]", (el, event) => {
@@ -7063,6 +7211,8 @@ export function Editor({
       const wasMoved = state.moved && state.gesture === "move";
       const drop = state.outcome;
       const swapWith = state.mobileSwap;
+      // Where the hand left it, still under the drag's transform: the point it settles from.
+      const drawn = el.getBoundingClientRect();
       clear(el, at.section, state);
       if (!wasMoved) return;
       justDragged = true;
@@ -7077,6 +7227,13 @@ export function Editor({
       if (drop?.kind !== "place") return;
       markChosen(iframeDoc, el);
       keepChosenFocus.current = true;
+      dropSettle.current = {
+        sectionId: at.sectionId,
+        elementId: at.elementId,
+        left: drawn.left,
+        top: drawn.top,
+        at: performance.now(),
+      };
       propsNow.current.onSetPlacement(at.sectionId, at.elementId, {
         column: drop.at.column,
         row: drop.at.row,
@@ -8211,6 +8368,44 @@ export function Editor({
       `.rb-toolbar-select:focus, .rb-toolbar-exact:focus { outline: ${screenPx(2)} solid #156FE7;`,
       `  outline-offset: ${screenPx(1)}; }`,
       /*
+       * **The canvas's chrome arrives and leaves** (sprint 35 día 3). What somebody opens — the
+       * insert menu, a composition or escalation popup, the text bar, a section's verbs — grows in
+       * over `--ui-fast` from the edge it was opened from, by the `scale` property, which composes
+       * with the `transform` a popup is centred by. What they close shrinks away in half that, as a
+       * copy (`editor/leaving.ts`): its words painted rather than written, so nothing finds it. The
+       * zone that receives a dragged menu acknowledges it once — a ring that grows and fades, the
+       * canvas's one pulse — and the label that followed the hand fades instead of vanishing.
+       */
+      `@keyframes rb-arrive { from { opacity: 0; scale: 0.96; } }`,
+      `.rb-arrives { animation: rb-arrive ${CHROME_SCALE.fast} ${CHROME_SCALE.ease} backwards; }`,
+      ".rb-actions, .rb-compositions { transform-origin: top right; }",
+      ".rb-menu { transform-origin: top center; }",
+      `@keyframes rb-leave { to { opacity: 0; scale: 0.96; } }`,
+      `[data-leaving="popup"] { animation: rb-leave 60ms ${CHROME_SCALE.ease} forwards; }`,
+      `@keyframes rb-zone-got { from { box-shadow: 0 0 0 0 rgba(21,111,231,0.45); }`,
+      `  to { box-shadow: 0 0 0 ${screenPx(12)} rgba(21,111,231,0); opacity: 0; } }`,
+      `[data-leaving="zone"] { animation: rb-zone-got ${CHROME_SCALE.base} ${CHROME_SCALE.easeShape} forwards; }`,
+      "[data-leaving-text]::before { content: attr(data-leaving-text); }",
+      /*
+       * **Sections sliding into their new places** (sprint 35 día 3, `editor/sectionSlide.ts`). Each
+       * section named for the transition travels from where it was over `--ui-base` on the shape
+       * curve — the largest things in the canvas changing place, to be followed rather than
+       * acknowledged. The page around them does not fade: the old picture of the root is not shown
+       * at all and the new one is there at once, so only the sections move. The gaps between them
+       * wait, hidden while the sections are on their way, and are there when they land — a pill
+       * standing in its final place while a section slid across it read as a collision. And a press
+       * goes through the transition's layer to the page under it, whose elements are already where
+       * they are going: a click during the 180 ms lands on what it lands on afterwards (sprint 35 día
+       * 1 named it: a press with `page.mouse` in a walk, and any fast hand).
+       */
+      "::view-transition { pointer-events: none; }",
+      `::view-transition-group(*) { animation-duration: ${CHROME_SCALE.base};`,
+      `  animation-timing-function: ${CHROME_SCALE.easeShape}; }`,
+      "::view-transition-group(root) { animation-duration: 0s; }",
+      "::view-transition-old(root) { display: none; }",
+      "::view-transition-new(root) { animation: none; }",
+      `html.${SLIDING_CLASS} .rb-gap { visibility: hidden; }`,
+      /*
        * Everything inside the canvas that moves, flattened for somebody who asked for less of it —
        * the destination is never removed, only the travel, which is the same contract `globals.css`
        * keeps on the other side of the boundary.
@@ -8232,7 +8427,13 @@ export function Editor({
       // and there is no fade left to wait for.
       "  .rb-tip { transition-duration: 0.01ms; transition-delay: 0s; }",
       "  .rb-handmade-in { animation-duration: 0.01ms; }",
-      "  .rb-line-add { transition-duration: 0.01ms; } }",
+      "  .rb-line-add { transition-duration: 0.01ms; }",
+      "  .rb-arrives { animation-duration: 0.01ms; }",
+      '  [data-leaving="popup"], [data-leaving="zone"] { animation-duration: 0.01ms; }',
+      // Never started for somebody who asked for less movement (`canSlide`); flattened here too, so
+      // the promise does not rest on one check.
+      "  ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) {",
+      "    animation: none !important; } }",
     ].join("\n");
     iframeDoc.head.appendChild(style);
 

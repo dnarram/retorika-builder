@@ -17,8 +17,14 @@
  *
  * `!important` because the renderer's rules sit on the same elements, and this sheet is the editor's
  * to win.
+ *
+ * **The page, not the editor's own chrome** (sprint 35 día 3): `:not([data-rb-chrome])`, because the
+ * verbs and the escalation and composition popups are children of a section too, and from this day
+ * they grow in when somebody opens them. The first version of that day measured the verbs carrying
+ * their arrival class with `animation-name: none` — this rule, written for the page, had reached the
+ * chrome. What it refuses is unchanged: everything the published page animates is page content.
  */
 export const CANVAS_STILLNESS: readonly string[] = [
   "html { scroll-behavior: auto !important; }",
-  "main > .rb-section > * { animation: none !important; }",
+  "main > .rb-section > :not([data-rb-chrome]) { animation: none !important; }",
 ];

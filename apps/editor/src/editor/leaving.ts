@@ -35,7 +35,13 @@
  * left standing over the editor.
  */
 
-export type LeavingKind = "panel" | "dialog" | "toast";
+/**
+ * What is leaving. The first three are the editor's (`globals.css` styles their exits); `popup`
+ * and `zone` are the canvas chrome's (sprint 35 día 3), styled by the sheet the editor injects into
+ * the frame, which `globals.css` cannot reach: a menu, a bar or a ghost shrinking away, and the zone
+ * that received a menu acknowledging it once.
+ */
+export type LeavingKind = "panel" | "dialog" | "toast" | "popup" | "zone";
 
 /** Longer than the longest exit (`--ui-fast`, 120 ms) with room for a slow frame, and short enough
  * that a copy left by an animation that never ran is gone before anybody could act on it. */
@@ -137,7 +143,7 @@ export function ghostOf(
   for (const heavy of ghost.querySelectorAll("iframe, video, audio")) heavy.remove();
   wordsAsPaint(ghost);
 
-  ghost.classList.remove("ui-enter-right", "ui-rise-in");
+  ghost.classList.remove("ui-enter-right", "ui-rise-in", "rb-arrives");
   ghost.setAttribute("data-leaving", kind);
   ghost.setAttribute("aria-hidden", "true");
   ghost.setAttribute("inert", "");

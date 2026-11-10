@@ -284,3 +284,15 @@ at the foot of a fixed bar whose owner turned it on — `animation: rb-progress 
 feature query. §7 stays true of what it governs — the page's own motion has no switch —; this one is the
 owner's, off by default, and the visitor's preference still governs it. And §5's two sheets — the
 published page's and the canvas's — now differ in three blocks where the bar carries the line.
+
+## Note — sprint 35 día 3: the canvas's stillness is the page's, not the editor's chrome
+
+§5's rule in the canvas, `main > .rb-section > * { animation: none !important }`, reached the
+editor's own chrome as well as the page: the section's verbs and its escalation and composition
+popups are children of a section too, and from this day they grow in when somebody opens them. The
+first run of the day measured the verbs carrying their arrival class with `animation-name: none`.
+The rule is now `main > .rb-section > :not([data-rb-chrome]) { animation: none !important }`
+(`editor/canvasStillness.ts`): what it refuses is unchanged — everything the published page animates
+is page content, which `canvasStillness.test.ts` still holds against the renderer's sheet — and the
+chrome, which never travels to a published page, keeps the motion the editor's budget allows it
+(`motionBudget.test.ts`). Recorded by development; it changes no published byte.
