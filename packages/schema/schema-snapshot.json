@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "1.18.0",
+  "schemaVersion": "1.19.0",
   "document": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
@@ -412,6 +412,30 @@
                   "src"
                 ],
                 "additionalProperties": false
+              },
+              "logoSize": {
+                "type": "string",
+                "enum": [
+                  "sm",
+                  "md",
+                  "lg"
+                ]
+              },
+              "nameSize": {
+                "type": "string",
+                "enum": [
+                  "body",
+                  "subheading",
+                  "heading"
+                ]
+              },
+              "place": {
+                "type": "string",
+                "enum": [
+                  "start",
+                  "center",
+                  "end"
+                ]
               }
             },
             "additionalProperties": false

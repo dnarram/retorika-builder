@@ -117,6 +117,21 @@ export const LOGO_SRC_PATTERN = /^(?:assets\/)?[A-Za-z0-9][A-Za-z0-9._-]*\.(?:pn
  */
 export const LOGO_MAX_EDGE = 512;
 
+/**
+ * **How tall the logo is drawn, in three words** (ADR 0069, sprint 35 día 4): pequeño, normal,
+ * grande. Words and never pixels (rule 6): the renderer owns the heights (`LOGO_HEIGHTS`), and `md` is
+ * what every logo drew before the key existed, so a document without it publishes as it did.
+ */
+export const LOGO_SIZES = ["sm", "md", "lg"] as const;
+export type LogoSize = (typeof LOGO_SIZES)[number];
+
+/**
+ * **How big the business name is written, by the scale's own tokens** (ADR 0069): the reading size,
+ * the subheading's or the heading's. `body` is what it always was.
+ */
+export const BRAND_NAME_SIZES = ["body", "subheading", "heading"] as const;
+export type BrandNameSize = (typeof BRAND_NAME_SIZES)[number];
+
 const logoEdgeSchema = z.number().int().min(1).max(LOGO_MAX_EDGE);
 
 /**
@@ -177,6 +192,25 @@ export const headerSchema = z
       .strictObject({
         name: z.boolean().optional(),
         logo: headerLogoSchema.optional(),
+        /** The logo's drawn size (ADR 0069). Only beside a logo: the state nobody can see is a
+         * state nobody can save, the rule of `progress`. */
+        logoSize: z.enum(LOGO_SIZES).optional(),
+        /** The name's size, a token of the scale (ADR 0069). Only with the name shown. */
+        nameSize: z.enum(BRAND_NAME_SIZES).optional(),
+        /** **Where the brand sits in its line** (ADR 0070): the bar's one line, or the brand's own
+         * line in the stacked layout. Absent is the layout's own place — the start, or the centre
+         * when stacked — derived by the renderer, where `align`'s default is derived too. Inert
+         * where the brand went to a rail with the pages (`brandWithPages`), and a key that does
+         * nothing is not an error. */
+        place: z.enum(HEADER_ALIGNMENTS).optional(),
+      })
+      .refine((brand) => brand.logoSize === undefined || brand.logo !== undefined, {
+        message: "brand.logoSize is only for a brand with a logo",
+        path: ["logoSize"],
+      })
+      .refine((brand) => brand.nameSize === undefined || brand.name === true, {
+        message: "brand.nameSize is only for a brand that shows its name",
+        path: ["nameSize"],
       })
       .optional(),
     sticky: z.boolean().optional(),

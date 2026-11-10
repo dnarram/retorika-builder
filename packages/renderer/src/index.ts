@@ -45,6 +45,7 @@ export type { ActionEntry, HeaderSettings, HeaderWidths } from "./header.ts";
 export {
   actionEntry,
   BAR_MEASURE,
+  brandSizeToken,
   GLASS_BACKGROUNDS,
   GLASS_MIX,
   headerDrawn,
@@ -53,6 +54,9 @@ export {
   headerSettings,
   headerWidths,
   homeMenuLabel,
+  LOGO_HEIGHTS,
+  logoHeightCss,
+  PHONE_BAR_MAX,
   phoneAt,
   RAIL_FOLD_WIDTH,
   RAIL_WIDTH,
