@@ -257,6 +257,23 @@ export function logoHeightCss(size: LogoSize, phone: boolean): string {
   return `${LOGO_HEIGHTS[size]}px`;
 }
 /**
+ * **The same height in pixels, for the sentence that says it** (sprint 35 día 5): the «Menú» panel
+ * tells the owner how tall the logo is drawn, on a phone too, and reads it here rather than from a
+ * table of its own — `logoHeightCss` evaluated against the theme's `space.sm`, so the number in the
+ * sentence is the number the stylesheet draws.
+ */
+export function logoDrawnPx(
+  size: LogoSize,
+  phone: boolean,
+  theme: RetorikaDocument["theme"],
+): number {
+  if (phone && size === "lg") {
+    return Math.min(LOGO_HEIGHTS.lg, PHONE_BAR_MAX - 1 - 2 * tokenPx(theme["space.sm"]));
+  }
+  return LOGO_HEIGHTS[size];
+}
+
+/**
  * The name's font size as the stylesheet writes it: the reading size (scaled 0.875 by the bar's
  * «small», as the `data-size` rule does), the subheading's, or the heading's — **which on a phone
  * is the subheading's** (rule 7): the generous scale's heading is 48 px, and 48 × 1.3 of line and

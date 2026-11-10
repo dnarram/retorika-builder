@@ -10,6 +10,7 @@ import {
   headerSettings,
   headerWidths,
   homeMenuLabel,
+  logoDrawnPx,
   MENU_MIN_ENTRIES,
   pageLabel,
   pageMenuEntries,
@@ -19,11 +20,14 @@ import {
   TWO_RAILS_FOLD_WIDTH,
 } from "@retorika/renderer";
 import type {
+  BrandNameSize,
   Header,
   HeaderAction,
   HeaderBackground,
   HeaderLayout,
+  HeaderLogo,
   HeaderPart,
+  LogoSize,
   Page,
   PagesPosition,
   RetorikaDocument,
@@ -102,6 +106,28 @@ export interface ActionChoice {
   where: string | undefined;
 }
 
+/**
+ * **The brand's size and place as the renderer reads them** (ADR 0069 and 0070, sprint 35 día 5):
+ * every absence filled by the renderer's own default (`headerSettings`), and the logo's height in
+ * the pixels the stylesheet draws it at (`logoDrawnPx`), so the panel's sentence is the page's.
+ */
+export interface BrandState {
+  /** A name or a logo is drawn — the place is offered only then. */
+  shown: boolean;
+  logoSize: LogoSize;
+  nameSize: BrandNameSize;
+  place: "start" | "center" | "end";
+  /** The logo's drawn height, on a wide screen and on a phone (ADR 0069 §3). */
+  logoPx: number;
+  logoPhonePx: number;
+  /** The logo is wider than tall, by its stored size: a large one may be drawn smaller on a phone,
+   * whole, rather than deform the line (ADR 0069 §3). `false` for a logo kept without its size. */
+  logoWide: boolean;
+  /** From the pages' column width up, the brand goes into the column with the pages, and its place
+   * here is the bar's of the narrower screens (ADR 0070, «What is preserved»). */
+  inRail: boolean;
+}
+
 export interface HeaderState {
   /** Whether the site draws a header at all. */
   drawn: boolean;
@@ -116,6 +142,7 @@ export interface HeaderState {
   brandName: boolean;
   /** The logo's file name, when the header shows one (ADR 0059). */
   logoSrc: string | undefined;
+  brand: BrandState;
   /** The colour the bar is painted, for the swatch the logo is shown on in the panel. */
   barBackground: string;
   /** The title of the page being edited, for the sentence that says whose sections these are. */
@@ -319,6 +346,23 @@ export function headerStateFor(doc: RetorikaDocument, pageId: string | undefined
     action: action?.label ?? null,
     brandName: settings.brandName,
     logoSrc: settings.logo?.src,
+    brand: {
+      shown: settings.brandName || settings.logo !== undefined,
+      logoSize: settings.logoSize,
+      nameSize: settings.nameSize,
+      place: settings.brandPlace,
+      logoPx: logoDrawnPx(settings.logoSize, false, doc.theme),
+      logoPhonePx: logoDrawnPx(settings.logoSize, true, doc.theme),
+      logoWide:
+        settings.logo?.width !== undefined &&
+        settings.logo.height !== undefined &&
+        settings.logo.width > settings.logo.height,
+      inRail:
+        settings.brandWithPages &&
+        pagesDrawn &&
+        settings.pagesPosition !== "bar" &&
+        (settings.brandName || settings.logo !== undefined),
+    },
     barBackground: headerBarBackground(doc),
     pageTitle: page.title,
     pagesMenu: { mode: modeOf(doc.header?.pages?.shown), count: pages.length, drawn: pagesDrawn },
@@ -448,14 +492,60 @@ export function menuModePatch(
   return { [menu]: Object.keys(next).length === 0 ? undefined : next };
 }
 
+/** A brand with nothing left in it drops its key, so a header nobody decided reads as none. */
+function brandOrNothing(next: NonNullable<Header["brand"]>): Partial<Header> {
+  return { brand: Object.keys(next).length === 0 ? undefined : next };
+}
+
 /**
- * The header with the brand's name switched, keeping the logo: `name` is written only when on, and
- * a brand with nothing left in it drops its key, so a header nobody decided reads as none.
+ * The header with the brand's name switched, keeping the logo: `name` is written only when on —
+ * **and off takes the name's size with it, in the same patch** (ADR 0069 §2): the schema refuses a
+ * size for a name nobody sees, and one patch is one step of history, so «Deshacer» brings both back.
  */
 export function brandNamePatch(doc: RetorikaDocument, name: boolean): Partial<Header> {
-  const { name: _, ...rest } = doc.header?.brand ?? {};
-  const next = name ? { ...rest, name: true } : rest;
-  return { brand: Object.keys(next).length === 0 ? undefined : next };
+  const { name: _, nameSize, ...rest } = doc.header?.brand ?? {};
+  return brandOrNothing(name ? { ...rest, name: true, ...(nameSize ? { nameSize } : {}) } : rest);
+}
+
+/**
+ * The brand with a new logo, **keeping its size** (ADR 0069): the size lives on the brand and not on
+ * the logo, because a new file replaces the whole `logo` object, and an owner who chose «Grande»
+ * and changes the file has not changed their mind about the size.
+ */
+export function logoPatch(doc: RetorikaDocument, logo: HeaderLogo): Partial<Header> {
+  return { brand: { ...(doc.header?.brand ?? {}), logo } };
+}
+
+/** «Quitar»: the logo goes, **and its size with it** (ADR 0069 §2) — the state nobody can see is a
+ * state nobody can save. The name and its size stay. */
+export function logoRemovedPatch(doc: RetorikaDocument): Partial<Header> {
+  const { logo: _, logoSize: _size, ...rest } = doc.header?.brand ?? {};
+  return brandOrNothing(rest);
+}
+
+/** The logo's size chosen; «Normal», the size every logo drew before the word, drops the key. */
+export function logoSizePatch(doc: RetorikaDocument, size: LogoSize): Partial<Header> {
+  const { logoSize: _, ...rest } = doc.header?.brand ?? {};
+  return brandOrNothing(size === "md" ? rest : { ...rest, logoSize: size });
+}
+
+/** The name's size chosen; «Normal», the reading size, drops the key. */
+export function nameSizePatch(doc: RetorikaDocument, size: BrandNameSize): Partial<Header> {
+  const { nameSize: _, ...rest } = doc.header?.brand ?? {};
+  return brandOrNothing(size === "body" ? rest : { ...rest, nameSize: size });
+}
+
+/**
+ * The brand's place chosen (ADR 0070). **Written even when it is the layout's own place**, as a
+ * chosen alignment is (`lookPatch`): absent means «the layout's», which is the start on one line and
+ * the centre when stacked — so «Al principio» pressed on a one-line bar and left absent would move
+ * to the centre the day the owner stacks the bar, the panel undoing a choice.
+ */
+export function brandPlacePatch(
+  doc: RetorikaDocument,
+  place: "start" | "center" | "end",
+): Partial<Header> {
+  return { brand: { ...(doc.header?.brand ?? {}), place } };
 }
 
 /** The header with the sections' place on a phone chosen — the row, nothing, or «Ir a…» beside
@@ -577,10 +667,17 @@ export function columnNote(
  * screen, and «a ningún ancho» alone would leave the owner not knowing why the desktop site has the
  * phone's menu. `undefined` where the bar is the phone's only on a phone.
  */
+/**
+ * `brandFrom`, since sprint 35 día 5: where the bar would fit on one line **with the brand at its
+ * «Normal» sizes**, when the owner chose a larger logo or name and that is part of why the bar folds
+ * — measured by the same renderer on the same document with the two sizes taken out, and written
+ * only when it is narrower, so the review never blames a size that changed nothing.
+ */
+type BrandFrom = { brandFrom?: number };
 export type FoldWarning =
-  | { weight: "tablet"; width: number }
-  | { weight: "desktop"; width: number; over: number }
-  | { weight: "always"; over: number; nearly: boolean };
+  | ({ weight: "tablet"; width: number } & BrandFrom)
+  | ({ weight: "desktop"; width: number; over: number } & BrandFrom)
+  | ({ weight: "always"; over: number; nearly: boolean } & BrandFrom);
 /** The fold the download review says: from 1024, or never fitting. */
 export type LoudFold = Exclude<FoldWarning, { weight: "tablet" }>;
 
@@ -589,16 +686,38 @@ export const NEARLY_PAST_THE_MEASURE = 0.05;
 
 export function foldWarning(doc: RetorikaDocument): FoldWarning | undefined {
   const widths = headerWidths(doc);
+  const brand = brandFrom(doc, widths.phone);
   if (widths.phone === "always") {
     return {
       weight: "always",
       over: widths.over,
       nearly: widths.beyond < NEARLY_PAST_THE_MEASURE * BAR_MEASURE,
+      ...brand,
     };
   }
   if (widths.phone <= PHONE_BREAKPOINT) return undefined;
-  if (widths.phone < RAIL_FOLD_WIDTH) return { weight: "tablet", width: widths.phone };
-  return { weight: "desktop", width: widths.phone, over: widths.over };
+  if (widths.phone < RAIL_FOLD_WIDTH) return { weight: "tablet", width: widths.phone, ...brand };
+  return { weight: "desktop", width: widths.phone, over: widths.over, ...brand };
+}
+
+/** The width the bar would fit from with the brand at «Normal», when that is narrower (`BrandFrom`). */
+function brandFrom(doc: RetorikaDocument, phone: number | "always"): BrandFrom {
+  const sized = doc.header?.brand;
+  if (sized?.logoSize === undefined && sized?.nameSize === undefined) return {};
+  const { logoSize: _, nameSize: _name, ...plain } = sized;
+  const without = headerWidths({ ...doc, header: { ...doc.header, brand: plain } }).phone;
+  if (without === "always" || (phone !== "always" && without >= phone)) return {};
+  return { brandFrom: Math.max(without, PHONE_BREAKPOINT) + 1 };
+}
+
+/** What the brand's size has to do with the fold, said after the fold's own reason, or `""`. */
+function brandFromText(fold: FoldWarning): string {
+  if (fold.brandFrom === undefined) return "";
+  return ` ${
+    fold.brandFrom <= PHONE_BREAKPOINT + 1
+      ? es["editor.menuPanel.notes.foldsBrandFits"]
+      : es["editor.menuPanel.notes.foldsBrandFrom"].replace("{width}", String(fold.brandFrom))
+  }`;
 }
 
 /** `es` with `{n}` filled, from its singular key when there is one character. */
@@ -609,6 +728,10 @@ function counted(one: keyof typeof es, many: keyof typeof es, n: number): string
 /** The fold said in the «Menú» panel, under «Dónde va»: by its weight, with the count when there
  * is one. */
 export function foldNoteText(fold: FoldWarning): string {
+  return foldNoteOwn(fold) + brandFromText(fold);
+}
+
+function foldNoteOwn(fold: FoldWarning): string {
   if (fold.weight === "tablet") {
     return es["editor.menuPanel.notes.foldsTablet"].replace("{width}", String(fold.width));
   }
@@ -634,9 +757,18 @@ export function foldReviewText(fold: LoudFold): { row: string; why: string } {
   if (fold.weight === "always") {
     return {
       row: es["editor.download.fold.row.always"],
-      why: fold.nearly
-        ? counted("editor.download.fold.whyNearlyOne", "editor.download.fold.whyNearly", fold.over)
-        : counted("editor.download.fold.whyAlwaysOne", "editor.download.fold.whyAlways", fold.over),
+      why:
+        (fold.nearly
+          ? counted(
+              "editor.download.fold.whyNearlyOne",
+              "editor.download.fold.whyNearly",
+              fold.over,
+            )
+          : counted(
+              "editor.download.fold.whyAlwaysOne",
+              "editor.download.fold.whyAlways",
+              fold.over,
+            )) + brandFromText(fold),
     };
   }
   const width = String(fold.width);
@@ -647,7 +779,9 @@ export function foldReviewText(fold: LoudFold): { row: string; why: string } {
       : counted("editor.download.fold.whyOverOne", "editor.download.fold.whyOver", fold.over);
   return {
     row,
-    why: why.replace("{width}", width).replace("{from}", String(TWO_RAILS_FOLD_WIDTH)),
+    why:
+      why.replace("{width}", width).replace("{from}", String(TWO_RAILS_FOLD_WIDTH)) +
+      brandFromText(fold),
   };
 }
 

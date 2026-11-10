@@ -1,7 +1,15 @@
 // @vitest-environment happy-dom
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { headerWidths, RAIL_FOLD_WIDTH, render, TWO_RAILS_FOLD_WIDTH } from "@retorika/renderer";
+import {
+  headerSettings,
+  headerWidths,
+  LOGO_HEIGHTS,
+  PHONE_BAR_MAX,
+  RAIL_FOLD_WIDTH,
+  render,
+  TWO_RAILS_FOLD_WIDTH,
+} from "@retorika/renderer";
 import {
   HEADER_ALIGNMENTS,
   HEADER_BACKGROUNDS,
@@ -19,6 +27,7 @@ import {
 import { describe, expect, it } from "vitest";
 import {
   brandNamePatch,
+  brandPlacePatch,
   brandWithPagesPatch,
   columnCardNote,
   columnNote,
@@ -32,10 +41,14 @@ import {
   headerStateFor,
   headerStylePatch,
   type LoudFold,
+  logoPatch,
+  logoRemovedPatch,
+  logoSizePatch,
   lookPatch,
   type MenuMode,
   menuModePatch,
   menuStatusText,
+  nameSizePatch,
   pagesPositionPatch,
   phoneSpan,
   progressPatch,
@@ -864,5 +877,162 @@ describe("the line of how much has been read, as the panel writes it (sprint 34 
     expect(unfixed.header).not.toHaveProperty("progress");
     // Without the patch's second key the document could not be saved: the schema refuses the line.
     expect(() => setHeader(lined, { sticky: false })).toThrow(/progress/);
+  });
+});
+
+/**
+ * **The brand's size and place, as the panel reads and writes them** (sprint 35 día 5, ADR 0069 and
+ * 0070): the state is the renderer's (`headerSettings`, `logoDrawnPx`), so the pixels in the sentence
+ * are the pixels on the page; the patches keep the rest of the brand, drop a default and never leave
+ * a size behind for a logo or a name that went — every one parsed, since the schema refuses that.
+ */
+describe("the brand's size and place (sprint 35 día 5)", () => {
+  const LOGO = { src: "assets/logo.png", width: 96, height: 96 };
+  const base = () => fixture("cabecera-con-marca");
+  const apply = (doc: RetorikaDocument, patch: Parameters<typeof setHeader>[1]) =>
+    parseDocument(setHeader(doc, patch));
+  const draw = (doc: RetorikaDocument) =>
+    new DOMParser()
+      .parseFromString(render(doc, "html").html, "text/html")
+      .querySelector("header.rb-header");
+
+  it("reads the size and the place the renderer draws, every absence filled by its default", () => {
+    const state = headerStateFor(base(), undefined).brand;
+    expect(state).toEqual({
+      shown: true,
+      logoSize: "md",
+      nameSize: "body",
+      place: "start",
+      logoPx: 40,
+      logoPhonePx: 40,
+      logoWide: false,
+      inRail: false,
+    });
+    const stacked = apply(base(), { layout: "stacked" });
+    expect(headerStateFor(stacked, undefined).brand.place).toBe(headerSettings(stacked).brandPlace);
+    expect(headerStateFor(stacked, undefined).brand.place).toBe("center");
+    const big = headerStateFor(fixture("marca-grande"), undefined).brand;
+    expect([big.logoSize, big.nameSize, big.place]).toEqual(["lg", "heading", "center"]);
+  });
+
+  it("says the logo's height in the pixels the page draws, on a phone too", () => {
+    const large = apply(base(), logoSizePatch(base(), "lg"));
+    const state = headerStateFor(large, undefined).brand;
+    expect(state.logoPx).toBe(LOGO_HEIGHTS.lg);
+    // The fixture's `space.sm`, through the stylesheet's own expression: under the phone's 72.
+    const pad = Number.parseFloat(String(large.theme["space.sm"]));
+    expect(state.logoPhonePx).toBe(Math.min(56, PHONE_BAR_MAX - 1 - 2 * pad));
+    expect(state.logoPhonePx + 2 * pad + 1).toBeLessThanOrEqual(PHONE_BAR_MAX);
+    // The sentence carries the number, never the 40 it used to.
+    expect(es["editor.menuPanel.logoShown"]).toContain("{px}");
+    expect(es["editor.menuPanel.logoShown"]).not.toContain("40");
+    const wide = apply(base(), { brand: { name: true, logo: { ...LOGO, width: 384 } } });
+    expect(headerStateFor(wide, undefined).brand.logoWide).toBe(true);
+    const unsized = apply(base(), { brand: { name: true, logo: { src: LOGO.src } } });
+    expect(headerStateFor(unsized, undefined).brand.logoWide).toBe(false);
+  });
+
+  it("writes a size and drops it at «Normal», keeping the rest of the brand", () => {
+    const doc = base();
+    const large = apply(doc, logoSizePatch(doc, "lg"));
+    expect(large.header?.brand).toEqual({ name: true, logo: LOGO, logoSize: "lg" });
+    expect(draw(large)?.getAttribute("data-logo-size")).toBe("lg");
+    expect(apply(large, logoSizePatch(large, "md")).header?.brand).toEqual(doc.header?.brand);
+    const named = apply(doc, nameSizePatch(doc, "heading"));
+    expect(named.header?.brand?.nameSize).toBe("heading");
+    expect(draw(named)?.getAttribute("data-name-size")).toBe("heading");
+    expect(apply(named, nameSizePatch(named, "body")).header?.brand).toEqual(doc.header?.brand);
+  });
+
+  it("keeps a chosen place even when it is the layout's own, as a chosen alignment is", () => {
+    const doc = base();
+    const start = apply(doc, brandPlacePatch(doc, "start"));
+    expect(start.header?.brand?.place).toBe("start");
+    // Stacking the bar afterwards does not move the brand the owner put at the start.
+    expect(headerStateFor(apply(start, { layout: "stacked" }), undefined).brand.place).toBe(
+      "start",
+    );
+    const centred = apply(doc, brandPlacePatch(doc, "center"));
+    expect(draw(centred)?.getAttribute("data-brand-place")).toBe("center");
+    expect(centred.header?.brand?.logo).toEqual(LOGO);
+  });
+
+  it("takes the name's size with the name, and the logo's size with the logo, in one patch", () => {
+    const doc = apply(base(), {
+      brand: { name: true, logo: LOGO, logoSize: "lg", nameSize: "heading" },
+    });
+    // Unticking the name: the size of a name nobody sees would be refused by the schema.
+    const nameless = apply(doc, brandNamePatch(doc, false));
+    expect(nameless.header?.brand).toEqual({ logo: LOGO, logoSize: "lg" });
+    // Ticking it back brings the name at the reading size: one step, and «Deshacer» brings both.
+    expect(brandNamePatch(nameless, true)).toEqual({
+      brand: { logo: LOGO, logoSize: "lg", name: true },
+    });
+    const logoless = apply(doc, logoRemovedPatch(doc));
+    expect(logoless.header?.brand).toEqual({ name: true, nameSize: "heading" });
+    // Nothing left: the brand goes.
+    const bare = apply(base(), { brand: { logo: LOGO, logoSize: "sm" } });
+    expect(logoRemovedPatch(bare)).toEqual({ brand: undefined });
+  });
+
+  it("keeps the logo's size when the logo is changed", () => {
+    const doc = apply(base(), { brand: { name: true, logo: LOGO, logoSize: "lg", place: "end" } });
+    const next = { src: "assets/otro.png", width: 200, height: 100 };
+    expect(apply(doc, logoPatch(doc, next)).header?.brand).toEqual({
+      name: true,
+      logo: next,
+      logoSize: "lg",
+      place: "end",
+    });
+  });
+
+  it("names the brand's size in the fold only when the size is part of it", () => {
+    const doc = base();
+    expect(foldWarning(doc)?.brandFrom).toBeUndefined();
+    const named = apply(doc, nameSizePatch(doc, "heading"));
+    const fold = foldWarning(named);
+    if (!fold || fold.weight === "always") throw new Error("the heading should fold at a width");
+    // With the name back at «Normal», the bar is the fixture's own: 801, so it fits from 802.
+    const plainWidth = headerWidths(doc).phone;
+    if (plainWidth === "always") throw new Error("the fixture's bar fits");
+    expect(fold.brandFrom).toBe(plainWidth + 1);
+    expect(fold.width).toBeGreaterThan(plainWidth);
+    const said = es["editor.menuPanel.notes.foldsBrandFrom"].replace(
+      "{width}",
+      String(plainWidth + 1),
+    );
+    expect(foldNoteText(fold).endsWith(said)).toBe(true);
+    if (fold.weight === "desktop") expect(foldReviewText(fold).why.endsWith(said)).toBe(true);
+    // A smaller logo folds earlier, not later: the size is no part of the fold, and is not named.
+    expect(foldWarning(apply(doc, logoSizePatch(doc, "sm")))?.brandFrom).toBeUndefined();
+    // A bar that fits with the brand at «Normal» everywhere on a desktop is said as such.
+    expect(
+      foldNoteText({ weight: "desktop", width: 1100, over: 0, brandFrom: 721 }).endsWith(
+        es["editor.menuPanel.notes.foldsBrandFits"],
+      ),
+    ).toBe(true);
+  });
+
+  it("moves the fold, and so the download review, with the logo's size", () => {
+    const doc = base();
+    const before = foldWarning(doc);
+    const after = foldWarning(apply(doc, logoSizePatch(doc, "lg")));
+    const width = (fold: typeof before) => (fold && fold.weight !== "always" ? fold.width : 0);
+    expect(width(after)).toBe(width(before) + (LOGO_HEIGHTS.lg - LOGO_HEIGHTS.md));
+  });
+
+  it("says where the brand sits, and that a column takes it from the pages' width", () => {
+    for (const key of ["editor.menuPanel.placeCenter", "editor.menuPanel.placeEnd"] as const) {
+      // Both say the phone, where the place derives (ADR 0070 §4).
+      expect(es[key], key).toMatch(/móvil/);
+    }
+    const railed = apply(base(), {
+      pages: { shown: true, position: "left" },
+      brandWithPages: true,
+    });
+    const state = headerStateFor(railed, undefined);
+    expect(state.brand.inRail).toBe(true);
+    expect(es["editor.menuPanel.placeRail"]).toContain("{width}");
+    expect(headerStateFor(base(), undefined).brand.inRail).toBe(false);
   });
 });
