@@ -7798,16 +7798,6 @@ export function Editor({
       `.rb-pill:focus-visible { background: ${CHROME_SCALE.brandSurface};`,
       `  box-shadow: ${CHROME_SCALE.shadow2}; outline: ${screenPx(2)} solid ${CHROME_SCALE.brand};`,
       `  outline-offset: ${screenPx(2)}; }`,
-      // Everything inside the canvas that moves, flattened for somebody who asked for less of it —
-      // the destination is never removed, only the travel, which is the same contract `globals.css`
-      // keeps on the other side of the boundary.
-      "@media (prefers-reduced-motion: reduce) {",
-      "  .rb-pill { transition-duration: 0.01ms; }",
-      "  .rb-action, .rb-grip { transition-duration: 0.01ms; }",
-      // The delay goes with the duration: it is what holds the word in the page while it fades,
-      // and there is no fade left to wait for.
-      "  .rb-tip { transition-duration: 0.01ms; transition-delay: 0s; }",
-      "  .rb-handmade-in { animation-duration: 0.01ms; } }",
       `.rb-menu { position: absolute; top: ${screenPx(60)}; left: 50%; transform: translateX(-50%);`,
       `  z-index: 20; width: ${screenPx(340)}; max-width: calc(100% - ${screenPx(80)}); box-sizing: border-box;`,
       `  padding: ${screenPx(14)}; background: ${CHROME_SCALE.surface}; border: ${screenPx(1)} solid ${CHROME_SCALE.border};`,
@@ -8207,6 +8197,29 @@ export function Editor({
       `.rb-toolbar-exact { width: ${screenPx(52)}; padding: 0 ${screenPx(6)}; }`,
       `.rb-toolbar-select:focus, .rb-toolbar-exact:focus { outline: ${screenPx(2)} solid #156FE7;`,
       `  outline-offset: ${screenPx(1)}; }`,
+      /*
+       * Everything inside the canvas that moves, flattened for somebody who asked for less of it —
+       * the destination is never removed, only the travel, which is the same contract `globals.css`
+       * keeps on the other side of the boundary.
+       *
+       * **Last in the sheet, and that is the rule rather than tidiness** (sprint 35 día 1). The
+       * frame is another document, so `globals.css`'s one `!important` block never reaches it, and
+       * these declarations win only by coming later than what they flatten: a media query adds no
+       * weight, so a rule of the same weight declared after this block takes the duration back.
+       * Measured in Chromium the day `motionBudget.test.ts` learned to read this sheet: the bar
+       * over an escalated section (`.rb-handmade-in`, declared below where this block used to sit)
+       * still arrived over 180 ms with reduced motion, and the line's «Añadir» (`.rb-line-add`)
+       * had never been listed. That test now holds both halves — every selector that moves is
+       * here, and here comes after it.
+       */
+      "@media (prefers-reduced-motion: reduce) {",
+      "  .rb-pill { transition-duration: 0.01ms; }",
+      "  .rb-action, .rb-grip { transition-duration: 0.01ms; }",
+      // The delay goes with the duration: it is what holds the word in the page while it fades,
+      // and there is no fade left to wait for.
+      "  .rb-tip { transition-duration: 0.01ms; transition-delay: 0s; }",
+      "  .rb-handmade-in { animation-duration: 0.01ms; }",
+      "  .rb-line-add { transition-duration: 0.01ms; } }",
     ].join("\n");
     iframeDoc.head.appendChild(style);
 

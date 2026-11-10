@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { CHROME_SCALE } from "../src/editor/chromeScale.ts";
 import { REVEAL_STAGGER_CAP } from "../src/questionnaire/ui.tsx";
 
 /**
@@ -266,3 +267,353 @@ describe("the budget on each screen", () => {
     expect(classes.filter((name) => name === "ui-ring-once").length).toBeLessThanOrEqual(1);
   });
 });
+
+/**
+ * **The ceiling every movement in the editor answers to** (sprint 35 día 1). Restated from the
+ * stylesheet's own comment on `--ui-fast` and `--ui-base`: the panel guard in
+ * `e2e/critical-flows.e2e.test.ts` waits 350 ms for the canvas to settle, and an interaction that
+ * outlasts a fifth of a second has stopped answering the hand and started making it wait.
+ */
+const INTERACTION_CAP_MS = 200;
+
+/**
+ * **The budget reaches the editor's own screens** (sprint 35 día 1, before any of them moves more).
+ *
+ * Sprint 22 wrote the restraint budget for the three screens it touched — the landing, the five
+ * questions, the proposals — and the editor was left out because nothing in it moved but a panel
+ * arriving. Sprint 35 is the sprint that gives the editor exits, dialogs that arrive and leave,
+ * popups that grow from where they were pressed and drops that settle; this is the ceiling those
+ * days land under, written the day before the first of them so that a breach is a red test and not
+ * a judgement somebody has to remember to make.
+ *
+ * **What counts as the editor**: the shell, the panel kit, the canvas's own component (and the
+ * stylesheet it injects into the frame, below), every `*Panel.tsx` and every dialog. **Found by
+ * name, not listed**, so the ninth panel is in the budget the day it is written. The building
+ * screen is not: its mark is one of the three animations allowed to loop, for exactly as long as a
+ * ZIP is being written, and `BuildingMark.tsx` carries it.
+ */
+describe("the budget in the editor", () => {
+  const QUESTIONNAIRE = join(EDITOR_SRC, "questionnaire");
+  const panels = readdirSync(QUESTIONNAIRE).filter((file) => /Panel\.tsx$/.test(file));
+  const dialogs = readdirSync(QUESTIONNAIRE).filter((file) => /Dialogs?\.tsx$/.test(file));
+  const EDITOR_FILES: string[][] = [
+    [EDITOR_SRC, "editor", "EditorShell.tsx"],
+    [EDITOR_SRC, "editor", "panelKit.tsx"],
+    [QUESTIONNAIRE, "Editor.tsx"],
+    ...panels.map((file) => [QUESTIONNAIRE, file]),
+    ...dialogs.map((file) => [QUESTIONNAIRE, file]),
+    [EDITOR_SRC, "account", "SaveToAccountDialog.tsx"],
+  ];
+
+  /**
+   * **The one movement allowed to take longer, by file and by name.** Pressing «Ver en móvil»
+   * animates the canvas card's width over `--ui-slow` (260 ms) with the shape curve, because the
+   * largest thing on the screen changing shape is meant to be followed, not acknowledged — and the
+   * shell restricts it to that one press (`changeDevice` in `EditorShell.tsx`). Anything else that
+   * wants longer than the cap is a decision, and it goes through this list.
+   */
+  const SLOWER: Record<string, string[]> = { "EditorShell.tsx": ["ui-reflow"] };
+
+  it("reads every panel and every dialog the editor draws", () => {
+    // A guard on the glob: if the files are renamed, the budget stops reading them in silence.
+    expect(panels.length, `panels found: ${panels.join(", ")}`).toBeGreaterThanOrEqual(8);
+    for (const name of ["StylePanel.tsx", "MenuPanel.tsx", "DesignPanel.tsx", "FieldsPanel.tsx"]) {
+      expect(panels).toContain(name);
+    }
+    expect(dialogs, `dialogs found: ${dialogs.join(", ")}`).toEqual(
+      expect.arrayContaining([
+        "DownloadGateDialogs.tsx",
+        "RevertDialog.tsx",
+        "FontChooserDialog.tsx",
+        "ImportFontDialog.tsx",
+      ]),
+    );
+  });
+
+  it("keeps its one slower movement where it is written, and nowhere else", () => {
+    // An exception that no longer applies is removed rather than left to excuse the next one.
+    for (const [file, names] of Object.entries(SLOWER)) {
+      const parts = EDITOR_FILES.find((p) => p[p.length - 1] === file);
+      expect(parts, `${file} is no longer read by this budget`).toBeDefined();
+      const source = readStripped(...(parts as string[]));
+      for (const name of names) expect(utilitiesIn(source), `${file} ${name}`).toContain(name);
+    }
+  });
+
+  for (const parts of EDITOR_FILES) {
+    const where = parts[parts.length - 1] as string;
+
+    it(`${where} loops nothing`, () => {
+      const source = readStripped(...parts);
+      for (const loop of ["ui-drift", "ui-hammer", "ui-block"]) {
+        expect(utilitiesIn(source), `${where} loops ${loop}`).not.toContain(loop);
+      }
+      // Tailwind's own four loop for ever; this application has never used them and must not
+      // start in the editor, where somebody is working.
+      expect(source, `${where} uses a looping Tailwind animation`).not.toMatch(
+        /(?<![\w-])animate-(spin|ping|pulse|bounce)(?![\w-])/,
+      );
+      expect(source, `${where} declares an infinite animation`).not.toMatch(/\binfinite\b/);
+    });
+
+    it(`${where} moves nothing for longer than ${INTERACTION_CAP_MS} ms`, () => {
+      const source = readStripped(...parts);
+      const slower = SLOWER[where] ?? [];
+      // This is also the budget's pulse rule, and the reason it has no test of its own: the one
+      // pulse the application has, `ui-ring-once`, takes 1.2 s to come to rest and is out of the
+      // editor by its length alone. Sabotaged with two of them in a panel, a separate «at most one
+      // pulse» check never got to fail — this one always failed first. The canvas's own pulse
+      // (sprint 35 día 3, the zone that receives a drop) answers to the frame's ceiling below.
+      for (const name of utilitiesIn(source)) {
+        if (slower.includes(name)) continue;
+        const rest = restOf(name);
+        expect(
+          rest,
+          `${where} uses ${name}, which takes ${rest} ms to come to rest`,
+        ).toBeLessThanOrEqual(INTERACTION_CAP_MS);
+      }
+      // Durations written by hand — an inline style, an injected stylesheet, a Tailwind class —
+      // are read where they are written, with the chrome scale's and the stylesheet's names
+      // resolved to the numbers they stand for.
+      for (const { declaration, ms: time } of timesIn(source)) {
+        expect(time, `${where}: «${declaration}»`).toBeLessThanOrEqual(INTERACTION_CAP_MS);
+      }
+      for (const match of source.matchAll(/(?<![\w-])(duration|delay)-(\d+)(?![\w-])/g)) {
+        expect(Number(match[2]), `${where}: ${match[0]}`).toBeLessThanOrEqual(INTERACTION_CAP_MS);
+      }
+      expect(source, `${where}: an arbitrary Tailwind duration`).not.toMatch(
+        /(?<![\w-])(duration|delay)-\[/,
+      );
+      // `transition-all` names width, height and every margin among everything else.
+      expect(source, `${where}: transition-all animates the layout`).not.toMatch(
+        /(?<![\w-])transition-all(?![\w-])/,
+      );
+    });
+  }
+});
+
+/**
+ * **The canvas's own stylesheet, read as CSS** (sprint 35 día 1).
+ *
+ * The chrome drawn inside the preview — the verbs, their words, the insertion pill, the «Diseñada
+ * a mano» bar, the text bar, the zones — is styled by one stylesheet `wireInteractions` injects into
+ * the frame, written in `Editor.tsx` as an array of strings. `globals.css` cannot reach it: the
+ * frame is another document, and the application's one `prefers-reduced-motion` block, the one that
+ * flattens everything with `!important`, stops at its border. So the canvas keeps its own block,
+ * selector by selector, and **a selector can be forgotten in it, or flattened before it is
+ * declared** — a later rule of the same weight wins the cascade, and the media query adds none.
+ * Both had happened by the day this was written.
+ *
+ * Read from the source's string literals with the chrome scale's values put back, which is what the
+ * browser receives, so the durations below are numbers and not names.
+ */
+describe("the budget inside the canvas", () => {
+  const SHEET = canvasSheet();
+  const RULES = cssRules(SHEET);
+  const reduced = (rule: CssRule) =>
+    rule.at.some((query) => query.includes("prefers-reduced-motion: reduce"));
+
+  it("finds the stylesheet the canvas is given, whole", () => {
+    // A guard on the extraction: a reader that stopped at a quote would pass everything below.
+    // 151 rules the day this was written; the floor is far enough under that to survive the
+    // sheet losing a few, and far above what a reader stopped at its first quote would find.
+    expect(RULES.length).toBeGreaterThan(100);
+    expect(SHEET).toContain(".rb-pill {");
+    expect(SHEET).toContain(".rb-toolbar-exact {");
+    expect(SHEET).not.toContain("${");
+    expect(RULES.filter(reduced).length).toBeGreaterThan(0);
+  });
+
+  it("loops nothing", () => {
+    expect(SHEET).not.toMatch(/\binfinite\b/);
+  });
+
+  it(`moves nothing for longer than ${INTERACTION_CAP_MS} ms`, () => {
+    const times = timesIn(SHEET);
+    expect(times.length, "no duration found: the reader has stopped reading").toBeGreaterThan(0);
+    for (const { declaration, ms: time } of times) {
+      expect(time, `«${declaration}»`).toBeLessThanOrEqual(INTERACTION_CAP_MS);
+    }
+  });
+
+  /**
+   * **Nothing in the frame animates its layout**, with the one exemption `globals.css` already has
+   * and for the same reason: `rb-handmade-in` is `ui-enter-up` carried into the frame, the bar that
+   * appears over a section the owner has just escalated, and its negative margin is what makes the
+   * section below travel down instead of jumping (the comment where it is declared).
+   */
+  it("animates no layout, but for the bar that opens room over an escalated section", () => {
+    const exempt = ["rb-handmade-in"];
+    const keyframes = RULES.filter((rule) => rule.prelude.startsWith("@keyframes"));
+    expect(keyframes.map((rule) => rule.prelude)).toContain("@keyframes rb-handmade-in");
+    for (const rule of keyframes) {
+      const name = rule.prelude.replace("@keyframes", "").trim();
+      if (exempt.includes(name)) continue;
+      expect(rule.body, `${name} animates a layout property`).not.toMatch(LAYOUT_PROPERTY);
+    }
+    for (const rule of RULES) {
+      for (const property of transitionedProperties(rule.body)) {
+        expect(
+          LAYOUT_NAMES.includes(property) || /^(margin|padding|inset)/.test(property),
+          `«${rule.prelude}» transitions ${property}`,
+        ).toBe(false);
+      }
+    }
+  });
+
+  it("flattens every movement for somebody who asked for less, after it is declared", () => {
+    const reduce = RULES.map((rule, index) => ({ rule, index })).filter(({ rule }) =>
+      reduced(rule),
+    );
+    let checked = 0;
+    RULES.forEach((rule, index) => {
+      if (reduced(rule) || rule.prelude.startsWith("@")) return;
+      for (const kind of movementsOf(rule.body)) {
+        for (const selector of selectorsOf(rule.prelude)) {
+          checked += 1;
+          const cover = reduce.find(
+            ({ rule: flat }) =>
+              selectorsOf(flat.prelude).includes(selector) &&
+              new RegExp(`(^|[;\\s])${kind}(-duration)?\\s*:`).test(flat.body),
+          );
+          expect(
+            cover,
+            `«${selector}» declares a ${kind} the reduced-motion block never flattens`,
+          ).toBeDefined();
+          expect(
+            cover?.index,
+            `«${selector}» is flattened before its ${kind} is declared, so the declaration wins`,
+          ).toBeGreaterThan(index);
+        }
+      }
+    });
+    // The verbs, their word, the pill, the escalated bar and the line's «Añadir» at least.
+    expect(checked).toBeGreaterThanOrEqual(5);
+  });
+});
+
+// ——— Readers ——————————————————————————————————————————————————————————————————————————————
+
+/** Every `ui-*` utility the stylesheet declares that the source names, once each. */
+function utilitiesIn(source: string): string[] {
+  return [...UTILITIES.keys()].filter((name) =>
+    new RegExp(`(?<![\\w-])${name}(?![\\w-])`).test(source),
+  );
+}
+
+/**
+ * How long a utility takes to come to rest: every time it declares, durations and delays summed,
+ * with the stylesheet's names resolved. `ui-ring-once` is 700 ms after 500; `ui-lift` declares none
+ * of its own and rides on `ui-interactive`'s.
+ */
+function restOf(name: string): number {
+  const body = UTILITIES.get(name);
+  if (body === undefined) throw new Error(`globals.css declares no ${name}`);
+  return timesIn(body).reduce((total, { ms: time }) => total + time, 0);
+}
+
+/** Every time inside a `transition` or `animation` declaration, in milliseconds, with the chrome
+ * scale and the `--ui-*` durations put back. A JavaScript style object writes the same property
+ * name, so an inline `style={{ transition: "…" }}` is read by the same expression. */
+function timesIn(source: string): { declaration: string; ms: number }[] {
+  const resolved = source
+    .replace(/\$\{CHROME_SCALE\.(\w+)\}/g, (_, key: string) =>
+      String((CHROME_SCALE as Record<string, string | number>)[key] ?? "?"),
+    )
+    .replace(/var\(--ui-(fast|base|slow|stagger)\)/g, (_, name: string) => `${ms(name)}ms`);
+  const out: { declaration: string; ms: number }[] = [];
+  for (const declaration of resolved.matchAll(
+    /(?<![\w-])(transition|animation)(-duration|-delay|Duration|Delay)?\s*:\s*([^;}\n]+)/g,
+  )) {
+    for (const time of (declaration[3] ?? "").matchAll(/(\d*\.?\d+)(ms|s)\b/g)) {
+      const value = Number(time[1]) * (time[2] === "s" ? 1000 : 1);
+      out.push({ declaration: declaration[0].trim(), ms: value });
+    }
+  }
+  return out;
+}
+
+const LAYOUT_NAMES = ["width", "height", "top", "left", "right", "bottom", "all"];
+const LAYOUT_PROPERTY =
+  /(^|[\s;{])(width|height|top|left|right|bottom|inset|margin[\w-]*|padding[\w-]*)\s*:/;
+
+/** The properties a rule's `transition` or `transition-property` names. */
+function transitionedProperties(body: string): string[] {
+  const out: string[] = [];
+  for (const match of body.matchAll(/(?<![\w-])transition(-property)?\s*:\s*([^;]+)/g)) {
+    for (const item of (match[2] ?? "").split(",")) {
+      const first = item.trim().split(/\s+/)[0] ?? "";
+      if (first !== "" && first !== "none" && !/^\d/.test(first)) out.push(first);
+    }
+  }
+  return out;
+}
+
+/** Which kinds of movement a rule declares: a transition with a duration, an animation by name. */
+function movementsOf(body: string): ("transition" | "animation")[] {
+  const kinds: ("transition" | "animation")[] = [];
+  if (/(?<![\w-])transition(-property|-duration)?\s*:\s*(?!none)/.test(body))
+    kinds.push("transition");
+  if (/(?<![\w-])animation(-name)?\s*:\s*(?!none)/.test(body)) kinds.push("animation");
+  return kinds;
+}
+
+function selectorsOf(prelude: string): string[] {
+  return prelude
+    .split(",")
+    .map((selector) => selector.trim().replace(/\s+/g, " "))
+    .filter(Boolean);
+}
+
+interface CssRule {
+  prelude: string;
+  body: string;
+  /** The `@media`/`@supports` preludes it sits inside, outermost first. */
+  at: string[];
+}
+
+/** A stylesheet's rules in source order, `@media` and `@supports` opened, `@keyframes` kept whole.
+ * Brace-matched, because there is no CSS parser in this package and the sheet needs none. */
+function cssRules(css: string, at: string[] = []): CssRule[] {
+  const out: CssRule[] = [];
+  let from = 0;
+  while (from < css.length) {
+    const open = css.indexOf("{", from);
+    if (open < 0) break;
+    const prelude = css.slice(from, open).trim();
+    const body = bodyAt(css, open);
+    if (prelude.startsWith("@media") || prelude.startsWith("@supports")) {
+      out.push(...cssRules(body, [...at, prelude]));
+    } else {
+      out.push({ prelude, body, at });
+    }
+    from = open + body.length + 2;
+  }
+  return out;
+}
+
+/**
+ * The stylesheet `wireInteractions` injects into the canvas, as the browser receives it: the
+ * array's string literals, joined as the source joins them, with `CHROME_SCALE`'s values put back
+ * and every other expression — sizes in the frame's pixels, which no rule here reads — set to 0.
+ */
+function canvasSheet(): string {
+  const source = readStripped(EDITOR_SRC, "questionnaire", "Editor.tsx");
+  const wire = source.indexOf("function wireInteractions(");
+  const open = source.indexOf("style.textContent = [", wire);
+  const close = source.indexOf('].join("\\n")', open);
+  if (wire < 0 || open < 0 || close < 0) {
+    throw new Error("Editor.tsx no longer builds the canvas stylesheet in wireInteractions");
+  }
+  const literals = [
+    ...source
+      .slice(open, close)
+      .matchAll(/"((?:[^"\\\n]|\\.)*)"|'((?:[^'\\\n]|\\.)*)'|`((?:[^`\\]|\\.)*)`/g),
+  ].map((match) => match[1] ?? match[2] ?? match[3] ?? "");
+  return literals
+    .join("\n")
+    .replace(/\$\{CHROME_SCALE\.(\w+)\}/g, (_, key: string) =>
+      String((CHROME_SCALE as Record<string, string | number>)[key] ?? "?"),
+    )
+    .replace(/\$\{[^}]*\}/g, "0");
+}
