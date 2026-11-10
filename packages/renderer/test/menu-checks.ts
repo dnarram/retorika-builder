@@ -1,5 +1,6 @@
 import type { Page } from "@playwright/test";
 import type { RetorikaDocument } from "@retorika/schema";
+import { PHONE_BAR_MAX } from "../src/header.ts";
 import { headerWidths, phoneAt, railsAt } from "../src/index.ts";
 import { measureOverflow } from "./browser-fixtures.ts";
 
@@ -149,7 +150,9 @@ export async function checkPhoneBar(page: Page, h: HeaderExpectation): Promise<s
   });
   if (!m) return ["3 phone: no header drawn"];
   const out: string[] = [];
-  if (m.bar > 72) out.push(`3 phone: the bar is ${m.bar.toFixed(1)} px tall, over 72`);
+  if (m.bar > PHONE_BAR_MAX) {
+    out.push(`3 phone: the bar is ${m.bar.toFixed(1)} px tall, over ${PHONE_BAR_MAX}`);
+  }
   // A bar lets go into the flow, and a transparent one over the cover: never `static`, which takes
   // the sheet's box with it (sprint 33 día 3).
   const letGo = h.background === "transparent" ? "absolute" : "relative";

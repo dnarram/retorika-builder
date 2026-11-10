@@ -443,6 +443,50 @@ describe("Part 8.5 — Lighthouse over a sample site, the three compositions", (
   }, 120_000);
 
   /**
+   * **The same fixed bar with its logo large and its name at the heading's size, in the middle**
+   * (ADR 0069 and 0070, sprint 35 día 4): the brand's heaviest form — a 56 px image above the fold
+   * and a 40 px bold name — and the pages' menu drawn bare before it. Measured beside the subject
+   * above, so the cost of the words is the difference between the two; the plan asked for 98 or a
+   * written cause.
+   */
+  it(`a fixed header with a large logo and a heading-sized name: performance and accessibility at ${FLOOR * 100} or more`, async () => {
+    const bundle = brandSite({
+      progress: true,
+      brand: {
+        name: true,
+        logo: { src: "assets/logo.png", width: 96, height: 96 },
+        logoSize: "lg",
+        nameSize: "heading",
+        place: "center",
+      },
+    });
+    const index = new TextDecoder().decode(
+      bundle.files.find((file) => file.path === "index.html")?.contents ?? new Uint8Array(),
+    );
+    // The subject is what it says: the three words on the bar, the pages before the brand.
+    expect(index).toContain('data-logo-size="lg"');
+    expect(index).toContain('data-name-size="heading"');
+    expect(index).toContain('data-brand-place="center"');
+    expect(index).toMatch(
+      /<nav aria-label="Páginas"[^>]*>[\s\S]*?<\/nav>\s*<span class="rb-brand"/,
+    );
+    const measured = await measure("marca-grande · fija, logo grande, nombre en título", bundle);
+    console.log(report(measured));
+    expect(
+      measured.scores["performance"],
+      `${measured.label}: performance below ${FLOOR * 100} — ${report(measured)}`,
+    ).toBeGreaterThanOrEqual(FLOOR);
+    expect(
+      measured.scores["accessibility"],
+      `${measured.label}: accessibility below ${FLOOR * 100} — ${report(measured)}`,
+    ).toBeGreaterThanOrEqual(FLOOR);
+    expect(
+      measured.scores["best-practices"],
+      `${measured.label}: best practices short of full marks — ${report(measured)}`,
+    ).toBe(BEST_PRACTICES);
+  }, 120_000);
+
+  /**
    * **The same site with each menu in a column** (ADR 0060, sprint 31 día 6): the pages, the brand
    * and the button in a left rail, the sections in a right one, «Ir a…» on a phone. Lighthouse's
    * preset is a phone, where no column exists — so what is measured is what a column costs a phone

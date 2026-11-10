@@ -22,7 +22,7 @@ import {
   KERNING_LABELS,
   KERNING_MARGINS,
 } from "../src/glyphAdvances.ts";
-import { SCROLLBAR_LANE } from "../src/header.ts";
+import { PHONE_BAR_MAX, SCROLLBAR_LANE } from "../src/header.ts";
 import { headerWidths, render, SHIPPABLE_FAMILIES } from "../src/index.ts";
 import { headerCase, openHtml } from "./browser-fixtures.ts";
 import { ASSETS_DIR, DOCUMENTS_DIR, loadCorpus } from "./corpus.ts";
@@ -211,7 +211,56 @@ async function tab(page: Page): Promise<{ text: string; href: string; cls: strin
   });
 }
 
+/** `withLogo` at the owner's logo size, on a scale of the system (ADR 0069). */
+function withLogoSized(logoSize: "md" | "lg", scaleId: string): RetorikaDocument {
+  const doc = withLogo();
+  return parseDocument({
+    ...doc,
+    theme: buildTheme({
+      paletteId: PALETTES[0]?.id ?? "",
+      typePairId: TYPE_PAIRS[0]?.id ?? "",
+      scaleId,
+    }),
+    header: { ...doc.header, brand: { ...doc.header?.brand, logoSize } },
+  });
+}
+
 describe("the header on the smallest phone", () => {
+  /**
+   * **The large logo on a phone is what the bar can give it under 72 px** (ADR 0069, rule 7): 55 at
+   * the default scale, and **47 at the generous one, which is the case that proves the cut** — 56
+   * would put the bar at 81. Read off the drawn logo, against the same expression the estimate uses.
+   */
+  for (const [logoSize, scaleId, expected] of [
+    ["md", "default", 40],
+    ["lg", "default", 55],
+    ["lg", "generous", 47],
+  ] as const) {
+    it(`keeps the bar at or under ${PHONE_BAR_MAX}px with a long name and a ${logoSize} logo (${scaleId}: ${expected} px), and nothing past the edge`, async () => {
+      const page = await open(withLogoSized(logoSize, scaleId), 320, 568);
+      try {
+        const m = await page.evaluate(() => {
+          const header = document.querySelector("header");
+          const logo = document.querySelector<HTMLImageElement>("img.rb-logo");
+          if (!header || !logo) throw new Error("no header or logo");
+          // The bar as the audit's check 3 reads it: what stands above the sections' row.
+          const row = document.querySelector<HTMLElement>(".rb-nav-row");
+          const box = header.getBoundingClientRect();
+          return {
+            header: row ? row.getBoundingClientRect().top - box.top : box.height,
+            logo: logo.getBoundingClientRect().height,
+            loaded: logo.complete && logo.naturalWidth > 0,
+          };
+        });
+        expect(m.loaded, "the logo did not load, so nothing was measured").toBe(true);
+        expect(m.logo).toBe(expected);
+        expect(m.header, `bar is ${m.header}px`).toBeLessThanOrEqual(PHONE_BAR_MAX);
+      } finally {
+        await page.context().close();
+      }
+    });
+  }
+
   it("keeps the bar at or under 72px with a long name and a logo, and nothing past the edge", async () => {
     const page = await open(withLogo(), 320, 568);
     try {
@@ -727,32 +776,39 @@ describe("«Ir a…» under the bar", () => {
 describe("«Ir a…» on the phone", () => {
   const FOLD = { sections: { shown: true, position: "fold" as const, mobile: "fold" as const } };
 
-  it("keeps the bar at or under 72px at 320 with a long name, a logo, the button, «Ir a…» and «Menú»", async () => {
-    const page = await open(placed(FOLD), 320, 568);
-    try {
-      const b = await boxes(page, {
-        header: "header.rb-header",
-        logo: "header > .rb-brand img.rb-logo",
-        action: "header > .rb-nav-action",
-        fold: "header > .rb-nav-fold > summary",
-        menu: "header > .rb-nav-narrow > summary",
+  for (const logoSize of ["md", "lg"] as const) {
+    it(`keeps the bar at or under 72px at 320 with a long name, a ${logoSize} logo, the button, «Ir a…» and «Menú»`, async () => {
+      const base = placed(FOLD);
+      const doc = parseDocument({
+        ...base,
+        header: { ...base.header, brand: { ...base.header?.brand, logoSize } },
       });
-      const where = JSON.stringify(b);
-      for (const part of ["logo", "action", "fold", "menu"])
-        expect(b[part], `${part}: ${where}`).not.toBeNull();
-      expect((b.header?.bottom ?? 99) - (b.header?.top ?? 0), where).toBeLessThanOrEqual(72);
-      // One line: the four share it, in this order, none over the next.
-      expect((b.logo?.right ?? 999) <= (b.action?.left ?? 0), where).toBe(true);
-      expect((b.action?.right ?? 999) <= (b.fold?.left ?? 0), where).toBe(true);
-      expect((b.fold?.right ?? 999) <= (b.menu?.left ?? 0), where).toBe(true);
-      expect(b.menu?.right ?? 999, where).toBeLessThanOrEqual(320);
-      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
-        320,
-      );
-    } finally {
-      await page.context().close();
-    }
-  });
+      const page = await open(doc, 320, 568);
+      try {
+        const b = await boxes(page, {
+          header: "header.rb-header",
+          logo: "header > .rb-brand img.rb-logo",
+          action: "header > .rb-nav-action",
+          fold: "header > .rb-nav-fold > summary",
+          menu: "header > .rb-nav-narrow > summary",
+        });
+        const where = JSON.stringify(b);
+        for (const part of ["logo", "action", "fold", "menu"])
+          expect(b[part], `${part}: ${where}`).not.toBeNull();
+        expect((b.header?.bottom ?? 99) - (b.header?.top ?? 0), where).toBeLessThanOrEqual(72);
+        // One line: the four share it, in this order, none over the next.
+        expect((b.logo?.right ?? 999) <= (b.action?.left ?? 0), where).toBe(true);
+        expect((b.action?.right ?? 999) <= (b.fold?.left ?? 0), where).toBe(true);
+        expect((b.fold?.right ?? 999) <= (b.menu?.left ?? 0), where).toBe(true);
+        expect(b.menu?.right ?? 999, where).toBeLessThanOrEqual(320);
+        expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+          320,
+        );
+      } finally {
+        await page.context().close();
+      }
+    });
+  }
 
   for (const sticky of [false, true]) {
     it(`hangs its panel under the bar at 390, covering none of it${sticky ? ", fixed" : ""}`, async () => {
@@ -1568,7 +1624,13 @@ describe("the bar's estimate against the bar it measures (sprint 33 día 6)", ()
   // bar instead of the one this test is about.
   const LOGO = { name: true, logo: { src: "assets/portada.png", width: 2, height: 2 } };
   /** The form, and the lines it is drawn on: the brand's own and the rest's, then the row. */
-  const FORMS: readonly { name: string; header: Partial<Header>; lines: number }[] = [
+  const FORMS: readonly {
+    name: string;
+    header: Partial<Header>;
+    lines: number;
+    /** The widths the form is measured at: the three bands, unless the form folds in one of them. */
+    widths?: readonly number[];
+  }[] = [
     { name: "one line", header: {}, lines: 1 },
     { name: "one line, a logo", header: { brand: LOGO }, lines: 1 },
     { name: "stacked", header: { layout: "stacked" }, lines: 2 },
@@ -1589,6 +1651,21 @@ describe("the bar's estimate against the bar it measures (sprint 33 día 6)", ()
         look: { size: "small" },
       },
       lines: 3,
+    },
+    // The brand at its sizes (ADR 0069): the large logo and the heading-sized name on one line,
+    // and the large logo on the stacked brand's own line — the estimate counts both.
+    {
+      name: "one line, a large logo, a heading-sized name",
+      header: { brand: { ...LOGO, logoSize: "lg", nameSize: "heading" } },
+      lines: 1,
+      // The heading-sized name folds this form at 846 (measured against its real break at 756, the
+      // same slack as the rest), so at 768 the bar is the phone's and the strip is not there to hold.
+      widths: [1024, 1280],
+    },
+    {
+      name: "stacked, a large logo",
+      header: { layout: "stacked", brand: { ...LOGO, logoSize: "lg" } },
+      lines: 2,
     },
   ];
   /** The teaser with labels short enough for one line at 768: the brand, the pages, the button. */
@@ -1623,7 +1700,7 @@ describe("the bar's estimate against the bar it measures (sprint 33 día 6)", ()
               return;
             }
             const html = render(formDocument(form.header, background), "html").html;
-            for (const width of [768, 1024, 1280]) {
+            for (const width of form.widths ?? [768, 1024, 1280]) {
               const page = await openHtml(browser, html, width, `${engine}/${form.name}`);
               try {
                 const m = await page.evaluate(() => {

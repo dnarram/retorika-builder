@@ -247,3 +247,13 @@ the open hand, carried over the left side it lights the zone, the drop writes th
 sheet; pressed without moving the sheet opens and Escape closes it; at 1280 the strip is whole and the
 column stands. Sabotaged: `zonesFor` back to a width of the header's, two unit tests red; «Menú» out
 of the grips, the walk red waiting for a zone.
+
+## Note — sprint 35 día 4: the brand becomes a grip (ADR 0070)
+
+«The brand and the button are still never grips» holds for the button only from sprint 35 día 6:
+David's third decision of 10 November 2026 makes the brand a grip, dragged to the three zones of its
+line as a menu is dragged to its place, and gives the logo's edge a stretch through its three sizes
+([ADR 0070](0070-the-brand-has-its-place-in-its-line.md) §5, [ADR 0069](0069-the-brand-has-a-size-in-the-systems-words.md)).
+The rest of this record — the threshold and the two states, the zones lit under the hand, Escape and
+the drop outside writing nothing, one step of history — is what the brand's gesture inherits. Recorded
+by development at his instruction.

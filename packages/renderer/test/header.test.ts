@@ -6,6 +6,7 @@ import {
   headerDrawn,
   headerPlaces,
   headerSettings,
+  LOGO_HEIGHTS,
   RAIL_FOLD_WIDTH,
   RAIL_WIDTH,
   TWO_RAILS_FOLD_WIDTH,
@@ -33,6 +34,9 @@ import { loadCorpus } from "./corpus.ts";
 const theme = {
   ...(Object.fromEntries(TOKEN_KEYS.map((key) => [key, `value-${key}`])) as Theme),
   "size.body": "1rem",
+  // The name's two other sizes (ADR 0069), which the estimate reads when the brand is given one.
+  "size.subheading": "1.5rem",
+  "size.heading": "2.5rem",
   // A shipped family, so the fold's numbers below are the table's and not a platform's fallback.
   "font.heading": "Inter, sans-serif",
   "font.body": "Inter, sans-serif",
@@ -241,6 +245,102 @@ describe("the brand", () => {
     );
     expect(old?.hasAttribute("width")).toBe(false);
     expect(old?.getAttribute("height")).toBe("40");
+    // …and at the owner's size, the height the stylesheet draws it at (ADR 0069), so the two agree.
+    const large = draw(
+      site(3, [], { brand: { logo: unsized, name: true, logoSize: "lg" } }),
+    ).querySelector("img.rb-logo");
+    expect(large?.getAttribute("height")).toBe(String(LOGO_HEIGHTS.lg));
+  });
+
+  /**
+   * **The brand's size and place** (ADR 0069 and 0070, sprint 35 día 4): three owner's words, each
+   * an attribute the bar carries only when it is the owner's and not the default — a saved site's
+   * markup is byte for byte what it was — and rules in the sheet whatever the document says, so the
+   * editor can preview a word the document does not carry yet (David's adjustment 3).
+   */
+  describe("the brand's size and place", () => {
+    const LOGO = { src: "assets/logo.png", width: 96, height: 96 };
+    const PAGES = [{ id: "p2", slug: "carta", title: "La carta" }];
+    const bar = (brand: NonNullable<RetorikaDocument["header"]>["brand"], layout?: "stacked") =>
+      draw(site(3, PAGES, { brand, ...(layout ? { layout } : {}) })).querySelector(
+        "header.rb-header",
+      );
+
+    it("writes no attribute for the defaults, and the owner's word when there is one", () => {
+      const plain = bar({ name: true, logo: LOGO });
+      for (const attribute of ["data-logo-size", "data-name-size", "data-brand-place"]) {
+        expect(plain?.hasAttribute(attribute), attribute).toBe(false);
+      }
+      // «md», «body» and the layout's own place are the defaults, written as words or not at all.
+      const explicit = bar({
+        name: true,
+        logo: LOGO,
+        logoSize: "md",
+        nameSize: "body",
+        place: "start",
+      });
+      expect(explicit?.hasAttribute("data-logo-size")).toBe(false);
+      expect(explicit?.hasAttribute("data-name-size")).toBe(false);
+      expect(explicit?.getAttribute("data-brand-place")).toBe("start");
+      const own = bar({
+        name: true,
+        logo: LOGO,
+        logoSize: "lg",
+        nameSize: "heading",
+        place: "end",
+      });
+      expect(own?.getAttribute("data-logo-size")).toBe("lg");
+      expect(own?.getAttribute("data-name-size")).toBe("heading");
+      expect(own?.getAttribute("data-brand-place")).toBe("end");
+    });
+
+    it("keeps the rules in the sheet whatever the document carries, and a bar without the words matches none", () => {
+      const { css } = render(site(3, PAGES, { brand: { name: true } }), "html");
+      expect(css).toContain(
+        `.rb-header[data-logo-size=lg] .rb-logo { height: ${LOGO_HEIGHTS.lg}px; }`,
+      );
+      expect(css).toContain(
+        ".rb-header[data-name-size=heading] .rb-brand { font-size: var(--size-heading); }",
+      );
+      // The one rule the logo's height comes from without a word: 40 px, as it always was.
+      expect(css).toContain(".rb-logo { height: 40px; width: auto; flex: none; }");
+      expect(css).not.toMatch(/^\.rb-logo \{ height: (?!40px)/m);
+      // The canvas's sheet carries them too: the preview writes the attribute before the document has it.
+      expect(buildCss(site(3, PAGES, { brand: { name: true } }), "dom")).toContain(
+        "[data-logo-size=lg]",
+      );
+    });
+
+    it("puts the pages' menu bare before the brand for «en medio» on a one-line bar, and nowhere else", () => {
+      const centred = bar({ name: true, logo: LOGO, place: "center" });
+      const order = [...(centred?.children ?? [])].map((el) => el.className.split(" ")[0]);
+      // The pages bare, the brand, then the strip with the sections alone.
+      expect(order.slice(0, 3)).toEqual(["rb-nav", "rb-brand", "rb-nav-wide"]);
+      expect(centred?.querySelector(".rb-nav-wide > [data-part=pagesLinks]")).toBeNull();
+      expect(centred?.querySelector(".rb-nav-wide > [data-part=sectionsLinks]")).not.toBeNull();
+      expect(centred?.querySelector(":scope > .rb-nav")?.getAttribute("data-part")).toBe(
+        "pagesLinks",
+      );
+      // Stacked: the brand has its own line, so the pages stay in the strip.
+      const stacked = bar({ name: true, logo: LOGO, place: "center" }, "stacked");
+      expect(
+        stacked?.querySelector(":scope > .rb-nav-wide > [data-part=pagesLinks]"),
+      ).not.toBeNull();
+      // At the end: the order is the document's, and the stylesheet's `order` moves the brand.
+      const atEnd = bar({ name: true, logo: LOGO, place: "end" });
+      expect([...(atEnd?.children ?? [])][0]?.className).toContain("rb-brand");
+    });
+
+    it("derives the absent place from the layout: the start, or the centre of the stacked brand's line", () => {
+      expect(headerSettings(site(3, PAGES, { brand: { name: true } })).brandPlace).toBe("start");
+      expect(
+        headerSettings(site(3, PAGES, { brand: { name: true }, layout: "stacked" })).brandPlace,
+      ).toBe("center");
+      expect(
+        headerSettings(site(3, PAGES, { brand: { name: true, place: "end" }, layout: "stacked" }))
+          .brandPlace,
+      ).toBe("end");
+    });
   });
 
   it("draws a header for the brand alone, under the threshold", () => {
@@ -1085,6 +1185,83 @@ describe("the bar's estimate", () => {
       "  html { --rb-bar-h: calc(2 * var(--space-sm) + 1.3 * max(1rem, 0.875 * var(--size-body)) + 1px); }",
     );
   });
+
+  /**
+   * **The brand's own heights** (ADR 0069, sprint 35 día 4): the logo at its word and the name at
+   * its token, in the same expressions the stylesheet draws them with — and with the defaults, every
+   * string above is byte for byte what it was, which is what the cases above still prove.
+   */
+  it("counts the large logo, and the heading-sized name, as the stylesheet draws them", () => {
+    const BIG = { ...LOGO, logoSize: "lg" as const };
+    expect(wide({ brand: BIG, action: BUTTON }).bar).toBe(
+      "calc(2 * var(--space-md) + max(56px, 2 * var(--space-sm) + 1.3 * var(--size-body)) + 1px)",
+    );
+    expect(wide({ brand: { name: true, nameSize: "heading" }, action: BUTTON }).bar).toBe(
+      "calc(2 * var(--space-md) + max(1.3 * var(--size-heading), 2 * var(--space-sm) + 1.3 * var(--size-body)) + 1px)",
+    );
+    // The name alone at its size is the whole of the line.
+    expect(wide({ brand: { name: true, nameSize: "subheading" } }).bar).toBe(
+      "calc(2 * var(--space-md) + max(1.3 * var(--size-subheading), 2 * var(--space-xs) + 1.3 * var(--size-body)) + 1px)",
+    );
+    // Stacked: the brand's line is the logo against the name at its token.
+    expect(
+      wide({ layout: "stacked", brand: { ...BIG, nameSize: "subheading" }, action: BUTTON }).bar,
+    ).toBe(
+      "calc(2 * var(--space-md) + max(56px, 1.3 * var(--size-subheading)) + var(--space-md) + 2 * var(--space-sm) + 1.3 * var(--size-body) + 1px)",
+    );
+  });
+
+  it("derives the phone's brand: the large logo cut to the bar's room, the heading at the subheading's size", () => {
+    const BIG = { ...LOGO, logoSize: "lg" as const, nameSize: "heading" as const };
+    const { css } = wide({ brand: BIG, action: BUTTON });
+    expect(css).toContain(
+      "  html { --rb-bar-h: calc(2 * var(--space-sm) + max(min(56px, calc(71px - 2 * var(--space-sm))), 1.3 * var(--size-subheading), 2 * var(--space-sm) + 1.3 * var(--size-body)) + 1px); }",
+    );
+    // The same expression the stylesheet draws the phone's logo with, so the estimate is the bar.
+    expect(css).toContain(
+      "  .rb-header[data-logo-size=lg] .rb-logo { height: min(56px, calc(71px - 2 * var(--space-sm)));",
+    );
+    expect(css).toContain(
+      "  .rb-header[data-name-size=heading] .rb-brand { font-size: var(--size-subheading); }",
+    );
+  });
+});
+
+/**
+ * **The fold counts the brand's size** (ADR 0069 with ADR 0067): a larger logo and a bigger name are
+ * more of the line, so the bar folds into «Menú» at a wider screen. Held on a site whose line already
+ * folds above 720, so the numbers move rather than sit at the floor.
+ */
+describe("the fold counts the brand's size", () => {
+  const corpus = () => loadCorpus().find((entry) => entry.name === "cabecera-con-marca")?.document;
+  const withBrand = (brand: Record<string, unknown>): RetorikaDocument => {
+    const doc = corpus();
+    if (!doc) throw new Error("no cabecera-con-marca in the corpus");
+    return { ...doc, header: { ...doc.header, brand: { ...doc.header?.brand, ...brand } } };
+  };
+  const phone = (doc: RetorikaDocument) => {
+    const w = headerWidths(doc);
+    if (w.phone === "always") throw new Error("the line never fits");
+    return w.phone;
+  };
+
+  it("adds the logo's extra width to the fold: 16 px for a square logo from 40 to 56", () => {
+    expect(phone(withBrand({ logoSize: "lg" }))).toBe(phone(withBrand({})) + 16);
+    expect(phone(withBrand({ logoSize: "sm" }))).toBe(phone(withBrand({})) - 12);
+  });
+
+  it("folds later with the name at the heading's size, and later than at the subheading's", () => {
+    const body = phone(withBrand({}));
+    const sub = phone(withBrand({ nameSize: "subheading" }));
+    const head = phone(withBrand({ nameSize: "heading" }));
+    expect(sub).toBeGreaterThan(body);
+    expect(head).toBeGreaterThan(sub);
+  });
+
+  it("counts the pages' menu standing bare before the brand («en medio») as the strip it was", () => {
+    expect(phone(withBrand({ place: "center" }))).toBe(phone(withBrand({})));
+    expect(phone(withBrand({ place: "end" }))).toBe(phone(withBrand({})));
+  });
 });
 
 describe("the phone's menu is a sheet (sprint 32 día 4)", () => {
@@ -1188,6 +1365,12 @@ describe("the header's widths", () => {
         // `header.browser.test.ts`). The one golden the fold moved: 797 on día 2, 801 since día 3,
         // when the brand's EB Garamond bold took the widest of the two machines' letters.
         expect(widths, entry.name).toEqual({ phone: 801, rails: 1024, over: 0 });
+      } else if (entry.name === "marca-grande") {
+        // The same site with its logo large and its name at the heading's size (ADR 0069, sprint 35
+        // día 4): the brand alone is twice as wide, and the bar is the phone's up to 1078 — which is
+        // what the «Menú» panel will tell its owner. The number is the glyphs' sum on this machine's
+        // and CI's widest letters, as 801 is.
+        expect(widths, entry.name).toEqual({ phone: 1078, rails: 1079, over: 0 });
       } else {
         expect(widths, entry.name).toEqual({ phone: 720, rails: 1024, over: 0 });
       }

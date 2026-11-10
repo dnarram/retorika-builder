@@ -1,4 +1,5 @@
 import {
+  type BrandNameSize,
   HEADER_PARTS,
   type Header,
   type HeaderAction,
@@ -7,6 +8,7 @@ import {
   type HeaderLogo,
   type HeaderPart,
   hrefForPage,
+  type LogoSize,
   type Page,
   type PagesPosition,
   type RetorikaDocument,
@@ -100,6 +102,14 @@ export interface HeaderSettings {
   layout: HeaderLayout;
   brandName: boolean;
   logo: HeaderLogo | undefined;
+  /** The logo's drawn size and the name's, in the owner's words (ADR 0069); `md` and `body` are
+   * what every bar drew before the words existed. */
+  logoSize: LogoSize;
+  nameSize: BrandNameSize;
+  /** Where the brand sits in its line (ADR 0070): the layout's own place when the owner chose
+   * none — the start, or the centre of the brand's own line when stacked — derived here beside
+   * `align`'s default, so the panel and the page read the absence the same way. */
+  brandPlace: "start" | "center" | "end";
   action: HeaderAction | undefined;
   sticky: boolean;
   /** The line of how much has been read (ADR 0068): only ever on a fixed bar. */
@@ -134,6 +144,9 @@ export function headerSettings(doc: RetorikaDocument): HeaderSettings {
     layout,
     brandName: header.brand?.name ?? false,
     logo: header.brand?.logo,
+    logoSize: header.brand?.logoSize ?? "md",
+    nameSize: header.brand?.nameSize ?? "body",
+    brandPlace: header.brand?.place ?? (layout === "stacked" ? "center" : "start"),
     action: header.action,
     sticky: header.sticky ?? false,
     progress: header.sticky === true && header.progress === true,
@@ -215,6 +228,46 @@ function twoRailsFrom(widths: HeaderWidths): number {
   return widths.rails === "none"
     ? Number.POSITIVE_INFINITY
     : Math.max(TWO_RAILS_FOLD_WIDTH, widths.rails);
+}
+
+/**
+ * **The three heights the logo is drawn at** (ADR 0069, sprint 35 día 4), by the owner's word:
+ * `md` is the 40 px every logo drew before the word existed. The one place the numbers live: the
+ * stylesheet, the `<img>`'s own `height`, the bar's estimate and the fold's all read them here, and
+ * the editor's «Menú» panel says them from here too.
+ */
+export const LOGO_HEIGHTS: Record<LogoSize, number> = { sm: 28, md: 40, lg: 56 };
+/**
+ * The phone's bar is never taller than this (sprint 30's bound, under 15 % of a 568 px screen):
+ * what the audit's check 3 and the browser tests hold it to, and what the large logo is cut to fit
+ * under on a phone (`logoHeightCss`).
+ */
+export const PHONE_BAR_MAX = 72;
+/**
+ * The logo's height as the stylesheet writes it. **On a phone the large one derives, by the token**
+ * (rule 7): `min(56px, calc(71px - 2 * var(--space-sm)))` is 56 at the compact scale, 55 at the
+ * default and 47 at the generous — the most the bar can give a logo and stay under `PHONE_BAR_MAX`
+ * with its padding and its hairline, worked out from the same `space.sm` the bar pads with rather
+ * than written as a table. The bar's estimate uses this same expression, so `--rb-bar-h` is the
+ * drawn bar to the pixel.
+ */
+export function logoHeightCss(size: LogoSize, phone: boolean): string {
+  if (phone && size === "lg")
+    return `min(56px, calc(${PHONE_BAR_MAX - 1}px - 2 * var(--space-sm)))`;
+  return `${LOGO_HEIGHTS[size]}px`;
+}
+/**
+ * The name's font size as the stylesheet writes it: the reading size (scaled 0.875 by the bar's
+ * «small», as the `data-size` rule does), the subheading's, or the heading's — **which on a phone
+ * is the subheading's** (rule 7): the generous scale's heading is 48 px, and 48 × 1.3 of line and
+ * the bar's padding is 87, over the phone's 72. The estimate and the fold use this same token.
+ */
+export function brandSizeToken(settings: HeaderSettings, phone: boolean): string {
+  if (settings.nameSize === "body") {
+    return settings.size === "small" ? "0.875 * var(--size-body)" : "var(--size-body)";
+  }
+  if (settings.nameSize === "heading" && !phone) return "var(--size-heading)";
+  return "var(--size-subheading)";
 }
 
 /** A logo stored without its size (before 1.16.0) is counted this many times as wide as its 40 px. */
@@ -339,9 +392,17 @@ function barLines(doc: RetorikaDocument, settings: HeaderSettings, page: Page): 
     if (logo && typeof logo !== "string") {
       const w = Number(logo.attributes["width"]);
       const h = Number(logo.attributes["height"]);
-      brand += w > 0 && h > 0 && logo.attributes["width"] ? (40 * w) / h : 40 * UNSIZED_LOGO_ASPECT;
+      const drawn = LOGO_HEIGHTS[settings.logoSize];
+      brand +=
+        w > 0 && h > 0 && logo.attributes["width"] ? (drawn * w) / h : drawn * UNSIZED_LOGO_ASPECT;
     }
-    if (name) brand += (logo ? px("space.sm") : 0) + text(textOf(name), heading, 700, false);
+    // The name at its own size (ADR 0069): the bar's, scaled by «small», or the token it was given,
+    // which «small» does not scale again — as the stylesheet writes it.
+    const nameSize =
+      settings.nameSize === "body" ? size : px(`size.${settings.nameSize}` as "size.heading");
+    if (name) {
+      brand += (logo ? px("space.sm") : 0) + labelPx(textOf(name), heading, 700, false, nameSize);
+    }
   }
   const action = header.children.find((c) => hasClass(c, "rb-nav-action"));
   const button =
@@ -358,10 +419,15 @@ function barLines(doc: RetorikaDocument, settings: HeaderSettings, page: Page): 
     );
   };
   const wide = header.children.find((c) => hasClass(c, "rb-nav-wide"));
+  // The strip's menus, and the pages' menu standing bare before the brand (ADR 0070's «en medio»):
+  // an item of the line of its own, as the strip is.
   const navs =
     wide && typeof wide !== "string"
       ? wide.children.filter((c): c is RenderNode => typeof c !== "string" && c.tag === "nav")
       : [];
+  const bare = header.children.find(
+    (c): c is RenderNode => hasClass(c, "rb-nav") && !hasClass(c, "rb-nav-row"),
+  );
   const row = header.children.find((c) => hasClass(c, "rb-nav-row"));
   const rowWidth =
     row && typeof row !== "string" && settings.sectionsPosition === "row" ? navWidth(row) : 0;
@@ -371,16 +437,19 @@ function barLines(doc: RetorikaDocument, settings: HeaderSettings, page: Page): 
     const sectionsStand =
       (sectionsSide === "left" || sectionsSide === "right") && standing.includes(sectionsSide);
     if (collapsed && (twoRails ? standing.length === 2 : standing.length > 0)) return 0;
-    const shown = navs.filter((nav) => {
+    const standsHere = (nav: RenderNode) => {
       const part = nav.attributes["data-part"];
       return part === "pagesLinks" ? !pagesStand : part === "sectionsLinks" ? !sectionsStand : true;
-    });
+    };
+    const shown = navs.filter(standsHere);
     const strip =
       wide === undefined
         ? null
         : shown.reduce((sum, nav) => sum + navWidth(nav), 0) + Math.max(0, shown.length - 1) * xl;
+    const bareWidth = bare !== undefined && standsHere(bare) ? navWidth(bare) : null;
     const gone = brandGoes && pagesStand;
     const items = [
+      ...(bareWidth === null ? [] : [bareWidth]),
       ...(settings.layout === "stacked" || gone || brand === 0 ? [] : [brand]),
       ...(strip === null ? [] : [strip]),
       ...(gone || button === 0 ? [] : [button]),
@@ -695,8 +764,11 @@ function brandNode(
         // refuses anything but a raster file name here, and the renderer does not rely on it.
         src: safeUrl(settings.logo.src),
         alt: settings.brandName ? "" : doc.siteName,
+        // A logo kept without its size says only how tall it is drawn — the chosen height, so the
+        // attribute and the stylesheet agree (ADR 0069); one with its size says the file's pixels,
+        // which is what gives the browser its ratio before the bytes.
         ...(settings.logo.width === undefined || settings.logo.height === undefined
-          ? { height: "40" }
+          ? { height: String(LOGO_HEIGHTS[settings.logoSize]) }
           : { width: String(settings.logo.width), height: String(settings.logo.height) }),
       }),
     );
@@ -728,6 +800,12 @@ function lookAttributes(doc: RetorikaDocument, settings: HeaderSettings): Record
     ...(settings.progress ? { "data-progress": "" } : {}),
     ...(settings.hairline ? {} : { "data-hairline": "none" }),
     ...(headerPhoneRow(doc, settings) ? { "data-phone-row": "" } : {}),
+    // **The brand's size and place** (ADR 0069, 0070), only when they are the owner's word and not
+    // the default: a saved site's markup stays byte for byte what it was. Not `data-brand`, which
+    // already means «went with the pages».
+    ...(settings.logoSize !== "md" ? { "data-logo-size": settings.logoSize } : {}),
+    ...(settings.nameSize !== "body" ? { "data-name-size": settings.nameSize } : {}),
+    ...(doc.header?.brand?.place !== undefined ? { "data-brand-place": settings.brandPlace } : {}),
   };
 }
 
@@ -762,6 +840,18 @@ export function headerNodes(doc: RetorikaDocument, current: Page): RenderNode[] 
     ]);
 
   const children: RenderNode[] = [];
+  // **«En medio» on a one-line bar is between the pages and the rest** (ADR 0070): the pages' menu
+  // comes out of the strip and stands before the brand, in the document as on the screen, so the
+  // order the eye reads — pages, brand, sections, button — is the order a keyboard walks. A true
+  // centring would need a wrapper around the sections and the button that the DOM does not have;
+  // the ADR names it as what it does not decide. On a phone the bare menu is hidden like the strip,
+  // and the brand is first again: `center` derives to `start` there.
+  const pagesBeforeBrand =
+    brand !== undefined &&
+    settings.brandPlace === "center" &&
+    settings.layout !== "stacked" &&
+    pages.length > 0;
+  if (pagesBeforeBrand) children.push(navNode(es["nav.pages"], "pagesLinks", pages));
   if (brand) children.push(brand);
 
   // The wide bar: the pages, and the sections when their place is the bar or a rail — a rail's
@@ -769,7 +859,8 @@ export function headerNodes(doc: RetorikaDocument, current: Page): RenderNode[] 
   // an empty strip is not navigation, and nothing is announced for it. A row of their own and the
   // disclosure are places of their own at every wide width, so neither leaves a copy here.
   const wide: RenderNode[] = [];
-  if (pages.length > 0) wide.push(navNode(es["nav.pages"], "pagesLinks", pages));
+  if (pages.length > 0 && !pagesBeforeBrand)
+    wide.push(navNode(es["nav.pages"], "pagesLinks", pages));
   if (
     sections.length > 0 &&
     settings.sectionsPosition !== "row" &&
@@ -954,6 +1045,39 @@ function headerStyleCss(doc: RetorikaDocument): string[] {
     }
   }
   return rules.length === 0 ? [] : ["/* rule 6: the header's own style */", ...rules];
+}
+
+/**
+ * **The brand's size and place** (ADR 0069 and 0070, sprint 35 día 4), each option an attribute
+ * the header carries only when it is the owner's word (`lookAttributes`), and **the rules always
+ * in the sheet, in both targets**: the editor's «Menú» panel previews a word by writing the attribute
+ * on the canvas's bar before the document has it (David's adjustment 3), so the canvas needs the
+ * rules for words its document does not carry yet. A saved site's bar matches none of them and
+ * draws exactly what it drew.
+ *
+ * The name's size goes on `.rb-brand`, where the owner's exact size is written too
+ * (`PART_SELECTOR.brand`): after the bar's «small», which it is not scaled by again, and before
+ * `headerStyleCss`, so the exact size still wins by order, as it always has.
+ *
+ * The place, in the brand's own line when stacked; on a one-line bar, `end` puts the brand after the
+ * strip and the button with the free space before it, and `center` — the pages' menu drawn bare
+ * before the brand (`headerNodes`) — halves the free space either side of it. Under either the
+ * strip's `align` is inert: the links keep to the start, and the panel says so.
+ */
+function brandCss(): string[] {
+  const oneLine = ".rb-header:not([data-layout=stacked])";
+  return [
+    `.rb-header[data-logo-size=sm] .rb-logo { height: ${LOGO_HEIGHTS.sm}px; }`,
+    `.rb-header[data-logo-size=lg] .rb-logo { height: ${LOGO_HEIGHTS.lg}px; }`,
+    ".rb-header[data-name-size=subheading] .rb-brand { font-size: var(--size-subheading); }",
+    ".rb-header[data-name-size=heading] .rb-brand { font-size: var(--size-heading); }",
+    ".rb-header[data-layout=stacked][data-brand-place=start] .rb-brand { justify-content: flex-start; }",
+    ".rb-header[data-layout=stacked][data-brand-place=end] .rb-brand { justify-content: flex-end; }",
+    `${oneLine}[data-brand-place=end] > .rb-brand { order: 3; margin-left: auto; }`,
+    `${oneLine}[data-brand-place=center] > .rb-brand { margin-inline: auto; }`,
+    `${oneLine}:is([data-brand-place=end], [data-brand-place=center]) > :is(.rb-nav-wide, .rb-nav-action) {`,
+    "  margin-left: 0; margin-right: 0; }",
+  ];
 }
 
 /**
@@ -1158,6 +1282,7 @@ export function headerCss(doc: RetorikaDocument, target: "html" | "dom"): string
     ".rb-header[data-gap=lg] .rb-nav { gap: var(--space-lg); }",
     ".rb-header[data-size=small] :is(.rb-brand, .rb-nav a, .rb-nav-action, .rb-nav-narrow > summary) {",
     "  font-size: calc(var(--size-body) * 0.875); }",
+    ...brandCss(),
     ".rb-header[data-uppercase] :is(.rb-nav a, .rb-nav-action, .rb-nav-narrow > summary) {",
     "  text-transform: uppercase; letter-spacing: 0.06em; }",
     // Underline on hover is a decoration the owner asks for, never a colour change of the words: a
@@ -1299,6 +1424,10 @@ function barEstimate(
   const logo = settings.logo !== undefined && !brandGoes;
   const name = settings.brandName && !brandGoes;
   const buttonHere = action && !brandGoes;
+  // The brand's own heights (ADR 0069): the logo at its word, and the name at its token where that
+  // is not the bar's reading size — at the reading size its line is `text` below, as it always was.
+  const logoHeight = logoHeightCss(settings.logoSize, phone);
+  const nameLine = settings.nameSize === "body" ? null : `1.3 * ${brandSizeToken(settings, phone)}`;
   // The wide strip is drawn whenever a menu has a copy in it, **even where every copy is hidden**
   // because its rail stands: an empty flex item still takes a line of its own, and its gap, when the
   // brand has the first line to itself (measured: 16 px a stacked bar did not account for).
@@ -1334,13 +1463,15 @@ function barEstimate(
   // is there and holds nothing visible.
   const lines: string[][] = [];
   if (settings.layout === "stacked" && !phone && (logo || name) && restHere) {
-    lines.push([...(logo ? ["40px"] : []), ...(name ? [text] : [])]);
+    lines.push([...(logo ? [logoHeight] : []), ...(name ? [nameLine ?? text] : [])]);
     lines.push([words ?? "0px"]);
   } else if (logo || name || restHere) {
-    const tallest = words ?? (name ? text : null);
+    const ownName = name && nameLine !== null;
+    const tallest = words ?? (name && !ownName ? text : null);
     lines.push([
-      ...(logo ? ["40px"] : []),
-      ...(tallest !== null ? [tallest] : logo ? [] : ["0px"]),
+      ...(logo ? [logoHeight] : []),
+      ...(ownName ? [nameLine] : []),
+      ...(tallest !== null ? [tallest] : logo || ownName ? [] : ["0px"]),
     ]);
   }
   // A phone's row keeps a little room under its entries for the scrollbar it may draw (below).
@@ -1558,6 +1689,8 @@ function railCss(doc: RetorikaDocument, widths: HeaderWidths): string[] {
     // The bar's copy of whatever stands in a rail, and the brand and button that went with the pages.
     "  .rb-header[data-pages=left] .rb-nav-wide > [data-part=pagesLinks],",
     "  .rb-header[data-pages=right] .rb-nav-wide > [data-part=pagesLinks],",
+    "  .rb-header[data-pages=left] > .rb-nav[data-part=pagesLinks],",
+    "  .rb-header[data-pages=right] > .rb-nav[data-part=pagesLinks],",
     "  .rb-header[data-sections=left] .rb-nav-wide > [data-part=sectionsLinks],",
     "  .rb-header[data-sections=right] .rb-nav-wide > [data-part=sectionsLinks],",
     "  .rb-header[data-brand=pages] > .rb-brand, .rb-header[data-brand=pages] > .rb-nav-action {",
@@ -1802,6 +1935,20 @@ export function headerMobileCss(doc: RetorikaDocument): string[] {
       // its natural width wrapped the bar onto two lines and 107px.
       "  .rb-brand { flex: 1 1 0; }",
       "  .rb-nav-wide { display: none; }",
+      // The pages' menu standing bare before the brand (ADR 0070's «en medio») is the strip's copy
+      // on a phone and hidden with it; the brand is first again, which is «center» deriving to
+      // «start» here — between a button and «Menú» at 320 a centred brand is off-centre by their
+      // widths and reads as a mistake.
+      "  .rb-header > .rb-nav[data-part=pagesLinks] { display: none; }",
+      // **The brand's size and place on a phone** (ADR 0069, 0070; rule 7): the large logo at what
+      // the bar can give it under 72 px, and shown whole rather than deforming the line — a 4 : 1
+      // mark at 55 px is 220 px beside a button, «Ir a…» and «Menú»; the heading-sized name at the
+      // subheading's; the brand at the end with «Menú» first.
+      `  .rb-header[data-logo-size=lg] .rb-logo { height: ${logoHeightCss("lg", true)};`,
+      "    max-width: 100%; object-fit: contain; object-position: left; }",
+      "  .rb-header[data-name-size=heading] .rb-brand { font-size: var(--size-subheading); }",
+      "  .rb-header[data-brand-place=end] > .rb-brand { order: 2; justify-content: flex-end; }",
+      "  .rb-header[data-brand-place=end] > .rb-nav-narrow { margin-left: 0; }",
       "  .rb-nav-narrow { display: block; margin-left: auto; }",
       "  .rb-nav-action + .rb-nav-narrow { margin-left: 0; }",
       // `[data-sections]` is here for weight and not for its value: the rule above that hides the

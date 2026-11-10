@@ -106,12 +106,14 @@ export {
   removeOwnFont,
 } from "./fonts.ts";
 export type {
+  BrandNameSize,
   Header,
   HeaderAction,
   HeaderBackground,
   HeaderLayout,
   HeaderLogo,
   HeaderPart,
+  LogoSize,
   MenuLabelIssue,
   MenuLabelTarget,
   PagesPosition,
@@ -119,6 +121,7 @@ export type {
   SectionsPosition,
 } from "./header.ts";
 export {
+  BRAND_NAME_SIZES,
   HEADER_ALIGNMENTS,
   HEADER_BACKGROUNDS,
   HEADER_GAPS,
@@ -129,6 +132,7 @@ export {
   headerLogoSchema,
   headerSchema,
   LOGO_MAX_EDGE,
+  LOGO_SIZES,
   LOGO_SRC_PATTERN,
   MENU_LABEL_MAX,
   MENU_LABEL_MIN,

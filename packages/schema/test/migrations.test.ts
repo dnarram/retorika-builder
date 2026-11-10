@@ -1928,8 +1928,8 @@ describe("1.15.0 — the header is the owner's", () => {
       );
       if (raw.header === undefined && !labelled) continue;
       // 1.15.0 or later: `cabecera-con-marca` moved to 1.16.0 when its logo gained a size, and to
-      // 1.17.0 when its row became a position.
-      expect(["1.15.0", "1.16.0", "1.17.0"], file).toContain(raw.schemaVersion);
+      // 1.17.0 when its row became a position; `marca-grande` was written at 1.19.0.
+      expect(["1.15.0", "1.16.0", "1.17.0", "1.19.0"], file).toContain(raw.schemaVersion);
     }
   });
 });
@@ -2027,7 +2027,7 @@ describe("1.16.0 — the logo keeps its size", () => {
     expect(down?.(migrateToCurrent(headless))).toEqual(headless);
   });
 
-  it("is the claim it rests on: the one corpus fixture with a size was written at 1.16.0 or later", () => {
+  it("is the claim it rests on: every corpus fixture with a size was written at 1.16.0 or later", () => {
     // The affected set of `up`, counted: a logo with a size below 1.16.0 would be one this version's
     // `up` ought to have validated, and there is none.
     const corpus = readdirSync(DOCUMENTS_DIR).filter((file) => file.endsWith(".json"));
@@ -2039,10 +2039,11 @@ describe("1.16.0 — the logo keeps its size", () => {
       };
       if (raw.header?.brand?.logo?.width === undefined) continue;
       carrying += 1;
-      // `cabecera-con-marca`, moved on to 1.17.0 when its row became a position.
-      expect(["1.16.0", "1.17.0"], file).toContain(raw.schemaVersion);
+      // `cabecera-con-marca`, moved on to 1.17.0 when its row became a position; and `marca-grande`,
+      // written at 1.19.0 (sprint 35 día 4).
+      expect(["1.16.0", "1.17.0", "1.19.0"], file).toContain(raw.schemaVersion);
     }
-    expect(carrying).toBe(1);
+    expect(carrying).toBe(2);
   });
 });
 
@@ -2158,7 +2159,7 @@ describe("1.17.0 — each menu has its place", () => {
     ).not.toHaveProperty("header");
   });
 
-  it("is the claim it rests on: the one corpus fixture with a row was moved by this `up`", () => {
+  it("is the claim it rests on: the one corpus fixture with a row was moved by this `up`, and the other was written after it", () => {
     const corpus = readdirSync(DOCUMENTS_DIR).filter((file) => file.endsWith(".json"));
     let placed = 0;
     for (const file of corpus) {
@@ -2169,10 +2170,11 @@ describe("1.17.0 — each menu has its place", () => {
       expect(raw.header?.sections?.row, `${file} still carries \`row\``).toBeUndefined();
       if (raw.header?.sections?.position === undefined) continue;
       placed += 1;
-      expect(raw.schemaVersion, file).toBe("1.17.0");
+      // `cabecera-con-marca`, moved by this `up`; `marca-grande`, written at 1.19.0 with its row.
+      expect(["1.17.0", "1.19.0"], file).toContain(raw.schemaVersion);
       expect(raw.header.sections.position, file).toBe("row");
     }
-    expect(placed).toBe(1);
+    expect(placed).toBe(2);
   });
 });
 
@@ -2217,9 +2219,8 @@ describe("1.18.0 — the fixed bar says how much has been read", () => {
     header: { sticky: true, progress: true, brand: { name: true } },
   });
 
-  it("is registered, and it is the one the chain ends at", () => {
+  it("is registered", () => {
     expect(step("1.18.0").version).toBe("1.18.0");
-    expect(SCHEMA_VERSION).toBe("1.18.0");
   });
 
   it("seals a 1.17.0 document and moves nothing, because the key is optional", () => {
@@ -2253,9 +2254,9 @@ describe("1.18.0 — the fixed bar says how much has been read", () => {
   it("round-trips a document with no line, and one with no header", () => {
     const down = step("1.18.0").down;
     const input = before();
-    expect(down?.(migrateToCurrent(input))).toEqual(input);
+    expect(down?.(upTo(input, "1.18.0"))).toEqual(input);
     const { header: _, ...headless } = input;
-    expect(down?.(migrateToCurrent(headless))).toEqual(headless);
+    expect(down?.(upTo(headless, "1.18.0"))).toEqual(headless);
   });
 
   it("is the claim it rests on: no corpus fixture carries the line", () => {
@@ -2267,5 +2268,151 @@ describe("1.18.0 — the fixed bar says how much has been read", () => {
       };
       expect(raw.header?.["progress"], file).toBeUndefined();
     }
+  });
+});
+
+/**
+ * `0020` — the brand has a size and a place (ADR 0069 and 0070, sprint 35 día 4): `logoSize`,
+ * `nameSize` and `place` on `header.brand`, three owner's words. `up` seals and moves nothing; a
+ * document nobody touched round-trips exactly; what the «Menú» panel writes parses, a size without
+ * the thing it sizes does not, and a word outside each vocabulary does not; `down` drops the three
+ * and keeps the name and the logo.
+ */
+describe("1.19.0 — the brand has a size and a place", () => {
+  /** A 1.18.0 site with a name and a logo, as sprint 30 left them. */
+  function before(): Record<string, unknown> {
+    return {
+      schemaVersion: "1.18.0",
+      id: "doc-marca",
+      siteName: "Taberna Santo Domingo",
+      theme,
+      collections: [],
+      header: {
+        brand: { name: true, logo: { src: "assets/logo.png", width: 96, height: 96 } },
+      },
+      pages: [
+        {
+          id: "home",
+          slug: "index",
+          title: "Taberna Santo Domingo",
+          sections: [
+            {
+              id: "sec-cover",
+              preset: { catalogId: "cover", variantId: "image-right" },
+              source: "catalog",
+              layout: null,
+              content: [],
+            },
+          ],
+        },
+      ],
+    };
+  }
+  /** The same site at 1.19.0 with the three words, as the panel writes them. */
+  const after = () => ({
+    ...before(),
+    schemaVersion: "1.19.0",
+    header: {
+      brand: {
+        name: true,
+        logo: { src: "assets/logo.png", width: 96, height: 96 },
+        logoSize: "lg",
+        nameSize: "heading",
+        place: "center",
+      },
+    },
+  });
+
+  it("is registered, and it is the one the chain ends at", () => {
+    expect(step("1.19.0").version).toBe("1.19.0");
+    expect(SCHEMA_VERSION).toBe("1.19.0");
+  });
+
+  it("seals a 1.18.0 document and moves nothing, because the keys are optional", () => {
+    const migrated = upTo(before(), "1.19.0");
+    expect(migrated).toEqual({ ...before(), schemaVersion: "1.19.0" });
+    const brand = (migrated["header"] as { brand: object }).brand;
+    for (const key of ["logoSize", "nameSize", "place"]) {
+      expect(Object.hasOwn(brand, key), key).toBe(false);
+    }
+    expect(() => parseDocument(migrated)).not.toThrow();
+    const once = migrateToCurrent(before());
+    expect(migrateToCurrent(once)).toEqual(once);
+  });
+
+  it("parses the three words, each alone and all together", () => {
+    expect(() => parseDocument(after())).not.toThrow();
+    const base = after();
+    const logoOnly = {
+      ...base,
+      header: { brand: { name: true, logo: { src: "l.png" }, logoSize: "sm" } },
+    };
+    expect(() => parseDocument(logoOnly)).not.toThrow();
+    const nameOnly = { ...base, header: { brand: { name: true, nameSize: "subheading" } } };
+    expect(() => parseDocument(nameOnly)).not.toThrow();
+    const placeOnly = { ...base, header: { brand: { name: true, place: "end" } } };
+    expect(() => parseDocument(placeOnly)).not.toThrow();
+  });
+
+  it("refuses a size without the thing it sizes, and a word outside each vocabulary", () => {
+    const base = after();
+    const noLogo = { ...base, header: { brand: { name: true, logoSize: "lg" } } };
+    expect(() => parseDocument(noLogo)).toThrow(/logoSize/);
+    const noName = { ...base, header: { brand: { logo: { src: "l.png" }, nameSize: "heading" } } };
+    expect(() => parseDocument(noName)).toThrow(/nameSize/);
+    const nameOff = { ...base, header: { brand: { name: false, nameSize: "heading" } } };
+    expect(() => parseDocument(nameOff)).toThrow(/nameSize/);
+    const xl = {
+      ...base,
+      header: { brand: { name: true, logo: { src: "l.png" }, logoSize: "xl" } },
+    };
+    expect(() => parseDocument(xl)).toThrow(/logoSize/);
+    const px = { ...base, header: { brand: { name: true, nameSize: "18px" } } };
+    expect(() => parseDocument(px)).toThrow(/nameSize/);
+    const left = { ...base, header: { brand: { name: true, place: "left" } } };
+    expect(() => parseDocument(left)).toThrow(/place/);
+  });
+
+  /** **`down` is lossy, and this is the loss, named:** the three words go, the name and the logo stay. */
+  it("takes the size and the place away on the way down and keeps the name and the logo", () => {
+    const down = step("1.19.0").down;
+    expect(down, "1.19.0 has no `down`").toBeDefined();
+    const back = down?.(after()) ?? {};
+    expect(back["schemaVersion"]).toBe("1.18.0");
+    expect(back["header"]).toEqual({
+      brand: { name: true, logo: { src: "assets/logo.png", width: 96, height: 96 } },
+    });
+    expect(() => parseDocument(upTo(back, "1.18.0"))).not.toThrow();
+  });
+
+  it("round-trips a document with none of the three, and one with no header", () => {
+    const down = step("1.19.0").down;
+    const input = before();
+    expect(down?.(migrateToCurrent(input))).toEqual(input);
+    const { header: _, ...headless } = input;
+    expect(down?.(migrateToCurrent(headless))).toEqual(headless);
+    // A header with no brand at all is not this step's to tidy away.
+    const brandless = { ...input, header: { sticky: true } };
+    expect(down?.(migrateToCurrent(brandless))).toEqual(brandless);
+  });
+
+  it("is the claim it rests on: no corpus fixture stamped before 1.19.0 carries any of the three", () => {
+    const corpus = readdirSync(DOCUMENTS_DIR).filter((file) => file.endsWith(".json"));
+    expect(corpus.length).toBeGreaterThan(0);
+    let stamped = 0;
+    for (const file of corpus) {
+      const raw = JSON.parse(readFileSync(join(DOCUMENTS_DIR, file), "utf8")) as {
+        schemaVersion: string;
+        header?: { brand?: Record<string, unknown> };
+      };
+      const brand = raw.header?.brand ?? {};
+      const carries = ["logoSize", "nameSize", "place"].filter((key) => key in brand);
+      if (carries.length === 0) continue;
+      // A fixture that carries them was written at 1.19.0 or later, so no `up` ever moved it.
+      stamped += 1;
+      expect(raw.schemaVersion, `${file} carries ${carries.join(", ")}`).toBe("1.19.0");
+    }
+    // `marca-grande` (sprint 35 día 4) is the one that does, and it is there to pin the published bytes.
+    expect(stamped).toBe(1);
   });
 });

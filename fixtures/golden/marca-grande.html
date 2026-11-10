@@ -1,0 +1,449 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Taberna Santo Domingo</title>
+<meta name="description" content="Comer, beber y quedarse un rato">
+<meta property="og:title" content="Taberna Santo Domingo">
+<meta property="og:description" content="Comer, beber y quedarse un rato">
+<style>
+:root {
+  --color-accent: #C2410C;
+  --color-ink: #1C1917;
+  --color-muted: #57534E;
+  --color-primary: #9A3412;
+  --color-secondary: #78350F;
+  --color-surface: #FAFAF9;
+  --font-body: Charter, 'Iowan Old Style', Palatino, 'Palatino Linotype', Georgia, Cambria, 'Times New Roman', Times, serif;
+  --font-heading: 'EB Garamond', Garamond, Baskerville, 'Big Caslon', Georgia, 'Times New Roman', serif;
+  --radius-lg: 16px;
+  --radius-md: 8px;
+  --radius-sm: 4px;
+  --size-body: 1rem;
+  --size-heading: 2.5rem;
+  --size-subheading: 1.5rem;
+  --space-lg: 24px;
+  --space-md: 16px;
+  --space-sm: 8px;
+  --space-xl: 48px;
+  --space-xs: 4px;
+}
+
+/* Self-hosted faces. Relative to this file, so a double-clicked page finds them. */
+@font-face {
+  font-family: 'EB Garamond';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("fonts/eb-garamond-latin-400-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: 'EB Garamond';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("fonts/eb-garamond-latin-700-normal.woff2") format("woff2");
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; font-family: var(--font-body); color: var(--color-ink);
+  background: var(--color-surface); }
+html { --rb-measure: 1200px; }
+.rb-section { display: grid; grid-template-columns: repeat(12, 1fr);
+  gap: var(--space-md); align-items: center;
+  padding: calc(1.5 * var(--space-xl)) max(var(--space-xl), calc((100% - var(--rb-measure)) / 2)); }
+.rb-section img { width: 100%; height: auto; border-radius: var(--radius-lg); }
+.rb-section :is(h1, h2, h3, h4, h5, h6, p, a) { overflow-wrap: break-word; }
+.rb-section :is(h1, h2, h3, h4, h5, h6, p.rb-subtitle) { -webkit-hyphens: auto;
+  hyphens: auto; }
+.rb-section h1 { font-family: var(--font-heading); font-size: var(--size-heading);
+  color: var(--color-primary); margin: 0; line-height: 1.15; letter-spacing: -0.01em;
+  text-wrap: balance; }
+.rb-section h2 { font-family: var(--font-heading); font-size: var(--size-subheading);
+  color: var(--color-secondary); margin: 0; line-height: 1.15; letter-spacing: -0.01em;
+  text-wrap: balance; }
+.rb-section p.rb-subtitle { font-family: var(--font-heading);
+  font-size: var(--size-subheading); color: var(--color-secondary); margin: 0; }
+.rb-section h3 { font-family: var(--font-heading); font-size: var(--size-body);
+  color: var(--color-ink); margin: 0; }
+.rb-list { display: grid; gap: var(--space-md); margin: 0; padding: 0; list-style: none;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); }
+.rb-item { display: flex; flex-direction: column; gap: var(--space-xs);
+  padding-top: var(--space-sm); border-top: 1px solid var(--color-muted); }
+.rb-prices .rb-list { grid-template-columns: 1fr; gap: var(--space-sm); }
+.rb-gallery .rb-item img { aspect-ratio: 4 / 3; object-fit: cover; }
+.rb-team .rb-item img { aspect-ratio: 1 / 1; object-fit: cover; }
+.rb-cover img { aspect-ratio: 4 / 3; object-fit: cover; object-position: center; }
+.rb-cover.rb-image-background img { aspect-ratio: 3 / 2; }
+.rb-section p { font-size: var(--size-body); color: var(--color-muted); margin: 0;
+  line-height: 1.6; }
+.rb-section a:not([role=button]) { color: var(--color-primary); text-decoration: underline; }
+.rb-section [role=button] { display: inline-block; padding: var(--space-sm) var(--space-lg);
+  background: var(--color-primary); color: var(--color-surface); font-family: var(--font-heading);
+  font-weight: 700; border-radius: 999px; text-decoration: none; }
+.rb-panel { align-self: stretch; margin: calc(-1.5 * var(--space-md)); z-index: 1;
+  background: var(--color-surface); border-radius: var(--radius-lg); pointer-events: none;
+  box-shadow: 0 24px 48px -24px color-mix(in srgb, var(--color-ink) 40%, transparent); }
+.rb-panel ~ :not(img) { z-index: 2; }
+
+html { --rb-ease: cubic-bezier(0.2, 0, 0, 1); --rb-fast: 200ms; --rb-base: 400ms; }
+@keyframes rb-rise { from { opacity: 0; transform: translateY(16px); } }
+@keyframes rb-reveal { from { transform: translateY(16px); } }
+@media (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: view()) {
+    main > .rb-section:not(:first-child) > * { animation: rb-reveal linear none;
+      animation-timeline: view(); animation-range: entry 0% entry 160px;
+      overflow-anchor: none; }
+  }
+  main > .rb-cover:first-child > :is(h1, p, a[role=button]) {
+    animation: rb-rise var(--rb-base) var(--rb-ease) backwards;
+    animation-delay: var(--rb-delay, 0ms); overflow-anchor: none; }
+  main > .rb-cover:first-child > p { --rb-delay: 80ms; }
+  main > .rb-cover:first-child > a[role=button] { --rb-delay: 160ms; }
+  @view-transition { navigation: auto; }
+  .rb-header { view-transition-name: rb-header; }
+  ::view-transition-old(root), ::view-transition-new(root) { animation-duration: var(--rb-fast); }
+  .rb-section [role=button] { transition: transform var(--rb-fast) var(--rb-ease),
+    box-shadow var(--rb-fast) var(--rb-ease); }
+}
+@media (hover: hover) {
+  .rb-section [role=button]:hover { transform: translateY(-1px); box-shadow: 0 8px 24px -16px var(--color-ink); }
+}
+
+.rb-skip { position: absolute; left: var(--space-md); top: -100px; z-index: 3;
+  padding: var(--space-sm) var(--space-md); background: var(--color-surface);
+  color: var(--color-primary); font-family: var(--font-heading); font-size: var(--size-body);
+  border-radius: var(--radius-sm); text-decoration: underline; }
+.rb-skip:focus-visible { top: var(--space-md); }
+html { --rb-bar-h: calc(2 * var(--space-md) + max(56px, 1.3 * var(--size-heading), 2 * var(--space-sm) + 1.3 * var(--size-body)) + 1px);
+  --rb-header-h: var(--rb-bar-h); }
+@media (min-width: 1079px) {
+  html:has(.rb-header[data-sections=row] > .rb-nav-row) { --rb-bar-h: calc(2 * var(--space-md) + max(56px, 1.3 * var(--size-heading), 2 * var(--space-sm) + 1.3 * var(--size-body)) + var(--space-md) + 2 * var(--space-xs) + 1.3 * var(--size-body) + 1px); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  html { scroll-behavior: smooth; }
+  .rb-nav a { transition: text-decoration-color var(--rb-fast) var(--rb-ease); }
+  .rb-nav::after { transition: left var(--rb-fast) var(--rb-ease), width var(--rb-fast) var(--rb-ease); }
+  .rb-nav-action { transition: transform var(--rb-fast) var(--rb-ease), box-shadow var(--rb-fast) var(--rb-ease); }
+  .rb-header[data-sticky] { transition: padding var(--rb-fast) var(--rb-ease), margin var(--rb-fast) var(--rb-ease),
+    background-color var(--rb-fast) var(--rb-ease), box-shadow var(--rb-fast) var(--rb-ease); }
+  .rb-burger::before, .rb-burger::after { transition: transform var(--rb-fast) var(--rb-ease); }
+}
+.rb-header { position: relative; z-index: 1; display: flex; flex-wrap: wrap; align-items: center;
+  gap: var(--space-md) var(--space-xl); padding: var(--space-md)
+    max(var(--space-xl), calc((100% - var(--rb-rail-l, 0px) - var(--rb-rail-r, 0px) - var(--rb-measure)) / 2));
+  background: var(--color-surface); border-bottom: 1px solid color-mix(in srgb, var(--color-ink) 10%, transparent); line-height: 1.3; }
+.rb-header[data-hairline=none] { border-bottom: 0; }
+.rb-brand { display: flex; align-items: center; gap: var(--space-sm); min-width: 0;
+  max-width: 100%; color: var(--color-ink); font-family: var(--font-heading);
+  font-size: var(--size-body); font-weight: 700; text-decoration: none; }
+.rb-brand-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rb-logo { height: 40px; width: auto; flex: none; }
+.rb-nav-wide { display: flex; flex-wrap: wrap; gap: var(--space-xl); margin-left: auto; }
+.rb-nav { position: relative; display: flex; flex-wrap: wrap; gap: var(--space-md); }
+.rb-nav a { color: var(--color-ink); font-family: var(--font-body); font-size: var(--size-body);
+  padding: var(--space-xs) 0; text-decoration: underline transparent; text-underline-offset: 6px;
+  text-decoration-thickness: 2px; }
+.rb-nav a[aria-current] { text-decoration-color: var(--color-primary); }
+@supports (anchor-name: --rb-x) {
+  :is(.rb-nav-wide, .rb-header) > .rb-nav a[aria-current] { text-decoration-color: transparent; }
+  :is(.rb-nav-wide, .rb-header) > .rb-nav[data-part=pagesLinks] a[aria-current] { anchor-name: --rb-current-pages; }
+  :is(.rb-nav-wide, .rb-header) > .rb-nav[data-part=sectionsLinks] a[aria-current] { anchor-name: --rb-current-sections; }
+  :is(.rb-nav-wide, .rb-header) > .rb-nav::after { content: ""; position: absolute; bottom: 0; height: 2px; border-radius: 1px;
+    background: var(--color-primary); left: anchor(left); width: anchor-size(width);
+    pointer-events: none; }
+  :is(.rb-nav-wide, .rb-header) > .rb-nav[data-part=pagesLinks]::after { position-anchor: --rb-current-pages; }
+  :is(.rb-nav-wide, .rb-header) > .rb-nav[data-part=sectionsLinks]::after { position-anchor: --rb-current-sections; }
+  :is(.rb-nav-wide, .rb-header) > .rb-nav:not(:has(a[aria-current]))::after { display: none; }
+}
+.rb-nav-action { display: inline-block; padding: var(--space-sm) var(--space-lg);
+  background: var(--color-primary); color: var(--color-surface); font-family: var(--font-heading);
+  font-size: var(--size-body); font-weight: 700; border-radius: 999px; text-decoration: none;
+  white-space: nowrap; }
+@media (hover: hover) {
+  .rb-nav-action:hover { transform: translateY(-1px); box-shadow: 0 8px 24px -16px var(--color-ink); }
+}
+.rb-brand + .rb-nav-action, .rb-header > .rb-nav-action:first-child { margin-left: auto; }
+.rb-nav-narrow { padding: 0; }
+.rb-nav-narrow > summary { display: inline-flex; align-items: center; gap: var(--space-sm);
+  color: var(--color-ink); font-family: var(--font-heading);
+  font-size: var(--size-body); cursor: pointer; list-style: none; }
+.rb-nav-narrow > summary::-webkit-details-marker { display: none; }
+.rb-nav-narrow > summary > .rb-when-open, .rb-nav-narrow[open] > summary > .rb-when-closed {
+  display: none; }
+.rb-nav-narrow[open] > summary > .rb-when-open { display: inline; }
+.rb-burger { position: relative; flex: none; width: 18px; height: 12px; }
+.rb-burger::before, .rb-burger::after { content: ""; position: absolute; left: 0; right: 0;
+  height: 2px; border-radius: 1px; background: currentColor; }
+.rb-burger::before { top: 0; }
+.rb-burger::after { bottom: 0; }
+.rb-nav-narrow[open] .rb-burger::before { transform: translateY(5px) rotate(45deg); }
+.rb-nav-narrow[open] .rb-burger::after { transform: translateY(-5px) rotate(-45deg); }
+.rb-nav-narrow .rb-nav { position: absolute; left: 0; right: 0; top: 100%; z-index: 2;
+  flex-direction: column; flex-wrap: nowrap; gap: var(--space-sm);
+  padding: var(--space-md) var(--space-lg);
+  background: var(--color-surface); border-bottom: 1px solid color-mix(in srgb, var(--color-ink) 10%, transparent); }
+.rb-nav-row { flex-basis: 100%; }
+.rb-header:not([data-sections=row]) .rb-nav-row { display: none; }
+.rb-header[data-layout=centered] { justify-content: center; }
+.rb-header[data-layout=centered] .rb-nav-wide,
+.rb-header[data-layout=centered] .rb-nav-action { margin-left: 0; }
+.rb-header[data-layout=stacked] { justify-content: center; }
+.rb-header[data-layout=stacked] .rb-brand { flex-basis: 100%; justify-content: center; }
+.rb-header[data-layout=stacked] .rb-nav-wide,
+.rb-header[data-layout=stacked] .rb-nav-action { margin-left: 0; }
+.rb-header[data-layout=stacked] .rb-nav-row { justify-content: center; }
+.rb-header[data-align=start] .rb-nav-wide { margin-left: 0; margin-right: auto; }
+.rb-header[data-align=center] .rb-nav-wide { margin-left: auto; margin-right: auto; }
+.rb-header[data-align=end] .rb-nav-wide { margin-left: auto; margin-right: 0; }
+.rb-header[data-align=start] .rb-nav-row { justify-content: flex-start; }
+.rb-header[data-align=center] .rb-nav-row { justify-content: center; }
+.rb-header[data-align=end] .rb-nav-row { justify-content: flex-end; }
+.rb-header[data-gap=sm] .rb-nav { gap: var(--space-sm); }
+.rb-header[data-gap=lg] .rb-nav { gap: var(--space-lg); }
+.rb-header[data-size=small] :is(.rb-brand, .rb-nav a, .rb-nav-action, .rb-nav-narrow > summary) {
+  font-size: calc(var(--size-body) * 0.875); }
+.rb-header[data-logo-size=sm] .rb-logo { height: 28px; }
+.rb-header[data-logo-size=lg] .rb-logo { height: 56px; }
+.rb-header[data-name-size=subheading] .rb-brand { font-size: var(--size-subheading); }
+.rb-header[data-name-size=heading] .rb-brand { font-size: var(--size-heading); }
+.rb-header[data-layout=stacked][data-brand-place=start] .rb-brand { justify-content: flex-start; }
+.rb-header[data-layout=stacked][data-brand-place=end] .rb-brand { justify-content: flex-end; }
+.rb-header:not([data-layout=stacked])[data-brand-place=end] > .rb-brand { order: 3; margin-left: auto; }
+.rb-header:not([data-layout=stacked])[data-brand-place=center] > .rb-brand { margin-inline: auto; }
+.rb-header:not([data-layout=stacked]):is([data-brand-place=end], [data-brand-place=center]) > :is(.rb-nav-wide, .rb-nav-action) {
+  margin-left: 0; margin-right: 0; }
+.rb-header[data-uppercase] :is(.rb-nav a, .rb-nav-action, .rb-nav-narrow > summary) {
+  text-transform: uppercase; letter-spacing: 0.06em; }
+.rb-header[data-hover] .rb-nav a:hover, .rb-header[data-hover] .rb-nav a:focus-visible {
+  text-decoration-color: color-mix(in srgb, var(--color-primary) 50%, transparent); }
+.rb-header[data-bg=primary] { background: var(--color-primary); border-bottom: 0; }
+.rb-header[data-bg=secondary] { background: var(--color-secondary); border-bottom: 0; }
+.rb-header[data-bg=ink] { background: var(--color-ink); border-bottom: 0; }
+.rb-header:is([data-bg=primary], [data-bg=secondary], [data-bg=ink])
+  :is(.rb-brand, .rb-nav a, .rb-nav-narrow > summary) { color: var(--color-surface); }
+.rb-header:is([data-bg=primary], [data-bg=secondary], [data-bg=ink]) .rb-nav a[aria-current] {
+  text-decoration-color: var(--color-surface); }
+.rb-header:is([data-bg=primary], [data-bg=secondary], [data-bg=ink]) .rb-nav::after {
+  background: var(--color-surface); }
+.rb-header:is([data-bg=primary], [data-bg=secondary], [data-bg=ink])[data-hover] .rb-nav a:hover,
+.rb-header:is([data-bg=primary], [data-bg=secondary], [data-bg=ink])[data-hover] .rb-nav a:focus-visible {
+  text-decoration-color: color-mix(in srgb, var(--color-surface) 50%, transparent); }
+.rb-header:is([data-bg=primary], [data-bg=secondary], [data-bg=ink]) .rb-nav-action {
+  background: var(--color-surface); color: var(--color-primary); }
+.rb-header[data-bg=primary] .rb-nav-narrow .rb-nav { background: var(--color-primary); }
+.rb-header[data-bg=secondary] .rb-nav-narrow .rb-nav { background: var(--color-secondary); }
+.rb-header[data-bg=ink] .rb-nav-narrow .rb-nav { background: var(--color-ink); }
+.rb-header[data-bg=transparent] { position: absolute; left: 0; right: 0; top: 0; z-index: 2;
+  background: transparent; border-bottom: 0; }
+.rb-header[data-bg=transparent] + main > .rb-section:first-child {
+  padding-top: calc(var(--space-xl) + var(--rb-bar-h)); }
+.rb-header[data-sticky] { position: sticky; top: 0; z-index: 2; }
+.rb-header[data-sticky] ~ main [data-section] { scroll-margin-top: var(--rb-header-h); }
+.rb-header[data-sticky][data-scrolled] { box-shadow: 0 1px 0 color-mix(in srgb, var(--color-ink) 10%, transparent),
+  0 8px 24px -16px var(--color-ink); }
+@media (min-width: 1079px) {
+  .rb-header[data-sticky][data-scrolled] { padding-block: var(--space-sm);
+    margin-bottom: calc(2 * (var(--space-md) - var(--space-sm))); }
+}
+.rb-header[data-sticky][data-bg=transparent] { position: absolute; }
+html[data-rb-js] .rb-header[data-sticky][data-bg=transparent] { position: fixed; }
+.rb-header[data-sticky][data-bg=transparent][data-scrolled] { background: var(--color-surface);
+  border-bottom: 1px solid color-mix(in srgb, var(--color-ink) 10%, transparent); }
+@supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+  .rb-header[data-sticky][data-scrolled]:is([data-bg=surface], [data-bg=transparent]) {
+    background: color-mix(in srgb, var(--color-surface) 88%, transparent);
+    -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
+  .rb-header[data-sticky][data-scrolled][data-bg=ink] {
+    background: color-mix(in srgb, var(--color-ink) 88%, transparent);
+    -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
+}
+
+@media (max-width: 720px) {
+  .rb-section { grid-template-columns: 1fr; padding: var(--space-lg); }
+  .rb-section > * { grid-column: 1 / -1 !important; grid-row: auto !important; }
+  .rb-section > img { order: -1; }
+  .rb-panel { display: none; }
+}
+
+.rb-nav-narrow { display: none; }
+@media (max-width: 1078px) {
+  html { --rb-bar-h: calc(2 * var(--space-sm) + max(min(56px, calc(71px - 2 * var(--space-sm))), 1.3 * var(--size-subheading), 2 * var(--space-sm) + 1.3 * var(--size-body)) + 1px); }
+  html:has(.rb-header > .rb-nav-row[data-mobile=row]) {
+    --rb-bar-h: calc(2 * var(--space-sm) + max(min(56px, calc(71px - 2 * var(--space-sm))), 1.3 * var(--size-subheading), 2 * var(--space-sm) + 1.3 * var(--size-body)) + var(--space-sm) + 3 * var(--space-xs) + 1.3 * var(--size-body) + 1px); }
+  html { scrollbar-gutter: stable; }
+  .rb-header { gap: var(--space-sm); padding: var(--space-sm) var(--space-lg); }
+  .rb-nav-action { padding-inline: var(--space-md); }
+  .rb-brand { flex: 1 1 0; }
+  .rb-nav-wide { display: none; }
+  .rb-header > .rb-nav[data-part=pagesLinks] { display: none; }
+  .rb-header[data-logo-size=lg] .rb-logo { height: min(56px, calc(71px - 2 * var(--space-sm)));
+    max-width: 100%; object-fit: contain; object-position: left; }
+  .rb-header[data-name-size=heading] .rb-brand { font-size: var(--size-subheading); }
+  .rb-header[data-brand-place=end] > .rb-brand { order: 2; justify-content: flex-end; }
+  .rb-header[data-brand-place=end] > .rb-nav-narrow { margin-left: 0; }
+  .rb-nav-narrow { display: block; margin-left: auto; }
+  .rb-nav-action + .rb-nav-narrow { margin-left: 0; }
+  .rb-header[data-sections] .rb-nav-row { display: flex; flex-wrap: nowrap; overflow-x: auto;
+    justify-content: flex-start; padding-bottom: var(--space-xs); }
+  .rb-header .rb-nav-row a { white-space: nowrap; }
+  .rb-header[data-sections] .rb-nav-row:is([data-mobile=hidden], [data-mobile=fold]) { display: none; }
+  .rb-header[data-layout=stacked] .rb-brand { flex-basis: 0; }
+  .rb-header[data-sticky][data-phone-row] { position: relative; }
+  html .rb-header[data-layout][data-sticky][data-phone-row][data-bg=transparent] { position: absolute; }
+  .rb-header[data-sticky][data-phone-row] ~ main [data-section] { scroll-margin-top: 0; }
+  .rb-nav-narrow > .rb-nav { box-sizing: border-box; height: calc(100dvh - 100%);
+    overflow: hidden auto; gap: var(--space-md); padding: var(--space-xl) var(--space-lg);
+    border-bottom: 0; }
+  .rb-nav-narrow > .rb-nav a { font-family: var(--font-heading); font-size: var(--size-subheading);
+    padding: var(--space-xs) var(--space-sm); margin-left: calc(-1 * var(--space-sm));
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0; box-shadow: inset 3px 0 0 transparent; }
+  .rb-nav-narrow > .rb-nav a[aria-current] { text-decoration-color: transparent;
+    box-shadow: inset 3px 0 0 currentColor;
+    background: color-mix(in srgb, currentColor 12%, transparent); }
+  body:has(.rb-nav-narrow[open]) main { visibility: hidden; }
+  html:has(.rb-nav-narrow[open]) { overflow: hidden; }
+  @media (prefers-reduced-motion: no-preference) {
+    .rb-nav-narrow[open] > .rb-nav > a { animation: rb-rise var(--rb-base) var(--rb-ease) backwards;
+      animation-delay: calc(var(--rb-i, 0) * 40ms); }
+    .rb-nav-narrow[open] > .rb-nav > a:nth-child(2) { --rb-i: 1; }
+    .rb-nav-narrow[open] > .rb-nav > a:nth-child(3) { --rb-i: 2; }
+    .rb-nav-narrow[open] > .rb-nav > a:nth-child(4) { --rb-i: 3; }
+    .rb-nav-narrow[open] > .rb-nav > a:nth-child(5) { --rb-i: 4; }
+    .rb-nav-narrow[open] > .rb-nav > a:nth-child(6) { --rb-i: 5; }
+    .rb-nav-narrow[open] > .rb-nav > a:nth-child(n + 7) { --rb-i: 6; }
+  }
+}
+</style>
+</head>
+<body>
+<a class="rb-skip" href="#rb-main">
+  Saltar al contenido
+</a>
+<header class="rb-header" data-align="end" data-bg="surface" data-brand-place="center" data-gap="md" data-layout="brand-left" data-logo-size="lg" data-name-size="heading" data-pages="bar" data-phone-row="" data-sections="row" data-size="body">
+  <nav aria-label="Páginas" class="rb-nav" data-part="pagesLinks">
+    <a href="./que-ponemos.html">
+      Qué ponemos
+    </a>
+    <a href="./donde-estamos.html">
+      Dónde
+    </a>
+  </nav>
+  <span class="rb-brand" data-part="brand">
+    <img alt="" class="rb-logo" height="96" src="assets/logo.png" width="96">
+    <span class="rb-brand-name">
+      Taberna Santo Domingo
+    </span>
+  </span>
+  <a class="rb-nav-action" data-part="action" href="#sec-contact">
+    Contacto
+  </a>
+  <details class="rb-nav-narrow">
+    <summary>
+      <span aria-hidden="true" class="rb-burger"></span>
+      <span class="rb-when-closed">
+        Menú
+      </span>
+      <span class="rb-when-open">
+        Cerrar
+      </span>
+    </summary>
+    <nav aria-label="Páginas" class="rb-nav" data-part="pagesLinks">
+      <a href="./que-ponemos.html">
+        Qué ponemos
+      </a>
+      <a href="./donde-estamos.html">
+        Dónde
+      </a>
+    </nav>
+  </details>
+  <nav aria-label="Secciones" class="rb-nav rb-nav-row" data-mobile="row" data-part="sectionsLinks">
+    <a href="#sec-services-home">
+      Servicios
+    </a>
+  </nav>
+</header>
+<main class="rb-page" data-page="home" id="rb-main">
+  <section class="rb-section rb-cover rb-image-right" data-preset="cover" data-section="sec-cover" data-variant="image-right" id="sec-cover">
+    <h1 data-id="el-headline" data-role="heading" data-slot="headline" style="grid-column:1/span 6;grid-row:1/span 1">
+      Taberna Santo Domingo
+    </h1>
+    <p class="rb-subtitle" data-id="el-subheadline" data-role="subheading" data-slot="subheadline" style="grid-column:1/span 6;grid-row:2/span 1">
+      Comer, beber y quedarse un rato
+    </p>
+    <p data-id="el-body" data-role="body" data-slot="body" style="grid-column:1/span 6;grid-row:3/span 1">
+      Pásate a comer o a tomar algo, con tiempo o de paso.
+    </p>
+    <img alt="Marcador de foto: aquí irá tu foto" data-id="el-image" data-role="image" data-slot="image" src="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%201600%201200%22%20role%3D%22img%22%20aria-label%3D%22Tu%20foto%20aqu%C3%AD%22%3E%0A%20%20%3Crect%20width%3D%221600%22%20height%3D%221200%22%20rx%3D%2212%22%20fill%3D%22%23E7EDF6%22%2F%3E%0A%20%20%3Cg%20transform%3D%22translate(0%20266)%22%3E%0A%20%20%20%20%3Cg%20fill%3D%22none%22%20stroke%3D%22%2394A3B8%22%20stroke-width%3D%226%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%0A%20%20%20%20%20%20%3Crect%20x%3D%22712%22%20y%3D%22212%22%20width%3D%22176%22%20height%3D%22130%22%20rx%3D%2212%22%2F%3E%0A%20%20%20%20%20%20%3Ccircle%20cx%3D%22759%22%20cy%3D%22252%22%20r%3D%2215%22%2F%3E%0A%20%20%20%20%20%20%3Cpath%20d%3D%22M719%20330l54-49%2046%2041%2030-26%2032%2027%22%2F%3E%0A%20%20%20%20%3C%2Fg%3E%0A%20%20%20%20%3Ctext%20x%3D%22800%22%20y%3D%22410%22%20text-anchor%3D%22middle%22%20font-family%3D%22system-ui%2C%20sans-serif%22%20font-size%3D%2230%22%20fill%3D%22%2364748B%22%3ETu%20foto%20aqu%C3%AD%3C%2Ftext%3E%0A%20%20%20%20%3Ctext%20x%3D%22800%22%20y%3D%22452%22%20text-anchor%3D%22middle%22%20font-family%3D%22system-ui%2C%20sans-serif%22%20font-size%3D%2220%22%20fill%3D%22%2364748B%22%3ECuando%20subas%20la%20tuya%2C%20ocupar%C3%A1%20este%20espacio%3C%2Ftext%3E%0A%20%20%3C%2Fg%3E%0A%3C%2Fsvg%3E%0A" style="grid-column:7/span 6;grid-row:1/span 4">
+    <a data-id="el-cta" data-role="button" data-slot="primaryAction" href="https://reservas.example.com/taberna" role="button" style="grid-column:1/span 3;grid-row:4/span 1">
+      Reservar mesa
+    </a>
+  </section>
+  <section class="rb-section rb-teaser rb-stacked" data-preset="teaser" data-section="sec-avance" data-variant="stacked" id="sec-avance">
+    <h2 style="grid-column:1/span 12;grid-row:1/span 1">
+      Qué ponemos
+    </h2>
+    <p style="grid-column:1/span 12;grid-row:2/span 1">
+      Esto es lo que ponemos en Taberna Santo Domingo.
+    </p>
+    <a aria-label="Ver más: Qué ponemos" data-id="el-link" data-role="link" data-slot="link" href="./que-ponemos.html" style="grid-column:1/span 12;grid-row:3/span 1">
+      Ver más
+    </a>
+  </section>
+  <section class="rb-section rb-teaser rb-stacked" data-preset="teaser" data-section="sec-avance-2" data-variant="stacked" id="sec-avance-2">
+    <h2 style="grid-column:1/span 12;grid-row:1/span 1">
+      Dónde estamos
+    </h2>
+    <p style="grid-column:1/span 12;grid-row:2/span 1">
+      Cta. de Santo Domingo, 2, Ronda
+    </p>
+    <a aria-label="Ver más: Dónde estamos" data-id="el-link" data-role="link" data-slot="link" href="./donde-estamos.html" style="grid-column:1/span 12;grid-row:3/span 1">
+      Ver más
+    </a>
+  </section>
+  <section class="rb-section rb-services rb-stacked" data-preset="services" data-section="sec-services-home" data-variant="stacked" id="sec-services-home">
+    <h2 data-id="el-services-headline" data-role="heading" data-slot="headline" style="grid-column:1/span 12;grid-row:1/span 1">
+      Qué ponemos
+    </h2>
+    <p data-id="el-services-intro" data-role="body" data-slot="intro" style="grid-column:1/span 8;grid-row:2/span 1">
+      Esto es lo que ponemos en Taberna Santo Domingo.
+    </p>
+    <ul class="rb-list" data-id="el-services" data-role="list" data-slot="services" role="list" style="grid-column:1/span 12;grid-row:3/span 1">
+      <li class="rb-item" data-item="item-1">
+        <h3 data-id="el-card-1-title" data-role="heading" data-slot="title">
+          comidas
+        </h3>
+      </li>
+      <li class="rb-item" data-item="item-2">
+        <h3 data-id="el-card-2-title" data-role="heading" data-slot="title">
+          tapas
+        </h3>
+      </li>
+      <li class="rb-item" data-item="item-3">
+        <h3 data-id="el-card-3-title" data-role="heading" data-slot="title">
+          terraza
+        </h3>
+      </li>
+    </ul>
+  </section>
+  <section class="rb-section rb-contact rb-stacked" data-preset="contact" data-section="sec-contact" data-variant="stacked" id="sec-contact">
+    <h2 data-id="el-contact-headline" data-role="heading" data-slot="headline" style="grid-column:1/span 12;grid-row:1/span 1">
+      Te esperamos
+    </h2>
+    <p data-id="el-contact-body" data-role="body" data-slot="body" style="grid-column:1/span 8;grid-row:2/span 1">
+      Pásate cuando quieras. Y si prefieres avisar antes, aquí nos tienes.
+    </p>
+    <a data-id="el-primary-action" data-role="button" data-slot="primaryAction" href="https://reservas.example.com/taberna" role="button" style="grid-column:1/span 3;grid-row:3/span 1">
+      Reservar mesa
+    </a>
+  </section>
+  <footer class="rb-section rb-footer rb-stacked" data-preset="footer" data-section="sec-footer" data-variant="stacked" id="sec-footer">
+    <p data-id="el-businessName" data-role="body" data-slot="businessName" style="grid-column:1/span 12;grid-row:1/span 1">
+      © Taberna Santo Domingo
+    </p>
+  </footer>
+</main>
+<script>(function(){var d=document,h=d.documentElement,b=d.querySelector('.rb-header');if(!b)return;h.setAttribute('data-rb-js','');var measure=function(){h.style.setProperty('--rb-header-h',b.offsetHeight+'px')};measure();addEventListener('resize',measure);if('ResizeObserver' in window)new ResizeObserver(measure).observe(b,{box:'border-box'});[].slice.call(d.querySelectorAll('details.rb-nav-narrow,details.rb-nav-fold')).forEach(function(det){var sum=det.querySelector('summary');d.addEventListener('keydown',function(e){if(e.key==='Escape'&&det.open){det.open=false;if(sum)sum.focus()}});d.addEventListener('click',function(e){if(det.open&&(!det.contains(e.target)||e.target.closest('a')))det.open=false})});var fixed=b.hasAttribute('data-sticky');if(fixed){var scrolled=function(){if(scrollY>0)b.setAttribute('data-scrolled','');else b.removeAttribute('data-scrolled')};scrolled();addEventListener('scroll',scrolled,{passive:true});}var links=[].slice.call(d.querySelectorAll('.rb-nav a[href^="#"]')),bySection=new Map(),sections=[];links.forEach(function(a){var s=d.getElementById(a.getAttribute('href').slice(1));if(!s)return;if(!bySection.has(s)){bySection.set(s,[]);sections.push(s)}bySection.get(s).push(a)});if(sections.length&&'IntersectionObserver' in window){var seen=new Map(),mark=function(){var best=null,most=0;seen.forEach(function(r,s){if(r>most){most=r;best=s}});links.forEach(function(a){a.removeAttribute('aria-current')});if(best)bySection.get(best).forEach(function(a){a.setAttribute('aria-current','location')})};var io=new IntersectionObserver(function(es){es.forEach(function(e){seen.set(e.target,e.isIntersecting?e.intersectionRatio:0)});mark()},{rootMargin:'-'+(fixed?b.offsetHeight:0)+'px 0px -40% 0px',threshold:[0,.25,.5,.75,1]});sections.forEach(function(s){io.observe(s)});}})();</script>
+</body>
+</html>

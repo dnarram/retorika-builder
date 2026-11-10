@@ -8109,3 +8109,69 @@ que nadie pulsa, encogen. Es una línea del plan cambiada («entran con `scale(0
 cambia son dos medidas. De paso, dos comentarios de documentación que el día 2 dejó separados de sus
 declaraciones (`DeleteToast` y `RailIcon`, que además seguía describiendo las tres pistas del raíl)
 vuelven a su sitio. **e2e completa tras el cambio: 301 verdes y 1 omitida, 1340 s.**
+
+### Día 4 — la marca tiene tamaño y sitio (PR de `feat/la-marca-tiene-tamano-y-sitio`, ADR 0069 y 0070, esquema 1.19.0)
+
+**Las tres palabras, en el esquema.** `header.brand.logoSize` (`sm` | `md` | `lg`), `nameSize` (`body` |
+`subheading` | `heading`: los tokens de la escala, nunca píxeles) y `place` (`start` | `center` | `end`,
+las mismas tres palabras que `align`), cada una opcional y cada una la palabra del dueño. Un tamaño sin
+la cosa que mide se rechaza (`logoSize` sin logo, `nameSize` sin nombre: la regla de `progress`).
+Esquema 1.19.0, migración `0020`: `up` sella y no mueve nada, porque ausentes dibujan exactamente lo de
+hoy; `down` borra las tres y deja nombre y logo. **Ninguna web guardada cambia**, y el marcado de una
+barra sin las palabras es byte a byte el que era: los atributos (`data-logo-size`, `data-name-size`,
+`data-brand-place`) solo se escriben para una palabra del dueño que no sea la de siempre.
+
+**El renderer dibuja y estima con las mismas expresiones.** `LOGO_HEIGHTS` (28 / 40 / 56) y
+`PHONE_BAR_MAX` (72) son constantes con nombre, y dos ayudantes —`logoHeightCss`, `brandSizeToken`—
+los escriben para la hoja, para `barEstimate` (`--rb-bar-h`, del que dependen el hueco de la portada
+transparente y la comprobación 11) y para `barLines` (el pliegue): así la estimación es la barra al
+píxel a cualquier tamaño, y el pliegue cuenta la marca (un logo cuadrado de 40 a 56 mueve el corte
+16 px; el nombre en título, por sus glifos). **El móvil deriva por el token** (regla 7): el logo grande
+a `min(56px, calc(71px - 2 * var(--space-sm)))` —56 / 55 / 47 por escala—, el nombre en título al
+tamaño del subtítulo (en la generosa, 48 × 1,3 más el relleno son 87 px, sobre 72), una marca ancha
+entera y sin deformar la línea (`max-width: 100%; object-fit: contain`), `end` conservado con «Menú»
+delante y `center` derivado a `start`. **Las reglas van siempre en la hoja, en las dos dianas**: el
+panel del día 5 previsualiza escribiendo el atributo en la barra del lienzo antes de que el documento
+la tenga (ajuste 3), y una hoja es una hoja. Los cuatro goldens con cabecera se mueven por **un bloque
+de dieciséis líneas, idéntico en los cuatro** (comprobado por el resumen del diff), y nada más.
+
+**«En medio» en una línea es entre el menú de páginas y el resto, en el documento.** Centrar de verdad
+pediría un nodo envoltorio que el DOM no tiene; el menú de páginas sale de la tira y se dibuja suelto
+antes de la marca, en el documento como en la pantalla, y la marca se reparte el espacio libre a los
+dos lados: el orden que lee el ojo es el que recorre el teclado. Costes con nombre: las reglas del raíl
+ocultan también la copia suelta, `barLines` la cuenta como un elemento más de la línea, y
+`patchCanvas` la llavea bajo la cabecera. **«Al final»** pone la marca la última por `order`, con el
+espacio libre delante: los menús a la izquierda y la marca a la derecha, las palabras de David. Bajo
+las dos, `align` queda inerte, como `brandWithPages` donde no hace nada: el panel lo dirá. Las tres se
+vieron en captura a 1280, 900 y 320, en una línea y apilada.
+
+**Medido antes de fiarse de la estimación.** Para la forma «logo grande, nombre en título» la
+estimación del pliegue da 846 y la rotura real, por bisección, 756; solo el título, 830 frente a 740;
+solo el logo grande, 730 frente a 656: la misma holgura que las formas de siempre, así que es
+conservadora sin ser desmesurada (el título se escribe a 40 px, un tamaño que la tabla de glifos no
+tiene medido y cae al redondeo por glifo). Esa forma se pliega legítimamente a 768, y la prueba de
+formas la mide desde 1024 y lo dice. En el móvil, el logo grande mide 55 en la escala por defecto y
+**47 en la generosa, la que prueba el tope**, con la barra en 71 px tal como la lee la auditoría (lo que
+está sobre la fila; la primera versión de la prueba restaba la fila y se quedaba con el hueco de 8 px).
+`marca-grande`, el nuevo documento del corpus —el de la marca con logo grande, nombre en título y «en
+medio»— se pliega a 1078, y es lo que el panel dirá a su dueño.
+
+**Pruebas.** Esquema: el bloque de 1.19.0 (registrada y fin de la cadena; sella sin tocar; acepta las
+tres, juntas y por separado; rechaza un tamaño sin su cosa, `xl`, `18px`, `left`; `down` pierde
+exactamente las tres; ninguna web del corpus por debajo de 1.19.0 las lleva, y la única que las lleva
+está en 1.19.0). Las tres pruebas antiguas que contaban «un solo documento del corpus con logo / con
+fila» cuentan dos. Renderer: atributos solo para la palabra del dueño; las reglas en la hoja sin
+palabras y ninguna sin atributo; el orden del DOM para «en medio» y no en apilada; la ausencia derivada
+del diseño; cinco cadenas más de la estimación; «el pliegue cuenta el tamaño de la marca». Navegador:
+el móvil con `lg` en la escala por defecto y en la generosa, «Ir a…» con `lg`, dos formas más en los
+tres motores (204 verdes). `a11y`: un gemelo de doce documentos con logo (`brandCombinations`) en axe y
+en la comprobación 11, no una dimensión más de la matriz. Lighthouse: el sujeto «marca grande» junto al
+de «fija, con logo». **Saboteos**: una regla sin atributo (goldens rojos); la estimación fija en 40
+(golden y cadenas rojas); el pliegue sin contar el tamaño (rojo); `down` conservando `place` (rojo).
+
+**Suites.** `typecheck`, `lint` (73 avisos, los de `main`), `test` (3819, 26 nuevas), invariantes (27),
+golden (27: los cuatro movidos y el nuevo), `renderer:deps`, `size` (el script en 0,8 KB), `secrets:scope`,
+`schema:guard` (1.19.0, `0020`). **`a11y` local: 1750** (89 más: el gemelo de la marca en axe y en la comprobación 11). **Lighthouse 27/27**:
+«marca-grande · fija, logo grande, nombre en título» da 100 / 100 / 100 / 100 con LCP 1,35 s y CLS 0,001,
+los mismos números que «fija, con logo» (LCP 1,35, CLS 0,002): las palabras no cuestan nada medible.
+**e2e completa, a la primera: 301 verdes y 1 omitida, 1344 s.**

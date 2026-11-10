@@ -4,6 +4,7 @@ import type { NodeResult, Result } from "axe-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { headerWidths, phoneAt, railsAt } from "../src/index.ts";
 import {
+  brandCombinations,
   type Combination,
   closeCombination,
   contrastCombinations,
@@ -130,6 +131,9 @@ describe("axe — contrast (every palette, every type pair, one composition)", (
  */
 describe("axe — the header (every scheme over every palette; the layouts, the row and the fixed bar)", () => {
   checkAxe(headerCombinations());
+  // And the brand at its sizes and places (ADR 0069, 0070): a heading-sized name is large text, and
+  // the pages' menu standing bare before the brand is a landmark like the strip's.
+  checkAxe(brandCombinations());
 });
 
 /**
@@ -213,7 +217,12 @@ describe("nothing over the cover under a transparent bar taller than a line (the
  * bound. The check reads no estimate: it judges what is drawn.
  */
 describe("the bar holds its lines or folds (the audit's check 11)", () => {
-  const combinations = headerCombinations().flatMap((c) => [c, shortLabelled(c)]);
+  const combinations = [
+    ...headerCombinations().flatMap((c) => [c, shortLabelled(c)]),
+    // The brand at its sizes and places: a large logo and a heading-sized name are more of the line,
+    // and the fold has to count them (ADR 0069 with 0067).
+    ...brandCombinations(),
+  ];
   for (const c of combinations) {
     for (const width of [768, 1024, 1247, 1280]) {
       it(`${c.id} @ ${width}px`, async () => {

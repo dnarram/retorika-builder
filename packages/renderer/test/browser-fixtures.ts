@@ -1036,6 +1036,37 @@ export function headerCombinations(): Combination[] {
 }
 
 /**
+ * **The brand at its sizes and places** (ADR 0069 and 0070, sprint 35 día 4), a twin of the matrix
+ * rather than a dimension of it: with a logo — which `headerCase` never draws — the nine words of size
+ * and place on the one-line bar with the name at the heading's size, and the three places on the
+ * stacked bar with the large logo. Twelve documents on the fixed palette, measured where the matrix
+ * is: by axe at the phone and the desktop, and by check 11 at the four widths the bar holds its lines
+ * or folds at.
+ */
+export function brandCombinations(): Combination[] {
+  const logo = { src: "assets/portada.png", width: 2, height: 2 };
+  const combinations: Combination[] = [];
+  for (const logoSize of ["sm", "md", "lg"] as const) {
+    for (const place of ["start", "center", "end"] as const) {
+      combinations.push(
+        headerCase(`brand/${logoSize}/${place}`, FIXED_PALETTE[0].id, {
+          brand: { name: true, logo, logoSize, nameSize: "heading", place },
+        }),
+      );
+    }
+  }
+  for (const place of ["start", "center", "end"] as const) {
+    combinations.push(
+      headerCase(`brand/stacked/${place}`, FIXED_PALETTE[0].id, {
+        layout: "stacked",
+        brand: { name: true, logo, logoSize: "lg", nameSize: "subheading", place },
+      }),
+    );
+  }
+  return combinations;
+}
+
+/**
  * **A transparent bar taller than one line, over the cover** (sprint 33 día 6): stacked, with the
  * sections' row, both, and the menu audit's own combination — the pages in a left column, the row,
  * stacked — each fixed and in the flow. The forms whose room the stylesheet's estimate of one line

@@ -286,3 +286,14 @@ a rail's background, the row, «Ir a…»'s summary — and let go on one of the
 writes that zone's word through the same patch the «Dónde va» card writes. The vocabulary is
 unchanged: the gesture chooses between the five words and makes none, as the condition of 30 October
 asked. §2's stacking is what a drop on the other menu's side produces, and the ghost says so first.
+
+## Note — sprint 35 día 4: the brand has a place of its own (ADR 0070)
+
+«What this does not decide» refused «the brand and the button each with a place of their own (four
+selectors)» because the checkbox of §4 covered the column with a logo without opening 256
+combinations. David's second decision of 10 November 2026 gives the brand a place — `start`, `center`
+or `end` in its own line, [ADR 0070](0070-the-brand-has-its-place-in-its-line.md) — and the cost is paid
+in part: the a11y suite gains a twin of twelve documents rather than a dimension of the matrix, and
+the menu audit does not change. The button still has no place of its own. §4 stays: where the brand
+went to a rail with the pages, its place in the bar is inert. Recorded by development at his
+instruction.
