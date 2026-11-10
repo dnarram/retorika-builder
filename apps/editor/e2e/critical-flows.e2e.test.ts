@@ -26286,3 +26286,435 @@ describe("sprint 35 día 1 — el arnés espera a lo que se mueve", () => {
     }
   }, 120_000);
 });
+
+/**
+ * **Sprint 35 día 2 — lo que llega se va.** Until today an open panel, a dialog or the notice after
+ * a delete arrived and then blinked out: React has no exit. Now the real thing goes in the frame
+ * it is closed and an inert copy (`editor/leaving.ts`) plays its way out where it was. These walks
+ * sample every frame from the press until nothing moves, because what they assert is the shape of
+ * the motion — something travels, the room comes back at the start and not at the end, nothing
+ * findable is left behind — and none of that is visible in the state before or the state after.
+ *
+ * Three walks: with motion; with reduced motion, where nothing travels and everything still
+ * arrives and goes; and the copy's own fallback, for an exit whose animation never runs.
+ */
+describe("sprint 35 día 2 — lo que llega se va", () => {
+  type PanelFrame = {
+    ghost: boolean;
+    ghostOpacity: number;
+    rowKids: number;
+    zoom: number;
+    landmarks: number;
+    inertCopy: boolean;
+  };
+
+  /** Every frame from the press on: the copy, the row, the zoom and how many panels a reader could
+   * find. Started before `act` and read once everything with an end has ended. */
+  async function panelFrames(page: Page, act: () => Promise<void>): Promise<PanelFrame[]> {
+    await page.evaluate(() => {
+      const w = window as unknown as { __pf: unknown[]; __pfOn: boolean };
+      w.__pf = [];
+      w.__pfOn = true;
+      const tick = () => {
+        const ghost = document.querySelector<HTMLElement>('[data-leaving="panel"]');
+        const row = document.querySelector('[data-testid="canvas-and-panel"]');
+        const frame = document.querySelector<HTMLIFrameElement>(
+          '[data-testid="canvas-card"] iframe:not([aria-hidden="true"])',
+        );
+        const view = frame?.contentWindow;
+        w.__pf.push({
+          ghost: ghost !== null,
+          ghostOpacity: ghost ? Number(getComputedStyle(ghost).opacity) : -1,
+          rowKids: row?.children.length ?? -1,
+          zoom:
+            frame && view && view.innerWidth > 0
+              ? Math.round((frame.getBoundingClientRect().width / view.innerWidth) * 1000) / 1000
+              : -1,
+          // Whatever a reader could take for a panel: a landmark of the kind panels are.
+          landmarks: document.querySelectorAll("aside, section[aria-labelledby]").length,
+          // The copy can be reached by nothing: the subtree is inert.
+          inertCopy: ghost ? ghost.closest("[inert]") !== null : true,
+        });
+        if (w.__pfOn) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    });
+    await act();
+    await motionSettled(page);
+    // Two more frames, so the last one recorded is after the copy's own removal.
+    await page.evaluate(
+      () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))),
+    );
+    return page.evaluate(() => {
+      const w = window as unknown as { __pf: PanelFrame[]; __pfOn: boolean };
+      w.__pfOn = false;
+      return w.__pf;
+    });
+  }
+
+  type DialogFrame = {
+    modal: boolean;
+    cardOpacity: number;
+    focusInside: boolean;
+    ghost: boolean;
+    ghostOpacity: number;
+    roles: number;
+  };
+
+  async function dialogFrames(page: Page, act: () => Promise<void>): Promise<DialogFrame[]> {
+    await page.evaluate(() => {
+      const w = window as unknown as { __df: unknown[]; __dfOn: boolean };
+      w.__df = [];
+      w.__dfOn = true;
+      const tick = () => {
+        const modal = document.querySelector<HTMLElement>('[aria-modal="true"]');
+        const ghost = document.querySelector<HTMLElement>('[data-leaving="dialog"]');
+        w.__df.push({
+          modal: modal !== null,
+          cardOpacity: modal ? Number(getComputedStyle(modal).opacity) : -1,
+          focusInside: modal?.contains(document.activeElement) ?? false,
+          ghost: ghost !== null,
+          ghostOpacity: ghost ? Number(getComputedStyle(ghost).opacity) : -1,
+          roles: document.querySelectorAll('[role="dialog"], [role="alertdialog"]').length,
+        });
+        if (w.__dfOn) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    });
+    await act();
+    await motionSettled(page);
+    await page.evaluate(
+      () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))),
+    );
+    return page.evaluate(() => {
+      const w = window as unknown as { __df: DialogFrame[]; __dfOn: boolean };
+      w.__dfOn = false;
+      return w.__df;
+    });
+  }
+
+  /** The rail's mark: where it is drawn, every frame from the press on. */
+  async function markFrames(page: Page, act: () => Promise<void>): Promise<string[]> {
+    await page.evaluate(() => {
+      const w = window as unknown as { __mf: string[]; __mfOn: boolean };
+      w.__mf = [];
+      w.__mfOn = true;
+      const tick = () => {
+        const mark = document.querySelector('[data-testid="rail-mark"]');
+        w.__mf.push(mark ? getComputedStyle(mark).transform : "none");
+        if (w.__mfOn) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    });
+    await act();
+    await motionSettled(page);
+    return page.evaluate(() => {
+      const w = window as unknown as { __mf: string[]; __mfOn: boolean };
+      w.__mfOn = false;
+      return w.__mf;
+    });
+  }
+
+  /** The chosen square, against the mark: the same box, to the pixel, once it has arrived. */
+  async function markOnChosen(page: Page): Promise<{ mark: DOMRectLike; tile: DOMRectLike }> {
+    return page.evaluate(() => {
+      const box = (el: Element | null) => {
+        const r = el?.getBoundingClientRect();
+        return { x: r?.x ?? -1, y: r?.y ?? -1, width: r?.width ?? -1, height: r?.height ?? -1 };
+      };
+      return {
+        mark: box(document.querySelector('[data-testid="rail-mark"]')),
+        tile: box(
+          document.querySelector(
+            '[data-testid="rail"] button[aria-pressed="true"] [data-rail-tile]',
+          ),
+        ),
+      };
+    });
+  }
+  type DOMRectLike = { x: number; y: number; width: number; height: number };
+
+  const distinct = <T>(values: T[]) => [...new Set(values)];
+
+  it("con movimiento: el panel se va y el lienzo vuelve al empezar; el cambio deja uno; el raíl desliza su marca", async () => {
+    const page = await (
+      await browser.newContext({ viewport: { width: 1440, height: 900 } })
+    ).newPage();
+    try {
+      await intoTheCanvas(page);
+      await motionSettled(page);
+
+      // The rail's mark travels from «Secciones» to «Estilo» and lands on its square.
+      expect(await page.locator('[data-testid="rail-mark"]').count()).toBe(1);
+      const marks = await markFrames(page, () =>
+        page.getByRole("button", { name: "Estilo", exact: true }).click(),
+      );
+      expect(
+        distinct(marks).length,
+        `posiciones de la marca: ${distinct(marks).join(" | ")}`,
+      ).toBeGreaterThan(3);
+      const { mark, tile } = await markOnChosen(page);
+      for (const key of ["x", "y", "width", "height"] as const) {
+        expect(
+          Math.abs(mark[key] - tile[key]),
+          `la marca y el cuadro elegido, ${key}`,
+        ).toBeLessThanOrEqual(0.5);
+      }
+      await expect(page.getByRole("heading", { name: "El estilo de toda la web" })).toBeVisible();
+      await motionSettled(page);
+
+      // 1. Closing: a copy travels out; the room is back on the copy's first frame; once.
+      const closing = await panelFrames(page, () =>
+        page.getByRole("button", { name: "Cerrar el estilo" }).click(),
+      );
+      const before = closing[0]?.zoom;
+      const withGhost = closing.filter((f) => f.ghost);
+      expect(withGhost.length, "no exit was drawn for a closing panel").toBeGreaterThan(0);
+      expect(
+        distinct(withGhost.map((f) => f.ghostOpacity.toFixed(2))).length,
+        `opacidades de la salida: ${distinct(withGhost.map((f) => f.ghostOpacity.toFixed(2))).join(", ")}`,
+      ).toBeGreaterThan(2);
+      const firstGhost = withGhost[0] as PanelFrame;
+      expect(firstGhost.rowKids, "the panel was still in the row while its copy left").toBe(1);
+      const after = closing.at(-1)?.zoom;
+      expect(after).not.toBe(before);
+      /*
+       * **At the start of the exit, not at its end** — David's adjustment 2. The zoom arrives a
+       * frame or two after the panel goes, through the card's `ResizeObserver` and a render, so it
+       * is not asserted on the copy's very first frame; what is asserted is that the canvas has its
+       * room back **while the copy is still leaving**, which is what would fail if the copy held the
+       * room and gave it back when it was removed.
+       */
+      const sequence = closing.map((f) => `${f.ghost ? "copy" : "-"}@${f.zoom}`).join(" ");
+      const arrived = closing.findIndex((f) => f.zoom === after);
+      expect(closing[arrived]?.ghost, `the room came back after the exit: ${sequence}`).toBe(true);
+      expect(
+        distinct(closing.map((f) => f.zoom)),
+        `the zoom changed more than once: ${sequence}`,
+      ).toEqual([before, after]);
+      expect(closing.at(-1)?.ghost, "the copy was left standing").toBe(false);
+      expect(
+        withGhost.map((f) => f.landmarks),
+        "a panel could still be found while its copy left",
+      ).toEqual(withGhost.map(() => 0));
+      expect(
+        closing.every((f) => f.inertCopy),
+        "the copy could be reached",
+      ).toBe(true);
+
+      // 2. Replacing: one panel in the row at every frame, the zoom never moves, the old one leaves.
+      await page.getByRole("button", { name: "Estilo", exact: true }).click();
+      await expect(page.getByRole("heading", { name: "El estilo de toda la web" })).toBeVisible();
+      await motionSettled(page);
+      const switching = await panelFrames(page, () =>
+        page.getByRole("button", { name: "Páginas", exact: true }).click(),
+      );
+      expect(
+        switching.some((f) => f.ghost),
+        "the replaced panel was not seen to go",
+      ).toBe(true);
+      expect(distinct(switching.map((f) => f.rowKids))).toEqual([2]);
+      expect(
+        distinct(switching.map((f) => f.zoom)),
+        "the canvas moved on a change of panel",
+      ).toHaveLength(1);
+      expect(Math.max(...switching.map((f) => f.landmarks)), "two panels at once").toBe(1);
+      await expect(page.getByRole("heading", { name: "Páginas de tu web" })).toBeVisible();
+      await expect(page.locator("[data-leaving]")).toHaveCount(0);
+
+      // 3. The press: a rail square gives under a held pointer, and comes back.
+      const square = page
+        .locator('[data-testid="rail"] button', { hasText: "Fotos" })
+        .locator("[data-rail-tile]");
+      const at = await pointIn(square);
+      await page.mouse.move(at.x, at.y);
+      await page.mouse.down();
+      await expect
+        .poll(() => square.evaluate((el) => getComputedStyle(el).transform))
+        .toBe("matrix(0.98, 0, 0, 0.98, 0, 0)");
+      await page.mouse.up();
+      await motionSettled(page);
+      expect(await square.evaluate((el) => getComputedStyle(el).transform)).toBe("none");
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+
+  it("con movimiento: un diálogo llega con el foco ya dentro y se va devolviéndolo; el aviso de borrar llega y se va", async () => {
+    const page = await (
+      await browser.newContext({ viewport: { width: 1440, height: 900 } })
+    ).newPage();
+    try {
+      await intoTheCanvas(page);
+      await motionSettled(page);
+      await page.getByRole("button", { name: "Estilo", exact: true }).click();
+      const opener = page.getByRole("button", { name: "Cambiar la letra de los titulares" });
+
+      // Arriving: it rises in, and focus is inside from its first frame — not after it lands.
+      const arriving = await dialogFrames(page, () => opener.click());
+      const open = arriving.filter((f) => f.modal);
+      expect(open.length).toBeGreaterThan(0);
+      expect(open[0]?.focusInside, "focus waited outside while the dialog arrived").toBe(true);
+      expect(
+        distinct(open.map((f) => f.cardOpacity.toFixed(2))).length,
+        `opacidades de la llegada: ${distinct(open.map((f) => f.cardOpacity.toFixed(2))).join(", ")}`,
+      ).toBeGreaterThan(2);
+      expect(open.at(-1)?.cardOpacity).toBe(1);
+
+      // Leaving: the real one is gone at once, focus is back on its opener, and a copy fades out
+      // that no reader can find.
+      const leaving = await dialogFrames(page, () => page.keyboard.press("Escape"));
+      const going = leaving.filter((f) => f.ghost);
+      expect(going.length, "no exit was drawn for a closing dialog").toBeGreaterThan(0);
+      expect(
+        going.every((f) => !f.modal),
+        "the dialog stayed while its copy left",
+      ).toBe(true);
+      expect(
+        going.every((f) => f.roles === 0),
+        "the copy can be found as a dialog",
+      ).toBe(true);
+      expect(distinct(going.map((f) => f.ghostOpacity.toFixed(2))).length).toBeGreaterThan(2);
+      expect(leaving.at(-1)?.ghost).toBe(false);
+      await expect(opener).toBeFocused();
+
+      // The notice after a delete rises in, and when «Deshacer» takes it away, a copy sinks out.
+      const frame = page.frameLocator(PREVIEW).first();
+      await page.getByRole("button", { name: "Cerrar el estilo" }).click();
+      await frame.locator('[data-section="sec-services"]').click();
+      await frame
+        .locator('[data-section="sec-services"] .rb-action[aria-label="Borrar esta sección"]')
+        .click();
+      const notice = page.getByText(/Has borrado la sección/);
+      await expect(notice).toBeVisible();
+      const noticeMoves = await notice.evaluate((words) =>
+        (words.parentElement?.getAnimations() ?? []).map((animation) => animation.playState),
+      );
+      expect(noticeMoves, "the notice appeared rather than arriving").toContain("running");
+      await motionSettled(page);
+      const ghosts: boolean[] = [];
+      await page.evaluate(() => {
+        const w = window as unknown as { __tf: boolean[]; __tfOn: boolean };
+        w.__tf = [];
+        w.__tfOn = true;
+        const tick = () => {
+          w.__tf.push(document.querySelector('[data-leaving="toast"]') !== null);
+          if (w.__tfOn) requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      });
+      await page.locator("button", { hasText: "Deshacer" }).click();
+      await expect(frame.locator('[data-section="sec-services"]')).toBeVisible();
+      await motionSettled(page);
+      ghosts.push(
+        ...(await page.evaluate(() => {
+          const w = window as unknown as { __tf: boolean[]; __tfOn: boolean };
+          w.__tfOn = false;
+          return w.__tf;
+        })),
+      );
+      expect(ghosts.some(Boolean), "the notice was not seen to go").toBe(true);
+      await expect(page.locator("[data-leaving]")).toHaveCount(0);
+      await expect(notice).toHaveCount(0);
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+
+  it("con movimiento reducido: todo llega y se va igual, sin recorrido y sin copias", async () => {
+    const page = await (
+      await browser.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: "reduce" })
+    ).newPage();
+    try {
+      await intoTheCanvas(page);
+      await motionSettled(page);
+
+      const marks = await markFrames(page, () =>
+        page.getByRole("button", { name: "Estilo", exact: true }).click(),
+      );
+      expect(distinct(marks).length, "the mark travelled").toBeLessThanOrEqual(2);
+      await expect(page.getByRole("heading", { name: "El estilo de toda la web" })).toBeVisible();
+
+      const switching = await panelFrames(page, () =>
+        page.getByRole("button", { name: "Páginas", exact: true }).click(),
+      );
+      expect(
+        switching.some((f) => f.ghost),
+        "a copy was drawn with reduced motion",
+      ).toBe(false);
+      expect(distinct(switching.map((f) => f.zoom))).toHaveLength(1);
+      await expect(page.getByRole("heading", { name: "Páginas de tu web" })).toBeVisible();
+
+      const closing = await panelFrames(page, () =>
+        page.getByRole("button", { name: "Cerrar las páginas" }).click(),
+      );
+      expect(closing.some((f) => f.ghost)).toBe(false);
+      expect(distinct(closing.map((f) => f.zoom))).toHaveLength(2);
+      await expect(page.getByRole("heading", { name: "Páginas de tu web" })).toHaveCount(0);
+
+      await page.getByRole("button", { name: "Estilo", exact: true }).click();
+      const arriving = await dialogFrames(page, () =>
+        page.getByRole("button", { name: "Cambiar la letra de los titulares" }).click(),
+      );
+      const open = arriving.filter((f) => f.modal);
+      expect(open[0]?.focusInside).toBe(true);
+      expect(
+        distinct(open.map((f) => f.cardOpacity.toFixed(2))).length,
+        "the dialog travelled",
+      ).toBeLessThanOrEqual(2);
+      expect(open.at(-1)?.cardOpacity).toBe(1);
+      const leaving = await dialogFrames(page, () => page.keyboard.press("Escape"));
+      expect(leaving.some((f) => f.ghost)).toBe(false);
+      expect(leaving.at(-1)?.modal).toBe(false);
+
+      // And a held control does not give: the press has no movement to remove, so it has none.
+      const square = page
+        .locator('[data-testid="rail"] button', { hasText: "Fotos" })
+        .locator("[data-rail-tile]");
+      const at = await pointIn(square);
+      await page.mouse.move(at.x, at.y);
+      await page.mouse.down();
+      await page.waitForTimeout(200); // a person holding the press, longer than the transition
+      expect(await square.evaluate((el) => getComputedStyle(el).transform)).toBe("none");
+      await page.mouse.up();
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+
+  it("una salida cuya animación no corre se va igual, a los 250 ms", async () => {
+    const page = await (
+      await browser.newContext({ viewport: { width: 1440, height: 900 } })
+    ).newPage();
+    try {
+      await intoTheCanvas(page);
+      await page.getByRole("button", { name: "Estilo", exact: true }).click();
+      await expect(page.getByRole("heading", { name: "El estilo de toda la web" })).toBeVisible();
+      await motionSettled(page);
+      // The case the fallback is for: no `animationend` will ever come.
+      await page.addStyleTag({ content: "[data-leaving] { animation: none !important; }" });
+      await page.evaluate(() => {
+        const w = window as unknown as { __gt: number[]; __gtOn: boolean };
+        w.__gt = [];
+        w.__gtOn = true;
+        const tick = (now: number) => {
+          if (document.querySelector('[data-leaving="panel"]')) w.__gt.push(now);
+          if (w.__gtOn) requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      });
+      await page.getByRole("button", { name: "Cerrar el estilo" }).click();
+      await expect(page.locator("[data-leaving]")).toHaveCount(0, { timeout: 2_000 });
+      const seen = await page.evaluate(() => {
+        const w = window as unknown as { __gt: number[]; __gtOn: boolean };
+        w.__gtOn = false;
+        return w.__gt;
+      });
+      expect(seen.length, "no copy was drawn at all, so nothing was proved").toBeGreaterThan(0);
+      const stood = (seen.at(-1) ?? 0) - (seen[0] ?? 0);
+      expect(stood, `the copy stood ${Math.round(stood)} ms`).toBeLessThan(400);
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+});

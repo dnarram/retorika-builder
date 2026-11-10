@@ -1,5 +1,6 @@
-import { type RefObject, useEffect, useRef } from "react";
+import { type RefObject, useEffect, useLayoutEffect, useRef } from "react";
 import { initialFocusIndex, tabDecision } from "./focusTrap.ts";
+import { leave } from "./leaving.ts";
 
 /**
  * The four things a modal dialog owes a keyboard.
@@ -22,7 +23,12 @@ import { initialFocusIndex, tabDecision } from "./focusTrap.ts";
  * The four:
  *
  * 1. **Focus moves in.** To the element the dialog asked for, else the first focusable thing, else
- *    the container itself — never left behind on the button that opened it.
+ *    the container itself — never left behind on the button that opened it. **At once, while the
+ *    card is still rising** (sprint 35 día 2): the sprint's plan said focus should wait for the card
+ *    to arrive, and it must not. The editor behind a dialog is not inert, so for those 180 ms focus
+ *    would stay on the button that opened it, and a second Return — the commonest fast hand there
+ *    is — would press «Descargar» again under its own warning. The walk «sprint 35 día 2» holds
+ *    focus inside the dialog from the first frame of its entrance.
  * 2. **Tab cycles inside.** Including Shift+Tab backwards off the first element.
  * 3. **Escape closes.** The one gesture every dialog on the web has.
  * 4. **Focus comes back.** To whatever had it before, because otherwise closing a dialog drops a
@@ -80,6 +86,18 @@ export function useFocusTrap(
   useEffect(() => {
     latestOnClose.current = onClose;
   });
+
+  /*
+   * **A dialog is seen to leave** (sprint 35 día 2). Every modal dialog in the editor draws its card
+   * as the only child of a full-screen backdrop and gives the card this hook's ref, so the backdrop
+   * is the card's parent — and the copy `leave` draws is that whole backdrop, card included, back
+   * in the place it had. A layout cleanup because it is the one that runs while the node is still on
+   * the page: React runs it before it removes the dialog, and a passive cleanup runs after.
+   *
+   * **Focus is not part of the exit**: the real dialog is gone in the frame it was closed, so the
+   * cleanup below gives focus back at once, to a page nothing covers any more. The copy is inert.
+   */
+  useLayoutEffect(() => () => leave(container.current?.parentElement, "dialog"), []);
 
   useEffect(() => {
     if (!active) return;

@@ -7916,3 +7916,95 @@ puede buscar; se repuso a mano, se comprobó con el tamaño del diff, y el guion
 
 **Suites.** `typecheck`, `lint`, `test` (3772, 39 más), invariantes (27), golden (26, cero cambios).
 **e2e completa antes de tocar nada: 291 verdes y 1 omitida, 1267 s.** Después: **293 verdes y 1 omitida, 1282 s, a la primera** — las 291 de antes y las 2 nuevas, 15 s más.
+
+### Día 2 — los paneles y los diálogos llegan y se van (PR de `feat/los-paneles-y-los-dialogos-llegan-y-se-van`)
+
+**React no tiene salida, así que lo que se cerraba parpadeaba.** Un componente que ya no está no tiene
+render que animar. La salida la dibuja algo que no es de React: **una copia del nodo, tomada en el
+instante antes de que React lo quite, dibujada donde estaba y que se va**, y luego se tira
+(`editor/leaving.ts`). Lo real se va en el fotograma en que se cierra, que es la mitad que importa a
+todo lo que mide: el lienzo recupera su sitio al empezar la salida (el ajuste 2), el foco vuelve a quien
+abrió el diálogo y el panel siguiente ya está. La copia se toma en la limpieza de *layout*, la única que
+React corre con el nodo aún en la página, y **se dibuja una microtarea después solo si el original de
+verdad se fue**: el modo estricto de React ensaya un desmontaje en cada montaje, y sin esa comprobación
+cada panel abierto en desarrollo habría dibujado su propia salida.
+
+**La copia es decoración y no puede ser otra cosa.** Inerte, oculta a la tecnología de asistencia, sin
+puntero; sin `id`, `data-testid`, `name`, `role`, referencias ARIA ni marcadores de posición; **sin texto**:
+cada nodo de texto pasa a un `<span>` vacío que pinta sus palabras con `::before`; y una raíz que es punto
+de referencia (`<aside>`, `<section>` con nombre) vuelve como `<div>`. Durante sus 120 ms nunca hay un
+segundo panel, un segundo diálogo ni un segundo «Descargar igualmente» que encontrar: lo que el día 1
+dejó dicho. **Nunca para quien pide menos movimiento**: lo que se cierra se va, como siempre. **Siempre
+termina**: en su propio `animationend` o a los 250 ms si la animación no corre.
+
+- **Paneles.** Un anfitrión en la ranura (`PanelHost`), con la identidad del panel (`panelKey`: el
+  cajón de campos o el elemento del raíl), deja la copia del último hijo de la fila al desmontarse. La
+  copia va al `body`, `fixed` sobre la caja que tenía, así que **la fila sigue teniendo los hijos que las
+  caminatas leen** (el lienzo primero, el panel después) y **el lienzo recupera su sitio al empezar la
+  salida**: una sola vez por cierre, ninguna al cambiar de panel. **Las capturas enseñaron el orden de
+  capas**: la primera copia se dibujaba encima del panel que llegaba, porque un panel sin posición se
+  pinta debajo de todo lo posicionado. Los paneles son ahora `relative z-[11]` y la copia va en la capa
+  10: sobre el lienzo, debajo del panel nuevo y de todo diálogo (20 y 30).
+- **Diálogos.** Toda tarjeta `[aria-modal]` sube 8 px sobre un fondo que se funde, **por el atributo y
+  no por una clase en cada uno**: los once ya los guarda `modalTrap.test.ts` y el duodécimo llegará igual
+  sin que nadie se acuerde. `useFocusTrap` deja la copia del fondo y su tarjeta, en su sitio.
+- **El aviso de borrar** sube al llegar (`ui-rise-in`) y baja al irse, por una referencia estable con
+  limpieza.
+- **El raíl**: **una sola marca** —el tinte y la raya del borde— que se desliza entre elementos con
+  `ui-slide`, medida como el indicador de las pestañas, en lugar de tres pistas por elemento que
+  aparecían. Se coloca sin recorrido la primera vez, para no llegar desde una esquina. El icono elegido
+  pasa al azul oscuro, que se lee sobre blanco mientras la marca viaja (la guarda de contraste reserva el
+  azul vivo para su tinte).
+- **La pulsación**: `ui-interactive` cede al apretar, un 2 % con puntero y un píxel con el dedo, solo
+  sin la preferencia de menos movimiento.
+
+**Una línea del plan, cambiada y por qué.** El plan decía que el foco entraría en el diálogo «cuando
+está, no antes». **No puede**: el editor detrás de un diálogo no es inerte, así que durante esos 180 ms
+el foco seguiría en el botón que lo abrió, y un segundo Intro —la mano rápida más común que hay—
+pulsaría «Descargar» otra vez debajo de su propio aviso; y `expectModalTrap` ya asevera el foco dentro
+en cuanto el diálogo aparece. **El foco entra al instante, mientras la tarjeta sube**, lo dice el propio
+gancho, y la caminata lo asevera desde el primer fotograma de la entrada. El saboteo de ese día es
+exactamente la versión del plan, y la pone en rojo.
+
+**Caminatas nuevas, «sprint 35 día 2 — lo que llega se va»**, que muestrean cada fotograma desde la
+pulsación hasta que nada se mueve, porque lo que se asevera es la forma del movimiento:
+
+1. **Con movimiento**: la marca del raíl recorre más de tres posiciones y acaba sobre el cuadro
+   elegido, al medio píxel; al cerrar «Estilo», una copia que pasa por más de dos opacidades, con el
+   panel ya fuera de la fila desde su primer fotograma, **el zoom final alcanzado mientras la copia
+   todavía sale** (llega uno o dos fotogramas después de que salga el panel, por el `ResizeObserver` de
+   la tarjeta y un render: lo que se asevera es «al empezar la salida, no al quitar la copia») y una sola
+   vez; ningún panel encontrable mientras la copia sale; al cambiar a «Páginas», un solo panel en la fila
+   en todo fotograma, el zoom quieto y la copia del anterior; y un cuadro del raíl apretado mide
+   `scale(0.98)` y vuelve.
+2. **Con movimiento**: un diálogo que sube, con el foco dentro desde su primer fotograma; al cerrarlo
+   con Escape, el real ya no está, la copia no se encuentra como diálogo, se funde y el foco vuelve a
+   quien lo abrió; el aviso de borrar llega moviéndose y se va al pulsar su «Deshacer».
+3. **Con movimiento reducido**: la marca no viaja, ningún panel ni diálogo deja copia, el diálogo
+   llega sin recorrido con el foco dentro, y un control apretado no cede.
+4. **El respaldo**: con las animaciones de salida anuladas, la copia se va igual antes de 400 ms.
+
+**Saboteos**, deshechos por guion: sin respaldo (rojas la prueba unitaria y la caminata 4); el foco tras
+la entrada, que es la versión del plan (rojas la 2 y la 3); la copia en el flujo (rojo: el panel seguía en
+la fila); la marca sin recorrido; sin pulsación; sin la comprobación del modo estricto. **Uno se quedó en
+verde y enseñó algo**: quitar la comprobación de movimiento reducido no movía la prueba unitaria, porque
+el doble de `matchMedia` contestaba que sí a cualquier consulta que contuviera «reduce», y
+«prefers-reduced-motion» ya lo contiene. Ahora compara la consulta exacta.
+
+**Visto en el navegador** con una sonda temporal, ya borrada: el panel que se cierra sale sobre el lienzo
+que ya ha recuperado su sitio; en un cambio, el panel nuevo encima y el viejo desvaneciéndose debajo; el
+diálogo a media llegada, con el foco ya en su primer control.
+
+**Lo que encontró la primera e2e completa, y por qué la copia no lleva texto.** Dos caminatas en
+rojo, con la misma causa: `aria-hidden` saca la copia de todo rol, pero no del *texto* de la página, y un
+localizador por texto, una etiqueta encontrada por sus palabras o el buscar del navegador leen nodos de
+texto. Durante los 120 ms de un selector de letra cerrándose, «Spectral» (y «Karla 2») estaba dos veces en
+la página, y las dos caminatas que leen el panel por su texto justo después se encontraban dos. El
+arreglo está en la copia y no en las caminatas: sus palabras se pintan con `::before { content:
+attr(data-leaving-text) }` y no se escriben. Se ven iguales —comprobado en captura, con las letras de la
+galería incluidas— y nada que lea texto las encuentra. Con prueba unitaria y su saboteo.
+
+**Suites.** `typecheck`, `lint` (73 avisos, los de `main`: uno de orden de especificidad que añadí se
+resolvió con `:where()`), `test` (3784, 12 nuevas), invariantes (27), golden (26, cero cambios).
+**e2e completa**: la primera pasada, 295 verdes y las 2 rojas del texto de la copia, 1311 s; tras el
+arreglo, **297 verdes y 1 omitida, 1314 s** — las 293 de antes y las 4 nuevas.

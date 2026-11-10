@@ -198,10 +198,12 @@ describe("brand and danger as text", () => {
 
   /**
    * **And no text reaches for the bright pair.** Read off the components, the way the canvas
-   * guards above read `Editor.tsx`. `text-ui-danger` has no use left. `text-ui-brand` keeps three,
-   * and all three colour an *icon* on its own tint — the rail's chip and the two device buttons —
-   * which is a graphic and asks 3:1, so each must sit beside `bg-ui-brand-surface`; a fourth that
-   * colours words would not.
+   * guards above read `Editor.tsx`. `text-ui-danger` has no use left. `text-ui-brand` keeps two,
+   * and both colour an *icon* on its own tint — the two device buttons — which is a graphic and
+   * asks 3:1, so each must sit beside `bg-ui-brand-surface`; a third that colours words would not.
+   * The rail's chosen icon was the third until sprint 35 día 2, when its tint became the rail's one
+   * sliding mark and the icon, which now stands on white while the mark travels, moved to the deep
+   * blue.
    */
   it("no component colours its words with the bright brand or danger", () => {
     const sources = ["editor", "questionnaire", "account", "auth", "app"].flatMap((dir) =>
