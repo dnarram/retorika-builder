@@ -8008,3 +8008,92 @@ galería incluidas— y nada que lea texto las encuentra. Con prueba unitaria y 
 resolvió con `:where()`), `test` (3784, 12 nuevas), invariantes (27), golden (26, cero cambios).
 **e2e completa**: la primera pasada, 295 verdes y las 2 rojas del texto de la copia, 1311 s; tras el
 arreglo, **297 verdes y 1 omitida, 1314 s** — las 293 de antes y las 4 nuevas.
+
+### Día 3 — las herramientas del lienzo se mueven (PR de `feat/las-herramientas-del-lienzo-se-mueven`)
+
+**Las secciones se deslizan** (el ajuste 1 de David). Un parche que cambia el orden de las secciones de
+la página ya dibujada —subir, bajar, insertar, duplicar, borrar— se aplica dentro de la transición de
+vista del propio documento del lienzo (`editor/sectionSlide.ts`), y cada sección a la vista viaja de
+donde estaba a donde está, 180 ms con la curva de forma. **Lo que el ajuste no decía y el código
+pedía**: una transición de vista llama a su actualización un fotograma después, porque el navegador
+tiene que fotografiar antes la página como estaba. Así que el parche entero, cromo incluido, va dentro de
+esa actualización. La decisión se toma antes y es exacta: se renderiza y se compara el orden de
+secciones vivo con el nuevo (`shouldSlide`, pura y probada). Y si algo cambió en ese fotograma, la
+actualización renderiza otra vez en lugar de poner una página más vieja encima de una más nueva. Una
+letra escrita, un color o una foto no cambian el orden y se aplican al instante, como siempre; otra
+página tampoco desliza.
+
+**Medido antes de aceptarlo, como pedía el ajuste.** Una web de veinte secciones, «Subir» en la
+undécima: **el fotograma más largo, 16,8 ms con transición y 16,8 ms sin ella**, ningún fotograma de más
+de 20 ms y ningún fotograma largo. Cabe en un fotograma, así que no hay FLIP de reserva. Ayuda que solo
+se nombran las secciones a la vista y las nuevas (tres en la medida): lo que queda fuera de la pantalla
+no se fotografía.
+
+**Lo que se ve y lo que no.** La página alrededor no se funde (el grupo de la raíz a 0 s, su imagen vieja
+oculta y la nueva sin animación: cualquiera de las dos defensas basta sola, y el saboteo tuvo que quitar
+las tres reglas para ver el fundido). Los huecos de «Añadir sección aquí» esperan ocultos mientras las
+secciones viajan, porque una píldora quieta en su sitio final con una sección cruzándola se leía como un
+choque. Y una pulsación atraviesa la capa de la transición hasta la página, cuyos elementos ya están en
+su sitio final: un clic durante los 180 ms cae donde caerá después (el día 1 lo dejó dicho).
+
+**Lo que se abre crece, y lo que se cierra se encoge.** El menú de insertar, las ventanas de composición
+y de escalar y la barra de texto llegan con `scale(0.96)` y opacidad en `--ui-fast`, desde el borde del
+que se abrieron, por la propiedad `scale`, que compone con la `transform` que centra un menú. **Los
+verbos de una sección llegan solo por opacidad** (abajo, por qué). **Solo cuando alguien los abre**: el lienzo los vuelve a dibujar tras
+cada parche, y una entrada en cada letra sería movimiento para nada. Lo que la persona cierra se encoge
+en la mitad de tiempo, como copia (`leave`, del día 2, ahora con los tipos `popup` y `zone` y sus reglas
+en la hoja del lienzo). **Un elemento soltado se asienta** en su celda desde donde lo dejó la mano
+(`translate` por la API de animaciones, con la duración de `CHROME_SCALE.fast`), y **la zona que recibe
+un menú arrastrado lo acusa una vez**: un anillo que crece y se apaga, el único pulso del lienzo, y el
+rótulo que seguía a la mano se funde.
+
+**Lo que el día encontró.**
+
+- **La quietud del lienzo alcanzaba al cromo.** La regla de la ADR 0062 §5, `main > .rb-section > *
+  { animation: none !important }`, se escribió para la página y también apagaba los verbos y las
+  ventanas, que son hijos de una sección. La primera pasada de las caminatas lo enseñó: los verbos
+  llevaban su clase de llegada con `animation-name: none`. La regla excluye ahora el cromo
+  (`:not([data-rb-chrome])`) y sigue rechazando todo lo que la página publicada anima, que su prueba
+  comprueba contra la hoja del renderer. Nota fechada en la ADR 0062.
+- **Un objetivo que se va a pulsar no debe moverse bajo la mano.** La primera e2e completa dio dos
+  rojos deterministas: un verbo medido justo al elegir su sección daba 31 px en vez de 32, y al abrir
+  «Campos» a 1024 la sección acababa 14 px fuera de su sitio. Muestreado fotograma a fotograma: mientras
+  el grupo de verbos crecía, Playwright lo daba por inestable y reintentaba su pulsación desplazando el
+  marco a otra alineación cada vez (1948 → 862 → 1412 → 1962). Una persona que pulse en esos 120 ms
+  pulsaría un botón que aún crece. Los verbos se dibujan donde ya está el puntero, así que llegan por
+  opacidad con la caja quieta; las ventanas, que se leen antes de pulsarse, conservan la escala.
+- **Una copia que conserva sus clases puede encontrarse por clase, y en el lienzo todo se busca por
+  clase.** La segunda e2e completa: `.rb-menu-search` resolvió a dos elementos, el menú abierto y la
+  copia del que se cerraba. Peor que una caminata: `drawGaps` busca «el menú abierto» como
+  `.rb-gap .rb-menu` para reabrirlo tras un redibujado, y un parche en los 60 ms de la salida habría
+  reabierto un menú recién cerrado. En el lienzo, la copia de un menú se dibuja ahora dentro de una
+  **raíz de sombra cerrada**, sobre un anfitrión sin caja (`display: contents`), con las hojas del cromo
+  del marco adoptadas como una hoja construida: se pinta igual y ninguna consulta la alcanza. La copia de
+  la zona no va a la sombra, porque nada busca una zona tras soltar y su pulso es lo que se mide. Y la
+  espera del arnés aguarda también a esos anfitriones, porque una animación dentro de una sombra cerrada
+  no sale en ningún `getAnimations()`.
+- **El guarda del día 1 confundía `animation: none` con un movimiento**: `\s*(?!none)` deja que el
+  espacio se devuelva y la anticipación lee « none». Corregido a `:(?!\s*none)`.
+- **La guarda de contraste buscaba la primera mención de la preferencia de movimiento** en
+  `Editor.tsx`, que ahora es el `matchMedia` del asentamiento; busca la regla `@media` misma.
+
+**Caminatas nuevas, «sprint 35 día 3 — las herramientas del lienzo se mueven»**, que muestrean cada
+fotograma del documento del lienzo (su `getAnimations()` lista los pseudoelementos de la transición):
+
+1. Los verbos llegan al elegir una sección; al subirla, los grupos de las secciones viajan y la raíz no
+   se funde; la misma subida con movimiento reducido deja cada sección **exactamente en el mismo sitio**;
+   el menú de insertar llega y, al cerrarlo, una copia se va y no queda.
+2. La ventana de escalar llega desde su verbo; un elemento soltado viaja hasta su celda y queda sin
+   animación alguna, con la colocación escrita.
+3. La zona que recibe un menú pulsa con una sola iteración, y nada queda en pie.
+4. Con movimiento reducido: nada desliza, el menú no deja copia y todo llega a su sitio.
+
+**Saboteos**, deshechos por guion: sin deslizar (rojo: «the sections jumped»); la raíz fundiéndose (rojo
+solo al quitar las tres defensas); sin asentar; sin pulso; los verbos sin llegada; y, en la prueba
+unitaria, deslizar otra página.
+
+**Suites.** `typecheck`, `lint` (73 avisos, los de `main`), `test` (3793, 9 nuevas), invariantes (27),
+golden (26, cero cambios). **e2e completa**: la primera pasada, 2 rojas deterministas (los verbos que
+crecían); la segunda, una roja real (la copia encontrada por clase) y nueve que no eran del código —
+la máquina entró en reposo con la tapa cerrada a las 15:25 (`pmset`: «Clamshell Sleep», con batería),
+la pasada duró 9582 s y los temporizadores de esas nueve pasaron de 900 000 ms —; la tercera, **301 verdes y 1 omitida, 1350 s** — las 297 de antes y las 4 nuevas.
