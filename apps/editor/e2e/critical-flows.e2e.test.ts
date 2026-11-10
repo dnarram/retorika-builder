@@ -711,13 +711,27 @@ async function settledIn(frame: Frame): Promise<void> {
  * on it would hang the walk until its timeout.
  */
 function everythingWithAnEnd(): Promise<unknown> {
-  return Promise.all(
-    document
+  // **And every exit copy gone** (sprint 35 día 3). The canvas draws a closing menu's copy inside a
+  // closed shadow root (`editor/leaving.ts`), so no query can find it — and its animation is in no
+  // `getAnimations()` either. Its host is on the page, marked, until the exit ends (at most the
+  // copy's 250 ms fallback); bounded here at a second so a stray host cannot hang a walk.
+  const copiesGone = new Promise<void>((resolve) => {
+    const started = performance.now();
+    const look = () => {
+      if (!document.querySelector("[data-leaving-host]") || performance.now() - started > 1_000) {
+        resolve();
+      } else requestAnimationFrame(look);
+    };
+    look();
+  });
+  return Promise.all([
+    copiesGone,
+    ...document
       .getAnimations()
       .filter((animation) => animation.effect?.getTiming().iterations !== Infinity)
       .filter((animation) => animation.timeline === document.timeline)
       .map((animation) => animation.finished.catch(() => undefined)),
-  );
+  ]);
 }
 
 /**
@@ -26756,7 +26770,8 @@ describe("sprint 35 día 3 — las herramientas del lienzo se mueven", () => {
             .length,
           rootFades: running.filter((a) => /::view-transition-(old|new)\(root\)/.test(pseudo(a)))
             .length,
-          copies: document.querySelectorAll("[data-leaving]").length,
+          // The canvas's copies are in closed shadow roots; their hosts are what the page holds.
+          copies: document.querySelectorAll("[data-leaving], [data-leaving-host]").length,
           arriving: running.filter((a) =>
             (a.effect as KeyframeEffect | null)?.target?.classList?.contains("rb-arrives"),
           ).length,

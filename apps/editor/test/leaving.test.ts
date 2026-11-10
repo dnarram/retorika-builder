@@ -149,6 +149,27 @@ describe("it is drawn only for a node that really left", () => {
   });
 });
 
+describe("in the canvas, the copy is out of every query's reach", () => {
+  it("keeps a closing menu's copy where no class selector — the walks', or the editor's own — finds it", async () => {
+    document.head.innerHTML = '<style data-rb-chrome="1">.rb-menu { position: absolute; }</style>';
+    document.body.innerHTML = `
+      <div class="rb-gap"><button class="rb-pill">Añadir sección aquí</button>
+        <div class="rb-menu" data-rb-chrome="1"><input class="rb-menu-search" type="search" /></div>
+      </div>`;
+    const menu = document.querySelector(".rb-menu") as HTMLElement;
+    leave(menu, "popup");
+    menu.remove();
+    await Promise.resolve();
+    const host = document.querySelector<HTMLElement>('[data-leaving-host="popup"]');
+    expect(host, "no copy was drawn").not.toBeNull();
+    expect(host?.parentElement?.className).toBe("rb-gap");
+    // What `drawGaps` asks to reopen a menu after a redraw, and what a walk fills: nothing.
+    expect(document.querySelector(".rb-gap .rb-menu")).toBeNull();
+    expect(document.querySelectorAll(".rb-menu-search")).toHaveLength(0);
+    expect(host?.shadowRoot, "an open shadow root can be queried").toBeNull();
+  });
+});
+
 describe("it always ends", () => {
   it("on its own animationend, and not on a child's", async () => {
     const node = panel();
