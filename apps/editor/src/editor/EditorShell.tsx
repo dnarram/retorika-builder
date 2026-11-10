@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { type RefObject, useEffect, useLayoutEffect, useRef, useState } from "react";
 import es from "../locales/es.json" with { type: "json" };
 import { accountSentence } from "./accountSentence.ts";
 import type { SwitchNotice } from "./designTools.ts";
+import { leave } from "./leaving.ts";
 import { DESKTOP_LAYOUT_WIDTH, desktopLayoutWidth, NARROWEST_WIDTH } from "./overflowCheck.ts";
 import { overscrollFor } from "./overscroll.ts";
 
@@ -298,14 +299,54 @@ export type RailItemId =
  * the rail's inner edge drawn by `RailButton`. One of the three is enough on its own, which is
  * what keeps it legible to someone who cannot separate the blue from the grey.
  */
+/**
+ * **The slot's hold on the panel it shows, so a panel that goes is seen to go** (sprint 35 día 2).
+ *
+ * It renders its panel and nothing else — no box of its own, so the row keeps exactly the children
+ * the walks read: the canvas first, the open panel last. Keyed by `panelKey`, it is removed when
+ * the panel is closed or replaced by another, and its layout cleanup runs in the instant before
+ * React removes the panel's own node: the one moment that node is still on the page with its size
+ * and scroll, which is what `leave` copies to draw its exit. Removal before insertion, in React's
+ * commit, is what makes «the row's last child» the panel going away even when the next one is
+ * arriving in the same render.
+ *
+ * **The room goes with the panel, not with its copy** — David's adjustment 2. The copy is drawn in
+ * the body over the box the panel had, so the canvas takes the room back on the first frame of the
+ * exit and the zoom changes once; a panel replaced by another keeps the slot at its width and the
+ * zoom does not change at all.
+ */
+function PanelHost({
+  row,
+  children,
+}: {
+  row: RefObject<HTMLElement | null>;
+  children: React.ReactNode;
+}) {
+  useLayoutEffect(
+    () => () => {
+      const box = row.current;
+      const node = box?.lastElementChild;
+      if (box && node && node !== box.firstElementChild) leave(node, "panel", box);
+    },
+    [row],
+  );
+  return <>{children}</>;
+}
+
 function RailIcon({ icon, active }: { icon: keyof typeof RAIL_ICONS; active: boolean }) {
   return (
     <span
+      data-rail-tile=""
       className={
         "ui-interactive flex h-[46px] w-[46px] items-center justify-center rounded-ui border phone:h-7 phone:w-10 " +
         "outline-2 outline-offset-2 outline-transparent group-focus-visible:outline-ui-brand " +
+        // The chosen item's tint is the rail's one sliding mark, under this square (sprint 35 día
+        // 2), so the square itself stays clear. Its icon is the deep blue rather than the bright:
+        // for the 180 ms the mark is on its way the icon stands on white, and the deep blue reads
+        // on white and on the tint alike, which the bright one does not as words (it is a graphic
+        // here, and the guard in `chromeContrast.test.ts` keeps the bright one for its own tint).
         (active
-          ? "border-transparent bg-ui-brand-surface text-ui-brand shadow-ui-1"
+          ? "border-transparent bg-transparent text-ui-brand-deep"
           : "border-transparent bg-transparent text-ui-muted group-hover:bg-ui-bg group-hover:text-ui-ink")
       }
     >
@@ -395,16 +436,6 @@ function RailButton({
             } as React.CSSProperties)
       }
     >
-      {/* The third cue for the chosen item: a rule on the rail's inner edge, the convention a
-          vertical navigation uses to say «you are here». Hidden from assistive technology — it
-          repeats what `aria-pressed` already says. */}
-      <span
-        aria-hidden="true"
-        className={
-          "ui-interactive absolute top-1/2 left-0 h-7 w-[3px] -translate-y-1/2 rounded-full bg-ui-brand phone:hidden " +
-          (active ? "opacity-100" : "opacity-0")
-        }
-      />
       <RailIcon icon={icon} active={active} />
       <RailLabel label={label} active={active} />
     </button>
@@ -703,6 +734,7 @@ export function EditorShell({
   onDismissDesignTools,
   onDesignToolsChange,
   panel,
+  panelKey,
   children,
   overlay,
   onZoomChange,
@@ -790,6 +822,12 @@ export function EditorShell({
    * than over it, which is how mockup 13 draws the style panel: the preview narrows and stays
    * visible while a choice is being made about how it looks. */
   panel?: React.ReactNode;
+  /**
+   * Which panel `panel` is — the rail item it belongs to, or the fields drawer — so the slot can
+   * tell a panel being replaced by another from the same panel drawn again with new props
+   * (sprint 35 día 2). The first leaves; the second updates in place, as it always did.
+   */
+  panelKey?: string;
   children: React.ReactNode;
 }) {
   /**
@@ -882,6 +920,59 @@ export function EditorShell({
    * otherwise it flashes at x=0 on first paint before jumping to the real tab.
    */
   const tabStrip = useRef<HTMLDivElement>(null);
+  /** The canvas-and-panel row, which `PanelHost` asks for the panel it is about to lose. */
+  const panelRow = useRef<HTMLElement>(null);
+
+  /**
+   * Where the rail's one mark has to be: the chosen item's square, in the rail's own coordinates
+   * (sprint 35 día 2). Measured like the tab marker above and for the same reasons — the squares'
+   * positions depend on the labels, the window and which items the design tools add — and
+   * `travels` only from the second placement on, so the first one does not slide in from a corner.
+   */
+  const railNav = useRef<HTMLElement>(null);
+  const [railMark, setRailMark] = useState<{
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+    travels: boolean;
+  } | null>(null);
+
+  // `rail` moves the mark to another item and `designTools` adds or removes two of them; the body
+  // reads them through the DOM, which is why Biome cannot see them used.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: see the note above this line
+  useLayoutEffect(() => {
+    const nav = railNav.current;
+    if (!nav) return;
+    const measure = () => {
+      const tile = nav.querySelector<HTMLElement>('button[aria-pressed="true"] [data-rail-tile]');
+      const button = tile?.closest("button");
+      if (!tile || !button) {
+        setRailMark(null);
+        return;
+      }
+      const next = {
+        left: button.offsetLeft + tile.offsetLeft,
+        top: button.offsetTop + tile.offsetTop,
+        width: tile.offsetWidth,
+        height: tile.offsetHeight,
+      };
+      setRailMark((previous) =>
+        previous &&
+        previous.left === next.left &&
+        previous.top === next.top &&
+        previous.width === next.width &&
+        previous.height === next.height
+          ? previous
+          : { ...next, travels: previous !== null },
+      );
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(nav);
+    for (const child of nav.children) observer.observe(child);
+    return () => observer.disconnect();
+  }, [rail, designTools]);
   const currentTab = useRef<HTMLButtonElement>(null);
   const [marker, setMarker] = useState<{ left: number; width: number } | null>(null);
 
@@ -1336,6 +1427,7 @@ export function EditorShell({
             switch, so the control that turns the studio off was behind the one edge nothing could
             scroll. It has 15px to spare at 720. */}
         <nav
+          ref={railNav}
           data-testid="rail"
           // Named, because «navegación» alone says nothing about which: these are the panels the
           // editor opens beside the canvas, and the design-tools switch that adds two of them.
@@ -1344,8 +1436,37 @@ export function EditorShell({
           // row with icon and word, above the home indicator. The same five buttons — nothing is
           // added or taken away by the move; the studio items and the switch are already absent
           // below 1024 (ADR 0025 §5). An 80px rail took a quarter of a 320px screen.
-          className="flex w-20 shrink-0 flex-col items-center gap-3.5 overflow-y-auto border-r border-ui-border bg-ui-surface py-3.5 phone:fixed phone:inset-x-0 phone:bottom-0 phone:z-20 phone:h-auto phone:w-auto phone:flex-row phone:items-stretch phone:justify-around phone:gap-0 phone:overflow-visible phone:border-t phone:border-r-0 phone:pt-1 phone:pb-[calc(4px+env(safe-area-inset-bottom))]"
+          className="relative flex w-20 shrink-0 flex-col items-center gap-3.5 overflow-y-auto border-r border-ui-border bg-ui-surface py-3.5 phone:fixed phone:inset-x-0 phone:bottom-0 phone:z-20 phone:h-auto phone:w-auto phone:flex-row phone:items-stretch phone:justify-around phone:gap-0 phone:overflow-visible phone:border-t phone:border-r-0 phone:pt-1 phone:pb-[calc(4px+env(safe-area-inset-bottom))]"
         >
+          {/* **The chosen item's mark: one for the whole rail, and it travels** (sprint 35 día 2).
+              It used to be three cues on each item, appearing and disappearing — the square's tint,
+              its shadow and a rule on the rail's inner edge. Now the tint and the rule are one
+              thing that slides from the item that was chosen to the one that is, as the page tabs'
+              indicator does, measured the same way (`offsetLeft`/`offsetTop`, inside the rail's
+              own scroll). The label keeps its weight and colour: the words still say which, without
+              the mark. Hidden from assistive technology: `aria-pressed` already says it. Placed
+              without travel the first time, so it does not slide in from the corner on load. */}
+          <span
+            aria-hidden="true"
+            data-testid="rail-mark"
+            className={`pointer-events-none absolute top-0 left-0 rounded-ui bg-ui-brand-surface shadow-ui-1 ${
+              railMark?.travels ? "ui-slide" : ""
+            }`}
+            style={{
+              width: railMark?.width ?? 0,
+              height: railMark?.height ?? 0,
+              transform: `translate(${railMark?.left ?? 0}px, ${railMark?.top ?? 0}px)`,
+              opacity: railMark ? 1 : 0,
+            }}
+          >
+            {/* The rule on the inner edge, «you are here» in a vertical navigation, riding with
+                the tint: at the rail's left edge whatever the square's offset. Not on a phone,
+                where the rail is a bar along the bottom and has no inner edge. */}
+            <span
+              className="absolute top-1/2 h-7 w-[3px] -translate-y-1/2 rounded-full bg-ui-brand phone:hidden"
+              style={{ left: -(railMark?.left ?? 0) }}
+            />
+          </span>
           <RailButton
             icon="sections"
             label={es["editor.rail.sections"]}
@@ -1428,6 +1549,7 @@ export function EditorShell({
         {/* The wide side gutters centre the canvas when it is alone; with a panel open they would
             only squeeze the preview, so they go. */}
         <main
+          ref={panelRow}
           data-testid="canvas-and-panel"
           // Named, because the canvas holds the client's own page and that page has a `<main>` of
           // its own: two unnamed `main` landmarks is axe's `landmark-unique`, measured the moment
@@ -1514,7 +1636,11 @@ export function EditorShell({
               </div>
             </div>
           </div>
-          {panel}
+          {panel ? (
+            <PanelHost key={panelKey ?? "panel"} row={panelRow}>
+              {panel}
+            </PanelHost>
+          ) : null}
         </main>
       </div>
     </div>

@@ -145,6 +145,7 @@ import { GUIDE_ZONE, type Guide, guidesFor, type Rect } from "../editor/guides.t
 import { HANDLE_TOUCH, handlesFor } from "../editor/handles.ts";
 import { headerStateFor, headerStylePatch } from "../editor/headerState.ts";
 import { ACCEPTED_IMAGE_ACCEPT } from "../editor/imageBytes.ts";
+import { leave } from "../editor/leaving.ts";
 import { toolbarFamilyLabel } from "../editor/letterGallery.ts";
 import { logoLuminanceOf } from "../editor/logoImage.ts";
 import { LOOK_AHEAD_DEADLINE_MS, lookAheadStep } from "../editor/lookAhead.ts";
@@ -252,6 +253,18 @@ function addressKey(sectionId: string, elementId: string): string {
  * and owns the timer that clears a non-persistent toast, since that has to survive this
  * component unmounting if the user leaves the editor mid-toast.
  */
+/**
+ * **The notice after a delete leaves as it arrived** (sprint 35 día 2): it rises into place
+ * (`ui-rise-in`) and, when it goes — «Deshacer», its own cross, or its time running out — a copy
+ * sinks back the eight pixels while the real one is already gone. A module-level function so the
+ * ref is the same on every render, and React calls its cleanup once, when the notice is removed,
+ * in the instant before the node leaves the page.
+ */
+function leavesAsNotice(node: HTMLDivElement | null): (() => void) | undefined {
+  if (!node) return undefined;
+  return () => leave(node, "toast");
+}
+
 export interface DeleteToast {
   sectionName: string;
   persistent: boolean;
@@ -8731,6 +8744,11 @@ export function Editor({
         setAskingDesignTools(false);
         onDesignToolsChange(on);
       }}
+      // Which panel this is, so the slot can tell one panel replacing another — which leaves —
+      // from the same panel with new props, which updates in place (sprint 35 día 2). The drawer
+      // is «fields» whatever section it shows: moving from one section's fields to another's is
+      // the drawer changing its contents, not a drawer closing and another opening.
+      panelKey={fieldsFor && findSection(doc, fieldsFor) ? "fields" : effectiveRail}
       panel={
         /**
          * **The fields drawer is the first branch, and it is in this slot at all since sprint 24
@@ -9049,7 +9067,10 @@ export function Editor({
         {previewFrame()}
       </div>
       {toast ? (
-        <div className="fixed bottom-[34px] left-1/2 z-10 flex max-w-[calc(100vw-32px)] -translate-x-1/2 flex-wrap items-center gap-5 rounded-[13px] bg-[#0F172A] py-3.5 pr-3.5 pl-5 shadow-[0_10px_30px_rgba(15,23,42,0.28)] phone:bottom-[calc(72px+env(safe-area-inset-bottom))]">
+        <div
+          ref={leavesAsNotice}
+          className="ui-rise-in fixed bottom-[34px] left-1/2 z-10 flex max-w-[calc(100vw-32px)] -translate-x-1/2 flex-wrap items-center gap-5 rounded-[13px] bg-[#0F172A] py-3.5 pr-3.5 pl-5 shadow-[0_10px_30px_rgba(15,23,42,0.28)] phone:bottom-[calc(72px+env(safe-area-inset-bottom))]"
+        >
           <span className="inline-flex items-center gap-2.5 text-[15px] font-medium text-white">
             <svg
               width="18"

@@ -89,6 +89,16 @@ function isSelector(line: string): boolean {
   return line.includes("'[aria-modal") || line.includes('"[aria-modal');
 }
 
+/**
+ * Whether a line is the attribute's *name* as a string alone in a list of attribute names — the
+ * ones the exit copy of a closing dialog takes off itself (`editor/leaving.ts`, sprint 35 día 2),
+ * so that for the 120 ms of its exit it can never be found as a second dialog. A name in a list is
+ * no dialog: nothing renders it.
+ */
+function isAttributeName(line: string): boolean {
+  return /^\s*"aria-modal",?\s*$/.test(line);
+}
+
 /** A line whose entire content is the attribute, which is how every dialog in this repository
  * declares it and how the formatter keeps it. */
 const ATTRIBUTE_LINE = 'aria-modal="true"';
@@ -129,7 +139,7 @@ const modals: Modal[] = sourceFiles(SRC).flatMap((file) => {
       });
       return;
     }
-    if (isComment(line) || isSelector(line)) return;
+    if (isComment(line) || isSelector(line) || isAttributeName(line)) return;
     // Neither a dialog this test can read, nor prose, nor a selector. Reported rather than ignored:
     // a guard whose unknown shapes pass silently is how the backlog row went stale in the first
     // place.

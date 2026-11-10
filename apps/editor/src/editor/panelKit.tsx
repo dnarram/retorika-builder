@@ -66,12 +66,20 @@ export const PANEL_WIDTH = "w-[340px] phone:w-auto";
  * indistinguishable from a second page. `rounded-b-none` because a sheet's bottom edge is the
  * screen's own edge, not a corner.
  *
+ * **Positioned, one layer over the canvas and under every dialog** (`relative z-[11]` beside the
+ * dialogs' 20 and 30; sprint 35 día 2). A panel replaced by another is seen to go by a copy drawn
+ * where it was, at layer 10 (`editor/leaving.ts`): over the canvas, so a closing panel is seen
+ * leaving across the room the canvas has just taken back, and under the panel arriving in its place,
+ * which in a cross is the one that has to be read. An unpositioned panel is painted under every
+ * positioned thing, the copy included, which is how the first version drew the old panel over the
+ * new. On a phone the sheet is `fixed` at 20 already, which keeps the same order.
+ *
  * `ui-enter-right` still runs on a phone — `translateX` under a `scale()`-free sheet reads as a
  * slide up its own short travel, not sideways, because the sheet's starting position (off past the
  * bar) is below the fold either way. Nothing here depends on the direction reading correctly; only
  * that something enters rather than appearing.
  */
-export const panelCard = `ui-enter-right flex shrink-0 flex-col rounded-ui-lg border border-ui-border bg-ui-surface shadow-ui-1 ${panelShell} phone:fixed phone:inset-x-0 phone:bottom-[calc(56px+env(safe-area-inset-bottom))] phone:z-20 phone:max-h-[70dvh] phone:rounded-b-none phone:border-b-0 phone:shadow-ui-3`;
+export const panelCard = `ui-enter-right relative z-[11] flex shrink-0 flex-col rounded-ui-lg border border-ui-border bg-ui-surface shadow-ui-1 ${panelShell} phone:fixed phone:inset-x-0 phone:bottom-[calc(56px+env(safe-area-inset-bottom))] phone:z-20 phone:max-h-[70dvh] phone:rounded-b-none phone:border-b-0 phone:shadow-ui-3`;
 
 /**
  * The X that closes a panel, which five of the six rail panels and the fields panel all drew by

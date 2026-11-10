@@ -210,6 +210,30 @@
   transition-property: color, background-color, border-color, box-shadow, transform, opacity;
   transition-duration: var(--ui-fast);
   transition-timing-function: var(--ui-ease);
+
+  /*
+   * **A control answers the press itself, not only the release** (sprint 35 día 2). Held down, it
+   * gives a little — under a pointer by shrinking 2 %, which reads as being pushed; under a finger,
+   * where the finger covers the control and a shrink would be under it, by sinking a pixel. Gone
+   * the moment the press ends, on the same 120 ms curve every control already wears.
+   *
+   * **`transform` and never `scale` or `translate`**: those two are separate properties in this
+   * Tailwind and a control positioned with `-translate-x-1/2` keeps its own. Only for somebody who
+   * has not asked for less movement — the global block below would still apply it at once, which is
+   * a jump rather than nothing.
+   */
+  @media (prefers-reduced-motion: no-preference) {
+    @media (hover: hover) {
+      &:active:not(:disabled) {
+        transform: scale(0.98);
+      }
+    }
+    @media (hover: none) {
+      &:active:not(:disabled) {
+        transform: translateY(1px);
+      }
+    }
+  }
 }
 
 /**
@@ -336,6 +360,95 @@
 
 @utility ui-fade-in {
   animation: ui-fade-in var(--ui-base) var(--ui-ease-shape) both;
+}
+
+/**
+ * ## What arrives over the editor, and what leaves it (sprint 35 día 2)
+ *
+ * **A dialog rises into place over a backdrop that fades in**, and the notice after a delete rises
+ * from where it sits. Eight pixels and `--ui-base` on the shape curve, the way a surface arrives;
+ * the backdrop on `--ui-fast`, because it only has to be there. Opacity and `transform`, never a
+ * layout property, and `backwards` so nothing is owned once it has arrived.
+ *
+ * **Every modal dialog, by the attribute that makes it one** rather than by a class on each: the
+ * editor has eleven, `test/modalTrap.test.ts` already holds every one of them to `aria-modal`, and
+ * the twelfth will arrive like the others without anybody remembering this. The backdrop is the
+ * element that holds the dialog, which every one of them draws as its parent.
+ */
+@keyframes ui-rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+@utility ui-rise-in {
+  animation: ui-rise-in var(--ui-base) var(--ui-ease-shape) backwards;
+}
+
+:where([aria-modal="true"]) {
+  animation: ui-rise-in var(--ui-base) var(--ui-ease-shape) backwards;
+}
+
+:where(:has(> [aria-modal="true"])) {
+  animation: ui-fade-in var(--ui-fast) var(--ui-ease) backwards;
+}
+
+/**
+ * **The exits are copies** (`editor/leaving.ts`): the real panel, dialog or notice is gone in the
+ * frame it was closed, and an inert copy marked `data-leaving` plays its way out where it was, on
+ * `--ui-fast` — leaving is quicker than arriving, because nobody has to read what is going. A panel
+ * slides back the way it came; on a phone, where it is a sheet, it sinks. A dialog's card and the
+ * notice sink the eight pixels they rose, as a backdrop fades. `forwards`, because the copy is
+ * removed on its own `animationend` and must not flash back to full opacity for the frame between.
+ */
+@keyframes ui-leave-right {
+  to {
+    opacity: 0;
+    transform: translateX(14px);
+  }
+}
+
+@keyframes ui-leave-down {
+  to {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+}
+
+@keyframes ui-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes ui-rise-out {
+  to {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+[data-leaving="panel"] {
+  animation: ui-leave-right var(--ui-fast) var(--ui-ease) forwards;
+}
+
+@media (width <= 720px) {
+  [data-leaving="panel"] {
+    animation-name: ui-leave-down;
+  }
+}
+
+[data-leaving="dialog"] {
+  animation: ui-fade-out var(--ui-fast) var(--ui-ease) forwards;
+}
+
+:where([data-leaving="dialog"] > *) {
+  animation: ui-rise-out var(--ui-fast) var(--ui-ease) forwards;
+}
+
+[data-leaving="toast"] {
+  animation: ui-rise-out var(--ui-fast) var(--ui-ease) forwards;
 }
 
 /**
