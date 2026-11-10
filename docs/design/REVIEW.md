@@ -8097,3 +8097,15 @@ golden (26, cero cambios). **e2e completa**: la primera pasada, 2 rojas determin
 crecían); la segunda, una roja real (la copia encontrada por clase) y nueve que no eran del código —
 la máquina entró en reposo con la tapa cerrada a las 15:25 (`pmset`: «Clamshell Sleep», con batería),
 la pasada duró 9582 s y los temporizadores de esas nueve pasaron de 900 000 ms —; la tercera, **301 verdes y 1 omitida, 1350 s** — las 297 de antes y las 4 nuevas.
+
+**Lo que encontró la CI de la PR, y por qué ya nada de lo que el lienzo abre crece.** La e2e de la CI, en
+Linux, falló en «escalar una sección a media página no la mueve en pantalla»: a mitad de la entrada de
+la barra, la sección estaba a 224 px del borde y no a 0. Es el mismo mecanismo de los verbos: la caminata
+pulsa «Sí» en la ventana de escalar mientras crece, Playwright la da por inestable, reintenta desplazando
+el marco y la sección acaba fuera de su sitio. En macOS la carrera se ganaba; en Linux, no. La regla
+de los verbos se extiende a todo: **lo que se va a pulsar no se mueve bajo la mano**. Todo lo que el
+lienzo abre llega solo por opacidad, con la caja quieta desde el primer fotograma; solo las salidas,
+que nadie pulsa, encogen. Es una línea del plan cambiada («entran con `scale(0.96)`»), y lo que la
+cambia son dos medidas. De paso, dos comentarios de documentación que el día 2 dejó separados de sus
+declaraciones (`DeleteToast` y `RailIcon`, que además seguía describiendo las tres pistas del raíl)
+vuelven a su sitio. **e2e completa tras el cambio: 301 verdes y 1 omitida, 1340 s.**
