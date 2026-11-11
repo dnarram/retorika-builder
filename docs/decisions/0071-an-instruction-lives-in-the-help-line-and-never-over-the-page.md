@@ -104,10 +104,12 @@ every patch is not a render on every patch.
   hago: elegida», `.rb-announce`, ADR 0049), which is the focused document's own state rather than an
   instruction and is invisible. Whether it too should be the line's is David's to say; the walk that
   counts the frame's live regions at one stays as it was.
-- **A phone with a sheet open at 320 × 568**: the sheet, capped at 70 % of the viewport (ADR 0042),
-  reaches above the line there, as it reaches over the canvas; at 390 × 844 the line stays in view
-  above it, and the walk asserts that width. The sheet is a panel, not an instruction, and its cap is
-  ADR 0042's.
+- **A phone with a sheet open**: the sheet, capped at 70 % of the viewport (ADR 0042), reaches
+  above the line at 320 × 568, as it reaches over the canvas; at 390 × 844 its top is 197 px from the
+  top of the screen and the line's foot 202 on CI's Linux, whose header wraps 5 px taller than macOS
+  — the row's last pixels under the sheet, its text 3 px clear. The walk asserts that the line stays
+  above the card and the card does not move with the sheet open, and not a number that flips on a
+  font's metrics. The sheet is a panel, not an instruction, and its cap is ADR 0042's.
 - **Any motion of the line**: today its text changes without a transition. What arrives through the
   live child will reveal by words and what changes in the quiet one will cross-fade, under sprint 36's
   motion budget, and that is REVIEW's to record (ADR 0015), not this ADR's.

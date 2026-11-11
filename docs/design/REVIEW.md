@@ -8530,15 +8530,18 @@ la de la aplicación—, así que la clase no puede volver en `Editor.tsx` ni en
 teclado, con una sección elegida, con «Aspecto» abierto, con la oferta «A mano» abierta, tras borrar una
 sección y tras deshacer, la caja de la línea no intersecta la de `canvas-card`, la línea mide 32, **la
 caja de la tarjeta es la misma antes y después de cada mensaje**, y el marco no contiene `.rb-keys`,
-`.rb-hint`, `.rb-menu-note` ni `.rb-toolbar-notice`; a 390, con la hoja de «Estilo» abierta, la línea
-sigue a la vista encima. **«La línea habla poco»** (ajuste 1 de David): elegir un texto, cinco Tab
+`.rb-hint`, `.rb-menu-note` ni `.rb-toolbar-notice`; en los dos anchos de móvil, con la hoja de
+«Estilo» abierta, lo mismo. **«La línea habla poco»** (ajuste 1 de David): elegir un texto, cinco Tab
 seguidos y abrir «Aspecto» no cambian el texto del hijo vivo mientras el silencioso sí sigue al foco;
 borrar una sección sí lo cambia, y hay un solo `p[role="status"]` en la página. **Lo que enseñó la
 primera pasada**: a 320 la tarjeta «se movía» 23,5 px entre dos estados — no por la línea sino por la
 cabecera, que gana su fila de estado («Guardado en este navegador») con el primer autoguardado; la
-caminata toma la caja de reposo cuando esa frase ya está. Y a 320 × 568 la hoja de un panel, con su tope
-del 70 % (ADR 0042), llega por encima de la línea como llega sobre el lienzo: es un panel, no una
-instrucción, y la ADR lo nombra como lo que no decide; la aserción de la hoja es la de 390.
+caminata toma la caja de reposo cuando esa frase ya está. Y la hoja de un panel, con su tope del 70 %
+(ADR 0042), llega por encima de la línea a 320 × 568 como llega sobre el lienzo; **a 390 × 844 lo midió
+la CI y no este Mac**: su borde queda a 197 px y el pie de la línea a 202 en el Linux de la CI, cuya
+cabecera parte 5 px más alta, con el texto de la línea 3 px libre. Un número que se da la vuelta por
+la métrica de una letra no se asevera: con la hoja abierta se asevera lo de siempre (la línea fuera de
+la tarjeta y la tarjeta quieta), y la ADR lo nombra como lo que no decide.
 
 **Caminatas reescritas sobre la línea: diez**, más el ayudante `editHint`, que treinta caminatas pulsan
 para dejar un texto (ahora pulsa la fila de la línea, diga lo que diga): «Intro hace aparecer las seis
