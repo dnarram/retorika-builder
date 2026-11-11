@@ -105,9 +105,11 @@ export interface Frame {
   readonly pagesPosition: PagesPosition;
 }
 
-export interface ZoneRect extends Rect {
-  readonly zone: Zone;
+/** A rectangle that stands for a word: a menu's place, or the brand's (`brandDrag.ts`). */
+export interface ZoneRectOf<Z extends string> extends Rect {
+  readonly zone: Z;
 }
+export type ZoneRect = ZoneRectOf<Zone>;
 
 /** The band under the bar that is the row's zone: two spaces, enough to aim at. */
 export const ROW_ZONE_HEIGHT = (spaceMd: number) => 2 * spaceMd;
@@ -161,7 +163,7 @@ function rectOf(zone: Zone, frame: Frame): ZoneRect {
  * right side's column, the bar's strip crosses both columns at the top — the smaller one wins, so
  * what is drawn smallest is what the hand can aim at.
  */
-export function zoneAt(point: Point, rects: readonly ZoneRect[]): Zone | null {
+export function zoneAt<Z extends string>(point: Point, rects: readonly ZoneRectOf<Z>[]): Z | null {
   const hit = [...rects]
     .sort((a, b) => a.width * a.height - b.width * b.height)
     .find(

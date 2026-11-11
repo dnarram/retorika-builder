@@ -113,3 +113,13 @@ The panel previews each word on hover by its attribute (David's adjustment 3), *
 a one-line bar, to or from**: there the pages' menu moves in the markup (§2), which no attribute
 draws, and a hover that showed something else than the press would write is the canvas promising
 what the page does not do. Recorded by development.
+
+## Note — sprint 35 día 6: the gesture, and the double click's limit
+
+§5 is in the canvas since this day: the bar's own brand is a grip, the zones are the bar in thirds,
+a drop writes the segment's word, the logo's bottom, right and corner step it through ADR 0069's three
+sizes with a chrome ghost and a label, and Escape writes nothing. One limit, measured: **the double
+click opens «Menú» at the brand's block only with the panel already open.** With it closed, the first
+click chooses the header and opens the panel, the canvas re-lays out under the second click, and the
+browser fires no `dblclick` on the brand. That first click opens the panel at its first block, which
+is the brand's; the walk double-clicks with the panel open and says so. Recorded by development.

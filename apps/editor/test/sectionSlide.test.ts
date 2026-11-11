@@ -1,6 +1,8 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  BRAND_SLIDE_RULE,
+  brandMoved,
   canSlide,
   namesSheet,
   SLIDE_NAMES_ID,
@@ -107,5 +109,38 @@ describe("the transition itself", () => {
     await Promise.resolve();
     expect(document.getElementById(SLIDE_NAMES_ID)).toBeNull();
     expect(document.documentElement.classList.contains(SLIDING_CLASS)).toBe(false);
+  });
+
+  /**
+   * **The brand settles** (sprint 35 día 6): a patch that moves the bar's brand — its place, its
+   * logo's size, the layout it sits in — names the brand for the transition; a patch that leaves
+   * those as they were, a typed letter, does not. And the brand's rule rides the same sheet.
+   */
+  it("names the brand when its place, its logo's size or its layout changed, and not otherwise", () => {
+    const bar = (attributes: Record<string, string>) => {
+      const root = document.implementation.createHTMLDocument("bar");
+      const header = root.createElement("header");
+      header.className = "rb-header";
+      for (const [name, value] of Object.entries(attributes)) header.setAttribute(name, value);
+      root.body.append(header);
+      return root.body;
+    };
+    const plain = bar({ "data-layout": "brand-left" });
+    expect(brandMoved(plain, bar({ "data-layout": "brand-left" }))).toBe(false);
+    expect(brandMoved(plain, bar({ "data-layout": "brand-left", "data-brand-place": "end" }))).toBe(
+      true,
+    );
+    expect(brandMoved(plain, bar({ "data-layout": "brand-left", "data-logo-size": "lg" }))).toBe(
+      true,
+    );
+    expect(brandMoved(plain, bar({ "data-layout": "stacked" }))).toBe(true);
+    // A bar that is not drawn on either side: nothing to settle.
+    const none = document.implementation.createHTMLDocument("none").body;
+    expect(brandMoved(none, plain)).toBe(false);
+    expect(brandMoved(plain, none)).toBe(false);
+    expect(namesSheet([], BRAND_SLIDE_RULE)).toBe(BRAND_SLIDE_RULE);
+    expect(namesSheet(["sec-cover"], BRAND_SLIDE_RULE)).toContain("rb-s-0");
+    expect(namesSheet(["sec-cover"], BRAND_SLIDE_RULE)).toContain("rb-brand");
+    expect(namesSheet(["sec-cover"])).not.toContain("rb-brand");
   });
 });

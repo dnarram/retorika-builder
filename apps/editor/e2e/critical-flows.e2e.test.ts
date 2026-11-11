@@ -27163,3 +27163,238 @@ describe("sprint 35 día 5 — el panel de la marca", () => {
     }
   }, 240_000);
 });
+
+/**
+ * **Sprint 35 día 6 — la marca se arrastra y se estira** (ADR 0070 §5, ADR 0069; David's third
+ * decision). The brand is a grip: past the threshold the bar is drawn in thirds, the one under the
+ * hand lit, and a drop writes the place the panel's segment writes — one step of history, and the
+ * live region says it. Pressed without moving, the brand is what it was: the header chosen, nothing
+ * written. The logo's bottom edge stretches it through its three sizes, the ghost saying the word and
+ * the pixels before the hand lets go; Escape half-way writes nothing. A double click opens «Menú» at
+ * the brand's block with its first radio focused. In the phone view there are no zones and no edge.
+ */
+describe("sprint 35 día 6 — la marca se arrastra y se estira", () => {
+  /** The canvas with a logo uploaded from «Menú» and the panel closed again: 1280, no panel. */
+  async function withLogo(page: Page): Promise<FrameLocator> {
+    await intoTheCanvas(page);
+    const frame = page.frameLocator(PREVIEW).first();
+    await page.getByRole("button", { name: "Menú", exact: true }).click();
+    const panel = page.getByRole("complementary", { name: "La cabecera de tu web" });
+    await expect(panel).toBeVisible();
+    const [chooser] = await Promise.all([
+      page.waitForEvent("filechooser"),
+      panel.getByRole("button", { name: "Subir tu logo" }).click(),
+    ]);
+    await chooser.setFiles(join(import.meta.dirname, "fixtures/logo.png"));
+    const logo = frame.locator("header.rb-header img.rb-logo");
+    await expect(logo).toHaveCount(1);
+    await imageLoaded(logo);
+    await panel.getByRole("button", { name: "Cerrar la cabecera" }).click();
+    await expect(panel).toHaveCount(0);
+    await deviceArrived(page, DESKTOP_LAYOUT_WIDTH);
+    await frame.locator("body").evaluate(() => window.scrollTo(0, 0));
+    await motionSettled(page);
+    return frame;
+  }
+  const brandOf = (page: Page) =>
+    page.evaluate(() => {
+      const raw = localStorage.getItem("retorika.session.v1") ?? "";
+      if (raw === "") return "unsaved";
+      const session = JSON.parse(raw) as {
+        openIndex: number;
+        documents: { header?: { brand?: { place?: string; logoSize?: string } } }[];
+      };
+      const brand = session.documents[session.openIndex]?.header?.brand ?? {};
+      return `${brand.place ?? ""}/${brand.logoSize ?? ""}`;
+    });
+
+  it("se lleva al tercio central y ahí está; pulsada sin mover no cambia nada; el logo se estira a «Grande», Escape no escribe; doble clic abre su bloque", async () => {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 950 } });
+    const page = await context.newPage();
+    try {
+      const frame = await withLogo(page);
+      const header = frame.locator("header.rb-header");
+      const brand = header.locator(":scope > .rb-brand");
+      const logo = brand.locator("img.rb-logo");
+      const zones = frame.locator(".rb-zone");
+      const said = page.locator('p[role="status"]');
+      const serial = await editSerialOf(page);
+
+      // 0. The hand is told: the open hand over the brand, the resize cursor on the logo's edge.
+      expect(await brand.evaluate((el) => getComputedStyle(el).cursor)).toBe("grab");
+
+      // 1. Held by the name and carried to the middle third: three zones, the middle one lit,
+      //    the ghost saying «Marca»; let go, and the brand is «En medio» — written once, and said.
+      const name = brand.locator(".rb-brand-name");
+      const { at, zoom } = await frameOnScreen(page);
+      const hold = await pointIn(name, 0.5, 0.5);
+      const barBox = await header.boundingBox();
+      if (!barBox) throw new Error("no bar");
+      await carry(
+        page,
+        hold,
+        { x: barBox.x + barBox.width / 2, y: barBox.y + barBox.height / 2 },
+        false,
+      );
+      await expect(zones).toHaveCount(3);
+      await expect(frame.locator('.rb-zone[data-zone="start"][data-current]')).toHaveCount(1);
+      await expect(frame.locator('.rb-zone[data-zone="center"][data-hot]')).toHaveCount(1);
+      await expect(frame.locator(".rb-menu-ghost")).toContainText("Marca");
+      // The thirds are the bar's own box, to a pixel: three of its width each, its height whole.
+      const thirds = await zones.evaluateAll((els) =>
+        els.map((el) => {
+          const r = el.getBoundingClientRect();
+          return [r.left, r.width, r.height].map((n) => Math.round(n));
+        }),
+      );
+      const barInFrame = await header.evaluate((el) => {
+        const r = el.getBoundingClientRect();
+        return [r.left, r.width, r.height].map((n) => Math.round(n));
+      });
+      expect(thirds.map((t) => t[2])).toEqual([barInFrame[2], barInFrame[2], barInFrame[2]]);
+      expect(thirds.reduce((sum, t) => sum + (t[1] ?? 0), 0)).toBeCloseTo(barInFrame[1] ?? 0, -1);
+      await page.mouse.up();
+      await expect(zones).toHaveCount(0);
+      await expect(header).toHaveAttribute("data-brand-place", "center");
+      await expect.poll(() => brandOf(page)).toBe("center/");
+      await expect(said).toHaveText("Marca: en medio");
+      expect(await editSerialOf(page)).toBe(serial + 1);
+      await motionSettled(page);
+
+      // 2. Pressed without moving: the header is chosen and «Menú» opens, as before — nothing
+      //    navigates, nothing is written. Bounded: a letter typed after proves the serial moves.
+      const press = await pointIn(name, 0.5, 0.5);
+      await page.mouse.click(press.x, press.y);
+      await expect(header).toHaveClass(/rb-selected/);
+      await expect(
+        page.getByRole("complementary", { name: "La cabecera de tu web" }),
+      ).toBeVisible();
+      await expect.poll(() => brandOf(page)).toBe("center/");
+      expect(await editSerialOf(page)).toBe(serial + 1);
+      await page.getByRole("button", { name: "Cerrar la cabecera" }).click();
+      await deviceArrived(page, DESKTOP_LAYOUT_WIDTH);
+      await motionSettled(page);
+
+      // 3. The logo's bottom edge, pulled twenty pixels of the frame: the ghost says «Grande · 56 px»
+      //    before the hand lets go, and letting go writes «lg». Escape half-way writes nothing.
+      const logoBox = await logo.boundingBox();
+      if (!logoBox) throw new Error("no logo");
+      const edge = { x: logoBox.x + logoBox.width / 2, y: logoBox.y + logoBox.height - 1 };
+      await page.mouse.move(edge.x, edge.y);
+      expect(await logo.evaluate((el) => getComputedStyle(el).cursor)).toBe("ns-resize");
+      await page.mouse.down();
+      await page.mouse.move(edge.x, edge.y + 20 * zoom, { steps: 8 });
+      await expect(frame.locator(".rb-logo-ghost")).toHaveCount(1);
+      await expect(frame.locator(".rb-menu-ghost")).toContainText("Grande · 56 px");
+      await page.keyboard.press("Escape");
+      await expect(frame.locator(".rb-logo-ghost")).toHaveCount(0);
+      await page.mouse.up();
+      await expect.poll(() => brandOf(page)).toBe("center/");
+      expect(await editSerialOf(page)).toBe(serial + 1);
+      // And for real: twenty pixels, let go, «Grande».
+      const logoBox2 = await logo.boundingBox();
+      if (!logoBox2) throw new Error("no logo");
+      const edge2 = { x: logoBox2.x + logoBox2.width / 2, y: logoBox2.y + logoBox2.height - 1 };
+      await page.mouse.move(edge2.x, edge2.y);
+      await page.mouse.down();
+      await page.mouse.move(edge2.x, edge2.y + 20 * zoom, { steps: 8 });
+      await expect(frame.locator(".rb-menu-ghost")).toContainText("Grande · 56 px");
+      // The ghost is drawn at the size to come, where the logo is; the logo itself has not moved.
+      const ghostBox = await frame.locator(".rb-logo-ghost").boundingBox();
+      expect(Math.round((ghostBox?.height ?? 0) / zoom)).toBe(56);
+      expect(await logo.evaluate((el) => el.style.height)).toBe("");
+      await page.mouse.up();
+      await expect(header).toHaveAttribute("data-logo-size", "lg");
+      await expect.poll(() => brandOf(page)).toBe("center/lg");
+      await expect(said).toHaveText("Logo: grande");
+      expect(await editSerialOf(page)).toBe(serial + 2);
+      await motionSettled(page);
+      expect(Math.round(await logo.evaluate((el) => el.getBoundingClientRect().height))).toBe(56);
+
+      // 4. A double click on the brand: «Menú» open at the brand's block, the keyboard on its
+      //    first radio — «Grande» is the logo's size now, so the checked one. With the panel open
+      //    first: closed, the first click opens it and the canvas re-lays out under the second
+      //    (the limit REVIEW names), and the block it opens at is the brand's anyway, the first.
+      const once = await pointIn(name, 0.5, 0.5);
+      await page.mouse.click(once.x, once.y);
+      const panel = page.getByRole("complementary", { name: "La cabecera de tu web" });
+      await expect(panel).toBeVisible();
+      await motionSettled(page);
+      const twice = await pointIn(name, 0.5, 0.5);
+      await page.mouse.dblclick(twice.x, twice.y);
+      await expect
+        .poll(() =>
+          page.evaluate(() => {
+            const el = document.activeElement as HTMLInputElement | null;
+            return el?.type === "radio" ? `${el.name.replace(/^.*-/, "")}:${el.checked}` : null;
+          }),
+        )
+        .toBe("size:true");
+      expect(
+        await page.evaluate(
+          () => document.activeElement?.closest('fieldset[data-menu-block="brand"]') !== null,
+        ),
+      ).toBe(true);
+      // Nothing written by the two clicks.
+      await expect.poll(() => brandOf(page)).toBe("center/lg");
+      expect(await editSerialOf(page)).toBe(serial + 2);
+      await page.getByRole("button", { name: "Cerrar la cabecera" }).click();
+
+      // 5. «Deshacer» twice: the logo at «Normal», the brand at the start.
+      await page.getByRole("button", { name: "Deshacer", exact: true }).click();
+      await expect(header).not.toHaveAttribute("data-logo-size", /.*/);
+      await page.getByRole("button", { name: "Deshacer", exact: true }).click();
+      await expect(header).not.toHaveAttribute("data-brand-place", /.*/);
+      await expect.poll(() => brandOf(page)).toBe("/");
+
+      // 6. The phone view: no zones past the threshold, no edge on the logo.
+      await page.getByRole("button", { name: "Ver en móvil" }).click();
+      await deviceArrived(page, NARROWEST_WIDTH);
+      await motionSettled(page);
+      const phoneHold = await pointIn(logo, 0.5, 0.5);
+      await page.mouse.move(phoneHold.x, phoneHold.y);
+      await page.mouse.down();
+      await page.mouse.move(phoneHold.x + 40, phoneHold.y, { steps: 6 });
+      await expect(zones).toHaveCount(0);
+      await expect(frame.locator(".rb-logo-ghost")).toHaveCount(0);
+      await page.mouse.up();
+      const phoneLogo = await logo.boundingBox();
+      if (!phoneLogo) throw new Error("no logo on the phone");
+      await page.mouse.move(phoneLogo.x + phoneLogo.width / 2, phoneLogo.y + phoneLogo.height - 1);
+      expect(await logo.evaluate((el) => getComputedStyle(el).cursor)).not.toBe("ns-resize");
+      await expect.poll(() => brandOf(page)).toBe("/");
+    } finally {
+      await context.close();
+    }
+  }, 300_000);
+
+  it("con movimiento reducido: la marca llega a su sitio sin recorrido, y el logo a su tamaño", async () => {
+    const context = await browser.newContext({
+      viewport: { width: 1440, height: 950 },
+      reducedMotion: "reduce",
+    });
+    const page = await context.newPage();
+    try {
+      const frame = await withLogo(page);
+      const header = frame.locator("header.rb-header");
+      const brand = header.locator(":scope > .rb-brand");
+      const name = brand.locator(".rb-brand-name");
+      const barBox = await header.boundingBox();
+      if (!barBox) throw new Error("no bar");
+      const hold = await pointIn(name, 0.5, 0.5);
+      await carry(page, hold, { x: barBox.x + barBox.width - 30, y: barBox.y + barBox.height / 2 });
+      await expect(header).toHaveAttribute("data-brand-place", "end");
+      // No transition group was ever started for the brand: it is at the end at once.
+      expect(
+        await frame.locator("html").evaluate((el) => el.classList.contains("rb-sliding")),
+      ).toBe(false);
+      const brandBox = await brand.boundingBox();
+      expect((brandBox?.x ?? 0) + (brandBox?.width ?? 0)).toBeGreaterThan(
+        barBox.x + barBox.width * 0.8,
+      );
+      await expect.poll(() => brandOf(page)).toBe("end/");
+    } finally {
+      await context.close();
+    }
+  }, 240_000);
+});

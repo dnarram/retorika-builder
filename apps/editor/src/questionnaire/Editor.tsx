@@ -99,6 +99,20 @@ import {
   toolbarShortcutFor,
   withOffset,
 } from "../editor/barPosition.ts";
+import {
+  type BrandPlace,
+  type BrandZoneRect,
+  brandDropOutcome,
+  brandDropText,
+  brandZoneRects,
+  brandZonesFor,
+  type LogoStep,
+  logoDropOutcome,
+  logoDropText,
+  logoStep,
+  pulledHeight,
+  stepOf,
+} from "../editor/brandDrag.ts";
 import { holdFor } from "../editor/buildingScreen.ts";
 import { canvasLinkTarget } from "../editor/canvasLinks.ts";
 import { CANVAS_STILLNESS } from "../editor/canvasStillness.ts";
@@ -207,6 +221,8 @@ import {
 } from "../editor/sectionKeys.ts";
 import { offersMatching } from "../editor/sectionSearch.ts";
 import {
+  BRAND_SLIDE_RULE,
+  brandMoved,
   canSlide,
   SLIDING_CLASS,
   sectionOrder,
@@ -1368,6 +1384,13 @@ export function Editor({
    * not one. Choosing a section clears it, and choosing it clears the section.
    */
   const headerChosen = useRef(false);
+  /** The block «Menú» was asked to open at (sprint 35 día 6): the brand's, by a double click on the
+   * canvas's brand. A token and not a flag, so a second double click focuses again. */
+  const [menuPanelFocus, setMenuPanelFocus] = useState<
+    { block: "brand"; token: number } | undefined
+  >(undefined);
+  /** Opens «Menú» at a block — reassigned every render, as `openMenuPanel` is. */
+  const openMenuPanelAt = useRef<(block: "brand") => void>(() => {});
   /** A section an entry of the header named on another page, scrolled to once that page is drawn:
    * `applyPatch` puts a changed page at the top, so the scroll has to come after it. */
   const scrollToSectionAfterPatch = useRef<string | null>(null);
@@ -1570,6 +1593,10 @@ export function Editor({
     if (item === "design" && designSectionId === null) setDesignSectionId(selectedSection.current);
   }
   openMenuPanel.current = () => showRail("menu");
+  openMenuPanelAt.current = (block) => {
+    showRail("menu");
+    setMenuPanelFocus((current) => ({ block, token: (current?.token ?? 0) + 1 }));
+  };
 
   /**
    * The rail item actually shown.
@@ -1879,18 +1906,25 @@ export function Editor({
      */
     const before = sectionOrder(iframeDoc.body);
     const after = sectionOrder(fresh);
-    if (
-      shouldSlide(before, after, patchedPageId.current === (inputs.pageId ?? null)) &&
-      canSlide(iframeDoc)
-    ) {
-      slide(iframeDoc, slidingIds(iframeDoc, before, after), () => {
-        const now = patchInputs();
-        if (samePatchInputs(now, inputs)) patchNow(iframeDoc, inputs, fresh, renderMs);
-        else {
-          const again = performance.now();
-          patchNow(iframeDoc, now, renderFor(now), performance.now() - again);
-        }
-      });
+    const samePage = patchedPageId.current === (inputs.pageId ?? null);
+    const sections = shouldSlide(before, after, samePage);
+    // **And the brand settling into its place** (sprint 35 día 6): named alone when only it moved,
+    // so a page of twenty sections captures one box and not twenty.
+    const brand = samePage && brandMoved(iframeDoc.body, fresh);
+    if ((sections || brand) && canSlide(iframeDoc)) {
+      slide(
+        iframeDoc,
+        sections ? slidingIds(iframeDoc, before, after) : [],
+        () => {
+          const now = patchInputs();
+          if (samePatchInputs(now, inputs)) patchNow(iframeDoc, inputs, fresh, renderMs);
+          else {
+            const again = performance.now();
+            patchNow(iframeDoc, now, renderFor(now), performance.now() - again);
+          }
+        },
+        brand ? BRAND_SLIDE_RULE : "",
+      );
       return;
     }
     patchNow(iframeDoc, inputs, fresh, renderMs);
@@ -3491,6 +3525,20 @@ export function Editor({
       const target = event.target as { closest?: (selector: string) => unknown } | null;
       if (typeof target?.closest === "function" && target.closest("a, summary") !== null) return;
       selectHeader(header);
+    });
+    /**
+     * **A double click on the brand opens «Menú» at the brand's block** (ADR 0070 §5, sprint 35
+     * día 6): the second way to the brand's size and place, for whoever does not know the drag and
+     * the stretch exist. The first click chose the header and opened the panel as before; the second
+     * brings the block into view and gives its first radio the keyboard.
+     */
+    delegate(iframeDoc, "dblclick", ".rb-header > .rb-brand", (brand, event) => {
+      event.preventDefault();
+      const header = brand.closest<HTMLElement>(".rb-header");
+      if (!header) return;
+      iframeDoc.getSelection()?.removeAllRanges();
+      if (!headerChosen.current) selectHeader(header);
+      openMenuPanelAt.current("brand");
     });
     function selectHeader(header: HTMLElement) {
       record("select", { sectionId: "header", via: "click", serial: serialOf(iframeDoc) });
@@ -6453,10 +6501,17 @@ export function Editor({
    * zones of that width, under it the click that opens the sheet.
    */
   function wireMenuDrag(iframeDoc: Document) {
-    const GRIPS =
-      "nav.rb-nav[data-part], .rb-rail[data-side], .rb-nav-row, details.rb-nav-fold > summary, details.rb-nav-narrow > summary";
+    // **And the brand, since sprint 35 día 6** (ADR 0070 §5): the bar's own, never a rail's copy.
+    const BRAND_GRIP = ".rb-header > .rb-brand";
+    const GRIPS = `nav.rb-nav[data-part], .rb-rail[data-side], .rb-nav-row, details.rb-nav-fold > summary, details.rb-nav-narrow > summary, ${BRAND_GRIP}`;
+    /**
+     * One gesture at a time, of three kinds: a menu to its zone (ADR 0066), the brand to its place
+     * (ADR 0070 §5), the logo's edge to its size (ADR 0069) — the same threshold, the same two
+     * states, the same Escape, the same swallowed click.
+     */
     interface MenuDrag {
-      menu: Menu;
+      kind: "menu" | "brand" | "logo";
+      menu: Menu | null;
       grip: HTMLElement;
       pointerId: number;
       from: Point;
@@ -6464,6 +6519,13 @@ export function Editor({
       rects: ZoneRect[];
       zones: ReturnType<typeof zonesFor>;
       hot: Zone | null;
+      brandRects: BrandZoneRect[];
+      brandZones: ReturnType<typeof brandZonesFor>;
+      brandHot: BrandPlace | null;
+      /** The logo's edge held, its box at the press and the step the ghost is drawn at. */
+      edge: "bottom" | "right" | "se" | null;
+      logoBox: DOMRect | null;
+      step: LogoStep | null;
     }
     let drag: MenuDrag | null = null;
     // A click right after a drag is the drag's own release, not a choice (ADR 0048 §2).
@@ -6518,23 +6580,123 @@ export function Editor({
       const { grip, pointerId, dragging } = drag;
       drag = null;
       if (dragging && grip.hasPointerCapture(pointerId)) grip.releasePointerCapture(pointerId);
-      for (const el of iframeDoc.querySelectorAll(".rb-zone, .rb-menu-ghost")) el.remove();
-      iframeDoc.documentElement.classList.remove("rb-dragging");
+      for (const el of iframeDoc.querySelectorAll(".rb-zone, .rb-menu-ghost, .rb-logo-ghost")) {
+        el.remove();
+      }
+      iframeDoc.documentElement.classList.remove("rb-dragging", "rb-stretching");
       flushQueuedPatch.current();
+    };
+
+    /** The ghost every kind carries: a label that follows the hand, and a second line. */
+    const ghostWith = (first: string) => {
+      const ghost = chrome(iframeDoc, "div");
+      ghost.className = "rb-ghost rb-menu-ghost";
+      ghost.setAttribute("aria-hidden", "true");
+      const name = chrome(iframeDoc, "span");
+      name.textContent = first;
+      const note = chrome(iframeDoc, "span");
+      note.className = "rb-menu-ghost-note";
+      ghost.append(name, note);
+      iframeDoc.body.appendChild(ghost);
+      return ghost;
+    };
+
+    const drawZones = (
+      rects: readonly { zone: string; left: number; top: number; width: number; height: number }[],
+      labelOf: (zone: string) => { label: string; current: boolean } | undefined,
+    ) => {
+      for (const rect of rects) {
+        const zone = labelOf(rect.zone);
+        const el = chrome(iframeDoc, "div");
+        el.className = "rb-zone";
+        el.setAttribute("aria-hidden", "true");
+        el.dataset["zone"] = rect.zone;
+        if (zone?.current) el.dataset["current"] = "";
+        el.style.left = `${rect.left}px`;
+        el.style.top = `${rect.top}px`;
+        el.style.width = `${rect.width}px`;
+        el.style.height = `${rect.height}px`;
+        el.textContent = zone?.label ?? "";
+        iframeDoc.body.appendChild(el);
+      }
+    };
+
+    /**
+     * **The brand's zones are the bar in thirds** (`brandZoneRects`), drawn as a menu's are; and
+     * **the logo's stretch draws a ghost of the logo at the next size** — a dashed box over the real
+     * one, chrome, never a `style.height` on the `<img>` that a patch would lose or leave behind —
+     * with the word and the pixels beside the hand.
+     */
+    const beginBrand = (state: MenuDrag, header: HTMLElement) => {
+      const view = iframeDoc.defaultView;
+      if (!view) return;
+      const brand = headerStateFor(docNow.current, pageIdNow.current).brand;
+      state.brandZones = brandZonesFor(brand, view.innerWidth);
+      if (state.brandZones.length === 0) return;
+      state.dragging = true;
+      state.brandRects = brandZoneRects(state.brandZones, header.getBoundingClientRect());
+      drawZones(state.brandRects, (zone) => state.brandZones.find((z) => z.zone === zone));
+      ghostWith(es["editor.brandDrag.name"]);
+    };
+    const beginLogo = (state: MenuDrag) => {
+      const logo = state.grip.querySelector<HTMLElement>("img.rb-logo");
+      if (!logo || !state.edge) return;
+      state.dragging = true;
+      state.logoBox = logo.getBoundingClientRect();
+      iframeDoc.documentElement.classList.add("rb-stretching");
+      const box = chrome(iframeDoc, "div");
+      box.className = "rb-logo-ghost";
+      box.setAttribute("aria-hidden", "true");
+      iframeDoc.body.appendChild(box);
+      ghostWith("");
+      followLogo(state, state.from);
+    };
+    const followLogo = (state: MenuDrag, at: Point) => {
+      const box = state.logoBox;
+      if (!box || !state.edge) return;
+      const step = logoStep(box.height, pulledHeight(state.from, at, box, state.edge));
+      if (step.size !== state.step?.size) {
+        state.step = step;
+        const ghost = iframeDoc.querySelector<HTMLElement>(".rb-logo-ghost");
+        if (ghost) {
+          const ratio = box.height > 0 ? box.width / box.height : 1;
+          ghost.style.left = `${box.left}px`;
+          ghost.style.top = `${box.top + box.height / 2 - step.px / 2}px`;
+          ghost.style.height = `${step.px}px`;
+          ghost.style.width = `${step.px * ratio}px`;
+        }
+        const name = iframeDoc.querySelector<HTMLElement>(".rb-menu-ghost > span");
+        if (name) name.textContent = step.label;
+      }
     };
 
     const begin = (state: MenuDrag) => {
       const view = iframeDoc.defaultView;
       const header = iframeDoc.querySelector<HTMLElement>("header.rb-header");
       if (!view || !header) return;
-      const places = headerStateFor(docNow.current, pageIdNow.current);
-      state.zones = zonesFor(state.menu, places, view.innerWidth);
-      if (state.zones.length === 0) return;
-      state.dragging = true;
+      if (state.kind === "brand") beginBrand(state, header);
+      else if (state.kind === "logo") beginLogo(state);
+      else if (state.menu) {
+        const places = headerStateFor(docNow.current, pageIdNow.current);
+        state.zones = zonesFor(state.menu, places, view.innerWidth);
+        if (state.zones.length > 0) beginMenu(state, state.menu, header, places);
+      }
+      if (!state.dragging) return;
       state.grip.setPointerCapture(state.pointerId);
       iframeDoc.documentElement.classList.add("rb-dragging");
       iframeDoc.getSelection()?.removeAllRanges();
       justDragged = true;
+    };
+
+    const beginMenu = (
+      state: MenuDrag,
+      menu: Menu,
+      header: HTMLElement,
+      places: ReturnType<typeof headerStateFor>,
+    ) => {
+      const view = iframeDoc.defaultView;
+      if (!view) return;
+      state.dragging = true;
       const bar = header.getBoundingClientRect();
       const spaceMd = resolved(iframeDoc.body, "--space-md");
       // **The sections leave their row when they go anywhere else** (sprint 33 día 6): the bar's
@@ -6542,7 +6704,7 @@ export function Editor({
       // without it — so the pill's zone does too, the row and its gap taken out.
       const row = header.querySelector<HTMLElement>(":scope > .rb-nav-row");
       const rowShare =
-        state.menu === "sections" && row && row.getClientRects().length > 0
+        menu === "sections" && row && row.getClientRects().length > 0
           ? row.getBoundingClientRect().height + spaceMd
           : 0;
       state.rects = zoneRects(state.zones, {
@@ -6559,42 +6721,35 @@ export function Editor({
         spaceMd,
         pagesPosition: places.pagesPosition,
       });
-      for (const rect of state.rects) {
-        const zone = state.zones.find((z) => z.zone === rect.zone);
-        const el = chrome(iframeDoc, "div");
-        el.className = "rb-zone";
-        el.setAttribute("aria-hidden", "true");
-        el.dataset["zone"] = rect.zone;
-        if (zone?.current) el.dataset["current"] = "";
-        el.style.left = `${rect.left}px`;
-        el.style.top = `${rect.top}px`;
-        el.style.width = `${rect.width}px`;
-        el.style.height = `${rect.height}px`;
-        el.textContent = zone?.label ?? "";
-        iframeDoc.body.appendChild(el);
+      drawZones(state.rects, (zone) => state.zones.find((z) => z.zone === zone));
+      ghostWith(menuName(menu));
+    };
+
+    const lightZone = (hot: string | null) => {
+      for (const el of iframeDoc.querySelectorAll<HTMLElement>(".rb-zone")) {
+        if (el.dataset["zone"] === hot) el.dataset["hot"] = "";
+        else delete el.dataset["hot"];
       }
-      const ghost = chrome(iframeDoc, "div");
-      ghost.className = "rb-ghost rb-menu-ghost";
-      ghost.setAttribute("aria-hidden", "true");
-      const name = chrome(iframeDoc, "span");
-      name.textContent = menuName(state.menu);
-      const note = chrome(iframeDoc, "span");
-      note.className = "rb-menu-ghost-note";
-      ghost.append(name, note);
-      iframeDoc.body.appendChild(ghost);
     };
 
     const follow = (state: MenuDrag, at: Point) => {
-      const hot = zoneAt(at, state.rects);
-      if (hot !== state.hot) {
-        state.hot = hot;
-        for (const el of iframeDoc.querySelectorAll<HTMLElement>(".rb-zone")) {
-          if (el.dataset["zone"] === hot) el.dataset["hot"] = "";
-          else delete el.dataset["hot"];
+      if (state.kind === "logo") {
+        followLogo(state, at);
+      } else if (state.kind === "brand") {
+        const hot = zoneAt(at, state.brandRects);
+        if (hot !== state.brandHot) {
+          state.brandHot = hot;
+          lightZone(hot);
         }
-        const note = iframeDoc.querySelector<HTMLElement>(".rb-menu-ghost-note");
-        const over = state.zones.find((z) => z.zone === hot);
-        if (note) note.textContent = over?.stacked ? stackedText(over.stacked) : "";
+      } else {
+        const hot = zoneAt(at, state.rects);
+        if (hot !== state.hot) {
+          state.hot = hot;
+          lightZone(hot);
+          const note = iframeDoc.querySelector<HTMLElement>(".rb-menu-ghost-note");
+          const over = state.zones.find((z) => z.zone === hot);
+          if (note) note.textContent = over?.stacked ? stackedText(over.stacked) : "";
+        }
       }
       const ghost = iframeDoc.querySelector<HTMLElement>(".rb-menu-ghost");
       if (ghost) {
@@ -6613,16 +6768,23 @@ export function Editor({
       // ground of its own — its `nav` is its link —, and the two states keep the link a link: under
       // the threshold the press is the click `wireLinks` follows, past it the click is swallowed.
       if (from.closest("button, [data-id]")) return;
+      // **The brand is a grip since sprint 35 día 6** (ADR 0070 §5), a link or not: under the
+      // threshold its press is still today's click — the header chosen, or home on another page.
+      const brand = from.closest<HTMLElement>(BRAND_GRIP);
       const link = from.closest("a");
-      if (link && !link.parentElement?.matches("nav.rb-nav[data-part]")) return;
+      if (!brand && link && !link.parentElement?.matches("nav.rb-nav[data-part]")) return;
       const grip = from.closest<HTMLElement>(GRIPS);
       if (!grip) return;
       // A finger drags the header's menus only once the header is chosen (ADR 0049).
       if (event.pointerType === "touch" && !headerChosen.current) return;
       const at = { x: event.clientX, y: event.clientY };
-      const menu = menuOfGrip(grip, at);
-      if (!menu) return;
+      const edge = brand ? logoEdgeUnder(event, brand) : null;
+      // The logo's edge is a mouse's gesture: a finger is wider than the edge, and the panel is its way.
+      if (edge && event.pointerType === "touch") return;
+      const menu = brand ? null : menuOfGrip(grip, at);
+      if (!brand && !menu) return;
       drag = {
+        kind: brand ? (edge ? "logo" : "brand") : "menu",
         menu,
         grip,
         pointerId: event.pointerId,
@@ -6631,7 +6793,58 @@ export function Editor({
         rects: [],
         zones: [],
         hot: null,
+        brandRects: [],
+        brandZones: [],
+        brandHot: null,
+        edge,
+        logoBox: null,
+        step: null,
       };
+    });
+
+    /**
+     * **The logo's bottom, right and corner stretch it** (ADR 0069, sprint 35 día 6): `edgeAt` of
+     * `resizeBox.ts` over the drawn `<img>`, the same six screen pixels divided by the zoom, and the
+     * same cursors, as classes on the logo (`showLogoCursor`). Three edges and not eight: a logo grows
+     * from its anchor, which is its top-left in the bar. Only in the desktop view, where the sizes
+     * are the owner's; on a phone the large one is the renderer's derivation (ADR 0069 §3).
+     */
+    const logoEdgeUnder = (
+      event: PointerEvent,
+      brand: HTMLElement,
+    ): "bottom" | "right" | "se" | null => {
+      if (deviceNow.current === "mobile") return null;
+      const logo = brand.querySelector<HTMLElement>("img.rb-logo");
+      if (!logo) return null;
+      const zoom = zoomOf(iframeDoc);
+      const edge = edgeAt({ x: event.clientX, y: event.clientY }, logo.getBoundingClientRect(), {
+        outside: EDGE_ZONE / zoom,
+        inside: EDGE_ZONE / zoom,
+      });
+      return edge === "bottom" || edge === "right" || edge === "se" ? edge : null;
+    };
+    const showLogoCursor = (logo: HTMLElement, edge: "bottom" | "right" | "se" | null) => {
+      for (const name of [...logo.classList]) {
+        if (name.startsWith("rb-cursor-")) logo.classList.remove(name);
+      }
+      if (edge) logo.classList.add(`rb-cursor-${cursorFor(edge).replace("-resize", "")}`);
+    };
+    iframeDoc.addEventListener("pointermove", (event) => {
+      if (drag || event.pointerType === "touch") return;
+      const target = event.target as Node | null;
+      const from =
+        target?.nodeType === target?.ELEMENT_NODE ? (target as Element) : target?.parentElement;
+      const brand = from?.closest<HTMLElement>(BRAND_GRIP) ?? null;
+      const logo = brand?.querySelector<HTMLElement>("img.rb-logo");
+      if (!logo) {
+        for (const el of iframeDoc.querySelectorAll<HTMLElement>(
+          'img.rb-logo[class*="rb-cursor-"]',
+        )) {
+          showLogoCursor(el, null);
+        }
+        return;
+      }
+      showLogoCursor(logo, brand ? logoEdgeUnder(event, brand) : null);
     });
 
     iframeDoc.addEventListener("pointermove", (event) => {
@@ -6650,10 +6863,19 @@ export function Editor({
 
     const release = () => {
       if (!drag) return;
-      const { dragging, menu, hot } = drag;
+      const { dragging, kind, menu, hot, brandHot, step } = drag;
       // Read before `clear` takes the zones away (sprint 35 día 3): the zone that receives the menu
       // acknowledges it once, and the label that followed the hand fades instead of vanishing.
-      const outcome = dragging ? dropOutcome(menu, hot, docNow.current) : null;
+      const brand = headerStateFor(docNow.current, pageIdNow.current).brand;
+      const outcome = !dragging
+        ? null
+        : kind === "brand"
+          ? brandDropOutcome(brandHot, brand, docNow.current)
+          : kind === "logo"
+            ? logoDropOutcome(step, brand, docNow.current)
+            : menu
+              ? dropOutcome(menu, hot, docNow.current)
+              : null;
       if (outcome?.kind === "write") leave(iframeDoc.querySelector(".rb-zone[data-hot]"), "zone");
       if (dragging) leave(iframeDoc.querySelector(".rb-menu-ghost"), "popup");
       clear();
@@ -6661,7 +6883,15 @@ export function Editor({
       justDragged = true;
       if (outcome.kind !== "write") return;
       propsNow.current.onSetHeader(outcome.patch);
-      announce(dropText(menu, outcome.zone));
+      announce(
+        "size" in outcome
+          ? logoDropText(outcome.size)
+          : kind === "brand"
+            ? brandDropText(outcome.zone as BrandPlace)
+            : menu
+              ? dropText(menu, outcome.zone as Zone)
+              : "",
+      );
     };
     iframeDoc.addEventListener("pointerup", release);
     // **A cancel is not a release** (sprint 33 día 5): the browser took the pointer — a finger that
@@ -8148,8 +8378,22 @@ export function Editor({
       // under the canvas's width (ADR 0067) — the desktop view, at any width of it, never the phone's.
       `@media (min-width: ${NARROWEST_DESKTOP}px) {`,
       "  .rb-header .rb-nav[data-part], .rb-header .rb-rail, .rb-header .rb-nav-row,",
-      "  .rb-header .rb-nav-fold > summary, .rb-header .rb-nav-narrow > summary { cursor: grab; }",
+      "  .rb-header .rb-nav-fold > summary, .rb-header .rb-nav-narrow > summary,",
+      // **And the brand** (ADR 0070 §5, sprint 35 día 6): the bar's own, never a rail's copy.
+      "  .rb-header > .rb-brand { cursor: grab; }",
       "  .rb-header .rb-nav[data-part] a { cursor: pointer; } }",
+      /*
+       * **The logo stretched by its edge** (ADR 0069, sprint 35 día 6): the edge's own cursor on the
+       * logo, as on an element's border, kept while the pull lasts (`rb-stretching` over the closed
+       * hand of `rb-dragging`); and the ghost of the logo at the size the hand has reached — a dashed
+       * box in the brand's colour over the real logo, which does not move. Chrome, fixed, under the
+       * label that follows the hand.
+       */
+      "html.rb-stretching, html.rb-stretching * { cursor: inherit; }",
+      `html.rb-stretching { cursor: nwse-resize; }`,
+      ".rb-logo-ghost { position: fixed; z-index: 10; pointer-events: none; box-sizing: border-box;",
+      `  border: ${screenPx(2)} dashed ${CHROME_SCALE.brand}; border-radius: ${screenPx(3)};`,
+      "  background: rgba(21,111,231,0.10); }",
       // The element being moved, while it is being moved: dimmed, so the ghost is what the eye
       // follows. It keeps its place in the grid — see `wireDragging` on why it does not follow the
       // pointer — so this is the only sign that it is the subject.
@@ -8171,7 +8415,7 @@ export function Editor({
       // **And on the chosen header's grips** (ADR 0066, sprint 33 día 5): a finger drags a menu only
       // once the header is chosen, the same rule, so its grips take the finger only then. Unchosen,
       // a finger on the bar scrolls the canvas as it always did.
-      ".rb-header.rb-selected :is(nav.rb-nav[data-part], .rb-rail, .rb-nav-row, .rb-nav-fold > summary) {",
+      ".rb-header.rb-selected :is(nav.rb-nav[data-part], .rb-rail, .rb-nav-row, .rb-nav-fold > summary, .rb-brand) {",
       "  touch-action: none; }",
       // The element the panel is stepping, outlined the way mockup 16 draws it, so the numbers in
       // the panel and the thing on the page are visibly the same subject.
@@ -8415,6 +8659,8 @@ export function Editor({
       `::view-transition-group(*) { animation-duration: ${CHROME_SCALE.base};`,
       `  animation-timing-function: ${CHROME_SCALE.easeShape}; }`,
       "::view-transition-group(root) { animation-duration: 0s; }",
+      // The brand settles faster than a section travels (sprint 35 día 6): one box, a short way.
+      `::view-transition-group(rb-brand) { animation-duration: ${CHROME_SCALE.fast}; }`,
       "::view-transition-old(root) { display: none; }",
       "::view-transition-new(root) { animation: none; }",
       `html.${SLIDING_CLASS} .rb-gap { visibility: hidden; }`,
@@ -9014,6 +9260,7 @@ export function Editor({
             onSetPageInMenu={onSetPageInMenu}
             onSetSectionInMenu={onSetSectionInMenu}
             preview={headerPreview}
+            focusBlock={menuPanelFocus}
             onClose={() => showRail("sections")}
           />
         ) : effectiveRail === "share" ? (
