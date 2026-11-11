@@ -4,6 +4,8 @@ import { type RefObject, useEffect, useLayoutEffect, useRef, useState } from "re
 import es from "../locales/es.json" with { type: "json" };
 import { accountSentence } from "./accountSentence.ts";
 import type { SwitchNotice } from "./designTools.ts";
+import { HelpLine } from "./HelpLine.tsx";
+import type { HelpLineSays } from "./helpLine.ts";
 import { leave } from "./leaving.ts";
 import { DESKTOP_LAYOUT_WIDTH, desktopLayoutWidth, NARROWEST_WIDTH } from "./overflowCheck.ts";
 import { overscrollFor } from "./overscroll.ts";
@@ -739,6 +741,7 @@ export function EditorShell({
   panelKey,
   children,
   overlay,
+  helpLine,
   onZoomChange,
   onLayoutWidthChange,
 }: {
@@ -757,6 +760,18 @@ export function EditorShell({
    * box, which is also a containing block for `fixed`.
    */
   overlay?: React.ReactNode;
+  /**
+   * **The help line** (ADR 0071): what the editor has to say to the person, in its two voices, drawn
+   * by this shell in the one place an instruction lives — at the foot of the canvas area on a desktop,
+   * above the card on a phone — and never over the page. The words are the editor's (`helpLine.ts`);
+   * the place is the shell's, because the shell is what knows where the card ends.
+   */
+  helpLine?: {
+    live: HelpLineSays;
+    quiet: HelpLineSays;
+    onUndo: () => void;
+    onDismiss: () => void;
+  };
   /**
    * **The zoom the canvas is drawn at, each time it changes** (ADR 0053, David's condition 3).
    *
@@ -1571,8 +1586,14 @@ export function EditorShell({
               A wrapper and not a sibling: the walks read the row's children — the first is the
               canvas, the last the open panel — so the row keeps exactly the children it had.
               `min-w-0` here and on `canvas-area` because the card is laid out wider than the room
-              (1280 in 532) and a flex item's automatic minimum is its content's. */}
-          <div className="relative flex min-w-0 flex-grow">
+              (1280 in 532) and a flex item's automatic minimum is its content's.
+
+              **A column since the help line (ADR 0071, sprint 36 día 1)**: the canvas area above and
+              the line below it on a desktop — the line takes its 32 px from the area, so the card
+              is laid out that much shorter and the `ResizeObserver` on the area sees the room that
+              is really there; on a phone the line goes first, above the card, because the foot of
+              the screen is the rail's and the sheet's. Nothing of the line is ever over the card. */}
+          <div className="relative flex min-w-0 flex-grow flex-col">
             {viewWidth !== null && (
               <p
                 data-testid="canvas-view-width"
@@ -1597,7 +1618,7 @@ export function EditorShell({
             <div
               ref={canvasArea}
               data-testid="canvas-area"
-              className="flex min-w-0 flex-grow justify-center overflow-clip"
+              className="flex min-h-0 min-w-0 flex-grow justify-center overflow-clip"
             >
               <div
                 data-testid="canvas-card"
@@ -1633,6 +1654,15 @@ export function EditorShell({
                 {children}
               </div>
             </div>
+            {helpLine ? (
+              <HelpLine
+                live={helpLine.live}
+                quiet={helpLine.quiet}
+                onUndo={helpLine.onUndo}
+                onDismiss={helpLine.onDismiss}
+                className="phone:order-first"
+              />
+            ) : null}
           </div>
           {panel ? (
             <PanelHost key={panelKey ?? "panel"} row={panelRow}>

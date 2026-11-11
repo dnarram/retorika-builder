@@ -16,7 +16,8 @@ every patch), [ADR 0052](0052-the-keyboard-enters-a-section-and-the-bar-acts-on-
 The canvas is the client's page laid out at desktop width — 1024 at the narrowest — and scaled into
 whatever room the editor leaves it: `EditorShell` computes a zoom from that room and draws the card
 with `transform: scale(zoom)`. For the page that is the point: the owner sees their site as it will be.
-For the chrome drawn inside the frame over the page — the handles, the section's verbs, the text bar,
+For the chrome drawn inside the frame over the page (none of it a word of instruction since
+[ADR 0071](0071-an-instruction-lives-in-the-help-line-and-never-over-the-page.md)) — the handles, the section's verbs, the text bar,
 the outlines, the guides, the badges — it is a defect: the chrome is scaled with the page.
 
 Measured on 25 October 2026 in Chromium at 1024 × 900 with «Diseño» open, where the zoom is

@@ -10,14 +10,7 @@ import {
   variantsFor,
 } from "@retorika/catalog";
 import catalogEs from "@retorika/catalog/locales/es" with { type: "json" };
-import {
-  buildCss,
-  headerWidths,
-  ownFontsFor,
-  render,
-  sectionMenuEntries,
-  TWO_RAILS_FOLD_WIDTH,
-} from "@retorika/renderer";
+import { buildCss, ownFontsFor, render, sectionMenuEntries } from "@retorika/renderer";
 import {
   bindList,
   canFoldPage,
@@ -159,6 +152,16 @@ import { GUIDE_ZONE, type Guide, guidesFor, type Rect } from "../editor/guides.t
 import { HANDLE_TOUCH, handlesFor } from "../editor/handles.ts";
 import { headerPreviewer } from "../editor/headerPreview.ts";
 import { headerStateFor, headerStylePatch } from "../editor/headerState.ts";
+import {
+  ANNOUNCEMENT_MS,
+  boundBadge,
+  boundSentence,
+  chosenHint,
+  HELP_AT_REST,
+  type HelpLineState,
+  helpLineFor,
+  type KeyboardPlace,
+} from "../editor/helpLine.ts";
 import { ACCEPTED_IMAGE_ACCEPT } from "../editor/imageBytes.ts";
 import { leave } from "../editor/leaving.ts";
 import { toolbarFamilyLabel } from "../editor/letterGallery.ts";
@@ -234,7 +237,7 @@ import { keepsItsOwnUndo, shortcutFor } from "../editor/shortcuts.ts";
 import { reviewLogo } from "../editor/styleReview.ts";
 import { insertedTextFor, liveFrameOf, offsetFor, textFrameOf } from "../editor/textEdits.ts";
 import { hasAnyControl, toolbarFor } from "../editor/textToolbar.ts";
-import { chosenHintText, clickAction, textKeyAction } from "../editor/twoStates.ts";
+import { clickAction, textKeyAction } from "../editor/twoStates.ts";
 import { isPhoneViewport } from "../editor/viewport.ts";
 import es from "../locales/es.json" with { type: "json" };
 import { CollectionsPanel } from "./CollectionsPanel.tsx";
@@ -257,7 +260,6 @@ import { PhotosPanel } from "./PhotosPanel.tsx";
 import { RevertDialog } from "./RevertDialog.tsx";
 import { SharePanel } from "./SharePanel.tsx";
 import { StylePanel } from "./StylePanel.tsx";
-import { FieldError } from "./ui.tsx";
 
 /** `preparing` is the overflow measurement and the gate; `downloading` the request and the hold.
  * Both draw the building screen (`BuildingScreen.tsx`). */
@@ -279,18 +281,6 @@ function addressKey(sectionId: string, elementId: string): string {
  * drawn again after a patch, which every edit does to all of them.
  */
 const ARRIVES = "rb-arrives";
-
-/**
- * **The notice after a delete leaves as it arrived** (sprint 35 día 2): it rises into place
- * (`ui-rise-in`) and, when it goes — «Deshacer», its own cross, or its time running out — a copy
- * sinks back the eight pixels while the real one is already gone. A module-level function so the
- * ref is the same on every render, and React calls its cleanup once, when the notice is removed,
- * in the instant before the node leaves the page.
- */
-function leavesAsNotice(node: HTMLDivElement | null): (() => void) | undefined {
-  if (!node) return undefined;
-  return () => leave(node, "toast");
-}
 
 /**
  * What the delete toast (ADR 0014) shows: a name and whether it stays until dismissed. `Variants`
@@ -1001,8 +991,48 @@ export function Editor({
    * document now survives every edit and a region in it would too. **It stays here on purpose**,
    * and the reason has changed rather than gone: it is the editor speaking, not the page, and the
    * page is what gets published (ADR 0051's amendment to ADR 0049 §3).
+   *
+   * **Since ADR 0071 it is said in the help line's live child**, the one live region of
+   * instructions the editor has, where the eye reads it too for `ANNOUNCEMENT_MS` — long enough to
+   * read, short enough that the delete notice has its row back — and then it is let go.
    */
-  const [announcement, setAnnouncement] = useState("");
+  const [announcement, setAnnouncement] = useState<{ text: string; at: number } | null>(null);
+  useEffect(() => {
+    if (!announcement) return;
+    const timer = setTimeout(() => setAnnouncement(null), ANNOUNCEMENT_MS);
+    return () => clearTimeout(timer);
+  }, [announcement]);
+  /**
+   * **What the canvas has to say, mirrored from the canvas** (ADR 0071). The keyboard's place comes
+   * from the frame's own focus events; the chosen element from `markChosen`; the rest — a popup with
+   * a note open, the phone's reorder gesture refusing a drop, the text bar over a bound text — is
+   * read off the frame's chrome by one `MutationObserver` (`watchCanvasHelp`), so the twelve places
+   * that open or close those popups need not each remember to say so. `patchHelp` writes only what
+   * changed, so an observer firing on every patch is not a render on every patch.
+   */
+  const [help, setHelp] = useState<
+    Pick<HelpLineState, "keyboard" | "menuNote" | "bound" | "chosen" | "dragRefused">
+  >({ keyboard: null, menuNote: null, bound: null, chosen: null, dragRefused: false });
+  const patchHelp = (patch: Partial<typeof help>) =>
+    setHelp((current) => {
+      let changed = false;
+      for (const key of Object.keys(patch) as (keyof typeof patch)[]) {
+        if (JSON.stringify(current[key]) !== JSON.stringify(patch[key])) changed = true;
+      }
+      return changed ? { ...current, ...patch } : current;
+    });
+  /** A screen that is touched and never hovered has no keys to say; a Mac needs Fn before F10.
+   * Both read once the editor is on a screen, never during a server render. */
+  const [machine, setMachine] = useState<Pick<HelpLineState, "touch" | "platform">>({
+    touch: false,
+    platform: "other",
+  });
+  useEffect(() => {
+    setMachine({
+      touch: window.matchMedia("(hover: none) and (pointer: coarse)").matches,
+      platform: toolbarShortcutFor(window.navigator) === "mac" ? "mac" : "other",
+    });
+  }, []);
   /**
    * A counter that makes the **same** sentence audible twice.
    *
@@ -1193,7 +1223,10 @@ export function Editor({
   const editSerial = useRef(0);
   const announce = (text: string) => {
     announcements.current += 1;
-    setAnnouncement(announcements.current % 2 === 0 ? `${text}\u200B` : text);
+    setAnnouncement({
+      text: announcements.current % 2 === 0 ? `${text}\u200B` : text,
+      at: Date.now(),
+    });
   };
   /**
    * How the drag opens the «Diseñar a mano» offer that `wireSelection` draws (ADR 0048 §6).
@@ -2001,7 +2034,6 @@ export function Editor({
     // The chrome follows the page (día 3): after every patch, structural or not, because a text
     // that grew moved the gap below it and a section that arrived has no verbs yet.
     const redrawMs = redrawChrome(iframeDoc);
-    placeKeysLegend(iframeDoc);
     readingPoint.current = null;
     // Another page starts at the top (sprint 26 día 4): the one rule of the reading position that
     // is left, the document being never replaced and so never restored. The same page, patched,
@@ -2423,6 +2455,29 @@ export function Editor({
     [doc],
   );
 
+  /** What the help line says now, in its two voices (ADR 0071): the one place every instruction the
+   * editor used to draw over the page is said. `Date.now()` at render, because the announcement's
+   * life is measured from when it was said and the effect above re-renders when it runs out. */
+  const helpSays = helpLineFor(
+    {
+      ...HELP_AT_REST,
+      ...help,
+      ...machine,
+      notice: toast
+        ? {
+            sectionName: toast.sectionName,
+            brokenAnchors: toast.brokenAnchors,
+            persistent: toast.persistent,
+          }
+        : null,
+      announcement,
+      download: state,
+      photoError,
+      placeholders,
+    },
+    Date.now(),
+  );
+
   /**
    * **No link inside the preview ever navigates.** The canvas is a picture of the site, not a copy
    * of it that can be browsed.
@@ -2642,57 +2697,6 @@ export function Editor({
         "{section}",
         sectionDisplayName(docNow.current, sectionId),
       );
-    }
-
-    /**
-     * The key map, in Spanish, on screen — and **on screen the moment it is useful**, which is the
-     * answer to where it goes rather than a way of hiding it.
-     *
-     * It is drawn inside the frame like every other piece of canvas chrome, and it appears when a
-     * section takes the keyboard. The alternative homes were measured and rejected: the 58px top bar
-     * has a right-hand group pinned at 673px with a browser-run guard over its widths, and the row
-     * that holds the canvas is a flex row whose width a `ResizeObserver` turns into the zoom factor.
-     * Putting a legend in either means changing a measured layout to document a keyboard.
-     *
-     * Appearing on arrival is not the hover trap `REVIEW.md` ruled against — «un control que solo
-     * aparece bajo un puntero no existe para quien no tiene puntero». This is the opposite case: it
-     * appears for the keyboard, it is not a control, and Tab is the universal gesture for «what is
-     * focusable here», so the thing that reveals it is the thing it documents.
-     *
-     * `pointer-events: none`, because a legend that can swallow a click is a bug with a reason.
-     */
-    function showKeyLegend(visible: boolean) {
-      let legend = iframeDoc.querySelector<HTMLElement>(".rb-keys");
-      if (!visible) {
-        legend?.remove();
-        return;
-      }
-      if (legend) return;
-      legend = chrome(iframeDoc, "div");
-      legend.className = "rb-keys";
-      // `aria-hidden`: a screen reader is told the keys by the section's own role and label plus
-      // the live region, and reading a legend out on every arrow would be noise over the name of
-      // the section somebody just moved to.
-      legend.setAttribute("aria-hidden", "true");
-      for (const text of [
-        es["editor.canvasKeys.title"],
-        es["editor.canvasKeys.move"],
-        es["editor.canvasKeys.inside"],
-        es["editor.canvasKeys.choose"],
-        es["editor.canvasKeys.release"],
-        // The way to the text bar, in the keys this machine needs (ADR 0052 §3, David's note 8:
-        // without Fn a MacBook's F10 mutes the audio and never arrives). Then the bar's own keys.
-        toolbarShortcutFor(window.navigator) === "mac"
-          ? es["editor.canvasKeys.toBarMac"]
-          : es["editor.canvasKeys.toBar"],
-        es["editor.canvasKeys.bar"],
-        es["editor.canvasKeys.grip"],
-      ]) {
-        const row = chrome(iframeDoc, "span");
-        row.textContent = text;
-        legend.appendChild(row);
-      }
-      iframeDoc.body.appendChild(legend);
     }
 
     /**
@@ -3191,11 +3195,8 @@ export function Editor({
         });
         panel.appendChild(choice);
       }
-
-      const note = chrome(iframeDoc, "p");
-      note.className = "rb-menu-note";
-      note.textContent = es["editor.composition.note"];
-      panel.appendChild(note);
+      // «Cambia la colocación. El texto y las fotos no cambian.» is said by the help line while
+      // this menu is open (ADR 0071, David's decision 3): the menu keeps its choices and nothing else.
 
       return panel;
     }
@@ -3219,11 +3220,8 @@ export function Editor({
       title.className = "rb-menu-title";
       title.textContent = es["editor.section.escalate.title"];
       panel.appendChild(title);
-
-      const body = chrome(iframeDoc, "p");
-      body.className = "rb-menu-description";
-      body.textContent = es["editor.section.escalate.body"];
-      panel.appendChild(body);
+      // The explanation («Si la diseñas a mano podrás mover y ensanchar…») is the help line's while
+      // the offer is open (ADR 0071): the offer keeps its question and its two answers.
 
       const row = chrome(iframeDoc, "div");
       row.className = "rb-escalate-row";
@@ -3559,15 +3557,32 @@ export function Editor({
      * person is not. `focusin` and not `focus`, because the thing receiving focus is usually a
      * child: a paragraph being edited, or one of the action buttons.
      */
-    delegate(iframeDoc, "focusin", "[data-section]", (section, event) => {
-      // The legend says the model the moment a section itself has the keyboard — by Tab as much
-      // as by an arrow (ADR 0052 §7). A child taking focus is not that moment.
-      if (event.target === section) showKeyLegend(true);
+    delegate(iframeDoc, "focusin", "[data-section]", (section) => {
       const id = section.dataset.section;
       if (!id || keyboardSection.current === id) return;
       keyboardSection.current = id;
       applyRovingTabIndex();
     });
+
+    /**
+     * **Where the keyboard is, for the help line** (ADR 0071, which moved the key legend out of the
+     * frame). The legend used to appear in the corner the moment a section itself had the keyboard
+     * and stay until Escape (ADR 0052 §7); the line says instead the keys of the place the focus is
+     * in right now — the section's, the text bar's, its grip's, or the text being written in — and
+     * nothing where the place has no keys of its own. Read from the focus events, which is the one
+     * source that cannot drift from where the keyboard really is; `null` when it leaves the frame.
+     */
+    /*
+     * Read from `activeElement` after the event, never from the event's own target: writing can
+     * begin on a text that already has the focus (the second click, or Intro on a chosen text),
+     * so the place changes with no focus event at all — `watchCanvasHelp` reads it again when
+     * `contenteditable` changes, through this same function. During `focusout` the document's
+     * active element is already the next one (or the body, when the focus leaves the frame).
+     */
+    iframeDoc.addEventListener("focusin", () => queueMicrotask(() => syncKeyboardPlace(iframeDoc)));
+    iframeDoc.addEventListener("focusout", () =>
+      queueMicrotask(() => syncKeyboardPlace(iframeDoc)),
+    );
 
     /**
      * The canvas's own keys. Every decision is `sectionKeys.ts`'s; this is the wiring.
@@ -3615,7 +3630,6 @@ export function Editor({
           keyboardSection.current = target.dataset.section ?? null;
           applyRovingTabIndex();
           target.focus();
-          showKeyLegend(true);
           return;
         }
         if (action.kind === "choose") {
@@ -3633,7 +3647,6 @@ export function Editor({
          * the canvas had ever been touched.
          */
         sectionsNow()[at]?.blur();
-        showKeyLegend(false);
       },
       true,
     );
@@ -4785,14 +4798,23 @@ export function Editor({
           (candidate) => candidate.id === boundHere.collectionId,
         );
         const places = usesOfCollection(docNow.current, boundHere.collectionId).length;
-        const notice = chrome(iframeDoc, "div");
-        notice.className = "rb-toolbar-notice";
-        notice.setAttribute("role", "status");
-        notice.textContent =
-          places > 1
-            ? es["editor.toolbar.boundMany"].replace("{n}", String(places))
-            : es["editor.toolbar.boundOne"].replace("{list}", collection?.name ?? "");
-        bar.appendChild(notice);
+        /*
+         * **Two characters in the bar, the sentence in the help line** (ADR 0071, David's decision
+         * 3): «×3» where the text is written, with the whole sentence as its name and its `title`,
+         * and the line says it in full while the bar is open — the consequence is seen where one
+         * writes, the explanation where explanations live. `watchCanvasHelp` reads the two data
+         * attributes; the sentence itself is built by the line, once, for both.
+         */
+        const list = collection?.name ?? "";
+        const badge = chrome(iframeDoc, "span");
+        badge.className = "rb-toolbar-badge";
+        badge.setAttribute("role", "note");
+        badge.setAttribute("aria-label", boundSentence(places, list));
+        badge.title = boundSentence(places, list);
+        badge.dataset["places"] = String(places);
+        badge.dataset["list"] = list;
+        badge.textContent = boundBadge(places);
+        bar.appendChild(badge);
 
         // **The exit is the section's, never the card's** — ADR 0033 §7, and David's correction to
         // the plan. The elements inside a card are one shared template, so unbinding this card's
@@ -5635,9 +5657,10 @@ export function Editor({
       had.classList.remove("rb-chosen");
       had.removeAttribute("aria-describedby");
     }
-    for (const hint of iframeDoc.querySelectorAll(".rb-hint")) hint.remove();
+    for (const hint of iframeDoc.querySelectorAll(".rb-chosen-description")) hint.remove();
     if (!el) {
       chosenText.current = null;
+      patchHelp({ chosen: null });
       // The handles belong to whatever is chosen, so nothing chosen means none of them (día 7).
       handlePainter.current?.();
       return;
@@ -5673,18 +5696,24 @@ export function Editor({
      */
     handlePainter.current?.();
 
-    const says = [
-      el.dataset["rbText"] === "1" ? chosenHintText() : "",
-      movable ? es["editor.canvas.moveHint"] : "",
-    ].filter((part) => part !== "");
-    if (says.length === 0) return;
+    /**
+     * **The words are the help line's; the frame keeps only the description** (ADR 0071). The hint
+     * used to be drawn here, over the section's foot. It is said in the chrome now — but
+     * `aria-describedby` cannot point across documents, so an `sr-only` copy of the same sentence
+     * (the same function, so the two cannot disagree) stays on the chosen element's behalf, invisible
+     * and covering nothing.
+     */
+    const chosen = { text: el.dataset["rbText"] === "1", movable };
+    patchHelp({ chosen });
+    const says = chosenHint(chosen);
+    if (says === "") return;
 
-    const hint = chrome(iframeDoc, "div");
-    hint.className = "rb-hint";
-    hint.id = "rb-hint";
-    hint.textContent = says.join(" · ");
-    section.appendChild(hint);
-    el.setAttribute("aria-describedby", hint.id);
+    const description = chrome(iframeDoc, "span");
+    description.className = "rb-chosen-description";
+    description.id = "rb-chosen-description";
+    description.textContent = says;
+    section.appendChild(description);
+    el.setAttribute("aria-describedby", description.id);
   }
 
   /**
@@ -5803,9 +5832,11 @@ export function Editor({
       state.liveMarks = marksFor(docNow.current, address) ?? [];
       state.liveText = liveFrameOf(el.textContent ?? "").text;
       state.anchored = true;
-      // The hint's instruction has been followed, so it stops being advice and becomes clutter.
-      for (const hint of iframeDoc.querySelectorAll(".rb-hint")) hint.remove();
+      // The hint's instruction has been followed, so it stops being advice and becomes clutter —
+      // in the help line and in the element's own description alike.
+      for (const hint of iframeDoc.querySelectorAll(".rb-chosen-description")) hint.remove();
       el.removeAttribute("aria-describedby");
+      patchHelp({ chosen: null });
       // Deferred by one microtask: a click's default caret placement runs after the listeners,
       // and a select-all that ran before it would be collapsed by it (measured as
       // «UNODOSTCUATRORESCINCO» after five edits that should each have replaced the heading).
@@ -7412,8 +7443,9 @@ export function Editor({
         ghost.style.width = `${Math.round(host.width)}px`;
         ghost.style.top = `${Math.round((over?.top ?? host.top) - host.top)}px`;
         ghost.style.height = `${Math.round((over?.bottom ?? host.top) - (over?.top ?? host.top))}px`;
+        // A refused drop is red and says nothing here: «Arrastra arriba o abajo…» is the help
+        // line's, read off this class by `watchCanvasHelp` (ADR 0071).
         ghost.classList.toggle("rb-ghost-no", state.mobileSwap === null);
-        ghost.textContent = state.mobileSwap === null ? es["editor.drag.order"] : "";
         return;
       }
       const metrics = gridMetricsOf(section);
@@ -7747,7 +7779,7 @@ export function Editor({
     // The chrome's lengths are divided by it from its first paint (ADR 0053).
     writeZoom(iframeDoc);
     wireInteractions(iframeDoc);
-    placeKeysLegend(iframeDoc);
+    watchCanvasHelp(iframeDoc);
     focusLineAfterChange(iframeDoc);
     // The reading point while the width is still (`steadyReading`): every scroll the person makes, and
     // none of the ones a settling width makes.
@@ -7820,35 +7852,62 @@ export function Editor({
   }
 
   /**
-   * **The key legend clear of a rail** (ADR 0060, David's adjustment 3 on approving sprint 31): a
-   * column fixed at the left edge is where the legend sits, so with a rail standing there it goes to
-   * the right, and with two standing it goes to the middle, between them. Read from the header's own
-   * `data-rails` and **the widths this document's rails stand from** — `headerWidths`, which writes
-   * the renderer's `@media` (sprint 34 día 5: since the fold of ADR 0067 a rail stands from just
-   * above the fold, past 1024 where the bar's words ask it) — never from a measurement. With two
-   * rails, between the two widths only the pages' rail stands, so it is the pages' side that counts
-   * there. Written once per document into a chrome `<style>` of its own, after every patch, and
-   * rewritten only when the widths change; a bar that never fits has no rail and no rule.
+   * **The line reads the canvas** (ADR 0071): a popup with a note of its own open over a section
+   * («Aspecto», the «A mano» offer), the phone's reorder gesture refusing a drop (`rb-ghost-no`),
+   * the text bar over a text bound to a collection (its badge) — each used to say its words inside
+   * the frame, over the page. One observer on the frame's body reads whether they are there and the
+   * help line says the words instead. Coalesced to one read per batch of mutations, and written
+   * through `patchHelp`, which drops a read that changed nothing, so the observer firing on every
+   * patch is not a render on every patch.
    */
-  function placeKeysLegend(iframeDoc: Document) {
-    const widths = headerWidths(docNow.current);
-    const rules =
-      widths.rails === "none"
-        ? ""
-        : [
-            `@media (min-width: ${widths.rails}px) {`,
-            '  .rb-header[data-rails=left] ~ .rb-keys, .rb-header[data-rails="left right"][data-pages=left] ~ .rb-keys {',
-            `    left: auto; right: ${screenPx(12)}; } }`,
-            `@media (min-width: ${Math.max(TWO_RAILS_FOLD_WIDTH, widths.rails)}px) {`,
-            '  .rb-header[data-rails="left right"] ~ .rb-keys { left: 50%; right: auto; transform: translateX(-50%); } }',
-          ].join("\n");
-    let style = iframeDoc.getElementById("rb-keys-place") as HTMLStyleElement | null;
-    if (!style) {
-      style = chrome(iframeDoc, "style");
-      style.id = "rb-keys-place";
-      iframeDoc.head.appendChild(style);
-    }
-    if (style.textContent !== rules) style.textContent = rules;
+  function keyboardPlaceOf(target: Element | null): KeyboardPlace {
+    if (!target || !("closest" in target)) return null;
+    const el = target as HTMLElement;
+    if (el.matches("[data-section]")) return "section";
+    if (el.matches(".rb-toolbar-grip")) return "grip";
+    if (el.closest(".rb-toolbar")) return "bar";
+    if (el.matches("[data-rb-text]") && el.isContentEditable) return "writing";
+    return null;
+  }
+
+  /** Where the keyboard is, for the help line (ADR 0071): the section's, the text bar's, its
+   * grip's, or the text being written in — and nowhere that has keys of its own, which includes
+   * the frame without focus. One reader for the focus events and the observer alike. */
+  function syncKeyboardPlace(iframeDoc: Document) {
+    patchHelp({ keyboard: keyboardPlaceOf(iframeDoc.activeElement) });
+  }
+
+  function watchCanvasHelp(iframeDoc: Document) {
+    let queued = false;
+    const read = () => {
+      queued = false;
+      syncKeyboardPlace(iframeDoc);
+      const badge = iframeDoc.querySelector<HTMLElement>(".rb-toolbar-badge");
+      patchHelp({
+        menuNote: iframeDoc.querySelector(".rb-escalate")
+          ? "escalate"
+          : iframeDoc.querySelector(".rb-compositions")
+            ? "composition"
+            : null,
+        dragRefused: iframeDoc.querySelector(".rb-ghost-no") !== null,
+        bound: badge
+          ? { places: Number(badge.dataset["places"] ?? "1"), list: badge.dataset["list"] ?? "" }
+          : null,
+      });
+    };
+    const observer = new MutationObserver(() => {
+      if (queued) return;
+      queued = true;
+      queueMicrotask(read);
+    });
+    observer.observe(iframeDoc.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      // `contenteditable`: writing begins and ends on an element that may keep the focus throughout.
+      attributeFilter: ["class", "contenteditable"],
+    });
+    read();
   }
 
   function wireInteractions(iframeDoc: Document) {
@@ -7896,7 +7955,7 @@ export function Editor({
        * Three states, three looks, and the pair is the one the sections already use: **dashed on
        * hover** means «you could», **solid** means «this is the one». Writing keeps the solid
        * outline and adds the caret and the selection, which is what distinguishes it — and the hint
-       * in the corner disappears, because its instruction has been followed.
+       * the help line says disappears, because its instruction has been followed (ADR 0071).
        */
       `[data-rb-text] { cursor: text; border-radius: ${screenPx(3)};`,
       `  outline: ${screenPx(2)} dashed transparent; outline-offset: ${screenPx(3)};`,
@@ -7912,18 +7971,15 @@ export function Editor({
        */
       `[data-rb-text]:focus-visible { outline: ${screenPx(3)} dashed #0F172A; outline-offset: ${screenPx(3)}; }`,
       /*
-       * The hint, in the section's own chrome and at the bottom of it — away from the verbs' cluster
-       * at the top right and from the floating text bar, which opens over the words themselves.
-       * `pointer-events: none`, because a line of advice that can eat a click is a bug with a
-       * reason. It is **not** `aria-hidden`: the chosen text points at it with `aria-describedby`,
-       * so a screen reader reading the text is told how to start writing in it.
+       * The chosen element's description (ADR 0071): the words the help line shows, kept here only
+       * for `aria-describedby`, which cannot point across documents. Off screen like `.rb-announce`
+       * — never `display: none`, which would take it out of the accessibility tree too — and so
+       * never over the page.
        */
-      `.rb-hint { position: absolute; left: ${screenPx(VERB_SCALE.inset)}; bottom: ${screenPx(VERB_SCALE.inset)};`,
-      `  z-index: 10; padding: ${screenPx(5)} ${screenPx(9)}; border-radius: ${screenPx(999)}; pointer-events: none;`,
-      `  background: ${CHROME_SCALE.ink}; color: #FFFFFF;`,
-      `  font: 600 ${screenPx(12)}/1.3 ${UI_FONT}; box-shadow: ${CHROME_SCALE.shadow2}; }`,
-      // Touched screens have no hover and no double click worth the name; the hint still says what
-      // to do, and the key legend is the thing that hides there (see `.rb-keys`).
+      ".rb-chosen-description { position: absolute; width: 1px; height: 1px; overflow: hidden;",
+      "  clip-path: inset(50%); white-space: nowrap; }",
+      // Touched screens have no hover and no double click worth the name; the help line still says
+      // what to do, and says no keys there (there are none).
       "@media (hover: none) and (pointer: coarse) { [data-rb-text]:hover { outline-color:",
       "  transparent; } }",
       // The canvas is still: no smooth scroll and no section animation, whatever the published page
@@ -7984,21 +8040,8 @@ export function Editor({
        */
       ".rb-announce { position: absolute; width: 1px; height: 1px; overflow: hidden;",
       "  clip-path: inset(50%); white-space: nowrap; }",
-      /*
-       * The key map. Fixed to the frame's own viewport, so it stays in view while the canvas
-       * scrolls, and `pointer-events: none` so a legend can never eat a click. White on `#0F172A`
-       * is about 17:1.
-       */
-      // The key legend is for a keyboard; on a screen that is touched and never hovered there is
-      // none, and a fixed box in the corner of a 320px canvas covers what it would explain.
-      "@media (hover: none) and (pointer: coarse) { .rb-keys { display: none; } }",
-      `.rb-keys { position: fixed; left: ${screenPx(12)}; bottom: ${screenPx(12)}; z-index: 30; display: flex;`,
-      `  flex-direction: column; gap: ${screenPx(2)}; padding: ${screenPx(8)} ${screenPx(11)}; border-radius: ${screenPx(10)};`,
-      "  background: #0F172A; color: #FFFFFF; pointer-events: none;",
-      `  font: 500 ${screenPx(12)}/1.45 ${UI_FONT}; box-shadow: ${CHROME_SCALE.shadow2}; }`,
-      ".rb-keys span:first-child { font-weight: 700; letter-spacing: 0.02em; }",
-      // **Clear of a rail**: the legend's place beside a standing column is written per document,
-      // from the widths its rails stand from — `placeKeysLegend`, after every patch.
+      // The key legend that stood fixed in this corner until sprint 36 día 1 is the help line's now
+      // (ADR 0071): nothing in the frame says a key.
       // Inset within the section, not hung outside it like the corner handles: the cover is
       // the first section, with no room above it, and a button hanging above the top of the
       // page there would sit outside the iframe's own visible area — covered by whatever the
@@ -8560,10 +8603,12 @@ export function Editor({
       // gives `[hidden]` a `display: none`, and an author rule with an explicit `display` beats it —
       // so the marks group set `hidden` and went on being drawn. Found by the test written for
       // mockup 18, after a probe that read the `.hidden` property and believed it.
-      // The notice is not a control and does not look like one: full width of the bar, its own line
-      // above the groups, and no border — so nothing about it invites a press.
-      `.rb-toolbar-notice { font-family: ${UI_FONT}; flex-basis: 100%; padding: ${screenPx(2)} ${screenPx(7)} ${screenPx(4)};`,
-      `  font-size: ${screenPx(11)}; line-height: 1.35; color: #92400E; }`,
+      // The badge of a bound text (ADR 0071): two characters at the end of the bar, not a control
+      // and not looking like one — no border, the bar's own muted ink on a quiet pill. The sentence
+      // it stands for is its name, and the help line says it in full while the bar is open.
+      `.rb-toolbar-badge { font-family: ${UI_FONT}; align-self: center; margin: 0 ${screenPx(7)} 0 ${screenPx(3)};`,
+      `  padding: ${screenPx(1)} ${screenPx(7)}; border-radius: ${screenPx(999)}; background: #FEF3C7;`,
+      `  font-size: ${screenPx(11)}; line-height: ${screenPx(16)}; font-weight: 700; color: #92400E; }`,
       ".rb-toolbar-group[hidden] { display: none; }",
       `.rb-toolbar-group { display: flex; align-items: center; gap: ${screenPx(4)}; padding: 0 ${screenPx(7)};`,
       `  border-right: ${screenPx(1)} solid #EDF1F6; }`,
@@ -9193,6 +9238,11 @@ export function Editor({
       // on the warning path, because the blocking check runs before it, so the block dialog worked
       // perfectly and the warning silently did nothing.
       onDownload={() => void requestDownload()}
+      helpLine={{
+        ...helpSays,
+        onUndo: undoFromHistory,
+        onDismiss: onDismissToast,
+      }}
       device={device}
       onDeviceChange={setDevice}
       canUndo={canUndo}
@@ -9449,26 +9499,6 @@ export function Editor({
         ) : undefined
       }
     >
-      <div className="flex flex-col gap-3 border-b border-ui-border px-4 py-3">
-        {state === "error" ? <FieldError>{es["editor.downloadError"]}</FieldError> : null}
-        {state === "busy" ? <FieldError>{es["editor.downloadBusy"]}</FieldError> : null}
-        {photoError ? <FieldError>{photoError}</FieldError> : null}
-        {placeholders > 0 ? (
-          <p className="m-0 text-[13px] font-medium text-[#92400E]">
-            {placeholders === 1
-              ? es["editor.placeholder.one"]
-              : es["editor.placeholder.many"].replace("{count}", String(placeholders))}
-          </p>
-        ) : null}
-        <p className="m-0 text-[13px] text-ui-muted">{es["editor.editHint"]}</p>
-        {/* Where a moved element says where it went. `role="status"` with `aria-live="polite"`, so
-            two quick presses do not queue two interruptions, and `sr-only` because this is for a
-            screen reader: the eye already sees the element move. It is **outside the canvas** on
-            purpose — see `announce`. */}
-        <p role="status" aria-live="polite" className="sr-only">
-          {announcement}
-        </p>
-      </div>
       <input
         ref={fileInputRef}
         type="file"
@@ -9539,73 +9569,6 @@ export function Editor({
       >
         {previewFrame()}
       </div>
-      {toast ? (
-        <div
-          ref={leavesAsNotice}
-          className="ui-rise-in fixed bottom-[34px] left-1/2 z-10 flex max-w-[calc(100vw-32px)] -translate-x-1/2 flex-wrap items-center gap-5 rounded-[13px] bg-[#0F172A] py-3.5 pr-3.5 pl-5 shadow-[0_10px_30px_rgba(15,23,42,0.28)] phone:bottom-[calc(72px+env(safe-area-inset-bottom))]"
-        >
-          <span className="inline-flex items-center gap-2.5 text-[15px] font-medium text-white">
-            <svg
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="#94A3B8"
-              strokeWidth={1.9}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M4 7h16" />
-              <path d="M9 7V5h6v2" />
-              <path d="M6 7l1 13h10l1-13" />
-            </svg>
-            {es["editor.toast.deleted"].replace("{name}", toast.sectionName)}
-          </span>
-          {toast.brokenAnchors > 0 ? (
-            <span className="max-w-[26ch] text-[13px] leading-snug text-[#FCA5A5]">
-              {toast.brokenAnchors === 1
-                ? es["editor.toast.deletedAnchors.one"]
-                : es["editor.toast.deletedAnchors.many"].replace(
-                    "{count}",
-                    String(toast.brokenAnchors),
-                  )}
-            </span>
-          ) : null}
-          <button
-            type="button"
-            onClick={undoFromHistory}
-            className="h-9 cursor-pointer rounded-[9px] border-0 bg-white px-[18px] text-sm font-semibold text-ui-ink"
-          >
-            {es["editor.toast.undo"]}
-          </button>
-          {toast.persistent ? (
-            <button
-              type="button"
-              onClick={onDismissToast}
-              aria-label={es["editor.toast.dismiss"]}
-              // `#94A3B8` stays **here** and nowhere else on a light surface: this toast paints
-              // `#0F172A`, where the stroke measures **6.96:1** against the 3:1 a non-text graphic
-              // answers to (WCAG 1.4.11). The same value on white is 2.56 and clears neither
-              // threshold, which is what `ui.tsx`'s note used to get wrong.
-              className="cursor-pointer border-0 bg-transparent text-[#94A3B8]"
-            >
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={2}
-                strokeLinecap="round"
-                aria-hidden="true"
-              >
-                <path d="M6 6l12 12M18 6L6 18" />
-              </svg>
-            </button>
-          ) : null}
-        </div>
-      ) : null}
     </EditorShell>
   );
 }
