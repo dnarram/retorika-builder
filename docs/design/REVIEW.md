@@ -8452,4 +8452,132 @@ medible.
    WebKit de escritorio, a 55 y 47 px; un iPhone no se ha mirado). El editor sigue sin probarse fuera de
    Chromium, así que el deslizamiento de las secciones tampoco se ha visto en WebKit ni en Firefox.
 6. **Anotado, sin arreglar**: el `rootMargin` del observador y el precipicio de la medida de la ADR 0067.
-7. **El sprint 36, sin planificar.**
+7. ~~**El sprint 36, sin planificar.**~~ **Planificado el 11 de noviembre** (abajo).
+
+## Sprint 36 — «El editor se encadena, y la ayuda tiene su línea» (desde el 11 de noviembre de 2026)
+
+David, con la #366 fusionada y redesplegada, pide **«que el editor mejore en animaciones y transiciones
+para dar un aspecto de vanguardia»**, con la referencia `aymanelimam.com/frontend/` (sin librería, solo
+`transform` y `opacity`, `prefers-reduced-motion` a cero, `@keyframes` y no JavaScript fotograma a
+fotograma: los principios que `motionBudget.test.ts` ya guarda) y el encargo de innovar; y una regla:
+**«los textos con instrucciones, sin importar si está en modo escritorio o en modo móvil, no deben
+cubrir la página a ser editada»**. Sus cuatro respuestas al plan: **un segundo registro con nombre**
+(`--ui-scene`, 400 ms, dos nombres: la propuesta que se convierte en el lienzo y la salida de la
+construcción; la escena no arranca hasta que el destino está pintado, y bajo `reduce` es un fundido de
+`--ui-fast`, nunca un corte); **la línea de ayuda al pie del área del lienzo** en escritorio y encima de
+la tarjeta en el móvil (32 px fijos y una línea con elipsis para que un mensaje nunca mueva el lienzo;
+la única región `aria-live="polite"` de instrucciones; los errores de descarga siguen siendo diálogo);
+**las notas de «Aspecto» y «A mano» a la línea**, y en la barra de texto un distintivo de dos caracteres
+con la frase entera como nombre; **onda al pulsar en todo botón e imán solo en «Descargar»**. Cuatro
+ajustes al aprobar: la línea tiene **dos hijos, uno vivo y otro silencioso** (una región viva que cambia
+con cada Tab es un lector de pantalla hablando sin parar); **el ritmo es para lo que llega, no para lo
+que cambia**; **la espera de una escena tope a 500 ms**, no a un segundo; y **un pseudoelemento no se
+comparte** (la onda en `::before`). El plan está en la memoria del proyecto (`project-sprint-36-plan`).
+
+### Día 1, primero y solo — la línea de ayuda sale de la página (PR de `feat/la-linea-de-ayuda-sale-de-la-pagina`)
+
+Un cambio de modelo va primero y solo: dónde vive una instrucción, antes de que ninguna se mueva.
+
+**Lo que tapaba la página, contado el 11 de noviembre**: dentro del marco, la leyenda de teclas
+`.rb-keys` fija en la esquina desde el primer foco de una sección hasta Escape; la pista «Doble clic o
+Intro para escribir» al pie de la sección del texto elegido, también en el móvil; «Arrastra arriba o
+abajo…» sobre la fila que un dedo movía; la nota bajo las opciones de «Aspecto»; la explicación dentro
+de la oferta «A mano»; «Este texto aparece en {n} sitios» como una línea de la barra de texto. Fuera del
+marco pero `fixed` sobre la tarjeta, el aviso de borrado con «Deshacer» (escalado con la tarjeta en
+escritorio, a 72 px del pie en el móvil). Y la tira «Haz doble clic en cualquier texto…» dentro de la
+tarjeta, en el flujo: no tapaba, pero escalaba con el zoom y dejaba 187 px de página en un 320 × 568.
+Ninguna guarda medía un texto de instrucción contra la página; ninguna medía nada en el móvil.
+
+**La línea** ([ADR 0071](../decisions/0071-an-instruction-lives-in-the-help-line-and-never-over-the-page.md)):
+una fila de 32 px del cromo, hija de la columna que sostiene el área del lienzo —debajo del área en
+escritorio, con `phone:order-first` encima de la tarjeta en el móvil—, así que su altura sale de la del
+área y la tarjeta se maqueta esa altura más corta; nunca está posicionada sobre la tarjeta. Texto en una
+línea con elipsis y la frase entera en `title`. **Dos hijos, los dos siempre en la página**: el vivo
+(`<p role="status" aria-live="polite" aria-atomic="true">`) para lo que nadie vio venir —los anuncios de
+`announce`, cuya `<p class="sr-only">` desaparece; el aviso de borrado con sus dos botones al lado; una
+descarga rechazada o el error de una foto— y el silencioso (`aria-live="off"`) para lo que sigue al foco:
+el reposo, las teclas del sitio donde está el foco, la pista del elegido, la nota del menú abierto, la
+frase del texto ligado, los textos de ejemplo que quedan. Un módulo puro, `editor/helpLine.ts`, decide
+cada hijo por prioridad cerrada (`helpLine.test.ts` es la tabla); `editor/HelpLine.tsx` lo dibuja;
+`EditorShell` le da el sitio. El aviso sigue llegando subiendo y yéndose como copia (`leaving.ts`,
+sprint 35 día 2): lo que cambió es dónde.
+
+**Lo que se mudó y cómo lo sabe la línea.** Las teclas ya no son un bloque de ocho líneas: son **las del
+sitio donde está el foco** —sección, barra del texto, su asa, el texto que se escribe— leídas de los
+`focusin`/`focusout` del propio marco, ninguna en táctil (`editor.help.keys.*`; la frase de la sección
+conserva «Tab: lo de esta sección, y después fuera del lienzo» palabra por palabra, ADR 0052 §7). El
+elegido lo dice `markChosen`, y en el marco queda solo una descripción `sr-only` (`.rb-chosen-description`)
+para `aria-describedby`, que no cruza documentos: la misma función escribe las dos, así que no pueden
+discrepar. **El resto lo lee un `MutationObserver` sobre el cuerpo del marco** (`watchCanvasHelp`): si
+hay `.rb-escalate` o `.rb-compositions`, si hay `.rb-ghost-no`, si la barra lleva `.rb-toolbar-badge`
+con sus dos `data-*`; una lectura por lote de mutaciones y escrita por un `patchHelp` que descarta lo que
+no cambió, así que disparar en cada parche no es un render en cada parche. Doce sitios abren o cierran
+esos menús y ninguno tuvo que aprender a avisar. El distintivo de la barra: «×{n}» o «≡», `role="note"`
+con la frase como `aria-label` y `title`. Las zonas de suelta conservan su nombre: nombran un destino.
+`placeKeysLegend` y `#rb-keys-place` —la leyenda que se apartaba de un raíl por ancho estimado (sprint
+34 día 5)— se van con la leyenda; `headerWidths` ya no se importa en el editor.
+
+**Una prueba de fuente cierra la vuelta atrás**: `Editor.tsx` y `EditorShell.tsx` no leen ninguna clave
+de instrucción (`canvasKeys.toBar*`, `canvas.chosenHint`, `canvas.moveHint`, `drag.order`,
+`composition.note`, `section.escalate.body`, `toolbar.bound*`, `toast.*`, `editHint`, `placeholder.*`,
+`downloadError/Busy`), ni dibujan `"rb-keys"`, `"rb-hint"`, `rb-keys-place` ni `"rb-toolbar-notice"`;
+`helpLine.ts` las lee todas. `chromeContrast.test.ts` pierde su única excepción: el `#94A3B8` del aspa
+del aviso vivía sobre `#0F172A`, y el aviso ya no pinta esa superficie —la cruz es `--ui-muted` sobre
+la de la aplicación—, así que la clase no puede volver en `Editor.tsx` ni en `HelpLine.tsx`.
+
+**Dos caminatas nuevas.** **«Ningún texto de instrucción tapa la página»**, a 320 × 568, 390 × 844,
+768 × 1024, 1024 × 800 y 1280 × 800: en reposo, con un texto elegido, con una sección enfocada por
+teclado, con una sección elegida, con «Aspecto» abierto, con la oferta «A mano» abierta, tras borrar una
+sección y tras deshacer, la caja de la línea no intersecta la de `canvas-card`, la línea mide 32, **la
+caja de la tarjeta es la misma antes y después de cada mensaje**, y el marco no contiene `.rb-keys`,
+`.rb-hint`, `.rb-menu-note` ni `.rb-toolbar-notice`; a 390, con la hoja de «Estilo» abierta, la línea
+sigue a la vista encima. **«La línea habla poco»** (ajuste 1 de David): elegir un texto, cinco Tab
+seguidos y abrir «Aspecto» no cambian el texto del hijo vivo mientras el silencioso sí sigue al foco;
+borrar una sección sí lo cambia, y hay un solo `p[role="status"]` en la página. **Lo que enseñó la
+primera pasada**: a 320 la tarjeta «se movía» 23,5 px entre dos estados — no por la línea sino por la
+cabecera, que gana su fila de estado («Guardado en este navegador») con el primer autoguardado; la
+caminata toma la caja de reposo cuando esa frase ya está. Y a 320 × 568 la hoja de un panel, con su tope
+del 70 % (ADR 0042), llega por encima de la línea como llega sobre el lienzo: es un panel, no una
+instrucción, y la ADR lo nombra como lo que no decide; la aserción de la hoja es la de 390.
+
+**Caminatas reescritas sobre la línea: diez**, más el ayudante `editHint`, que treinta caminatas pulsan
+para dejar un texto (ahora pulsa la fila de la línea, diga lo que diga): «Intro hace aparecer las seis
+acciones» (la leyenda → las teclas del hijo silencioso y `.rb-keys` a cero), «escribir gana» (ninguna
+leyenda → el silencioso no dice las teclas de sección), «la barra es la parada siguiente» (la tecla del
+Mac en la línea), «elige la cabecera desde el raíl» (la leyenda a la derecha del raíl → la línea bajo la
+tarjeta), «con la barra plegada en el lienzo» (el sondeo de `#rb-keys-place` se va; el pliegue lo dice la
+frase del panel), «un clic elige, el segundo escribe» (`.rb-hint` → `.rb-chosen-description` y la línea),
+«warns before a character is typed», «says «en N sitios»», «makes a list from the cards» y «edita la
+ficha desde su página» (el aviso de la barra → el distintivo y la línea). Las de `p[role="status"]` (ocho)
+y las del aviso de borrado (cuatro) no cambian: el hijo vivo es ese `<p>` y el aviso sigue diciendo «Has
+borrado la sección» con su «Deshacer».
+
+**Saboteos**, cada uno deshecho por guion: la prioridad del arrastre bajo las teclas → «ranks the refused
+drag over the keys» roja; la pista del elegido por el hijo vivo → «never sends a focus-driven text through
+the live child» roja; `.rb-hint` dibujado otra vez en `Editor.tsx` → la prueba de fuente roja.
+
+**Un límite con nombre, para David**: la única región viva que sigue dentro del marco es el nombre de la
+sección al elegirla («Qué hago: elegida», `.rb-announce`, ADR 0049), estado del documento con el foco y
+no una instrucción, invisible; si ha de ser también de la línea es suyo decirlo (la caminata que cuenta
+una región viva en el marco sigue igual). Y el glifo «≡» para «viene de la lista»: dos caracteres fueron
+suyos, cuáles fueron del desarrollo.
+
+**Lo que enseñaron las dos primeras pasadas completas**, cada una con tres rojos de una sola causa:
+(1) dos caminatas táctiles del 24 y el 25 deslizaban con un dedo desde `y: 700` en un contexto cuyo
+`width`/`height` no son opciones de contexto, así que su ventana real es 1280 × 720 — con la línea al pie,
+la tarjeta acaba en 688 y el dedo empezaba sobre la línea, que no desplaza nada, con razón; el dedo
+empieza ahora en 640 y lo dice. Y la caminata de la negrita por teclado veía el reposo donde esperaba
+las teclas del texto: escribir puede empezar sobre un texto que ya tiene el foco (el segundo clic, Intro
+sobre un elegido), sin ningún evento de foco, así que el sitio del teclado se lee ahora de
+`activeElement` tras cada `focusin`/`focusout` y cuando cambia `contenteditable`, por el mismo
+observador. (2) Con el sitio bien leído, tres caminatas de textos ligados veían las teclas del texto
+donde esperaban la frase «aparece en 2 sitios»: la frase es lo que hay que leer antes de la primera
+tecla, así que **gana a las teclas del texto que se escribe** (no a las de la barra ni del asa), y la
+tabla lo dice. Nada de esto lo vio la pasada filtrada del día, que no incluía esas caminatas: la
+completa es la que cuenta.
+
+**Suites.** `typecheck`, `lint`, `test` (3863 en 181 ficheros, 16 más), invariantes (27), golden (27,
+cero cambios: nada viaja), `a11y` local (1750). **e2e completa**: antes de tocar nada, la del cierre
+del 35 sobre el mismo `0acd54c` (306 verdes y 1 omitida, 1371 s); después, tres pasadas — 309 + 3 rojos,
+309 + 3 rojos, y **312 verdes y 1 omitida en 1403 s, limpia** — las 306 de antes y las 6 nuevas.
+

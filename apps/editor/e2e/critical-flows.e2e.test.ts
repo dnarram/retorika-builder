@@ -4038,7 +4038,9 @@ async function intoWriting(target: Locator): Promise<void> {
  * sentence is corrected; this way the correction lands in one place.
  */
 function editHint(page: Page): Locator {
-  return page.getByText("Haz doble clic en cualquier texto para cambiarlo");
+  // The help line (ADR 0071): the sentence lives there, and the row is what a walk presses to
+  // leave a text — whatever the line happens to be saying at that moment.
+  return page.getByTestId("help-line");
 }
 
 async function selectWord(locator: Locator, word: string): Promise<void> {
@@ -6895,7 +6897,8 @@ describe("sprint 14 día 6 — enlazar, avisar y desenlazar", () => {
 
       // **The notice is there before anything is typed** — one section shows it, so it says where
       // the words live rather than warning about a consequence with nowhere to land.
-      await expect(frame.locator(".rb-toolbar-notice")).toHaveText(/viene de la lista/);
+      await expect(frame.locator(".rb-toolbar-badge")).toHaveText("≡");
+      await expect(page.getByTestId("help-line-quiet")).toHaveText(/viene de la lista/);
 
       await page.keyboard.type("Chapa y pintura");
       await editHint(page).click();
@@ -6944,7 +6947,7 @@ describe("sprint 14 día 6 — enlazar, avisar y desenlazar", () => {
       const titles = frame.locator('[data-preset="services"] li.rb-item h3');
       await titles.first().click();
       await frame.locator(".rb-toolbar").waitFor();
-      await expect(frame.locator(".rb-toolbar-notice")).toHaveText(/viene de la lista|2 sitios/);
+      await expect(page.getByTestId("help-line-quiet")).toHaveText(/viene de la lista|2 sitios/);
     } finally {
       await page.context().close();
     }
@@ -7108,7 +7111,8 @@ describe("sprint 14 día 7 — el recorrido completo del sprint", () => {
       await intoWriting(first);
       await frame.locator(".rb-toolbar").waitFor();
       // The warning, before a character is typed, and now naming the count.
-      await expect(frame.locator(".rb-toolbar-notice")).toHaveText(/2 sitios/);
+      await expect(frame.locator(".rb-toolbar-badge")).toHaveText("×2");
+      await expect(walk.getByTestId("help-line-quiet")).toHaveText(/2 sitios/);
       await walk.keyboard.type("Comidas caseras");
       await editHint(walk).click();
       await expect(walk.getByText("Guardado en este navegador")).toBeVisible();
@@ -11890,9 +11894,12 @@ describe("sprint 17 día 3 — el lienzo se maneja con el teclado", () => {
 
       // The legend appears when the keyboard starts moving, which is the moment it is useful.
       await page.keyboard.press("ArrowDown");
-      await expect(frame.locator(".rb-keys")).toHaveCount(1);
-      await expect(frame.locator(".rb-keys")).toContainText("Teclas del lienzo");
-      await expect(frame.locator(".rb-keys")).toContainText("cambiar de sección");
+      // The keys of the place the keyboard is in, said by the help line (ADR 0071) and drawn
+      // nowhere in the frame.
+      const keys = page.getByTestId("help-line-quiet");
+      await expect(keys).toContainText("cambiar de sección");
+      await expect(keys).toContainText("Esc: soltar el lienzo");
+      await expect(frame.locator(".rb-keys")).toHaveCount(0);
 
       // **The six verbs, which is the whole point of the day.** They did not exist until now.
       const chosen = await focusedSection(page);
@@ -11921,10 +11928,10 @@ describe("sprint 17 día 3 — el lienzo se maneja con el teclado", () => {
       await expect(frame.locator(".rb-announce")).toContainText("elegida");
       await expect(frame.locator('[aria-live="polite"]')).toHaveCount(1);
 
-      // Esc gives the keyboard back, and the legend goes with it.
+      // Esc gives the keyboard back, and the keys go with it.
       await page.keyboard.press("Escape");
       expect(await focusedSection(page)).toBeNull();
-      await expect(frame.locator(".rb-keys")).toHaveCount(0);
+      await expect(keys).not.toContainText("cambiar de sección");
       // The choice survives letting go: Escape is not «forget where I was».
       await expect(frame.locator(".rb-actions")).toHaveCount(1);
     } finally {
@@ -11953,10 +11960,11 @@ describe("sprint 17 día 3 — el lienzo se maneja con el teclado", () => {
       const before = await focusedSection(page);
       await page.keyboard.press("ArrowDown");
       await page.keyboard.press("ArrowUp");
-      // Focus is still in the text, not on another section, and no legend appeared.
+      // Focus is still in the text, not on another section, and the line says the text's keys,
+      // not the sections'.
       expect(await focusedElementId(page), "an arrow was stolen mid-word").toBe("el-headline");
       expect(await focusedSection(page)).toBe(before);
-      await expect(frame.locator(".rb-keys")).toHaveCount(0);
+      await expect(page.getByTestId("help-line-quiet")).not.toContainText("cambiar de sección");
 
       /*
        * **Enter inside text belongs to the text, and what the text does with it is commit.**
@@ -13710,7 +13718,7 @@ describe("sprint 19 día 5 — editar en la ficha, la puerta y el ZIP", () => {
       // Still the home page in the canvas: the click edited, it did not travel.
       await expect(frame.locator('main[data-page="home"]')).toHaveCount(1);
       await expect(tabs.first()).toHaveAttribute("aria-current", "page");
-      await expect(frame.locator(".rb-toolbar-notice")).toContainText("aparece en 2 sitios");
+      await expect(page.getByTestId("help-line-quiet")).toContainText("aparece en 2 sitios");
       // Focus selects the whole title, which is this field's contract: the first keystroke replaces.
       await page.keyboard.type("Comidas del día");
       await editHint(page).click();
@@ -13721,7 +13729,7 @@ describe("sprint 19 día 5 — editar en la ficha, la puerta y el ZIP", () => {
       const headline = frame.locator('[data-section^="sec-ficha"] h1');
       await expect(headline).toHaveText("Comidas del día");
       await clickToEdit(frame, headline);
-      await expect(frame.locator(".rb-toolbar-notice")).toContainText("aparece en 2 sitios");
+      await expect(page.getByTestId("help-line-quiet")).toContainText("aparece en 2 sitios");
       await page.keyboard.type("Comidas del día y noche");
       await editHint(page).click();
       await expect(headline).toHaveText("Comidas del día y noche");
@@ -16656,14 +16664,18 @@ describe("sprint 24 día 7 — un texto se elige antes de escribir en él", () =
       await headline.click();
       await expect(headline).toHaveClass(/rb-chosen/);
       await expect(headline).not.toHaveAttribute("contenteditable", "true");
-      const hint = frame.locator(".rb-hint");
+      // Said by the help line (ADR 0071), and kept in the frame only as the text's own description
+      // — off screen, so it is not advice only the eye gets and it covers nothing.
+      await expect(page.getByTestId("help-line-quiet")).toHaveText(
+        "Doble clic o Intro para escribir",
+      );
+      const hint = frame.locator(".rb-chosen-description");
       await expect(hint).toHaveText("Doble clic o Intro para escribir");
-      // The hint is the text's own description, so it is not advice only the eye gets.
       expect(await textFocus(page)).toMatchObject({
         id: "el-headline",
         chosen: true,
         writing: false,
-        describedBy: "rb-hint",
+        describedBy: "rb-chosen-description",
       });
 
       // **And typing does not reach the page**, which is the whole of what the first state buys:
@@ -16675,7 +16687,7 @@ describe("sprint 24 día 7 — un texto se elige antes de escribir en él", () =
       // ---- the second click: writing, with the field selected so typing replaces ----
       await headline.click();
       await expect(headline).toHaveAttribute("contenteditable", "true");
-      await expect(frame.locator(".rb-hint")).toHaveCount(0);
+      await expect(frame.locator(".rb-chosen-description")).toHaveCount(0);
       await page.keyboard.type("Taberna del Puerto");
       await expect(headline).toHaveText("Taberna del Puerto");
 
@@ -16684,7 +16696,7 @@ describe("sprint 24 día 7 — un texto se elige antes de escribir en él", () =
       await expect(headline).toHaveText(original);
       await expect(headline).not.toHaveAttribute("contenteditable", "true");
       await expect(headline).toHaveClass(/rb-chosen/);
-      await expect(frame.locator(".rb-hint")).toHaveCount(1);
+      await expect(frame.locator(".rb-chosen-description")).toHaveCount(1);
 
       // ---- Intro commits, and the choice survives the rebuild every edit causes ----
       await headline.click();
@@ -16708,7 +16720,7 @@ describe("sprint 24 día 7 — un texto se elige antes de escribir en él", () =
       expect(await textFocus(page)).toMatchObject({ id: "el-headline", chosen: true });
       await page.keyboard.press("Escape");
       await expect(frame.locator(".rb-chosen")).toHaveCount(0);
-      await expect(frame.locator(".rb-hint")).toHaveCount(0);
+      await expect(frame.locator(".rb-chosen-description")).toHaveCount(0);
       expect(await focus(page)).toMatchObject({ section: "sec-cover", onSection: true });
     } finally {
       await context.close();
@@ -17289,7 +17301,10 @@ describe("sprint 24 día 9 — el teclado lo mueve y lo dice", () => {
       const scrollTop = () =>
         frame.locator("body").evaluate(() => document.scrollingElement?.scrollTop ?? 0);
       const before = await scrollTop();
-      await finger(context, page, { x: 720, y: 700 }, { x: 720, y: 300 });
+      // From inside the card: this context's window is 1280 × 720 (its `width`/`height` are not
+      // context options), the card ends at 688 since the help line took the foot of the canvas
+      // area (ADR 0071), and a finger that starts on the line scrolls nothing — rightly.
+      await finger(context, page, { x: 720, y: 640 }, { x: 720, y: 300 });
       await expect
         .poll(scrollTop, { message: "un dedo dejó de desplazar el lienzo" })
         .toBeGreaterThan(before);
@@ -18997,7 +19012,9 @@ describe("sprint 25 día 7 — las asas en táctil, y el móvil sin solape", () 
        * ve en un ratón. Se vuelve a aseverar hoy porque hoy hay ocho elementos nuevos que la
        * llevan.
        */
-      const at = { x: 720, y: 700 };
+      // Dentro de la tarjeta: la ventana de este contexto mide 1280 × 720 y, con la línea de ayuda
+      // al pie del área (ADR 0071), la tarjeta acaba en 688.
+      const at = { x: 720, y: 640 };
       // Y el dedo aterriza donde dice: sin esto la caminata podría acabar aseverando que el
       // elemento elegido desplaza el lienzo, que es lo contrario de lo que se promete.
       const under = await page.evaluate((point) => {
@@ -21194,7 +21211,7 @@ describe("sprint 27 día 4 — las flechas de la barra", () => {
            * and never arrives. Playwright's own press does not depend on that setting, which is
            * why the walk presses `Alt+F10` on every platform and the legend is what differs.
            */
-          await expect(frame.locator(".rb-keys")).toContainText(
+          await expect(page.getByTestId("help-line-quiet")).toContainText(
             process.platform === "darwin" ? "Fn+⌥+F10" : "Alt+F10",
           );
         }
@@ -24017,11 +24034,15 @@ describe("sprint 31 día 4 — el raíl se elige en el lienzo", () => {
         reached = await focusedSection();
       }
       expect(reached, "Tab from the rail never reached a section").toBe("sec-cover");
-      const legend = frame.locator(".rb-keys");
-      await expect(legend).toBeVisible();
-      const legendBox = await inFrame(legend);
-      expect(legendBox.left, JSON.stringify(legendBox)).toBeGreaterThan(railBox.right);
-      expect(legendBox.right).toBeLessThanOrEqual(1280);
+      // The keys are the help line's since ADR 0071: under the card, never over the page or a rail.
+      const keys = page.getByTestId("help-line");
+      await expect(keys).toContainText("cambiar de sección");
+      const keysBox = await keys.boundingBox();
+      const cardBox = await page.getByTestId("canvas-card").boundingBox();
+      expect(
+        keysBox !== null && cardBox !== null && keysBox.y >= cardBox.y + cardBox.height - 0.5,
+        JSON.stringify({ keysBox, cardBox }),
+      ).toBe(true);
 
       // 4. The text bar of a headline stays inside its section, which a rail made 1040 wide.
       await frame.locator('[data-section="sec-cover"] [data-id="el-headline"]').click();
@@ -26005,9 +26026,8 @@ describe("sprint 34 día 5 — «Menú» es agarre", () => {
       if (!(fold >= 1024 && fold < DESKTOP_LAYOUT_WIDTH)) {
         throw new Error(`the fold is ${fold}: this walk needs one in [1024, 1280)`);
       }
-      await expect
-        .poll(() => frame.locator("#rb-keys-place").evaluate((el) => el.textContent ?? ""))
-        .toContain(`(min-width: ${fold + 1}px)`);
+      // (The key legend that used to be placed clear of the rail by this width is the help
+      // line's since ADR 0071; the fold itself is what the panel's sentence above says.)
 
       // 2. A 1024 window with the panel lays the canvas out at 887, under the fold: the phone's
       //    header, «Menú» drawn, and the panel says it is the pages' grip.
@@ -27520,4 +27540,213 @@ describe("sprint 35 día 7 — cada control responde", () => {
       await context.close();
     }
   }, 240_000);
+});
+
+describe("sprint 36 día 1 — la línea de ayuda sale de la página", () => {
+  /**
+   * **No instruction text covers the page being edited, at any width** (ADR 0071, David's rule for
+   * sprint 36). The help line is a 32 px row of the chrome outside the card — under it on a desktop,
+   * above it on a phone — and the frame draws none of the words it used to: the key legend in its
+   * corner, the chosen text's hint at its section's foot, the notes inside «Aspecto» and the «A
+   * mano» offer. Measured in the editor's own document, where the line and the card both are: the
+   * two boxes never intersect, the line is always 32 px, and the card does not move by a pixel when
+   * the message changes (David's condition).
+   */
+  type Box = { x: number; y: number; width: number; height: number };
+  const sameBox = (box: Box) => ({ x: box.x, y: box.y, width: box.width, height: box.height });
+  async function lineAndCard(page: Page): Promise<{ line: Box; card: Box; overlaps: boolean }> {
+    const line = await page.getByTestId("help-line").boundingBox();
+    const card = await page.getByTestId("canvas-card").boundingBox();
+    if (!line || !card) throw new Error("the help line or the canvas card has no box");
+    const overlaps = !(
+      line.y >= card.y + card.height - 0.5 ||
+      line.y + line.height <= card.y + 0.5 ||
+      line.x >= card.x + card.width ||
+      line.x + line.width <= card.x
+    );
+    return { line, card, overlaps };
+  }
+  const OVER_THE_PAGE = ["rb-keys", "rb-hint", "rb-menu-note", "rb-toolbar-notice"];
+
+  it.each([
+    [320, 568],
+    [390, 844],
+    [768, 1024],
+    [1024, 800],
+    [1280, 800],
+  ])(
+    "ningún texto de instrucción tapa la página a %i × %i",
+    async (width, height) => {
+      const context = await browser.newContext({ viewport: { width, height } });
+      const page = await context.newPage();
+      try {
+        await intoTheCanvas(page);
+        const frame = page.frameLocator(PREVIEW).first();
+        const quiet = page.getByTestId("help-line-quiet");
+        const live = page.getByTestId("help-line-live");
+        // The header gains its status row with the first autosave — 23.5 px on a phone, measured
+        // — and that is the header's, not the line's: the rest box is taken once it is there.
+        await expect(page.getByText("Guardado en este navegador")).toBeVisible();
+        await motionSettled(page);
+        const rest = await lineAndCard(page);
+        const cardAtRest = sameBox(rest.card);
+
+        const clear = async (state: string) => {
+          await motionSettled(page);
+          const { line, card, overlaps } = await lineAndCard(page);
+          expect(
+            overlaps,
+            `${state}: the help line intersects the canvas card ${JSON.stringify({ line, card })}`,
+          ).toBe(false);
+          expect(Math.round(line.height), `${state}: the line is not 32 px`).toBe(32);
+          const around = await page.evaluate(() =>
+            ["editor-shell", "canvas-and-panel", "canvas-area", "help-line", "rail"].map((id) => {
+              const box = document.querySelector(`[data-testid="${id}"]`)?.getBoundingClientRect();
+              return `${id}: ${box ? [box.x, box.y, box.width, box.height].map(Math.round).join(",") : "-"}`;
+            }),
+          );
+          const header = await page
+            .locator("header")
+            .first()
+            .evaluate((el) => `${el.getBoundingClientRect().height} ${el.textContent}`);
+          expect(
+            sameBox(card),
+            `${state}: the card moved when the message changed; ${around.join(" | ")}; header ${header}`,
+          ).toEqual(cardAtRest);
+          const drawn = await frame
+            .locator("body")
+            .evaluate(
+              (_, names: string[]) =>
+                names.filter((name) => document.querySelector(`.${name}`) !== null),
+              OVER_THE_PAGE,
+            );
+          expect(drawn, `${state}: an instruction is drawn over the page again`).toEqual([]);
+        };
+
+        // 1. At rest: the idle sentence, and nothing in the live voice.
+        await expect(quiet).toContainText("Haz doble clic en cualquier texto");
+        await expect(live).toHaveText("");
+        await clear("en reposo");
+
+        // 2. A chosen text: its hint, in the line and nowhere over the section.
+        const headline = frame.locator('[data-section="sec-cover"] [data-id="el-headline"]');
+        await headline.click();
+        await expect(quiet).toHaveText("Doble clic o Intro para escribir");
+        await clear("con un texto elegido");
+
+        // 3. A section with the keyboard: the canvas's keys.
+        const services = frame.locator('[data-section="sec-services"]');
+        await services.evaluate((el) => (el as HTMLElement).focus());
+        await expect(quiet).toContainText("cambiar de sección");
+        await clear("con una sección enfocada por teclado");
+        await page.keyboard.press("Escape");
+        await expect(quiet).not.toContainText("cambiar de sección");
+
+        // 4. «Aspecto» open: its note is the line's; the menu keeps only its choices.
+        await services.click();
+        await clear("con una sección elegida");
+        const aspect = services.locator('.rb-action[aria-label="Cambiar cómo se ve esta sección"]');
+        if ((await aspect.count()) > 0) {
+          await aspect.click();
+          await expect(frame.locator(".rb-compositions")).toHaveCount(1);
+          await expect(quiet).toHaveText("Cambia la colocación. El texto y las fotos no cambian.");
+          await clear("con «Aspecto» abierto");
+          await page.keyboard.press("Escape");
+          await expect(frame.locator(".rb-compositions")).toHaveCount(0);
+        }
+
+        // 5. The «A mano» offer open: its explanation is the line's; the offer keeps its question.
+        const byHand = services.locator('.rb-action[aria-label="Diseñar a mano"]');
+        if ((await byHand.count()) > 0) {
+          await services.click();
+          await byHand.click();
+          await expect(frame.locator(".rb-escalate")).toHaveCount(1);
+          await expect(quiet).toContainText("Si la diseñas a mano podrás mover y ensanchar");
+          await expect(frame.locator(".rb-escalate")).not.toContainText("podrás mover");
+          await clear("con la oferta «A mano» abierta");
+          await frame.locator(".rb-escalate-no").click();
+          await expect(frame.locator(".rb-escalate")).toHaveCount(0);
+        }
+
+        // 6. After a delete: the notice and its «Deshacer» are in the line, not fixed over the card.
+        await services.click();
+        await services.locator('.rb-action[aria-label="Borrar esta sección"]').click();
+        await expect(live).toContainText("Has borrado la sección");
+        await expect(page.locator("button", { hasText: "Deshacer" })).toBeVisible();
+        await clear("tras borrar una sección");
+        await page.locator("button", { hasText: "Deshacer" }).click();
+        await expect(services).toBeVisible();
+        await expect(live).toHaveText("");
+        await clear("tras deshacer");
+
+        // 7. On a phone, with a sheet open, the line is still in view above it — at 390 × 844. At
+        //    320 × 568 the sheet's 70 % cap (ADR 0042) reaches above the line as it reaches over the
+        //    canvas: a panel, not an instruction, and named in ADR 0071 as what it does not decide.
+        if (width === 390) {
+          await page.getByRole("button", { name: "Estilo", exact: true }).click();
+          await motionSettled(page);
+          const sheet = await page
+            .locator('[data-testid="canvas-and-panel"] > :last-child')
+            .boundingBox();
+          const { line } = await lineAndCard(page);
+          expect(
+            sheet !== null && line.y + line.height <= sheet.y + 0.5,
+            `the sheet covers the help line ${JSON.stringify({ sheet, line })}`,
+          ).toBe(true);
+        }
+      } finally {
+        await context.close();
+      }
+    },
+    240_000,
+  );
+
+  it("la línea habla poco: elegir, tabular y abrir un menú no tocan la voz viva; borrar sí", async () => {
+    /**
+     * David's adjustment 1: a live region that changed with every Tab would be a screen reader
+     * talking without pause. The quiet child changes with the focus; the live child only says what
+     * the person did not see coming.
+     */
+    const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+    const page = await context.newPage();
+    try {
+      await intoTheCanvas(page);
+      const frame = page.frameLocator(PREVIEW).first();
+      const live = page.getByTestId("help-line-live");
+      const quiet = page.getByTestId("help-line-quiet");
+      const liveText = () => live.evaluate((el) => el.textContent ?? "");
+      await expect(live).toHaveAttribute("aria-live", "polite");
+      await expect(live).toHaveAttribute("aria-atomic", "true");
+      await expect(quiet).toHaveAttribute("aria-live", "off");
+      expect(await liveText()).toBe("");
+
+      const headline = frame.locator('[data-section="sec-cover"] [data-id="el-headline"]');
+      await headline.click();
+      await expect(quiet).toHaveText("Doble clic o Intro para escribir");
+      expect(await liveText(), "choosing a text spoke").toBe("");
+
+      const said: string[] = [];
+      for (let press = 0; press < 5; press += 1) {
+        await page.keyboard.press("Tab");
+        said.push(await quiet.evaluate((el) => el.textContent ?? ""));
+        expect(await liveText(), `Tab ${press + 1} spoke`).toBe("");
+      }
+      // The quiet voice did follow the focus: it is not that nothing happened.
+      expect(new Set(said).size, `five Tabs said ${JSON.stringify(said)}`).toBeGreaterThan(1);
+
+      const services = frame.locator('[data-section="sec-services"]');
+      await services.click();
+      await services.locator('.rb-action[aria-label="Cambiar cómo se ve esta sección"]').click();
+      await expect(quiet).toHaveText("Cambia la colocación. El texto y las fotos no cambian.");
+      expect(await liveText(), "opening «Aspecto» spoke").toBe("");
+      await page.keyboard.press("Escape");
+
+      await services.click();
+      await services.locator('.rb-action[aria-label="Borrar esta sección"]').click();
+      await expect(live).toContainText("Has borrado la sección «Qué hago»");
+      await expect(page.locator('p[role="status"]')).toHaveCount(1);
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
 });

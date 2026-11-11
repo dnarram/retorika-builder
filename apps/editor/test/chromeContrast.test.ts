@@ -419,21 +419,30 @@ describe("the greys the mockups use and the product refuses", () => {
     }
   });
 
-  it("keeps the one exception on the one surface where it clears 3:1, and nowhere else", () => {
-    // The persistent toast's dismiss icon, on `#0F172A`. A non-text graphic answers to 1.4.11's
-    // 3:1, and the same stroke on white measures 2.56 — which is why «icon strokes are untouched»
-    // was true of this one and false as a general claim.
+  it("carries the grey nowhere now that the dark toast is gone, and never on a light surface", () => {
+    // The persistent toast's dismiss icon used to be the one exception, on `#0F172A`, where the
+    // stroke clears 1.4.11's 3:1; the same stroke on white measures 2.56. Since ADR 0071 the notice
+    // is a line of the chrome on the app's own surface and its cross is `--ui-muted`, so the
+    // exception is gone with the surface it was measured on — and the class may not come back.
     expect(contrastRatio("#94A3B8", INK)).toBeGreaterThan(UI_COMPONENT);
     expect(contrastRatio("#94A3B8", SURFACE)).toBeLessThan(UI_COMPONENT);
 
-    const toast = readFileSync(
-      join(import.meta.dirname, "..", "src", "questionnaire", "Editor.tsx"),
-      "utf8",
-    );
-    expect(
-      [...toast.matchAll(/text-\[#94A3B8\]/g)],
-      "`#94A3B8` is used as a colour class more than once; only the dark toast may",
-    ).toHaveLength(1);
+    for (const file of ["Editor.tsx", "HelpLine.tsx"]) {
+      const source = readFileSync(
+        join(
+          import.meta.dirname,
+          "..",
+          "src",
+          file === "HelpLine.tsx" ? "editor" : "questionnaire",
+          file,
+        ),
+        "utf8",
+      );
+      expect(
+        [...source.matchAll(/text-\[#94A3B8\]/g)],
+        `\`#94A3B8\` is used as a colour class in ${file}, which paints on a light surface`,
+      ).toEqual([]);
+    }
 
     // **The class syntax and not the bare hex**, because both files now explain the refusal in
     // prose and a guard that reads prose is a guard that fails on its own documentation. The

@@ -1,14 +1,15 @@
 # Signing pack — November 2026
 
-> **For David.** Twenty-eight ADRs are `proposed`: 0042, 0043 and 0045 to 0070. Each one records a
+> **For David.** Twenty-nine ADRs are `proposed`: 0042, 0043 and 0045 to 0071. Each one records a
 > decision of yours, and none of them is accepted until you say so in writing. This file is the
 > one place to read them from: what each decides in a sentence, what was added to it after it was
 > written and when, what development decided under your delegation rather than you, and what
 > signing it changes. Prepared on sprint 34 día 7, 6 November 2026, and brought up to date closing
-> sprint 35, 11 November 2026. **Development does not sign.**
+> sprint 35, 11 November 2026, and again on sprint 36 día 1 the same day. **Development does not sign.**
 
 The sprint 34 plan counted 24 (0042, 0043, 0045–0066). ADR 0067 and ADR 0068 were written during
-sprint 34, and ADR 0069 and ADR 0070 during sprint 35 (its día 4), so the pack has 28 rows.
+sprint 34, ADR 0069 and ADR 0070 during sprint 35 (its día 4), and ADR 0071 on sprint 36 día 1, so the
+pack has 29 rows.
 
 ## What signing changes, and what it does not
 
@@ -53,7 +54,7 @@ A suggestion, so that each chain of amendments is signed together. Any other gro
 
 | Batch | ADRs | What it is about |
 |---|---|---|
-| **A** | 0042, 0047, 0048, 0049, 0050, 0051, 0052, 0053, 0061, 0066 | The editor: the phone, choosing and writing, the drag and the keys, the canvas that patches, the chrome, the canvas at 1280, a menu dragged to its zone |
+| **A** | 0042, 0047, 0048, 0049, 0050, 0051, 0052, 0053, 0061, 0066, 0071 | The editor: the phone, choosing and writing, the drag and the keys, the canvas that patches, the chrome, the canvas at 1280, a menu dragged to its zone, the help line |
 | **B** | 0045, 0046, 0055, 0056 | The letter: no reserved names, the gallery, forty families, an owner's own font |
 | **C** | 0043, 0057, 0058, 0059, 0060, 0063, 0065, 0067, 0069, 0070 | The header: two menus, the owner's header, its script, the logo, the places, the bar of 2026, the sheet, the fold, the brand's size and its place |
 | **D** | 0054, 0062, 0064, 0068 | The published page: its icon, its motion and the progress line that amends it, its measure and rhythm |
@@ -77,6 +78,7 @@ of the commit that added it, read from `git log`.
 | [0053](0053-chrome-is-drawn-in-screen-pixels-and-an-element-too-small-on-screen-keeps-its-corners.md) · 25 Oct, sprint 27 | Every length of the canvas's chrome is a length of the screen whatever the zoom, measured into `--rb-zoom`; the handles are 44 px on screen, and an element too small on screen keeps its corners | Amendment of 26 Oct (sprint 28 día 2: the chrome in the page's flow at a lower zoom, measured) | **Yes, 25 Oct**, under the same words: the handles' rule stays three along and two across; the outlines are accepted as Chromium draws them; what keeps the frame's pixels stays as built |
 | [0061](0061-the-canvas-lays-out-at-1280-and-scales.md) · 30 Oct, sprint 31 | The desktop canvas lays out at 1280 px and scales to the window; under the legibility floor it gives up width rather than legibility, and says so | Nothing | Nothing |
 | [0066](0066-a-menu-is-dragged-to-its-zone.md) · 4 Nov, sprint 33 | A menu is dragged from its own ground to a zone drawn when the gesture starts; a drop outside or Escape writes nothing; a side the other menu holds stacks the two; the live region names the zone, the cards stay the keyboard's way; the cursor announces the gesture | Notes of 5 Nov (sprint 33 día 5: the gesture case by case; día 6: it also starts on an entry, your condition 1 amended), 6 Nov (sprint 34 día 5: «Menú» is a grip) and 10 Nov (sprint 35 día 4: the brand becomes a grip, by ADR 0070 in batch C — sign C with or after this batch) | Nothing |
+| [0071](0071-an-instruction-lives-in-the-help-line-and-never-over-the-page.md) · 11 Nov, sprint 36 | Every instruction the editor says lives in one 32 px help line of the chrome — under the canvas on a desktop, above it on a phone — and never over the page: the key legend, the chosen text's hint, the popups' notes, the bound text's sentence (a two-character badge stays in the bar) and the delete notice moved there; two voices, a live one for what nobody saw coming and a quiet one for what follows the focus (amends 0042 and 0052) | Nothing | Nothing |
 
 ### Batch B — the letter
 

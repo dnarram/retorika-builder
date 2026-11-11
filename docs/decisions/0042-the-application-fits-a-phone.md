@@ -69,7 +69,7 @@ decide si sigue o se va a Canva». On a phone it showed a sixth of each proposal
    | Editor rail | **a bottom bar**: five items, icon and word, above the home indicator | the 80px rail | the 80px rail, seven items with the tools on |
    | Editor canvas | opens in «Ver en móvil», at its real 320px; the desktop view stays available and scales, as it always has | as studio | holds its layout width and scales (sprint 11) |
    | Editor panels, fields panel | **sheets** from the bottom, full width, their own scroll, a close button each | beside the canvas, 340px | beside the canvas, 340px |
-   | Dialogs, toast, key legend | fit the screen; the toast clears the bottom bar; the key legend is not drawn where there is no keyboard | as studio | as studio |
+   | Dialogs, toast, key legend | fit the screen; the toast clears the bottom bar; the key legend is not drawn where there is no keyboard. *Since [ADR 0071](0071-an-instruction-lives-in-the-help-line-and-never-over-the-page.md) (11 Nov 2026) the toast and the legend are the help line's, a 32 px row above the card on a phone and under it elsewhere, never over the page; the line says no keys where there is no keyboard* | as studio | as studio |
 
 3. **The questions and the proposals have no breakpoint.** They are inline-styled screens, and
    everything they need is fluid: `clamp()`, `repeat(auto-fill, minmax(min(100%, N px), 1fr))`,

@@ -411,5 +411,11 @@ with the old revert put back.
   except after an arrow moved the keyboard without choosing; then they are not in the way either,
   which is the point.
 - **Two ADRs proposed on top of ten unsigned**: this one and 0053.
+- **§7's legend left the frame on 11 November 2026 (sprint 36 día 1,
+  [ADR 0071](0071-an-instruction-lives-in-the-help-line-and-never-over-the-page.md)).** The model it
+  said is said by the help line instead, as the keys of the place the focus is in — the section's
+  line keeps «Tab: lo de esta sección, y después fuera del lienzo» word for word — and nothing in
+  the frame says a key. The mitigation stands; its place changed, because a legend fixed over the page
+  was drawn over what it was explaining.
 
 **Still `proposed`.** This ADR until David signs it.
