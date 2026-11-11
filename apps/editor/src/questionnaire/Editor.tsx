@@ -7899,7 +7899,8 @@ export function Editor({
        * in the corner disappears, because its instruction has been followed.
        */
       `[data-rb-text] { cursor: text; border-radius: ${screenPx(3)};`,
-      `  outline: ${screenPx(2)} dashed transparent; outline-offset: ${screenPx(3)}; }`,
+      `  outline: ${screenPx(2)} dashed transparent; outline-offset: ${screenPx(3)};`,
+      `  transition: outline-color ${CHROME_SCALE.fast} ${CHROME_SCALE.ease}; }`,
       "[data-rb-text]:hover { outline-color: #156FE7; }",
       "[data-rb-text].rb-chosen { outline-style: solid; outline-color: #156FE7; }",
       '[data-rb-text][contenteditable="true"] { outline-style: solid; outline-color: #156FE7; }',
@@ -7929,6 +7930,14 @@ export function Editor({
       // does (`canvasStillness.ts`, ADR 0051 §3, sprint 32 adjustment 2).
       ...CANVAS_STILLNESS,
       "[data-section] { position: relative; cursor: pointer; }",
+      /*
+       * **A choice fades in** (sprint 35 día 7): the section's and the header's outline is always
+       * there, transparent, and choosing colours it over `--ui-fast` — the outline appears where it
+       * always was, and nothing moves. The text's own dashed and solid outline does the same, on
+       * hover and on choosing. Flattened under reduced motion with the rest of the canvas.
+       */
+      `[data-section], .rb-header { outline: ${screenPx(2)} solid transparent; outline-offset: ${screenPx(-2)};`,
+      `  transition: outline-color ${CHROME_SCALE.fast} ${CHROME_SCALE.ease}; }`,
       `[data-section].rb-selected { outline: ${screenPx(2)} solid #156FE7; outline-offset: ${screenPx(-2)}; }`,
       // The header is chosen like a section and drawn like one (sprint 30 día 3): the same pointer,
       // the same outline. Its entries keep the pointer a link has.
@@ -8688,6 +8697,8 @@ export function Editor({
       "  .rb-handmade-in { animation-duration: 0.01ms; }",
       "  .rb-line-add { transition-duration: 0.01ms; }",
       "  .rb-arrives { animation-duration: 0.01ms; }",
+      // The choice that fades in (sprint 35 día 7): coloured at once.
+      "  [data-section], .rb-header, [data-rb-text] { transition-duration: 0.01ms; }",
       '  [data-leaving="popup"], [data-leaving="zone"] { animation-duration: 0.01ms; }',
       // Never started for somebody who asked for less movement (`canSlide`); flattened here too, so
       // the promise does not rest on one check.

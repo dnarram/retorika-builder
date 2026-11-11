@@ -388,8 +388,29 @@ describe("the budget in the editor", () => {
       expect(source, `${where}: transition-all animates the layout`).not.toMatch(
         /(?<![\w-])transition-all(?![\w-])/,
       );
+      /*
+       * **One press, the one `ui-interactive` gives** (sprint 35 día 7). A Tailwind `active:scale-*`
+       * is a second press beside it: it writes `scale`, which `ui-interactive` does not transition,
+       * so it jumps — and it stays under reduced motion, where the day-2 press gives nothing. Undo,
+       * redo and «Descargar» wore one each until this day.
+       */
+      expect(source, `${where}: a second press beside ui-interactive's`).not.toMatch(
+        /(?<![\w-])active:scale-/,
+      );
     });
   }
+
+  it("draws the saved tick once, and shades a scrolled panel without a movement", () => {
+    const shell = readStripped(EDITOR_SRC, "editor", "EditorShell.tsx");
+    expect(utilitiesIn(shell)).toContain("ui-draw");
+    expect(UTILITIES.get("ui-draw")).toMatch(/animation:[^;]*backwards/);
+    expect(restOf("ui-draw")).toBeLessThanOrEqual(INTERACTION_CAP_MS);
+    // The shade is two backgrounds, one that scrolls with the content: no time in it at all.
+    const shade = UTILITIES.get("ui-scroll-shade") ?? "";
+    expect(shade).toMatch(/background-attachment:\s*local,\s*scroll/);
+    expect(timesIn(shade)).toEqual([]);
+    expect(readStripped(EDITOR_SRC, "editor", "panelKit.tsx")).toMatch(/ui-scroll-shade/);
+  });
 });
 
 /**

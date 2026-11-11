@@ -254,6 +254,52 @@
 }
 
 /**
+ * **A line that draws itself once, as it arrives** (sprint 35 día 7): the tick beside «Guardado en
+ * este navegador». The path is given `pathLength="1"`, so one dash the length of the whole line and an
+ * offset going from 1 to 0 draws it from its start, whatever its shape. `--ui-base` on the shape
+ * curve, the way a thing arrives; `backwards`, so a drawn tick owns nothing once it is drawn. Once:
+ * the tick mounts when the sentence becomes true and stays mounted while it is, so a second save
+ * draws nothing — the sentence did not change, and a mark that redrew at every keystroke would be a
+ * pulse. «No guardado» has no tick and nothing drawn: it is said.
+ */
+@utility ui-draw {
+  stroke-dasharray: 1;
+  animation: ui-draw var(--ui-base) var(--ui-ease-shape) backwards;
+}
+
+@keyframes ui-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+}
+
+/**
+ * **A panel that has scrolled says so at its top** (sprint 35 día 7): a soft shadow under the top
+ * edge once the content has gone up under it, and none while it is at the top. The classic two
+ * backgrounds, and no animation at all: a cover in the panel's own colour that scrolls with the
+ * content (`local`) and hides the shadow while the top of the content is there, and the shadow
+ * itself, which stays with the box (`scroll`). The plan had a scroll-driven animation for this; the
+ * backgrounds do the same in every engine Firefox included, move nothing in time, and so need no
+ * reduced-motion twin — the shadow is where the content is, not a movement.
+ *
+ * Painted under the panel's children, as a background is: over the words and the gaps, under a
+ * control with its own fill. `background-color` stays the panel's own utility's.
+ */
+@utility ui-scroll-shade {
+  background-image:
+    linear-gradient(var(--ui-surface) 40%, transparent),
+    radial-gradient(farthest-side at 50% 0, rgb(15 23 42 / 0.14), transparent);
+  background-size:
+    100% 28px,
+    100% 10px;
+  background-position:
+    top center,
+    top center;
+  background-repeat: no-repeat;
+  background-attachment: local, scroll;
+}
+
+/**
  * The canvas changing shape, which is the one place in this interface where animating `width` is
  * the point rather than a mistake.
  *

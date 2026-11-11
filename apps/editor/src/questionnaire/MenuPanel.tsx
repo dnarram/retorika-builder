@@ -23,7 +23,7 @@ import {
   SECTIONS_POSITIONS,
   type SectionsPosition,
 } from "@retorika/schema";
-import { type PointerEvent, useEffect, useId, useRef, useState } from "react";
+import { type PointerEvent, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import type { HeaderPreview, HeaderPreviewer } from "../editor/headerPreview.ts";
 import {
   brandNamePatch,
@@ -992,12 +992,56 @@ function Segments<T extends string>({
   preview?: (option: T) => HeaderPreview | null;
   previewer?: HeaderPreviewer | undefined;
 }) {
+  const grid = useRef<HTMLDivElement>(null);
+  const mark = useRef<HTMLSpanElement>(null);
+  /*
+   * **A mark slides under the chosen option** (sprint 35 día 7), as the page tabs' indicator does:
+   * one bar for the group, placed under the checked segment's box and moved on `ui-slide` when the
+   * choice changes, so the eye follows the choice from where it was. Written on the node rather than
+   * through state, so the first placing happens before the first paint and nothing travels in from
+   * the corner; a resize of the group — the sheet on a phone — places it again. Under reduced motion
+   * the global block flattens `ui-slide`, and the mark is simply there.
+   */
+  useLayoutEffect(() => {
+    const host = grid.current;
+    const bar = mark.current;
+    if (!host || !bar) return;
+    const place = () => {
+      // The segment of the option chosen, by its place among the options: what the mark follows.
+      const chosen = host.querySelectorAll<HTMLElement>(":scope > label")[options.indexOf(value)];
+      if (!chosen) {
+        bar.style.opacity = "0";
+        return;
+      }
+      bar.style.opacity = "1";
+      // Read off the boxes and not `offsetLeft`, which rounds to whole pixels: three columns of a
+      // 300-pixel group are not whole, and the mark sat most of a pixel off its segment.
+      const box = chosen.getBoundingClientRect();
+      const from = host.getBoundingClientRect();
+      bar.style.width = `${box.width - 16}px`;
+      bar.style.transform = `translate(${box.left - from.left + 8}px, ${box.bottom - from.top - 4}px)`;
+    };
+    place();
+    const resized = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(place);
+    resized?.observe(host);
+    return () => resized?.disconnect();
+  }, [value, options]);
   return (
     <div role="radiogroup" aria-label={label}>
       <p className="m-0 mb-1 text-[12px] font-semibold text-ui-ink" aria-hidden="true">
         {label}
       </p>
-      <div className={`grid gap-1.5 ${options.length === 3 ? "grid-cols-3" : "grid-cols-2"}`}>
+      <div
+        ref={grid}
+        className={`relative grid gap-1.5 ${options.length === 3 ? "grid-cols-3" : "grid-cols-2"}`}
+      >
+        <span
+          ref={mark}
+          data-testid="segment-mark"
+          aria-hidden="true"
+          className="ui-slide pointer-events-none absolute top-0 left-0 z-[1] h-[2px] rounded-full bg-ui-brand"
+          style={{ opacity: 0 }}
+        />
         {options.map((option) => (
           <Segment
             key={option}

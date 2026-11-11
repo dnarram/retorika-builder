@@ -8287,3 +8287,55 @@ nunca nombrada para la transición; la marca fuera de `GRIPS` (la caminata, sin 
 
 **Suites.** `typecheck`, `lint` (73 avisos, los de `main`), `test` (3846), invariantes (27), golden
 byte a byte (27), `secrets:scope`. **e2e completa, a la primera: 304 verdes y 1 omitida, 1357 s** (las dos caminatas nuevas incluidas). Lint: 75 avisos en local frente a 73 en `main`; comparado por fichero contra un worktree de `main`, ninguno de los ficheros del día cambia su cuenta.
+
+### Día 7 — los detalles de la interacción (PR de `feat/los-detalles-de-la-interaccion`)
+
+Lo que un experto añade sin que nadie lo pida, dentro del presupuesto del día 1 y cada cosa con su
+gemelo de movimiento reducido. Ningún token de movimiento nuevo: `--ui-fast`, `--ui-base` y las dos
+curvas de siempre.
+
+- **Una marca se desliza bajo la opción elegida** en todos los segmentos de «Menú» (alineación,
+  separación, tamaño de la letra y los tres de la marca): una sola barra de 2 px por grupo, colocada
+  bajo la caja del segmento marcado y movida con `ui-slide` cuando la elección cambia. Se escribe en el
+  nodo desde un `useLayoutEffect`, así que la primera colocación ocurre antes del primer pintado y nada
+  llega volando desde la esquina; un `ResizeObserver` la recoloca si el grupo cambia de ancho (la hoja
+  del móvil). **Se lee de las cajas, no de `offsetLeft`**: la caminata midió 7,33 px donde debían ser 8,
+  porque `offsetLeft` redondea y tres columnas de un grupo de 300 px no son enteras. Las flechas del
+  teclado siguen siendo las de los radios nativos.
+- **La selección del lienzo se funde.** El contorno de una sección y el de la cabecera están siempre,
+  transparentes, y elegir los colorea en `--ui-fast`; el contorno discontinuo y el sólido de un texto,
+  al pasar y al elegir, igual. Nada se mueve. Aplanado en el bloque de reducido del lienzo, que el
+  presupuesto del día 1 obliga a declarar después.
+- **El tic de guardado se dibuja una vez.** `ui-draw`: el trazo con `pathLength="1"`, un guion del largo
+  de la línea y el desplazamiento de 1 a 0 en `--ui-base`, relleno hacia atrás. Una vez: el tic se monta
+  cuando la frase pasa a ser verdad y sigue montado mientras lo es, así que un segundo guardado no dibuja
+  nada. «No guardado» no tiene tic: se dice.
+- **Un panel desplazado sombrea su borde de arriba.** `ui-scroll-shade` en la tarjeta de todo panel: dos
+  fondos, una tapa del color del panel que se desplaza con el contenido (`local`) y la sombra, que se queda
+  con la caja (`scroll`). **Desviación del plan, con su razón**: el plan pedía `animation-timeline:
+  scroll(self)` bajo `@supports`, que Firefox no ve; los dos fondos hacen lo mismo en los tres motores, no
+  mueven nada en el tiempo y no necesitan gemelo reducido. Se pinta bajo los hijos, como todo fondo: sobre
+  las palabras y los huecos, debajo de un control con relleno propio.
+- **Deshacer, rehacer y «Descargar» ceden con la pulsación del día 2, y solo con ella.** Los tres
+  llevaban además un `active:scale-*` de Tailwind: escribe `scale`, que `ui-interactive` no transiciona,
+  así que saltaba — y seguía bajo movimiento reducido, donde la pulsación del día 2 no da nada. Fuera los
+  tres, y el presupuesto gana la guarda: ningún fichero del editor escribe `active:scale-`. No hay contador
+  de la pila que pudiera moverse.
+- **Las flechas de «Diseño» llevan `ui-interactive`**: la misma pulsación, y su `:active` salta las
+  deshabilitadas.
+
+**Lo que no entra, con nombre**: nada tras `hover` que no esté también sin él; ningún pulso en el
+cuestionario; nada que afirme lo que no es.
+
+**Pruebas.** `motionBudget`: «ningún segundo `active:scale-`» en cada fichero del editor, y «el tic se
+dibuja una vez y el panel se sombrea sin movimiento» (`ui-draw` hacia atrás y ≤ 200 ms; la sombra con
+`local, scroll` y ningún tiempo; la tarjeta la lleva). Caminata «sprint 35 día 7» y su gemelo reducido:
+el tic con `ui-draw` a 0,18 s (o a 0,01 ms); la marca a 8 px de cada lado del segmento elegido y en
+camino tras pulsar «Mucha»; el panel con `local, scroll`; «Deshacer» sostenido a `matrix(0.98…)` sin
+`scale` (o `none`); una sección elegida con su contorno fundiéndose y luego `rgb(21, 111, 231)`, a 0,12 s
+(o a 0,01 ms). **Saboteos**, todos en rojo: `ui-draw` con `both`; un `active:scale-95` devuelto a
+«Deshacer»; el fundido fuera del bloque reducido; la tarjeta sin sombra; la marca sin `ui-slide` (la
+caminata). Capturas: la marca bajo «Derecha», «Mucha» y «Normal»; la sombra arriba del panel desplazado.
+
+**Suites.** `typecheck`, `lint` (75 avisos, como el día 6; ningún error), `test` (3847), invariantes
+(27), golden byte a byte (27), `secrets:scope`. **e2e completa en local: 305 verdes, 1 roja y 1 omitida, 1362 s.** La roja era la caminata del sprint 32 día 5, «el editor dice lo que se mueve»: cuenta toda animación sobre la página del lienzo como la web moviéndose, y pulsar una sección arranca ahora el fundido de su contorno. Ese contorno es el dibujo de la selección del editor, un color y no un movimiento; el filtro deja fuera las transiciones de `outline-color` y lo dice. Vuelta a correr sola, en verde; la CI corre la completa. No la repetí entera en local con la batería al 14 %.

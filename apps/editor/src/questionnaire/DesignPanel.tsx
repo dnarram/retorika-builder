@@ -96,7 +96,9 @@ function Stepper({
       disabled={next === undefined}
       onClick={() => next !== undefined && onStep({ [field]: next })}
       className={
-        "flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-ui-border " +
+        // The press every control in the chrome gives (sprint 35 día 7): `ui-interactive`, whose
+        // `:active` skips a disabled arrow.
+        "ui-interactive flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-ui-border " +
         (next === undefined
           ? "text-ui-border"
           : "cursor-pointer text-ui-brand-deep hover:bg-ui-brand-surface")
