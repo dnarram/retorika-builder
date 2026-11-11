@@ -24281,9 +24281,13 @@ describe("sprint 32 día 5 — el editor dice lo que se mueve", () => {
           anchors: sheets.some((t) => /anchor-name|position-anchor|anchor\(/.test(t)),
           animation: child ? getComputedStyle(child).animationName : "none",
           // The page's own elements only: the editor's chrome (a verb's lift, its tip) moves in the
-          // same frame, and is not the site.
+          // same frame, and is not the site. **Nor is the selection's outline** (sprint 35 día 7):
+          // choosing a section fades its outline in on the section itself, over 120 ms — the
+          // editor's drawing of the choice, a colour and not a movement, and gone at rest.
           moving: document.getAnimations().filter((x) => {
             const t = (x.effect as KeyframeEffect | null)?.target as Element | null;
+            if (x instanceof CSSTransition && x.transitionProperty === "outline-color")
+              return false;
             return (
               !!t?.closest("main > .rb-section, header.rb-header") &&
               !t.closest(".rb-actions, .rb-tip, .rb-toolbar")
@@ -27393,6 +27397,125 @@ describe("sprint 35 día 6 — la marca se arrastra y se estira", () => {
         barBox.x + barBox.width * 0.8,
       );
       await expect.poll(() => brandOf(page)).toBe("end/");
+    } finally {
+      await context.close();
+    }
+  }, 240_000);
+});
+
+/**
+ * **Sprint 35 día 7 — cada control responde.** The details an expert adds without being asked, each
+ * read where it happens and each with its reduced-motion twin: a mark slides under the chosen
+ * segment; a section chosen in the canvas has its outline fade in; the saved tick draws itself once;
+ * «Deshacer» gives under the press with the day-2 press and no second one; and a panel that has
+ * scrolled shades its top edge. Under reduced motion every one of them arrives where it goes, with
+ * nothing travelling — and the shade, which is not a movement, is still there.
+ */
+describe("sprint 35 día 7 — cada control responde", () => {
+  async function walk(page: Page, reduced: boolean): Promise<void> {
+    await intoTheCanvas(page);
+    const frame = page.frameLocator(PREVIEW).first();
+    const running = (locator: Locator) =>
+      locator.evaluate((el) => el.getAnimations().filter((a) => a.playState === "running").length);
+
+    // 1. The saved tick: drawn once, by `ui-draw`, in 180 ms — or at once.
+    const tick = page.locator("header svg.text-ui-ok path");
+    await expect(tick).toHaveCount(1);
+    expect(await tick.evaluate((el) => getComputedStyle(el).animationName)).toBe("ui-draw");
+    expect(await tick.evaluate((el) => getComputedStyle(el).animationDuration)).toBe(
+      reduced ? "1e-05s" : "0.18s",
+    );
+
+    // 2. «Menú»: the mark under the chosen segment, and it slides to the next choice.
+    await page.getByRole("button", { name: "Menú", exact: true }).click();
+    const panel = page.getByRole("complementary", { name: "La cabecera de tu web" });
+    await expect(panel).toBeVisible();
+    await motionSettled(page);
+    const gaps = panel.getByRole("radiogroup", { name: "Separación entre enlaces" });
+    await gaps.scrollIntoViewIfNeeded();
+    const mark = gaps.getByTestId("segment-mark");
+    const under = async (label: string) => {
+      const [m, l] = await Promise.all([
+        mark.boundingBox(),
+        gaps.getByText(label, { exact: true }).boundingBox(),
+      ]);
+      if (!m || !l) throw new Error("the mark or the segment is not drawn");
+      return {
+        left: m.x - l.x,
+        right: l.x + l.width - (m.x + m.width),
+        bottom: l.y + l.height - m.y,
+      };
+    };
+    const normal = await under("Normal");
+    expect(normal.left).toBeCloseTo(8, 0);
+    expect(normal.right).toBeCloseTo(8, 0);
+    const much = await pointIn(gaps.getByText("Mucha", { exact: true }));
+    await page.mouse.click(much.x, much.y);
+    if (!reduced) expect(await running(mark), "the mark should be on its way").toBeGreaterThan(0);
+    await motionSettled(page);
+    const there = await under("Mucha");
+    expect(there.left).toBeCloseTo(8, 0);
+    expect(there.right).toBeCloseTo(8, 0);
+    expect(there.bottom).toBeCloseTo(normal.bottom, 0);
+
+    // 3. The panel scrolled: its top edge shaded by two backgrounds, one of them scrolling.
+    expect(await panel.evaluate((el) => getComputedStyle(el).backgroundAttachment)).toBe(
+      "local, scroll",
+    );
+    await panel.evaluate((el) => el.scrollTo(0, 200));
+    expect(await panel.evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
+    await page.getByRole("button", { name: "Cerrar la cabecera" }).click();
+    await motionSettled(page);
+
+    // 4. «Deshacer» held down: the day-2 press — 2 % smaller — and nothing under reduced motion.
+    const undo = page.getByRole("button", { name: "Deshacer", exact: true });
+    await expect(undo).toBeEnabled();
+    const press = await pointIn(undo);
+    await page.mouse.move(press.x, press.y);
+    await page.mouse.down();
+    await expect
+      .poll(() => undo.evaluate((el) => getComputedStyle(el).transform))
+      .toBe(reduced ? "none" : "matrix(0.98, 0, 0, 0.98, 0, 0)");
+    expect(await undo.evaluate((el) => getComputedStyle(el).scale)).toBe("none");
+    // Let go off the button, so the press undoes nothing.
+    await page.mouse.move(press.x, press.y + 200);
+    await page.mouse.up();
+
+    // 5. A section chosen in the canvas: its outline fades in where it always was.
+    const services = frame.locator('[data-section="sec-services"]');
+    expect(await services.evaluate((el) => getComputedStyle(el).outlineStyle)).toBe("solid");
+    const at = await pointIn(services, 0.05, 0.05);
+    await page.mouse.click(at.x, at.y);
+    if (!reduced)
+      expect(await running(services), "the outline should be fading in").toBeGreaterThan(0);
+    await frameMotionSettled(frame);
+    await expect(services).toHaveClass(/rb-selected/);
+    expect(await services.evaluate((el) => getComputedStyle(el).outlineColor)).toBe(
+      "rgb(21, 111, 231)",
+    );
+    expect(await services.evaluate((el) => getComputedStyle(el).transitionDuration)).toBe(
+      reduced ? "1e-05s" : "0.12s",
+    );
+  }
+
+  it("la marca se desliza, la selección se funde, el tic se dibuja, «Deshacer» cede y el panel se sombrea", async () => {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 950 } });
+    const page = await context.newPage();
+    try {
+      await walk(page, false);
+    } finally {
+      await context.close();
+    }
+  }, 240_000);
+
+  it("con movimiento reducido: todo llega a su sitio sin recorrido, y la sombra sigue", async () => {
+    const context = await browser.newContext({
+      viewport: { width: 1440, height: 950 },
+      reducedMotion: "reduce",
+    });
+    const page = await context.newPage();
+    try {
+      await walk(page, true);
     } finally {
       await context.close();
     }

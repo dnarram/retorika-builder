@@ -79,7 +79,7 @@ export const PANEL_WIDTH = "w-[340px] phone:w-auto";
  * bar) is below the fold either way. Nothing here depends on the direction reading correctly; only
  * that something enters rather than appearing.
  */
-export const panelCard = `ui-enter-right relative z-[11] flex shrink-0 flex-col rounded-ui-lg border border-ui-border bg-ui-surface shadow-ui-1 ${panelShell} phone:fixed phone:inset-x-0 phone:bottom-[calc(56px+env(safe-area-inset-bottom))] phone:z-20 phone:max-h-[70dvh] phone:rounded-b-none phone:border-b-0 phone:shadow-ui-3`;
+export const panelCard = `ui-enter-right ui-scroll-shade relative z-[11] flex shrink-0 flex-col rounded-ui-lg border border-ui-border bg-ui-surface shadow-ui-1 ${panelShell} phone:fixed phone:inset-x-0 phone:bottom-[calc(56px+env(safe-area-inset-bottom))] phone:z-20 phone:max-h-[70dvh] phone:rounded-b-none phone:border-b-0 phone:shadow-ui-3`;
 
 /**
  * The X that closes a panel, which five of the six rail panels and the fields panel all drew by

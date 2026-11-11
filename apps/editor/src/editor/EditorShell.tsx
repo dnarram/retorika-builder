@@ -1294,9 +1294,7 @@ export function EditorShell({
             onClick={onUndo}
             className={
               "ui-interactive flex h-[30px] w-[30px] items-center justify-center rounded-ui-sm phone:order-1 phone:ml-auto " +
-              (canUndo
-                ? "cursor-pointer text-ui-ink hover:bg-ui-bg active:scale-95"
-                : "text-ui-muted opacity-40")
+              (canUndo ? "cursor-pointer text-ui-ink hover:bg-ui-bg" : "text-ui-muted opacity-40")
             }
           >
             <svg
@@ -1321,9 +1319,7 @@ export function EditorShell({
             onClick={onRedo}
             className={
               "ui-interactive flex h-[30px] w-[30px] items-center justify-center rounded-ui-sm phone:order-1 " +
-              (canRedo
-                ? "cursor-pointer text-ui-ink hover:bg-ui-bg active:scale-95"
-                : "text-ui-muted opacity-40")
+              (canRedo ? "cursor-pointer text-ui-ink hover:bg-ui-bg" : "text-ui-muted opacity-40")
             }
           >
             <svg
@@ -1369,7 +1365,9 @@ export function EditorShell({
                     strokeLinejoin="round"
                     aria-hidden="true"
                   >
-                    <path d="M20 6L9 17l-5-5" />
+                    {/* Drawn once as it arrives (sprint 35 día 7): mounted with the sentence and
+                        kept while it is true, so a later save draws nothing. */}
+                    <path className="ui-draw" pathLength={1} d="M20 6L9 17l-5-5" />
                   </svg>
                 ) : null}
                 {/**
@@ -1410,9 +1408,7 @@ export function EditorShell({
             data-building-return="download"
             className={
               "ui-interactive flex h-9 items-center justify-center rounded-ui px-[18px] text-sm font-semibold text-white phone:order-1 " +
-              (building
-                ? "bg-ui-brand opacity-65"
-                : "cursor-pointer bg-ui-brand hover:shadow-ui-2 active:scale-[0.98]")
+              (building ? "bg-ui-brand opacity-65" : "cursor-pointer bg-ui-brand hover:shadow-ui-2")
             }
           >
             {building ? es["editor.downloading"] : es["editor.download"]}
