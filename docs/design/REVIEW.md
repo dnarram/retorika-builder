@@ -8399,7 +8399,7 @@ medible.
 
 | Suite | Resultado |
 |---|---|
-| `pnpm audit:menus` | **no corrida al cierre**: dura unas dos horas y el portátil estaba con batería al 6 %. Pendiente de corriente; se reanuda por filas (`RETORIKA_AUDIT_RESUME=1`). El sprint no cambia nada de lo que la auditoría varía: sus documentos no llevan tamaño ni sitio de marca, y el bloque nuevo de la hoja no casa ningún atributo suyo |
+| `pnpm audit:menus` | **306 combinaciones por motor, 918 en total, ningún estado en rojo**, 6 227 s, como al cierre del 34. Corrida el mismo 11 de noviembre, después de fusionar el cierre: al cerrar el portátil estaba con batería al 6 % y la pasada dura dos horas. Las únicas notas, las permitidas de siempre: la `y` de «Ir a…» en el lienzo a 1280, 0,5 px (504) o 1 px (212), las mismas cuentas que en el 34. El sprint no cambia nada de lo que la auditoría varía, y ahora está medido |
 | `pnpm test` | 3847 en verde, 180 ficheros (3733 al cierre del 34) |
 | `typecheck`, `lint` | en verde; 75 avisos, ningún error |
 | invariantes, golden, `renderer:deps` | en verde; golden 27 |
