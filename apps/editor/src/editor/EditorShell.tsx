@@ -9,6 +9,7 @@ import type { HelpLineSays } from "./helpLine.ts";
 import { leave } from "./leaving.ts";
 import { DESKTOP_LAYOUT_WIDTH, desktopLayoutWidth, NARROWEST_WIDTH } from "./overflowCheck.ts";
 import { overscrollFor } from "./overscroll.ts";
+import { wireRipples } from "./ripple.ts";
 
 /**
  * **The one rule every in-flow rail panel has to obey: fit the row, and scroll what does not fit.**
@@ -882,6 +883,11 @@ export function EditorShell({
    * at zoom 1, with the table's grey either side.
    */
   const canvasArea = useRef<HTMLDivElement>(null);
+  /** The editor's one press listener (sprint 36 día 2): every control under the shell that wears
+   * `ui-ripple` rings from where it was pressed, by one delegated `pointerdown` on this root rather
+   * than a handler on each. Nothing wears it until día 6. */
+  const shellRoot = useRef<HTMLDivElement>(null);
+  useEffect(() => (shellRoot.current ? wireRipples(shellRoot.current) : undefined), []);
   const [available, setAvailable] = useState(0);
   // The row's height, for the room the page is given when the zoom falls (`overscrollFor`).
   const [rowHeight, setRowHeight] = useState(0);
@@ -1082,6 +1088,7 @@ export function EditorShell({
 
   const shell = (
     <div
+      ref={shellRoot}
       data-testid="editor-shell"
       // `h-dvh`, not `h-screen`: `100vh` on a phone is the height with the browser's bars hidden,
       // so a shell that tall puts its bottom edge under the bar that is actually showing

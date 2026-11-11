@@ -118,6 +118,30 @@
   --ui-stagger: 40ms;
 
   /**
+   * ## Sprint 36: a spring, a second register and a blur
+   *
+   * **`--ui-spring`** is a curve and not a library: a `linear()` that overshoots by six per cent and
+   * settles inside `--ui-base`. For what *lands* — the rail's mark, a segment's mark, a dropped
+   * element, the magnet letting go — never for what leaves. `linear()` is in every engine the editor
+   * runs in (Chromium 113, Firefox 112, Safari 17.2); where it is not, the `@supports` below falls
+   * back to the shape curve, and nothing is faster than it was.
+   *
+   * **`--ui-scene`** is the second register (David, 11 November 2026): two moments, and only two,
+   * may take 400 ms — the proposal card that becomes the editor's canvas (`rb-scene-canvas`) and the
+   * building screen handing over to «Descargar» (`ui-scene-build`). `test/motionBudget.test.ts`
+   * lists the two by name; a third is a decision, not a keyframe. Under `prefers-reduced-motion`
+   * each is a `--ui-fast` fade, never a cut: the travel goes, the continuity stays.
+   *
+   * **`--ui-blur`** is the one `filter` the editor may animate, and only in `ui-blur-in`: a popup or
+   * a tip arriving sharp out of four pixels of blur, 120 ms, on a surface no wider than 320 px. It
+   * is not the landing's rejected mesh (a 520 px disc repainted sixty times a second): seven frames
+   * over a small box, and still measured on a phone before it is applied (sprint 36 día 7).
+   */
+  --ui-spring: linear(0, 0.42 22%, 0.86 44%, 1.06 62%, 0.99 80%, 1);
+  --ui-scene: 400ms;
+  --ui-blur: 4px;
+
+  /**
    * ## The palette's own secondary, promoted to a token
    *
    * `#105CB1` is not a new colour: the dossier gives it as «Azul oscuro — títulos y estados
@@ -807,6 +831,255 @@
 }
 
 /**
+ * ## The vocabulary of sprint 36 — pieces, declared here and applied by the days that follow
+ *
+ * Each one answers something the person does, and each one keeps to `transform`, `opacity` and the
+ * two properties named beside it. Nothing here is applied the day it is written (sprint 36 día 2):
+ * `test/motionBudget.test.ts` holds every piece to its ceiling before any screen wears it.
+ */
+
+/**
+ * **Words that arrive one after another** — for what *arrives* in the help line's live voice (an
+ * announcement, the delete notice, an error) and the building screen's stages; never for what
+ * merely changes with the focus, which cross-fades (David's adjustment 2). Each word is a
+ * `[data-ui-word]` span whose delay the caller writes as `--ui-word-delay`, computed from
+ * `--ui-stagger` with the same cap of seven the proposals use, so the longest sentence is at rest
+ * inside the budget's 600 ms. `backwards`: a word that has arrived owns nothing.
+ */
+@keyframes ui-words {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+@utility ui-words {
+  & > [data-ui-word] {
+    display: inline-block;
+    animation: ui-words var(--ui-fast) var(--ui-ease-shape) backwards;
+    animation-delay: var(--ui-word-delay, 0ms);
+  }
+}
+
+/**
+ * **A ring from where the finger or the pointer pressed.** The press writes `--ui-x` and `--ui-y`
+ * (`editor/ripple.ts`, one delegated listener per shell) and restarts the animation by the
+ * `data-ui-press` attribute; the circle grows from that point to past the control's corners and
+ * fades, in `--ui-base`. `overflow: hidden` and `isolation: isolate` so it stays inside the
+ * control's rounded box and composites on its own.
+ *
+ * **On `::before`, deliberately** (David's adjustment 4): `ui-ring-once` draws on `::after`, and
+ * the landing's «Crear mi web» wears both — a shared pseudo-element lets one overwrite the other
+ * with nothing going red. The budget test holds the two apart.
+ */
+@keyframes ui-ripple {
+  from {
+    opacity: 0.35;
+    transform: translate(-50%, -50%) scale(0);
+  }
+
+  to {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+@utility ui-ripple {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+
+  &::before {
+    content: "";
+    position: absolute;
+    left: var(--ui-x, 50%);
+    top: var(--ui-y, 50%);
+    width: 250%;
+    aspect-ratio: 1;
+    border-radius: 50%;
+    background: currentColor;
+    opacity: 0;
+    pointer-events: none;
+    transform: translate(-50%, -50%) scale(0);
+  }
+
+  &[data-ui-press]::before {
+    animation: ui-ripple var(--ui-base) var(--ui-ease) 1 forwards;
+  }
+}
+
+/**
+ * **A control that leans toward the pointer** — the one primary button, «Descargar», and no other
+ * (the budget counts). `editor/magnet.ts` writes `--ui-mx` and `--ui-my`, at most four pixels, from
+ * `pointermove`; the control returns with the spring when the pointer leaves. Only where there is a
+ * pointer that hovers, and never for somebody who asked for less movement — the module checks the
+ * preference before it listens, and this rule makes sure the translation is nothing regardless.
+ */
+@utility ui-magnet {
+  @media (hover: hover) {
+    translate: var(--ui-mx, 0px) var(--ui-my, 0px);
+    transition: translate var(--ui-base) var(--ui-spring);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    translate: none;
+  }
+}
+
+/**
+ * **An underline that draws itself from the left** — the page tabs, the header's links. It draws
+ * on hover and on focus, and it stays drawn on the current one (`aria-current`), so it is never a
+ * thing that exists only under a pointer (the rule of sprint 35 día 7). `::after`, because the
+ * same control may ripple on `::before`.
+ */
+@utility ui-underline {
+  position: relative;
+
+  &::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 2px;
+    background: currentColor;
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform var(--ui-fast) var(--ui-ease);
+  }
+
+  &:hover::after,
+  &:focus-visible::after,
+  &[aria-current]::after {
+    transform: scaleX(1);
+  }
+}
+
+/**
+ * **Something arriving sharp out of a blur** — the one `filter` in this stylesheet, for a popup or a
+ * tip of the canvas (sprint 36 día 7, after measuring it on a phone). Opacity and `filter`, no
+ * movement: what is about to be pressed does not move under the hand (sprint 35 día 3).
+ */
+@keyframes ui-blur-in {
+  from {
+    opacity: 0;
+    filter: blur(var(--ui-blur));
+  }
+
+  to {
+    opacity: 1;
+    filter: blur(0);
+  }
+}
+
+@utility ui-blur-in {
+  animation: ui-blur-in var(--ui-fast) var(--ui-ease-shape) backwards;
+}
+
+/**
+ * **A field that shakes its head once** — the questionnaire's one answer to an invalid submit, four
+ * pixels each way and back inside `--ui-base`. Not a pulse of attention: it happens after the person
+ * acted, on the thing they acted on. Once, and `backwards`, so a shaken field owns nothing.
+ */
+@keyframes ui-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+
+  20%,
+  60% {
+    transform: translateX(-4px);
+  }
+
+  40%,
+  80% {
+    transform: translateX(4px);
+  }
+}
+
+@utility ui-shake {
+  animation: ui-shake var(--ui-base) var(--ui-ease) 1 backwards;
+}
+
+/**
+ * **A thing carried that leans the way it goes** — the drag ghosts of the canvas, two degrees in the
+ * direction of travel (`--ui-tilt`, written by the gesture) and back to level at rest. `rotate`
+ * alone, so a ghost positioned by `translate` keeps its own.
+ */
+@utility ui-tilt {
+  rotate: var(--ui-tilt, 0deg);
+  transition: rotate var(--ui-fast) var(--ui-ease);
+}
+
+/**
+ * **A number that counts to its value** — the ZIP's weight, the example texts left. The caller
+ * writes `--ui-n`; the registered property lets the transition interpolate it, and the counter
+ * paints the integer. Where `@property` is not understood the number is simply written, which is
+ * what the text under it says anyway.
+ */
+@property --ui-n {
+  syntax: "<integer>";
+  inherits: false;
+  initial-value: 0;
+}
+
+@utility ui-count {
+  transition: --ui-n var(--ui-base) var(--ui-ease-shape);
+  counter-reset: ui-n var(--ui-n, 0);
+
+  /* `::after`, so a counted number inside a control that ripples keeps its ring (the ripple is on
+     `::before`); a number is never a tab, so it never meets the underline that also draws there. */
+  &::after {
+    content: counter(ui-n);
+  }
+}
+
+/**
+ * **A skeleton with no pulse in it** — a bar the shade of a border where a proposal's page or an
+ * account's list has not arrived yet. Nothing loops here: a fourth looping name is a decision for
+ * the budget, not for a loading state. It leaves by opacity (`ui-fade-out`) when the thing arrives.
+ */
+@utility ui-skeleton {
+  background: var(--ui-border);
+  border-radius: var(--ui-radius-sm);
+  color: transparent;
+  user-select: none;
+}
+
+/**
+ * ## The second register: two scenes at `--ui-scene`
+ *
+ * **`rb-scene-canvas`** is the proposal card becoming the editor's canvas, and the canvas becoming
+ * its card on the way back: a view transition of the document (sprint 36 día 4), the card's frame
+ * and the canvas card sharing the name. The new capture waits for the canvas to paint, at most
+ * 500 ms (David's adjustment 3). **`ui-scene-build`** is the building screen's card contracting
+ * toward «Descargar» once the ZIP is handed over. Both on the shape curve; nothing else may read
+ * `--ui-scene`, and the budget test counts the readers.
+ */
+::view-transition-group(rb-scene-canvas) {
+  animation-duration: var(--ui-scene);
+  animation-timing-function: var(--ui-ease-shape);
+}
+
+::view-transition-old(rb-scene-canvas),
+::view-transition-new(rb-scene-canvas) {
+  animation-duration: var(--ui-scene);
+  animation-timing-function: var(--ui-ease-shape);
+}
+
+@keyframes ui-scene-build {
+  to {
+    opacity: 0;
+    transform: scale(0.2);
+  }
+}
+
+@utility ui-scene-build {
+  animation: ui-scene-build var(--ui-scene) var(--ui-ease-shape) forwards;
+}
+
+/**
  * **Motion is a preference, and this file has to honour it.** Nothing in this repository read
  * `prefers-reduced-motion` before the chrome had transitions worth suppressing; adding movement
  * without this would be fixing one accessibility problem by introducing another, for the people
@@ -823,6 +1096,40 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+}
+
+/**
+ * **The two scenes under less movement are a fade, never a cut** (David, 11 November 2026: «retirar
+ * el recorrido, no la continuidad»). After the block above, so that it wins: the view transition's
+ * pseudo-elements are not matched by `*` and keep their own durations, so they are set here by
+ * name — the group's travel to nothing, the old and new captures crossing in `--ui-fast`; the
+ * building card's contraction becomes the same fade, with `!important` because the block above
+ * already flattened its duration with one.
+ */
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(rb-scene-canvas) {
+    animation: none;
+  }
+
+  ::view-transition-old(rb-scene-canvas),
+  ::view-transition-new(rb-scene-canvas) {
+    animation-duration: var(--ui-fast);
+    animation-timing-function: var(--ui-ease);
+  }
+
+  .ui-scene-build {
+    animation-name: ui-fade-out;
+    animation-duration: var(--ui-fast) !important;
+    animation-timing-function: var(--ui-ease);
+  }
+}
+
+/* Where `linear()` is not understood the spring is the shape curve: nothing lands faster than it
+   did, it only lands without the overshoot. */
+@supports not (animation-timing-function: linear(0, 1)) {
+  :root {
+    --ui-spring: cubic-bezier(0.4, 0, 0.2, 1);
   }
 }
 

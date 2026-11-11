@@ -513,6 +513,199 @@ describe("the budget inside the canvas", () => {
   });
 });
 
+/**
+ * **The vocabulary of sprint 36, and the second register** (día 2). Every piece declared here is
+ * held to its ceiling before any screen wears it, and the two scenes that may take `--ui-scene`
+ * are the only readers of it. David's four conditions of 11 November 2026 are the four assertions
+ * that read like rules: a scene no longer than 400 ms and a fade under less movement; the ripple on
+ * `::before` and no two pieces that can meet on one element sharing a pseudo-element; the magnet on
+ * at most one control; nothing new that loops.
+ */
+describe("the vocabulary of sprint 36 and the second register", () => {
+  const PIECES = [
+    "ui-words",
+    "ui-ripple",
+    "ui-magnet",
+    "ui-underline",
+    "ui-blur-in",
+    "ui-shake",
+    "ui-tilt",
+    "ui-count",
+    "ui-skeleton",
+    "ui-scene-build",
+  ];
+  /** The two names that may read `--ui-scene`: a utility and a view-transition name. */
+  const SCENES = ["ui-scene-build", "rb-scene-canvas"];
+  const SCENE_CAP_MS = 400;
+
+  it("declares every piece, each at rest inside the interaction cap but the scene", () => {
+    for (const name of PIECES) {
+      expect(UTILITIES.get(name), `globals.css declares no ${name}`).toBeDefined();
+      if (SCENES.includes(name)) continue;
+      expect(restOf(name), `${name} takes longer than the cap`).toBeLessThanOrEqual(
+        INTERACTION_CAP_MS,
+      );
+    }
+  });
+
+  it("gives the second register 400 ms, and lets only the two scenes read it", () => {
+    expect(ms("scene")).toBeLessThanOrEqual(SCENE_CAP_MS);
+    expect(ms("scene")).toBeLessThanOrEqual(600); // at rest with no stagger before it
+    const readers = cssRules(CSS)
+      .filter((rule) => /var\(--ui-scene\)/.test(rule.body))
+      .map((rule) => rule.prelude);
+    expect(readers.length, "nothing reads --ui-scene: the register has no scene").toBeGreaterThan(
+      0,
+    );
+    for (const prelude of readers) {
+      expect(
+        SCENES.some((scene) => prelude.includes(scene)),
+        `«${prelude}» reads --ui-scene, and only ${SCENES.join(" and ")} may: a third scene is a decision for the budget`,
+      ).toBe(true);
+    }
+  });
+
+  it("fades the two scenes under less movement, in --ui-fast and never in 0.01 ms", () => {
+    const reduce = cssRules(CSS).filter((rule) =>
+      rule.at.some((query) => query.includes("prefers-reduced-motion: reduce")),
+    );
+    for (const scene of SCENES) {
+      const rules = reduce.filter((rule) => rule.prelude.includes(scene));
+      expect(rules.length, `${scene} has no rule under reduced motion`).toBeGreaterThan(0);
+      const fades = rules.some((rule) => /animation-duration:\s*var\(--ui-fast\)/.test(rule.body));
+      expect(fades, `${scene} under reduced motion is a cut, not a --ui-fast fade`).toBe(true);
+      for (const rule of rules) expect(rule.body).not.toMatch(/0\.01ms/);
+    }
+    // And the scenes' reduced rules come after the global flattening, which they have to beat.
+    const global = CSS.indexOf("animation-duration: 0.01ms !important");
+    const scenes = CSS.indexOf("::view-transition-group(rb-scene-canvas) {\n    animation: none");
+    expect(scenes).toBeGreaterThan(global);
+  });
+
+  it("springs with a curve that ends at rest and overshoots by a tenth at most", () => {
+    const spring = CSS.match(/--ui-spring:\s*linear\(([^)]+)\)/)?.[1];
+    expect(spring, "globals.css declares no linear() spring").toBeDefined();
+    const stops = (spring ?? "").split(",").map((stop) => Number(stop.trim().split(/\s+/)[0]));
+    expect(stops.at(-1)).toBe(1);
+    expect(Math.max(...stops)).toBeLessThanOrEqual(1.1);
+    expect(Math.max(...stops), "a spring without an overshoot is a curve").toBeGreaterThan(1);
+    // Where linear() is not understood, the fallback is the shape curve and nothing faster.
+    expect(CSS).toMatch(/@supports not \(animation-timing-function: linear\(0, 1\)\)/);
+  });
+
+  it("keeps filter to the blur-in alone, and the blur-in to opacity and filter", () => {
+    const outside = cssRules(CSS).filter(
+      (rule) => /(^|[\s;{])filter\s*:/.test(rule.body) && !rule.prelude.includes("ui-blur-in"),
+    );
+    expect(
+      outside.map((rule) => rule.prelude),
+      "a filter outside ui-blur-in",
+    ).toEqual([]);
+    const blur = KEYFRAMES.get("ui-blur-in") ?? "";
+    expect(blur).toMatch(/filter:\s*blur\(var\(--ui-blur\)\)/);
+    expect(blur).not.toMatch(/transform/);
+  });
+
+  it("rings on ::before, and no two pieces that can meet on one control share a pseudo-element", () => {
+    const pseudosOf = (name: string): string[] => {
+      const body = UTILITIES.get(name) ?? "";
+      return [...body.matchAll(/::(before|after)/g)].map((m) => m[1] as string);
+    };
+    expect(pseudosOf("ui-ripple")).toEqual(["before", "before"]);
+    expect(pseudosOf("ui-ring-once")).toEqual(["after"]);
+    // The pairs the application combines on one element, or will: the landing's call to action
+    // wears the ring and will ripple; a page tab underlines and will ripple; a counted number
+    // may ripple when it is a button. A new pair goes here the day it is written.
+    const MAY_MEET: [string, string][] = [
+      ["ui-ripple", "ui-ring-once"],
+      ["ui-ripple", "ui-underline"],
+      ["ui-ripple", "ui-count"],
+    ];
+    // Not in the list, by design: `ui-count` and `ui-underline` both draw on `::after`, and a
+    // counted number is never a tab. The scan of the source below is what would say otherwise.
+    for (const [a, b] of MAY_MEET) {
+      const shared = pseudosOf(a).filter((pseudo) => pseudosOf(b).includes(pseudo));
+      expect(shared, `${a} and ${b} both draw on ::${shared[0]}: one overwrites the other`).toEqual(
+        [],
+      );
+    }
+    // And the pairs that actually meet in the source, found by their class lists.
+    const withPseudo = [...UTILITIES.keys()].filter((name) => pseudosOf(name).length > 0);
+    for (const file of allSourceFiles()) {
+      for (const list of classListsOf(file)) {
+        const pieces = withPseudo.filter((name) => list.includes(name));
+        for (let i = 0; i < pieces.length; i += 1) {
+          for (let j = i + 1; j < pieces.length; j += 1) {
+            const a = pieces[i] as string;
+            const b = pieces[j] as string;
+            const shared = pseudosOf(a).filter((pseudo) => pseudosOf(b).includes(pseudo));
+            expect(
+              shared,
+              `${file}: ${a} and ${b} meet on one element and share ::${shared[0]}`,
+            ).toEqual([]);
+          }
+        }
+      }
+    }
+  });
+
+  it("leans at most one control toward the pointer, and shakes only a questionnaire field", () => {
+    const magnets = allSourceFiles().flatMap((file) =>
+      classListsOf(file)
+        .filter((list) => list.includes("ui-magnet"))
+        .map(() => file),
+    );
+    expect(
+      magnets.length,
+      `ui-magnet on ${magnets.join(", ")}: the plan allows one`,
+    ).toBeLessThanOrEqual(1);
+    expect(UTILITIES.get("ui-shake")).toMatch(/animation:[^;]*\s1\s/);
+    for (const file of allSourceFiles()) {
+      if (file.endsWith("questionnaire/ui.tsx")) continue;
+      expect(
+        classListsOf(file).some((list) => list.includes("ui-shake")),
+        `${file} shakes something that is not a questionnaire field`,
+      ).toBe(false);
+    }
+  });
+
+  it("has no time in the skeleton and no loop in anything new", () => {
+    expect(timesIn(UTILITIES.get("ui-skeleton") ?? "")).toEqual([]);
+    for (const name of PIECES) {
+      expect(UTILITIES.get(name), name).not.toMatch(/\binfinite\b/);
+      expect(KEYFRAMES.get(name) ?? "", name).not.toMatch(/\binfinite\b/);
+    }
+  });
+
+  it("spends a staggered line inside 600 ms with the proposals' own cap", () => {
+    // The caller writes `--ui-word-delay` from `--ui-stagger` and the same cap of seven.
+    expect(ms("fast") + REVEAL_STAGGER_CAP * ms("stagger")).toBeLessThanOrEqual(600);
+    expect(UTILITIES.get("ui-words")).toMatch(/animation-delay:\s*var\(--ui-word-delay, 0ms\)/);
+  });
+});
+
+/** Every `.ts`/`.tsx` under `src`, by path. */
+function allSourceFiles(): string[] {
+  const out: string[] = [];
+  const walk = (dir: string) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const path = join(dir, entry.name);
+      if (entry.isDirectory()) walk(path);
+      else if (/\.tsx?$/.test(entry.name)) out.push(path);
+    }
+  };
+  walk(EDITOR_SRC);
+  return out;
+}
+
+/** Every class list a file writes, each as its words. */
+function classListsOf(file: string): string[][] {
+  const source = readStripped(file);
+  return [...source.matchAll(/className=(?:"([^"]*)"|\{`([^`]*)`\})|class="([^"]*)"/g)].map((m) =>
+    (m[1] ?? m[2] ?? m[3] ?? "").split(/\s+/).filter(Boolean),
+  );
+}
+
 // ——— Readers ——————————————————————————————————————————————————————————————————————————————
 
 /** Every `ui-*` utility the stylesheet declares that the source names, once each. */
@@ -541,7 +734,7 @@ function timesIn(source: string): { declaration: string; ms: number }[] {
     .replace(/\$\{CHROME_SCALE\.(\w+)\}/g, (_, key: string) =>
       String((CHROME_SCALE as Record<string, string | number>)[key] ?? "?"),
     )
-    .replace(/var\(--ui-(fast|base|slow|stagger)\)/g, (_, name: string) => `${ms(name)}ms`);
+    .replace(/var\(--ui-(fast|base|slow|stagger|scene)\)/g, (_, name: string) => `${ms(name)}ms`);
   const out: { declaration: string; ms: number }[] = [];
   for (const declaration of resolved.matchAll(
     /(?<![\w-])(transition|animation)(-duration|-delay|Duration|Delay)?\s*:\s*([^;}\n]+)/g,
