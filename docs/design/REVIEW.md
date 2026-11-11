@@ -8234,3 +8234,56 @@ serie de edición se mueve: 4 → 5); la marca nunca nombrada en el pliegue.
 
 **Suites.** `typecheck`, `lint` (73 avisos, los de `main`), `test` (3835), invariantes (27), golden
 byte a byte (27), `secrets:scope`. **e2e completa, a la primera: 302 verdes y 1 omitida, 1334 s** (la caminata nueva incluida).
+
+### Día 6 — la marca se arrastra y se estira (PR de `feat/la-marca-se-arrastra-y-se-estira`, ADR 0070 §5 y ADR 0069)
+
+**El juicio, sin DOM.** `editor/brandDrag.ts` es el gemelo de `menuDrag.ts` para la marca: `brandZonesFor`
+(las tres palabras del panel, la actual marcada; ninguna en la vista de móvil, sin marca o con la marca
+en columna, donde su sitio en la barra es inerte), `brandZoneRects` (**la barra en tercios**, en la caja
+de la propia barra: en apilada la línea propia de la marca está dentro de la misma caja, así que los
+tercios son los mismos), `brandDropOutcome` (nada sin zona o sobre el sitio que el renderer dibuja; si
+no, el parche del segmento «Dónde va la marca», un paso de historial), `brandDropText` («Marca: en
+medio»), y para el logo `logoStep` (el tamaño más cercano a la altura alcanzada, el mayor en empate),
+`pulledHeight` (el tirón por el borde sujeto: abajo, a la derecha escalado a la proporción del logo, o
+el mayor de los dos), `logoDropOutcome` y `logoDropText` («Logo: grande»). `zoneAt` de `menuDrag.ts`
+pasa a ser genérico sobre la palabra de la zona, y nada más cambia allí.
+
+**El cableado**, en `wireMenuDrag`, que ahora lleva tres gestos con el mismo umbral, los mismos dos
+estados, el mismo Escape y el mismo clic tragado: el menú a su zona, la marca a su sitio y el borde del
+logo a su tamaño. `GRIPS` gana `.rb-header > .rb-brand` (la copia de la columna, no); la guarda de
+enlaces deja pasar la marca aunque sea un `<a>` (en otra página lleva a Inicio): bajo el umbral su
+pulsación sigue siendo la de hoy. **El estiramiento del logo** es de ratón: `edgeAt` de `resizeBox.ts`
+sobre el `<img>` dibujado, solo abajo, derecha y esquina (un logo crece desde su ancla, arriba a la
+izquierda), con el cursor de borde de siempre como clase sobre el logo al pasar; **el fantasma es cromo**
+—`.rb-logo-ghost`, una caja discontinua en el color de la marca sobre el logo real, a la altura del
+tamaño que viene, más la etiqueta junto a la mano («Grande · 56 px»)— y **nunca un `style.height` en el
+`<img>`** (la caminata lo asevera: `style.height` vacío a mitad del tirón). Soltar escribe
+`logoSizePatch` una vez; Escape no escribe. **El doble clic** sobre la marca abre «Menú» en el bloque de
+la marca (`fieldset[data-menu-block="brand"]`, `openMenuPanelAt`, un token por doble clic) y da el teclado
+al radio marcado del bloque. La nota del panel nombra el gesto y el doble clic, solo en la vista de
+escritorio. **La marca se asienta**: un parche que mueve la marca de la barra —su sitio, el tamaño de su
+logo o el diseño— la nombra para la View Transition del día 3 (`BRAND_SLIDE_RULE`, `brandMoved`), sola,
+sin nombrar secciones, a `--ui-fast`; bajo `reduce`, nada.
+
+**Un límite medido y con nombre: el doble clic con el panel cerrado.** El primer clic elige la cabecera y
+abre «Menú», el lienzo se recoloca bajo el segundo clic, y el navegador no dispara `dblclick` sobre la
+marca. Con el panel abierto funciona; cerrado, el primer clic ya abre el panel por su primer bloque, que
+es el de la marca. La caminata lo hace con el panel abierto y lo dice; queda en una nota fechada de la ADR
+0070.
+
+**Pruebas.** `brandDrag.test.ts` (14: zonas, tercios en la caja de la barra, `zoneAt`, resultado,
+`logoStep` con el empate al mayor, el tirón por borde, palabras). `sectionSlide.test.ts` gana «nombra la
+marca cuando cambió su sitio, su logo o su diseño». Caminata «sprint 35 día 6» a 1280 sin panel: el
+cursor `grab` sobre la marca; cogerla por el nombre y llevarla al tercio central → tres zonas, la de
+inicio marcada como actual, la central encendida, el fantasma «Marca», los tercios con la altura de la
+barra y la suma de su ancho; soltar → `data-brand-place="center"`, la sesión con `place`, «Marca: en
+medio» en la región viva, la serie de edición +1; pulsar sin mover → la cabecera elegida, nada escrito
+(serie igual); el borde inferior del logo con `ns-resize`, 20 px de tirón → «Grande · 56 px» y Escape no
+escribe; otra vez y soltar → `data-logo-size="lg"`, «Logo: grande», el fantasma a 56 px y el logo sin
+`style.height`; doble clic → el panel en el bloque de la marca con el radio marcado enfocado y nada
+escrito; dos «Deshacer»; en el móvil, ni zonas ni borde. Gemelo bajo `reduce`: la marca llega a «Al final»
+sin `rb-sliding`. **Saboteos**, todos en rojo: tercios al revés (dos pruebas); empate al menor; la marca
+nunca nombrada para la transición; la marca fuera de `GRIPS` (la caminata, sin zonas).
+
+**Suites.** `typecheck`, `lint` (73 avisos, los de `main`), `test` (3846), invariantes (27), golden
+byte a byte (27), `secrets:scope`. **e2e completa, a la primera: 304 verdes y 1 omitida, 1357 s** (las dos caminatas nuevas incluidas). Lint: 75 avisos en local frente a 73 en `main`; comparado por fichero contra un worktree de `main`, ninguno de los ficheros del día cambia su cuenta.

@@ -112,6 +112,10 @@ export interface MenuPanelProps {
   /** The canvas's bar, previewed by attribute while a segment is under the mouse (David's
    * adjustment 3 on sprint 35): absent where there is no canvas to preview on. */
   preview?: HeaderPreviewer;
+  /** A block to bring into view and give the keyboard to, each time the token changes: the brand's,
+   * when the canvas's brand was double-clicked (sprint 35 día 6) — the second way in, for whoever
+   * does not know the gesture exists. */
+  focusBlock?: { block: "brand"; token: number } | undefined;
   onClose: () => void;
 }
 
@@ -149,6 +153,7 @@ export function MenuPanel({
   onSetPageInMenu,
   onSetSectionInMenu,
   preview,
+  focusBlock,
   onClose,
 }: MenuPanelProps) {
   const headingId = useId();
@@ -156,6 +161,22 @@ export function MenuPanel({
   const state = headerStateFor(doc, pageId);
   // A panel closed with the mouse still on a segment never sees the pointer leave: put the bar back.
   useEffect(() => () => preview?.end("restore"), [preview]);
+  const panel = useRef<HTMLElement>(null);
+  // The block asked for, scrolled into the panel's view and its first radio given the keyboard — the
+  // logo's sizes when there is a logo, the brand's place otherwise. Nothing without a token.
+  useEffect(() => {
+    if (!focusBlock) return;
+    const block = panel.current?.querySelector<HTMLElement>(
+      `fieldset[data-menu-block="${focusBlock.block}"]`,
+    );
+    if (!block) return;
+    block.scrollIntoView({ block: "nearest" });
+    // The checked radio of the block — the word in force — and the first one failing that.
+    (
+      block.querySelector<HTMLInputElement>('input[type="radio"]:checked') ??
+      block.querySelector<HTMLInputElement>('input[type="radio"]')
+    )?.focus();
+  }, [focusBlock]);
   const oneLine = state.layout !== "stacked";
   // «En medio» on a one-line bar moves the pages' menu in the markup (ADR 0070 §2), which no attribute
   // does: it is not previewed, to or from, so the canvas never shows on hover what a press would not.
@@ -220,7 +241,11 @@ export function MenuPanel({
         );
 
   return (
-    <aside aria-labelledby={headingId} className={`${PANEL_WIDTH} gap-4 p-5 ${panelCard}`}>
+    <aside
+      ref={panel}
+      aria-labelledby={headingId}
+      className={`${PANEL_WIDTH} gap-4 p-5 ${panelCard}`}
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="flex flex-col gap-1">
           <h2 id={headingId} className="m-0 text-[15px] font-bold text-ui-ink">
@@ -237,7 +262,7 @@ export function MenuPanel({
         </p>
       )}
       {/* 0. The brand: the business name, and the logo on the bar it will sit on (ADR 0059). */}
-      <fieldset className={blockClass}>
+      <fieldset className={blockClass} data-menu-block="brand">
         <legend className={legendClass}>{es["editor.menuPanel.brandBlock"]}</legend>
         <Check
           label={es["editor.menuPanel.brand"]}
@@ -364,6 +389,11 @@ export function MenuPanel({
               previewer={preview}
             />
             {placeNote === null ? null : <p className={noteClass}>{placeNote}</p>}
+            {/* The gesture's twin (ADR 0070 §5): said where the segments are, in the desktop view
+                only — the phone's canvas has no zones and no edge to pull. */}
+            {device === "desktop" && !state.brand.inRail ? (
+              <p className={noteClass}>{es["editor.menuPanel.brandGesture"]}</p>
+            ) : null}
           </>
         ) : null}
         <p className={noteClass}>

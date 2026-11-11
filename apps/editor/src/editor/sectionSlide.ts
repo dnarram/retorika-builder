@@ -98,13 +98,34 @@ export function slidingIds(
  * The names, as a stylesheet: one rule per section, named by its place in the list rather than by
  * its id, so the name is always a valid identifier whatever an id holds.
  */
-export function namesSheet(ids: readonly string[]): string {
-  return ids
-    .map(
+export function namesSheet(ids: readonly string[], extra = ""): string {
+  return [
+    ...ids.map(
       (id, index) =>
         `[data-section="${id.replace(/["\\]/g, "\\$&")}"] { view-transition-name: rb-s-${index}; }`,
-    )
-    .join("\n");
+    ),
+    ...(extra === "" ? [] : [extra]),
+  ].join("\n");
+}
+
+/**
+ * **The brand settles into its place** (sprint 35 día 6, ADR 0070 §5): a patch that moves the bar's
+ * brand — its place, or its logo's size — names the brand for the transition, so it glides from
+ * where it was rather than appearing there. Read off the two bars' attributes, which is what the
+ * renderer draws the place and the size by; a brand that went to a rail or came back is a layout
+ * change of the bar, and is not named.
+ */
+export const BRAND_SLIDE_RULE = ".rb-header > .rb-brand { view-transition-name: rb-brand; }";
+
+export function brandMoved(live: ParentNode, fresh: ParentNode): boolean {
+  const read = (root: ParentNode) => {
+    const header = root.querySelector("header.rb-header");
+    if (!header) return null;
+    return `${header.getAttribute("data-brand-place") ?? ""}/${header.getAttribute("data-logo-size") ?? ""}/${header.getAttribute("data-layout") ?? ""}`;
+  };
+  const before = read(live);
+  const after = read(fresh);
+  return before !== null && after !== null && before !== after;
 }
 
 /**
@@ -112,11 +133,11 @@ export function namesSheet(ids: readonly string[]): string {
  * already asked `canSlide`. Every promise the transition hands back is answered, so a transition a
  * newer one skips is not an unhandled rejection in the console.
  */
-export function slide(doc: Document, ids: readonly string[], update: () => void): void {
+export function slide(doc: Document, ids: readonly string[], update: () => void, extra = ""): void {
   doc.getElementById(SLIDE_NAMES_ID)?.remove();
   const names = chrome(doc, "style");
   names.id = SLIDE_NAMES_ID;
-  names.textContent = namesSheet(ids);
+  names.textContent = namesSheet(ids, extra);
   doc.head.append(names);
   const root = doc.documentElement;
   const start = (doc as WithTransitions).startViewTransition;
