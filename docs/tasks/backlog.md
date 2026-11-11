@@ -12,7 +12,46 @@ drift, and the facilitator's script already says findings go to the decision the
 a separate document nobody reads again». So an item with an ADR points at the ADR; an item with
 an issue points at the issue; and only the things with no other home are described here at all.
 
-Last reviewed: 8 November 2026, **closing sprint 34 — «la barra nunca se parte».** David decided what
+Last reviewed: 11 November 2026, **closing sprint 35 — «el editor se mueve, y la marca tiene tamaño y
+sitio».** David asked for two things: an editor that moves and answers the hand in the tools it already
+has, and a logo and business name whose size and place the owner chooses in «Menú». His three answers
+before planning: three named sizes (28, 40 and 56 px for the logo, the scale's tokens for the name),
+three places in the brand's own line, and the gesture — the brand is a grip and the logo's edge
+stretches. Three adjustments approving: sections slide with the document's View Transitions, the
+leaving panel never pushes the canvas twice, and a segment previews on hover and chooses on press.
+Eight days in eight PRs (#358–#364 and the close). What changed for somebody visiting a site: **a brand
+with a size and a place** — nothing for any saved site, whose bytes move only by the brand's rules,
+which match no attribute it carries ([ADR 0069](../decisions/0069-the-brand-has-a-size-in-the-systems-words.md),
+[ADR 0070](../decisions/0070-the-brand-has-its-place-in-its-line.md), schema 1.19.0, día 4). For the
+owner: panels, dialogs and the undo notice arrive and leave (día 2); the canvas's popups, drops and
+sections move (día 3); three rows of the brand in «Menú» that preview on hover (día 5); the brand
+dragged to its third of the bar and the logo stretched by its edge (día 6); and every control answering
+the hand (día 7). The motion budget of sprint 22 covers the editor since día 1. Of the corpus's ZIP, ten
+pages changed by one identical block, and one site entered. The record is `docs/design/REVIEW.md`,
+sprint 35.
+
+**What sprint 35 leaves open** — the full text is the last section of REVIEW's sprint 35:
+
+1. **Twenty-eight signatures**: 0042, 0043, 0045–0070, all `proposed`, **with their pack brought up to
+   date**, [`docs/decisions/signing-2026-11.md`](../decisions/signing-2026-11.md). 0069 and 0070 join
+   batch C; 0070 amends 0066, in batch A, so C is signed with A or after it.
+2. **The nine photographs**: the exemption fails on **1 December 2026**. Their sheet,
+   [`docs/tasks/las-nueve-fotos.md`](las-nueve-fotos.md), and `pnpm photos:replace`; David's two
+   questions in it are unchanged.
+3. **Three limits of this sprint, named, for David to say whether they are fixed**: the double click
+   opens «Menú» at the brand only with the panel already open (ADR 0070's note of día 6); «en medio» on a
+   one-line bar is not previewed on hover (ADR 0070's note of día 5); a transparent cover's room is not
+   recomputed during a preview (REVIEW, día 5).
+4. **What ADR 0069 and 0070 do not decide**: a free pixel size for the logo; an exact centring of the
+   brand with a wrapper; «en medio» on a phone; a place for the button; a keyboard chord for the brand.
+5. **From sprint 34, untouched**: the catalog's neutral entries at source (row «Sprint 34 día 4»); the
+   button inside «Menú» on a phone; the zone «bajo la portada» (now schema 1.20.0) and the real editor in
+   Firefox and WebKit — the sections' slide has not been seen outside Chromium; the iPhone list of PR
+   #250, which gains the large logo on a phone.
+6. **Noted, still not fixed**: the observer's `rootMargin` and the measure's cliff of ADR 0067.
+7. **Sprint 36 unplanned.**
+
+The review before that: 8 November 2026, **closing sprint 34 — «la barra nunca se parte».** David decided what
 sprint 33 had measured: a bar whose words do not fit one line **folds into the phone's header** under a
 width of each document's own, estimated from the words it draws, with no upper bound — «always» where
 it never fits; the owner is told in the panel and, from 1024, in the download review; «Menú» becomes a

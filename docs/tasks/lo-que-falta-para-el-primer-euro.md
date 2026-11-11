@@ -123,7 +123,7 @@ nada de ellos.
 | ADR 0038, aceptación de la Fase 1 | **El material existe** (`docs/tasks/fase-1-lo-que-prometimos.md`, con sus preguntas al final); el ADR no está escrito ni firmado. Desarrollo no firma | `fase-1-lo-que-prometimos.md` §7 |
 | «Profesionalmente vendible» | Es de dirección, sin fecha; el ADR 0021 fija el orden, no el día | ADR 0021 |
 | ADR 0039, la galería del banco | **Firmado por ti el 12 de octubre** | ADR 0039 |
-| ADR 0042, 0043 y de la 0045 a la 0068 | **Veintiséis `proposed`**, cada una con una decisión tuya; su paquete para firmarlas, por ADR o por lote, es `docs/decisions/signing-2026-11.md` (sprint 34, día 7). Desarrollo no firma | `signing-2026-11.md` |
+| ADR 0042, 0043 y de la 0045 a la 0070 | **Veintiocho `proposed`**, cada una con una decisión tuya; su paquete para firmarlas, por ADR o por lote, es `docs/decisions/signing-2026-11.md` (sprint 34, día 7; la 0069 y la 0070 añadidas al cerrar el sprint 35). Desarrollo no firma | `signing-2026-11.md` |
 
 ### 2.10 Google fuera del modo de pruebas, y una app que pide no ser encontrada
 

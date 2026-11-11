@@ -8339,3 +8339,117 @@ caminata). Capturas: la marca bajo «Derecha», «Mucha» y «Normal»; la sombr
 
 **Suites.** `typecheck`, `lint` (75 avisos, como el día 6; ningún error), `test` (3847), invariantes
 (27), golden byte a byte (27), `secrets:scope`. **e2e completa en local: 305 verdes, 1 roja y 1 omitida, 1362 s.** La roja era la caminata del sprint 32 día 5, «el editor dice lo que se mueve»: cuenta toda animación sobre la página del lienzo como la web moviéndose, y pulsar una sección arranca ahora el fundido de su contorno. Ese contorno es el dibujo de la selección del editor, un color y no un movimiento; el filtro deja fuera las transiciones de `outline-color` y lo dice. Vuelta a correr sola, en verde; la CI corre la completa. No la repetí entera en local con la batería al 14 %.
+
+### Día 8 — colchón y cierre (PR de `test/el-cierre-del-sprint-35`)
+
+**Nada de los días 1 a 7 quedó corto**: lo que cada día dejó al siguiente lo cerró el siguiente (las
+esperas de las caminatas del día 1, los días 2 y 3; el panel de la marca que el día 4 dejó al 5; el
+bloque de la marca del panel, que el día 6 recibió con su `data-menu-block`). El cierre mide, compara y
+escribe.
+
+**El presupuesto de contención del editor, enmendado.** El del sprint 22 regía tres pantallas; desde el
+día 1 rige el editor entero —armazón, kit de paneles, `Editor.tsx`, cada panel y cada diálogo
+encontrados por nombre, y la hoja que se inyecta en el lienzo leída como CSS—, con las mismas palabras:
+nada en bucle; nada pasa de 200 ms salvo el cambio de dispositivo (`ui-reflow`, 260 ms, la única
+excepción con nombre); nada anima la maquetación salvo la barra que abre sitio sobre una sección
+escalada; el bloque de reducido del lienzo aplana cada selector que anima y lo hace después de
+declararlo; un pulso por pantalla (en el lienzo, la zona que recibe una suelta). **Lo que el sprint le
+añadió**: la salida de cada entrada (`ui-leave-right`, `ui-fade-out`, `ui-rise-out`, a `--ui-fast`); las
+copias de salida (`editor/leaving.ts`); las llegadas del lienzo solo por opacidad (`rb-arrives`), porque
+una escala hacía que Playwright reintentara una pulsación 14 y 224 px más allá; las secciones que se
+deslizan con View Transitions (180 ms; medido con veinte secciones, el fotograma más largo 16,8 ms con
+la transición y sin ella); la marca que se asienta (120 ms); la marca deslizante de los segmentos; el fundido de la
+selección; el tic que se dibuja; y **una guarda nueva: ningún fichero del editor escribe
+`active:scale-`**, la segunda pulsación que saltaba también con movimiento reducido. Ningún token de
+movimiento nuevo en todo el sprint.
+
+**El ZIP contra el inicio del sprint** (`22b7f84`, el cierre del 34), construyendo los documentos del
+corpus con el publicador de cada árbol (`build-corpus.mts`):
+
+- cambian **10 de 123 ficheros: todas las páginas de las cuatro webs con cabecera** (`cabecera-con-marca`,
+  `menu-curado`, `menu-explicito`, `menu-y-paginas`), **por un único bloque de dieciséis líneas, idéntico
+  en las diez**: las reglas de la marca —dos alturas del logo, dos tamaños del nombre, los sitios en una
+  línea y en la apilada, y las cinco del móvil—, que la hoja lleva diga lo que diga el documento para que
+  el editor pueda previsualizar por atributo (ADR 0069 §5). Ninguna barra guardada casa ninguna: no lleva
+  los atributos;
+- **entra una web, `marca-grande`** (nueve ficheros), el documento del corpus con logo grande, nombre en
+  título y la marca en medio;
+- **ningún cambio de marcado**, y las otras dieciocho webs —letras, fotos, favicon, `robots.txt`,
+  `sitemap.xml`— byte a byte iguales;
+- **el script, sin un byte de diferencia**: `headerScript.ts` no cambió en el sprint; 0,8 KB gzip.
+
+**Lighthouse**, los sujetos en el perfil móvil, contra el cierre del 34:
+
+| Sujeto | Rendimiento | Accesibilidad | Buenas prácticas | SEO | LCP | CLS |
+|---|---|---|---|---|---|---|
+| v1 image-right | 99 | 100 | 100 | 100 | 1,80 s (1,80) | 0,003 (0,003) |
+| v2 image-background | 98 | 100 | 100 | 100 | 2,40 s (2,40) | 0,000 (0,000) |
+| v3 image-left | 98 | 100 | 100 | 100 | 2,33 s (2,33) | 0,003 (0,003) |
+| letra propia `.ttf` | 99 | 100 | 100 | 100 | 1,80 s (1,80) | 0,000 (0,000) |
+| cabecera fija con logo, con la línea | 100 | 100 | 100 | 100 | 1,35 s (1,35) | 0,002 (0,002) |
+| **marca grande: fija, logo grande, nombre en título, en medio** (nuevo, día 4) | 100 | 100 | 100 | 100 | 1,35 s | 0,001 |
+| cabecera en columnas | 100 | 100 | 100 | 100 | 1,35 s (1,35) | 0,004 (0,004) |
+| página por ficha | 100 | 100 | 100 | 100 | 0,90 s (0,90) | 0,000 (0,000) |
+
+**Los mismos números que al cierre del 34, uno por uno**, y ninguna composición por debajo de 98. El
+sujeto nuevo mide lo mismo que «fija, con logo»: el logo grande y el nombre en título no cuestan nada
+medible.
+
+**Suites del cierre**, una tras otra y nada en paralelo:
+
+| Suite | Resultado |
+|---|---|
+| `pnpm audit:menus` | **no corrida al cierre**: dura unas dos horas y el portátil estaba con batería al 6 %. Pendiente de corriente; se reanuda por filas (`RETORIKA_AUDIT_RESUME=1`). El sprint no cambia nada de lo que la auditoría varía: sus documentos no llevan tamaño ni sitio de marca, y el bloque nuevo de la hoja no casa ningún atributo suyo |
+| `pnpm test` | 3847 en verde, 180 ficheros (3733 al cierre del 34) |
+| `typecheck`, `lint` | en verde; 75 avisos, ningún error |
+| invariantes, golden, `renderer:deps` | en verde; golden 27 |
+| `schema:guard 22b7f84..HEAD` | la forma cambió y lleva su migración, su prueba y su versión: 1.19.0, la `0020` |
+| `secrets:scope` | 130 módulos, 30 de cliente, ninguno cruza |
+| `size` | todo dentro; `marca-grande` 18,5 KB propios de 28, el script en 0,8 KB de 2 |
+| `test:a11y` local | 1750 en verde, 124 s (1661 al cierre del 34: el gemelo de la marca, doce documentos con logo en axe y en la comprobación 11) |
+| `pnpm lighthouse` | 27 de 27: los 8 sujetos y lo medido desde `file://` en los tres motores (26 al cierre del 34: el sujeto de la marca grande) |
+| e2e completa | **306 verdes y 1 omitida, 1371 s, a la primera** (291 al cierre del 34: las caminatas del sprint y sus gemelos reducidos) |
+
+**Lo que el sprint encontró sin buscarlo**, por día:
+
+1. **Un bloque de reducido escrito a mitad de la hoja pierde ante lo que se declara después** (día 1):
+   `.rb-handmade-in` no se aplanaba y `.rb-line-add` faltaba; el presupuesto del lienzo lo comprueba ya
+   por orden.
+2. **Una caminata que busca texto encontraba la copia de salida**, que lo llevaba en el árbol (día 2): las
+   copias pintan sus palabras con `::before`.
+3. **Una escala en una llegada hace que Playwright reintente la pulsación** 14 px más allá en local y 224
+   en el CI (día 3): todo lo que el lienzo abre llega solo por opacidad.
+4. **La regla de quietud del lienzo apagaba también las animaciones del cromo** (día 3): `:not([data-rb-chrome])`.
+5. **La letra exacta de la marca no entraba en ninguna de las dos estimaciones** (exploración del plan),
+   y quitar el logo o desmarcar el nombre dejaban un tamaño que el esquema rechaza (día 5).
+6. **El aviso de descarga culpaba a las etiquetas** de un pliegue que causaba el tamaño de marca recién
+   elegido (día 5): ahora dice desde qué ancho cabría con la marca a «Normal».
+7. **El doble clic sobre la marca no llega con el panel cerrado**: el primer clic lo abre y el lienzo se
+   recoloca bajo el segundo (día 6; anotado en la ADR 0070).
+8. **`offsetLeft` redondea**: la marca de los segmentos caía 0,67 px fuera de su sitio (día 7).
+9. **Una caminata del sprint 32 contaba el fundido de un contorno como la web moviéndose** (día 7).
+
+### Lo que el sprint 35 deja abierto
+
+1. **Veintiocho firmas**: 0042, 0043 y de la 0045 a la 0070, todas `proposed`, **con su paquete
+   actualizado**: [`docs/decisions/signing-2026-11.md`](../decisions/signing-2026-11.md). La 0069 y la
+   0070 son de este sprint y entran en el lote C; la 0070 enmienda la 0060 (lote C) y la 0066 (lote A),
+   así que el lote C se firma con el A o después.
+2. **Las nueve fotografías a 1600 × 1072**: la exención **falla desde el 1 de diciembre de 2026, dentro
+   de 20 días**. Su hoja, [`docs/tasks/las-nueve-fotos.md`](../tasks/las-nueve-fotos.md), y
+   `pnpm photos:replace`. Las dos preguntas de la hoja siguen siendo tuyas: el plato reconocible y los
+   16 PNG de la raíz, que no se borran sin tu palabra.
+3. **Tres límites con nombre de este sprint**, para decidir si se arreglan: el doble clic con el panel
+   cerrado (ADR 0070); «en medio» sin previsualización en una barra de una línea (el menú de páginas
+   cambia de sitio en el marcado); y el hueco de una portada transparente, que no se recalcula durante
+   una previsualización.
+4. **Lo que la ADR 0069 y la 0070 no deciden**: un tamaño libre en píxeles para el logo; un centrado
+   exacto de la marca con un envoltorio; «en medio» en el móvil; un sitio para el botón; un acorde de
+   teclado para la marca en el lienzo.
+5. **Del sprint 34, sin tocar**: acortar en origen las entradas neutras del catálogo; el botón dentro de
+   «Menú» en el móvil; la zona «bajo la portada» (ahora esquema 1.20.0) y el editor real en Firefox y
+   WebKit; la lista del iPhone, que gana la marca grande en el móvil (las pruebas del navegador la miden en
+   WebKit de escritorio, a 55 y 47 px; un iPhone no se ha mirado). El editor sigue sin probarse fuera de
+   Chromium, así que el deslizamiento de las secciones tampoco se ha visto en WebKit ni en Firefox.
+6. **Anotado, sin arreglar**: el `rootMargin` del observador y el precipicio de la medida de la ADR 0067.
+7. **El sprint 36, sin planificar.**
