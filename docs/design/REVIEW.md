@@ -2401,7 +2401,9 @@ librería, sin `filter: blur`, sin animar maquetación.
 
 `test/motionBudget.test.ts` lo guarda con diecinueve aserciones, mitad sobre la hoja de estilos y
 mitad sobre los componentes de cada pantalla. Un cuarto nombre en la lista de lo que puede girar en
-bucle es una decisión sobre cuánto distrae esta aplicación, y pasa por este documento.
+bucle es una decisión sobre cuánto distrae esta aplicación, y pasa por este documento. **Desde el
+sprint 36 (día 2) el presupuesto tiene dos registros**: el de siempre, 200 ms, y `--ui-scene`, 400 ms,
+para dos escenas con nombre y ninguna más — está escrito en el sprint 36, abajo.
 
 **Dos tokens nuevos, ninguno un color nuevo.** `--ui-brand-deep: #105CB1` es el azul oscuro que el
 dossier ya daba para «títulos y estados pulsados» y que el ADR 0041 §3 pone en la paleta «Neutra»:
@@ -8583,4 +8585,70 @@ completa es la que cuenta.
 cero cambios: nada viaja), `a11y` local (1750). **e2e completa**: antes de tocar nada, la del cierre
 del 35 sobre el mismo `0acd54c` (306 verdes y 1 omitida, 1371 s); después, tres pasadas — 309 + 3 rojos,
 309 + 3 rojos, y **312 verdes y 1 omitida en 1403 s, limpia** — las 306 de antes y las 6 nuevas.
+
+### Día 2 — el vocabulario del 36, y el presupuesto con dos registros (PR de `feat/el-vocabulario-del-36`)
+
+Nada se ve hoy, y se dice: las piezas existen, están guardadas, y ningún control las lleva aún.
+
+**Tres tokens en `globals.css`.** `--ui-spring`, un `linear()` que sobrepasa un 6 % y se asienta
+dentro de `--ui-base` (`linear(0, 0.42 22%, 0.86 44%, 1.06 62%, 0.99 80%, 1)`), para lo que *aterriza*
+—la marca del raíl, la de los segmentos, una suelta, el imán al soltar— y nunca para lo que se va;
+donde el motor no entienda `linear()`, un `@supports not` lo deja en la curva de forma, y nada
+aterriza más rápido que antes. **`--ui-scene`, 400 ms: el segundo registro** (decisión 1 de David). Y
+`--ui-blur`, 4 px, el único `filter` que el editor puede animar. `CHROME_SCALE` transcribe `spring`
+(`settleDrop` aterrizará por WAAPI con la misma cadena) y `chromeScale.test.ts` lo exige; `scene` y
+`blur` quedan nombrados como lo que el lienzo no lleva — el techo dentro del marco sigue en 200, y el
+desenfoque lo mide el día 7 antes de cruzar.
+
+**Diez piezas, cada una con lo que anima escrito al lado.** `ui-words` (palabra a palabra: opacidad y
+4 px, `--ui-fast`, el retardo lo escribe quien llama como `--ui-word-delay` desde `--ui-stagger` con el
+tope de siete de las propuestas, `backwards`); `ui-ripple` (**en `::before`**, ajuste 4 de David: un
+círculo desde `--ui-x`/`--ui-y` que crece y se apaga en `--ui-base`; `overflow: hidden` e
+`isolation`; lo repone el atributo `data-ui-press`); `ui-magnet` (`translate` ≤ 4 px hacia el puntero,
+vuelta con el muelle, solo bajo `(hover: hover)` y `translate: none` bajo `reduce`); `ui-underline`
+(un `::after` que se dibuja desde la izquierda al pasar, al enfocar **y en el actual**, para que nunca
+exista solo bajo un puntero); `ui-blur-in` (opacidad y `filter`, sin movimiento: lo que se va a pulsar
+no se mueve bajo la mano); `ui-shake` (±4 px en cuatro pasos, una vez, `backwards`); `ui-tilt`
+(`rotate` por `--ui-tilt`); `ui-count` (`@property --ui-n` entero, transición de la propiedad y el
+número pintado por `counter()` **en `::after`** — la primera versión lo pintaba en `::before` y la
+prueba de los pseudoelementos lo vio antes que nadie); `ui-skeleton` (barras del color de un borde, sin
+tiempo dentro: un cuarto nombre en bucle es una decisión del presupuesto y no de un estado de carga);
+y los dos nombres de escena: `::view-transition-*(rb-scene-canvas)` a `--ui-scene` con la curva de
+forma, y `ui-scene-build`, la tarjeta de la construcción que se contrae. **Bajo `reduce`, las dos
+escenas son un fundido de `--ui-fast` y nunca un corte** (condición de David): escrito **después** del
+bloque global, porque los pseudoelementos de una transición de vista no los alcanza `*` y la tarjeta
+necesita un `!important` para ganar al que ya la aplanó.
+
+**Dos oyentes y nada que oír.** `editor/ripple.ts` (`ripplePoint` puro, `press`, `wireRipples`: un
+`pointerdown` delegado por raíz, también táctil, que escribe el punto como porcentaje y repone el anillo
+quitando y poniendo el atributo con una lectura de estilo en medio, para que una segunda pulsación
+durante la primera lo reinicie) está cableado en la raíz de `EditorShell` y, en `Shell` del
+cuestionario, por un componente cliente de un `<span hidden>` que cablea a su padre
+(`editor/Ripples.tsx`): `ui.tsx` lo importa la portada, que es un componente de servidor, y Next
+rechaza un `useEffect` importado en un módulo al que llega uno de servidor — la primera pasada de la
+e2e no arrancó por eso, y lo dijo en su primera línea; `editor/magnet.ts` (`magnetOffset` puro, `magnetAllowed`, `wireMagnet`) no está cableado
+en nada: el día 6 lo pone en «Descargar». `ripple.test.ts` (6) y `magnet.test.ts` (5).
+
+**El presupuesto, enmendado** (`motionBudget.test.ts`, una `describe` nueva de ocho aserciones): cada
+pieza declarada y en reposo bajo los 200 ms salvo la escena; `--ui-scene` ≤ 400 y **solo las dos
+escenas lo leen** (se cuentan las reglas que llevan `var(--ui-scene)`); las dos escenas tienen regla
+bajo `reduce` con `animation-duration: var(--ui-fast)`, sin `0.01ms` y después del bloque global; el
+muelle acaba en 1, no pasa de 1,1 y sobrepasa (una curva sin sobrepaso no es un muelle), con su
+`@supports`; `filter` solo dentro de `ui-blur-in`, y `ui-blur-in` sin `transform`; **la onda en
+`::before` y ningún par de piezas que puedan coincidir en un control comparte pseudoelemento** —los
+pares declarados (onda + anillo, onda + subrayado, onda + contador) y los que de verdad coinciden en
+una `className` de cualquier fichero de `src`—; `ui-magnet` en **como mucho un** control; `ui-shake`
+una iteración y solo en `questionnaire/ui.tsx`; el esqueleto sin tiempo y nada nuevo en bucle; una
+línea escalonada dentro de los 600 ms con el tope de las propuestas. `timesIn` resuelve ahora también
+`var(--ui-scene)`, sin lo cual una utilidad a 400 ms habría contado 0 y pasado el techo de 200.
+
+**Saboteos**, deshechos por guion: `--ui-scene: 500ms` → «gives the second register 400 ms» roja; la
+onda en `::after` → el par con `ui-ring-once` roja; `ui-magnet` en dos botones → «leans at most one
+control» roja. **Lo que costó**: el guion del tercer saboteo llevaba un `git checkout --` «de guarda»
+que corrió sin condición y devolvió `EditorShell.tsx` a `HEAD` con los cambios del día dentro; se
+rehicieron por guion desde el mismo texto. La regla ya estaba escrita; esta vez se rompió por una línea
+que no debía existir en ningún guion.
+
+**Suites.** `typecheck`, `lint`, `test` (3884 en 183 ficheros, 21 más), invariantes (27), golden (27,
+cero cambios), e2e filtrada a los sprints 35 y 36: **21 verdes en 105 s**.
 

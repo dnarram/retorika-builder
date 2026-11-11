@@ -210,6 +210,7 @@ describe("the canvas's copy of the scale", () => {
     ["easeShape", "--ui-ease-shape"],
     ["fast", "--ui-fast"],
     ["base", "--ui-base"],
+    ["spring", "--ui-spring"],
   ];
 
   for (const [key, custom] of pairs) {
@@ -252,10 +253,20 @@ describe("the canvas's copy of the scale", () => {
     // the delete action, the refused ghost — and no word in red, so it has nothing to paint with
     // it. The day a red word appears on the canvas, this line goes and the pair above gains one.
     "danger-deep",
+    // The second register (sprint 36 día 2): the two scenes are the application's — a proposal
+    // becoming the canvas, the building screen handing over — and nothing inside the preview is a
+    // scene. The ceiling inside the frame stays 200 ms.
+    "scene",
+    // The one `filter` the editor may animate. Día 7 measures `ui-blur-in` on a phone before the
+    // canvas's popups wear it; the day it does, this line goes and the pair above gains `blur`.
+    "blur",
   ];
 
   it("transcribes every token the stylesheet declares, apart from the ones named here", () => {
-    const declared = [...DECLARATIONS.matchAll(/--ui-([\w-]+):/g)].flatMap((m) => m[1] ?? []);
+    // Once each: `--ui-spring` is declared twice, the second time as the `@supports` fallback.
+    const declared = [
+      ...new Set([...DECLARATIONS.matchAll(/--ui-([\w-]+):/g)].flatMap((m) => m[1] ?? [])),
+    ];
     const expected = declared.filter((name) => !EDITOR_ONLY.includes(name));
     expect(expected.length).toBe(pairs.length);
     // And the exceptions have to be real: a stale name here would quietly widen the hole.

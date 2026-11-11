@@ -1,4 +1,5 @@
 import type { CSSProperties, InputHTMLAttributes, ReactNode } from "react";
+import { Ripples } from "../editor/Ripples.tsx";
 import es from "../locales/es.json" with { type: "json" };
 
 /**
@@ -170,6 +171,10 @@ export function Shell({ caption, children }: { caption?: string; children: React
         flexDirection: "column",
       }}
     >
+      {/* The one press listener of the screens before the editor (sprint 36 día 2): any control
+          under this root that wears `ui-ripple` rings from where it was pressed. Nothing wears it
+          yet. A client component and not a hook here — see `editor/Ripples.tsx`. */}
+      <Ripples />
       <Brand />
       <div
         style={{

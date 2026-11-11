@@ -51,6 +51,10 @@ export const CHROME_SCALE = {
   easeShape: "cubic-bezier(0.4, 0, 0.2, 1)",
   fast: "120ms",
   base: "180ms",
+  // The curve for what lands (sprint 36 día 2): the same string the stylesheet declares, so a drop
+  // that settles inside the frame (`settleDrop`, through the Web Animations API) lands the way a
+  // mark in the rail does.
+  spring: "linear(0, 0.42 22%, 0.86 44%, 1.06 62%, 0.99 80%, 1)",
 } as const;
 
 /**
