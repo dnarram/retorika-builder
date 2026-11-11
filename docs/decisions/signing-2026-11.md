@@ -1,13 +1,14 @@
 # Signing pack — November 2026
 
-> **For David.** Twenty-six ADRs are `proposed`: 0042, 0043 and 0045 to 0068. Each one records a
+> **For David.** Twenty-eight ADRs are `proposed`: 0042, 0043 and 0045 to 0070. Each one records a
 > decision of yours, and none of them is accepted until you say so in writing. This file is the
 > one place to read them from: what each decides in a sentence, what was added to it after it was
 > written and when, what development decided under your delegation rather than you, and what
-> signing it changes. Prepared on sprint 34 día 7, 6 November 2026. **Development does not sign.**
+> signing it changes. Prepared on sprint 34 día 7, 6 November 2026, and brought up to date closing
+> sprint 35, 11 November 2026. **Development does not sign.**
 
 The sprint 34 plan counted 24 (0042, 0043, 0045–0066). ADR 0067 and ADR 0068 were written during
-the sprint, so the pack has 26 rows.
+sprint 34, and ADR 0069 and ADR 0070 during sprint 35 (its día 4), so the pack has 28 rows.
 
 ## What signing changes, and what it does not
 
@@ -22,13 +23,13 @@ its named costs stay exactly as written; the open design questions of the sprint
 
 **An ADR is signed as it reads today**, with every amendment and note below in it. Several amend
 each other (0043 by 0057 and 0058; 0047–0049 by 0050 and 0051; 0046 by 0055 and 0056; 0060 §3 by
-0067; 0062 by 0068; 0063's note by 0065), so signing an older one without the newer that amends it
+0067; 0062 by 0068; 0063's note by 0065; 0060 and 0066 by 0070), so signing an older one without the newer that amends it
 would sign a rule the product no longer follows. The batches below keep those chains together.
 
 ## How a signature is recorded
 
 1. **You write the instruction**, per ADR or per batch, in your own words — «Firma la ADR 0054 por
-   mí», «Firma el lote B», «Firma las veintiséis». A merge, an approval of a plan, or a delegation
+   mí», «Firma el lote B», «Firma las veintiocho». A merge, an approval of a plan, or a delegation
    to decide («decide lo mejor») is not a signature: the 0052 and 0053 delegations say so in their
    own text — «Recorded as that, and not as his signature» (0052).
 2. **Development records it in each ADR's status line**, in the form ADR 0037 and ADR 0040 carry:
@@ -54,7 +55,7 @@ A suggestion, so that each chain of amendments is signed together. Any other gro
 |---|---|---|
 | **A** | 0042, 0047, 0048, 0049, 0050, 0051, 0052, 0053, 0061, 0066 | The editor: the phone, choosing and writing, the drag and the keys, the canvas that patches, the chrome, the canvas at 1280, a menu dragged to its zone |
 | **B** | 0045, 0046, 0055, 0056 | The letter: no reserved names, the gallery, forty families, an owner's own font |
-| **C** | 0043, 0057, 0058, 0059, 0060, 0063, 0065, 0067 | The header: two menus, the owner's header, its script, the logo, the places, the bar of 2026, the sheet, the fold |
+| **C** | 0043, 0057, 0058, 0059, 0060, 0063, 0065, 0067, 0069, 0070 | The header: two menus, the owner's header, its script, the logo, the places, the bar of 2026, the sheet, the fold, the brand's size and its place |
 | **D** | 0054, 0062, 0064, 0068 | The published page: its icon, its motion and the progress line that amends it, its measure and rhythm |
 
 ## The rows
@@ -75,7 +76,7 @@ of the commit that added it, read from `git log`.
 | [0052](0052-the-keyboard-enters-a-section-and-the-bar-acts-on-the-words-the-hand-chose.md) · 23 Oct, sprint 27 | The canvas is one Tab stop and a section's insides are stops only while it holds the keyboard; the floating bar is a complete keyboard landmark; marking commits first; escalating is one change; the shell has landmarks | What was measured on días 2–6 (23–25 Oct); what día 8 found (25 Oct) | **Yes, 25 Oct**, under «Actua como experto y decide lo mejor para el proyecto para conseguir los objetivos marcados en el proyecto», written merging día 7's pull request: día 4's six open questions about the text bar (↑ ↓ on its grip and ← → and Inicio the toolbar's; the bar not moved beside the text; ← → in the pixel fields belonging to the bar; where a keyboard press returns and when the bar closes) and día 6's two region names, «Paneles del editor» and «Área de edición» — all kept as built |
 | [0053](0053-chrome-is-drawn-in-screen-pixels-and-an-element-too-small-on-screen-keeps-its-corners.md) · 25 Oct, sprint 27 | Every length of the canvas's chrome is a length of the screen whatever the zoom, measured into `--rb-zoom`; the handles are 44 px on screen, and an element too small on screen keeps its corners | Amendment of 26 Oct (sprint 28 día 2: the chrome in the page's flow at a lower zoom, measured) | **Yes, 25 Oct**, under the same words: the handles' rule stays three along and two across; the outlines are accepted as Chromium draws them; what keeps the frame's pixels stays as built |
 | [0061](0061-the-canvas-lays-out-at-1280-and-scales.md) · 30 Oct, sprint 31 | The desktop canvas lays out at 1280 px and scales to the window; under the legibility floor it gives up width rather than legibility, and says so | Nothing | Nothing |
-| [0066](0066-a-menu-is-dragged-to-its-zone.md) · 4 Nov, sprint 33 | A menu is dragged from its own ground to a zone drawn when the gesture starts; a drop outside or Escape writes nothing; a side the other menu holds stacks the two; the live region names the zone, the cards stay the keyboard's way; the cursor announces the gesture | Notes of 5 Nov (sprint 33 día 5: the gesture case by case; día 6: it also starts on an entry, your condition 1 amended) and 6 Nov (sprint 34 día 5: «Menú» is a grip) | Nothing |
+| [0066](0066-a-menu-is-dragged-to-its-zone.md) · 4 Nov, sprint 33 | A menu is dragged from its own ground to a zone drawn when the gesture starts; a drop outside or Escape writes nothing; a side the other menu holds stacks the two; the live region names the zone, the cards stay the keyboard's way; the cursor announces the gesture | Notes of 5 Nov (sprint 33 día 5: the gesture case by case; día 6: it also starts on an entry, your condition 1 amended), 6 Nov (sprint 34 día 5: «Menú» is a grip) and 10 Nov (sprint 35 día 4: the brand becomes a grip, by ADR 0070 in batch C — sign C with or after this batch) | Nothing |
 
 ### Batch B — the letter
 
@@ -94,9 +95,11 @@ of the commit that added it, read from `git log`.
 | [0057](0057-the-header-is-the-owners.md) · 28 Oct, sprint 30 | The header is the owner's: two menus that are chosen, named and dressed, as references and preferences on the document — one button, the brand, a shape at every width, and a stylesheet that travels only where a header does | Notes of 29 Oct (sprint 30 día 7: a line of the bar is a number), 31 Oct (sprint 31 día 2: each menu has its place, ADR 0060) and 3 Nov (sprint 32 día 1: the bar's look is of 2026, ADR 0063) | Nothing |
 | [0058](0058-a-published-page-carries-one-script-and-it-is-constant.md) · 29 Oct, sprint 30 | A published page carries one inline script, constant and dispensable, at the end of the body and only where a header is drawn, within 2 KB gzipped; the canvas does not carry it | Notes of 29 Oct (sprint 30 día 6), 31 Oct (sprint 31 día 2: 815 bytes), 3 Nov (sprint 32 día 1: still four writes) and 4 Nov (sprint 33 día 1: the canvas no longer runs it at its first paint) | Nothing |
 | [0059](0059-the-logo-travels-like-a-photograph.md) · 29 Oct, sprint 30 | The logo travels like a photograph: raster only, PNG out, a name minted on every upload; the header shows it with a derived `alt`, the review warns when it is hard to see, and the button's label is the sector's | Note of 29 Oct (sprint 30 día 7: the logo keeps its size) | Nothing |
-| [0060](0060-each-menu-has-its-place-and-the-places-are-the-zones.md) · 31 Oct, sprint 31 | Each menu has a place from a closed vocabulary, and the places are the zones of a future drag; the rail is one mechanism for both menus; the bar keeps every copy; a bar with nothing left collapses and is still the header (schema 1.17.0) | Notes of 1 Nov (sprint 31 días 3 and 4), 2 Nov (días 5 and 6) and 4 Nov (sprint 33 día 4: the gesture arrived); §3 amended by ADR 0067 (5 Nov: rails stand from the fold, never under 1024) | Nothing |
+| [0060](0060-each-menu-has-its-place-and-the-places-are-the-zones.md) · 31 Oct, sprint 31 | Each menu has a place from a closed vocabulary, and the places are the zones of a future drag; the rail is one mechanism for both menus; the bar keeps every copy; a bar with nothing left collapses and is still the header (schema 1.17.0) | Notes of 1 Nov (sprint 31 días 3 and 4), 2 Nov (días 5 and 6) and 4 Nov (sprint 33 día 4: the gesture arrived); §3 amended by ADR 0067 (5 Nov: rails stand from the fold, never under 1024); its refusal of a place for the brand amended by ADR 0070 (10 Nov) | Nothing |
 | [0063](0063-the-bar-is-of-2026-and-it-is-the-same-for-every-site.md) · 3 Nov, sprint 32 | The bar and its two menus take one look of 2026, the same for every site saved or new, every value a token or a mix of two; a fixed bar condenses once scrolled without changing its box; the glass is allowed and proved by arithmetic | Notes of 3 Nov (sprint 32 días 2, 4 and 5), 4 Nov (sprint 33 días 1 and 3) and 5 Nov (sprint 33 día 6: the bar's estimate is a sum per form); its día 4 note amended by ADR 0065 | Nothing |
 | [0065](0065-the-phones-sheet-holds-the-page-still-without-a-byte-of-script.md) · 4 Nov, sprint 33 | While a phone's sheet is open the page does not scroll under it — by the stylesheet, without a byte of script — and keeps its width as the lock comes and goes; the iPhone goes first on its list | Nothing | Nothing |
+| [0069](0069-the-brand-has-a-size-in-the-systems-words.md) · 10 Nov, sprint 35 | The logo has three named sizes (28, 40, 56 px, «normal» today's) and the name three of the scale's tokens; a size needs the thing it sizes; the phone derives the large logo and the heading-sized name by the token; the estimates count them with the stylesheet's own expressions; the rules travel in every sheet so the editor can preview by attribute (schema 1.19.0) | Nothing | Nothing |
+| [0070](0070-the-brand-has-its-place-in-its-line.md) · 10 Nov, sprint 35 | The brand has a place in its own line — start, middle or end —, «en medio» on a one-line bar being the pages' menu drawn before it in the document; the phone keeps «al final» and derives «en medio» to the start; the brand is a grip and the button is not (amends 0060 and 0066) | Notes of 10 Nov (sprint 35 día 5: the panel writes the word pressed even when it is the layout's own; the alignment still moves the sections' row; «en medio» is not previewed on hover) and 11 Nov (día 6: the gesture, and the double click opening «Menú» at the brand only with the panel already open) | Nothing |
 | [0067](0067-the-bar-folds-where-its-words-do-not-fit.md) · 5 Nov, sprint 34 | A bar whose words would not fit one line folds into the phone's header below a width estimated from the advance of every glyph it draws, conservatively, with no upper bound — «always» where it never fits | Notes of 6 Nov: día 3 (your decisions of that day — the table holds the maximum measured on macOS and on CI's Linux; the gate is that the bar never wraps, bound 60 px; kerning margins 3 % lower case and 1.5 % capitals, derived by a test); día 4 (who is told, and from which width); día 5 (the canvas under the fold has its grip) | Nothing |
 
 ### Batch D — the published page

@@ -219,6 +219,37 @@ fixed bar can say how much has been read.**
   the three pages of `cabecera-con-marca`, by three `@media` lines — its fold at 801 instead of 720 —
   and nothing else; the script byte for byte the same.
 
+**What sprint 35 added (closing it, 11 November 2026): the brand has a size and a place, and it is
+carried and stretched in the canvas.**
+
+- **Rule 6: three more of the owner's words, never a pixel**
+  ([ADR 0069](decisions/0069-the-brand-has-a-size-in-the-systems-words.md),
+  [ADR 0070](decisions/0070-the-brand-has-its-place-in-its-line.md)). Since 1.19.0 (migration `0020`)
+  the brand may carry `logoSize` (`sm` | `md` | `lg`), `nameSize` (`body` | `subheading` | `heading` —
+  the scale's own tokens) and `place` (`start` | `center` | `end`). The logo's heights, 28, 40 and 56,
+  are engine constants in the renderer (`LOGO_HEIGHTS`), the same for every site; a name at the
+  heading's size is as big as the page's headings on every scale. A size for a thing nobody sees —
+  `logoSize` without a logo, `nameSize` without the name — is refused, and the editor takes it away in
+  the same patch that takes the logo or the name. The exact pixel on the brand's letter is still the
+  design tools' marked exception, and still wins by order; the logo gets none.
+- **Rule 7: the phone derives the brand, by the token.** The large logo is drawn on a phone at
+  `min(56px, calc(71px - 2 * var(--space-sm)))` — 56, 55 or 47 by the scale —, the heading-sized name at
+  the subheading's size, a wide mark whole rather than deforming the line, the brand at the end with
+  «Menú» first, and «en medio» at the start. All of it inside the header's own phone `@media`, never
+  `breakpoints`, and never an owner's patch.
+- **Rule 4 is asked for a position a sixth time, and answers the same.** The brand is now dragged in
+  the canvas, and a drop writes one of the three words, the zones being the bar in thirds; the logo's
+  edge steps through the three sizes. No coordinate reaches the document. **«En medio» on a one-line bar
+  is a matter of order, not of geometry**: the pages' menu is drawn bare before the brand, so the order
+  a keyboard walks is the order the eye reads.
+- **Rule 2 keeps its vocabulary.** The brand was already the header's `brand` part; being a grip is the
+  editor's behaviour on it, like a menu's since sprint 33, not a new role.
+- **What it moved, counted.** The schema once (1.18.0 → 1.19.0, `up` seals and moves nothing). The
+  corpus's ZIP against the sprint's start (`22b7f84`): ten pages of 123 — every page of the four sites
+  with a header — by one identical block of sixteen lines, the brand's rules, which the sheet carries
+  whatever the document says so that the editor can preview a word by its attribute; one new corpus
+  site (`marca-grande`, nine files); no markup changed; the script byte for byte the same.
+
 ## The role vocabulary, v1
 
 Nine roles and one container:
