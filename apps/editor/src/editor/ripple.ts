@@ -13,6 +13,9 @@
  */
 
 export const RIPPLE_CLASS = "ui-ripple";
+/** Every control the ring answers: each button of the chrome that answers the press, and anything
+ * that opts in (sprint 36 día 6, David's decision 4). */
+export const RIPPLE_SELECTOR = `.${RIPPLE_CLASS}, button.ui-interactive`;
 export const PRESS_ATTRIBUTE = "data-ui-press";
 
 /** Where the press landed, as percentages of the control's box, clamped to it. */
@@ -38,16 +41,28 @@ export function press(control: HTMLElement, pointer: { clientX: number; clientY:
   control.removeAttribute(PRESS_ATTRIBUTE);
   void control.offsetWidth;
   control.setAttribute(PRESS_ATTRIBUTE, "");
-  control.addEventListener("animationend", () => control.removeAttribute(PRESS_ATTRIBUTE), {
-    once: true,
-  });
+  // Let go on the ring's own end — the control's `::before` — and on nothing else: a child's
+  // animation keyed to the same press (undo's arrow turning) would end it early and cut the ring.
+  const done = (event: Event) => {
+    if (event.target !== control || (event as AnimationEvent).pseudoElement !== "::before") return;
+    control.removeEventListener("animationend", done);
+    control.removeAttribute(PRESS_ATTRIBUTE);
+  };
+  control.addEventListener("animationend", done);
 }
 
 /** One listener on a root, for every `ui-ripple` control under it; returns the way to remove it. */
 export function wireRipples(root: HTMLElement): () => void {
   const onPointerDown = (event: PointerEvent) => {
     const target = event.target as Element | null;
-    const control = target?.closest?.(`.${RIPPLE_CLASS}`) as HTMLElement | null;
+    /*
+     * The control itself, or — for a button whose visible part is one piece of it, like the rail's
+     * items, whose chip is the icon's square and whose word sits below it — that piece, marked
+     * `.ui-ripple`: a press anywhere on the button rings the part that looks like the button.
+     */
+    const control = (target?.closest?.(RIPPLE_SELECTOR) ??
+      target?.closest?.("button")?.querySelector(`.${RIPPLE_CLASS}`) ??
+      null) as HTMLElement | null;
     if (!control || (control as HTMLButtonElement).disabled) return;
     press(control, event);
   };

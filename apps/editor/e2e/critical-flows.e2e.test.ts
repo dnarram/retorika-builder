@@ -28908,3 +28908,201 @@ describe("sprint 36 día 5 — la línea habla", () => {
     }
   }, 180_000);
 });
+
+describe("sprint 36 día 6 — cada control responde donde se pulsa", () => {
+  /** Every animation that starts, on an element or its `::before`, with its timing read from the
+   * computed style of the very pseudo-element it runs on. Recorded from the page's first script. */
+  type Started = {
+    name: string;
+    pseudo: string;
+    where: string;
+    duration: number;
+    iterations: string;
+  };
+  async function recorded(context: BrowserContext): Promise<void> {
+    await context.addInitScript(() => {
+      const w = window as unknown as { __started: Started[] };
+      w.__started = [];
+      document.addEventListener(
+        "animationstart",
+        (event) => {
+          const target = event.target as HTMLElement;
+          const pseudo = event.pseudoElement || "";
+          const style = getComputedStyle(target, pseudo || null);
+          const value = style.animationDuration.split(", ")[0] ?? "0s";
+          w.__started.push({
+            name: event.animationName,
+            pseudo,
+            where:
+              target.getAttribute("aria-label") ??
+              target.closest<HTMLElement>("[aria-label]")?.getAttribute("aria-label") ??
+              target.tagName.toLowerCase(),
+            duration: value.endsWith("ms")
+              ? Number.parseFloat(value)
+              : Number.parseFloat(value) * 1000,
+            iterations: style.animationIterationCount,
+          });
+        },
+        true,
+      );
+    });
+  }
+  const started = (page: Page) =>
+    page.evaluate(() => (window as unknown as { __started: Started[] }).__started);
+  const percent = (value: string) => Number.parseFloat(value);
+
+  it("la onda sale de donde se pulsa, «Descargar» se inclina hacia el puntero, deshacer gira, y lo que llega llega con muelle", async () => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    await recorded(context);
+    const page = await context.newPage();
+    try {
+      await intoTheCanvas(page);
+      await motionSettled(page);
+
+      // 1. A ring from the point pressed: a quarter of the way along «Estilo»'s tile, halfway down.
+      const style = page
+        .getByRole("button", { name: "Estilo", exact: true })
+        .locator("[data-rail-tile]");
+      const box = await style.boundingBox();
+      if (!box) throw new Error("«Estilo» has no tile");
+      await page.mouse.click(box.x + box.width * 0.25, box.y + box.height * 0.5);
+      const at = await style.evaluate((el) => ({
+        x: (el as HTMLElement).style.getPropertyValue("--ui-x"),
+        y: (el as HTMLElement).style.getPropertyValue("--ui-y"),
+      }));
+      expect(Math.abs(percent(at.x) - 25), JSON.stringify(at)).toBeLessThanOrEqual(1);
+      expect(Math.abs(percent(at.y) - 50), JSON.stringify(at)).toBeLessThanOrEqual(1);
+      await motionSettled(page);
+      const ring = (await started(page)).filter((s) => s.name === "ui-ripple");
+      expect(ring.length, "no ring was drawn").toBeGreaterThan(0);
+      for (const r of ring) {
+        expect(r.pseudo).toBe("::before");
+        expect(r.iterations).toBe("1");
+        expect(r.duration).toBeLessThanOrEqual(200);
+      }
+      // And let go: the press is over, and nothing about the button's box changed.
+      await expect(style).not.toHaveAttribute("data-ui-press", "");
+      expect(await style.boundingBox()).toEqual(box);
+
+      // 2. «Descargar» leans toward a pointer three pixels from its right edge, four at most, and
+      //    comes back to where it was when the pointer goes.
+      await page.getByRole("button", { name: "Cerrar el estilo" }).click();
+      await motionSettled(page);
+      const download = page.getByRole("button", { name: "Descargar", exact: true });
+      const rest = await download.boundingBox();
+      if (!rest) throw new Error("«Descargar» has no box");
+      await page.mouse.move(rest.x + rest.width - 3, rest.y + rest.height / 2, { steps: 4 });
+      await page.waitForTimeout(260);
+      const leaning = await download.evaluate((el) => getComputedStyle(el).translate);
+      const [dx = 0, dy = 0] = leaning.split(" ").map((v) => Number.parseFloat(v) || 0);
+      expect(dx, `«Descargar» at ${leaning}`).toBeGreaterThan(2);
+      expect(Math.hypot(dx, dy), `«Descargar» at ${leaning}`).toBeLessThanOrEqual(4 * Math.SQRT2);
+      expect(Math.abs(dx)).toBeLessThanOrEqual(4);
+      expect(Math.abs(dy)).toBeLessThanOrEqual(4);
+      await page.mouse.move(rest.x - 300, rest.y + 200, { steps: 4 });
+      await motionSettled(page);
+      expect(await download.boundingBox()).toEqual(rest);
+
+      // 3. Undo turns back on its press, and its arrow is level again at rest.
+      const headline = page
+        .frameLocator(PREVIEW)
+        .first()
+        .locator('[data-section="sec-cover"] [data-id="el-headline"]');
+      await intoWriting(headline);
+      await page.keyboard.type(" y más");
+      await editHint(page).click();
+      await expect(page.getByText("Guardado en este navegador")).toBeVisible();
+      await motionSettled(page);
+      const undo = page.getByRole("button", { name: "Deshacer", exact: true });
+      await undo.click();
+      await motionSettled(page);
+      const turned = (await started(page)).filter((s) => s.name === "ui-turn-back");
+      expect(turned.length, "undo did not turn").toBe(1);
+      expect(turned[0]?.duration).toBeLessThanOrEqual(200);
+      expect(await undo.locator("svg").evaluate((el) => getComputedStyle(el).rotate)).toBe("none");
+
+      // 4. What lands lands on the spring: the rail's mark and the tabs' bar.
+      const timings = await page.evaluate(() =>
+        [
+          document.querySelector('[data-testid="rail-mark"]'),
+          document.querySelector('[data-testid="page-tabs"] .ui-slide'),
+        ].map((el) => (el ? getComputedStyle(el).transitionTimingFunction : "missing")),
+      );
+      for (const timing of timings) expect(timing, JSON.stringify(timings)).toMatch(/^linear\(/);
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
+
+  it("con el dedo la onda sale de donde se toca", async () => {
+    const context = await browser.newContext({
+      viewport: { width: 390, height: 844 },
+      hasTouch: true,
+    });
+    await recorded(context);
+    const page = await context.newPage();
+    try {
+      await page.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
+      await page.fill("#nombre", "Taberna del Puerto");
+      await motionSettled(page);
+      const next = page.getByRole("button", { name: "Siguiente" });
+      const box = await next.boundingBox();
+      if (!box) throw new Error("«Siguiente» has no box");
+      // Read the point before the screen hands over and the button is gone — on `window`, in the
+      // bubbling phase, which is after the shell's own listener has written it (a microtask queued
+      // from a capturing listener runs between listeners, before the shell's).
+      await page.evaluate(() => {
+        const w = window as unknown as { __pressed: { x: string; y: string } | null };
+        w.__pressed = null;
+        window.addEventListener("pointerdown", (event) => {
+          const button = (event.target as Element).closest<HTMLElement>("button");
+          if (button) {
+            w.__pressed = {
+              x: button.style.getPropertyValue("--ui-x"),
+              y: button.style.getPropertyValue("--ui-y"),
+            };
+          }
+        });
+      });
+      await page.touchscreen.tap(box.x + box.width * 0.8, box.y + box.height * 0.3);
+      const pressed = await page.evaluate(
+        () => (window as unknown as { __pressed: { x: string; y: string } | null }).__pressed,
+      );
+      expect(pressed, "the finger's press wrote no point").not.toBeNull();
+      expect(Math.abs(percent(pressed?.x ?? "") - 80)).toBeLessThanOrEqual(1);
+      expect(Math.abs(percent(pressed?.y ?? "") - 30)).toBeLessThanOrEqual(1);
+      await expect(page.getByText("Paso 2 de 5")).toBeVisible();
+    } finally {
+      await context.close();
+    }
+  }, 120_000);
+
+  it("con menos movimiento: la onda y el giro son nada, y «Descargar» no se inclina", async () => {
+    const context = await browser.newContext({
+      viewport: { width: 1280, height: 900 },
+      reducedMotion: "reduce",
+    });
+    await recorded(context);
+    const page = await context.newPage();
+    try {
+      await intoTheCanvas(page);
+      await motionSettled(page);
+      const download = page.getByRole("button", { name: "Descargar", exact: true });
+      const rest = await download.boundingBox();
+      if (!rest) throw new Error("«Descargar» has no box");
+      await page.mouse.move(rest.x + rest.width - 3, rest.y + rest.height / 2, { steps: 4 });
+      await page.waitForTimeout(260);
+      expect(
+        await download.boundingBox(),
+        "«Descargar» leaned for somebody who asked for less",
+      ).toEqual(rest);
+      await page.getByRole("button", { name: "Estilo", exact: true }).click();
+      await motionSettled(page);
+      const ring = (await started(page)).filter((s) => s.name === "ui-ripple");
+      expect(ring.length).toBeGreaterThan(0);
+      for (const r of ring) expect(r.duration).toBeLessThan(1);
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
+});

@@ -7,6 +7,7 @@ import type { SwitchNotice } from "./designTools.ts";
 import { HelpLine } from "./HelpLine.tsx";
 import type { HelpLineSays } from "./helpLine.ts";
 import { leave } from "./leaving.ts";
+import { wireMagnet } from "./magnet.ts";
 import { DESKTOP_LAYOUT_WIDTH, desktopLayoutWidth, NARROWEST_WIDTH } from "./overflowCheck.ts";
 import { overscrollFor } from "./overscroll.ts";
 import { wireRipples } from "./ripple.ts";
@@ -360,7 +361,9 @@ function RailIcon({ icon, active }: { icon: keyof typeof RAIL_ICONS; active: boo
     <span
       data-rail-tile=""
       className={
-        "ui-interactive flex h-[46px] w-[46px] items-center justify-center rounded-ui border phone:h-7 phone:w-10 " +
+        // `ui-ripple`: the tile is what looks like the button, so the ring is drawn in it wherever
+        // the item is pressed (sprint 36 día 6, `editor/ripple.ts`).
+        "ui-interactive ui-ripple flex h-[46px] w-[46px] items-center justify-center rounded-ui border phone:h-7 phone:w-10 " +
         "outline-2 outline-offset-2 outline-transparent group-focus-visible:outline-ui-brand " +
         // The chosen item's tint is the rail's one sliding mark, under this square (sprint 35 día
         // 2), so the square itself stays clear. Its icon is the deep blue rather than the bright:
@@ -931,6 +934,22 @@ export function EditorShell({
    * than a handler on each. Nothing wears it until día 6. */
   const shellRoot = useRef<HTMLDivElement>(null);
   useEffect(() => (shellRoot.current ? wireRipples(shellRoot.current) : undefined), []);
+  /** «Descargar», the one control that leans toward the pointer (David's decision 4; the budget
+   * counts). Nothing at all on a touched screen or for somebody who asked for less movement. */
+  const downloadButton = useRef<HTMLButtonElement>(null);
+  /**
+   * **The arrow that turns is the one whose press acted**, and it keeps turning after the press has
+   * changed what it can do: undoing the last change re-renders «Deshacer» with nothing left to undo,
+   * and a class tied to `canUndo` alone was taken off mid-turn, which cancels the animation. So a
+   * press that could act holds the turn for as long as it lasts (sprint 36 día 6).
+   */
+  const [turning, setTurning] = useState<"back" | "on" | null>(null);
+  useEffect(() => {
+    if (turning === null) return;
+    const done = setTimeout(() => setTurning(null), 400);
+    return () => clearTimeout(done);
+  }, [turning]);
+  useEffect(() => (downloadButton.current ? wireMagnet(downloadButton.current) : undefined), []);
   const [available, setAvailable] = useState(0);
   // The row's height, for the room the page is given when the zoom falls (`overscrollFor`).
   const [rowHeight, setRowHeight] = useState(0);
@@ -1352,7 +1371,9 @@ export function EditorShell({
                 {/* The label truncates, not the button: `truncate` on a flex container does
                     nothing to its text child, which cut «Taberna Santo Domingo» mid-letter with no
                     ellipsis. A page title is the owner's own words and can be any length. */}
-                <span className="truncate">{page.title}</span>
+                {/* The title's line draws itself under the pointer or the keyboard on a tab that is
+                    not the current one (sprint 36 día 6); the current one has the bar below. */}
+                <span className={current ? "truncate" : "ui-underline truncate"}>{page.title}</span>
               </button>
             );
           })}
@@ -1379,9 +1400,13 @@ export function EditorShell({
             type="button"
             aria-label={es["editor.undo"]}
             disabled={!canUndo}
-            onClick={onUndo}
+            onClick={() => {
+              if (canUndo) setTurning("back");
+              onUndo();
+            }}
             className={
               "ui-interactive flex h-[30px] w-[30px] items-center justify-center rounded-ui-sm phone:order-1 phone:ml-auto " +
+              (canUndo || turning === "back" ? "ui-turn-back " : "") +
               (canUndo ? "cursor-pointer text-ui-ink hover:bg-ui-bg" : "text-ui-muted opacity-40")
             }
           >
@@ -1404,9 +1429,13 @@ export function EditorShell({
             type="button"
             aria-label={es["editor.redo"]}
             disabled={!canRedo}
-            onClick={onRedo}
+            onClick={() => {
+              if (canRedo) setTurning("on");
+              onRedo();
+            }}
             className={
               "ui-interactive flex h-[30px] w-[30px] items-center justify-center rounded-ui-sm phone:order-1 " +
+              (canRedo || turning === "on" ? "ui-turn-on " : "") +
               (canRedo ? "cursor-pointer text-ui-ink hover:bg-ui-bg" : "text-ui-muted opacity-40")
             }
           >
@@ -1490,12 +1519,13 @@ export function EditorShell({
           </div>
 
           <button
+            ref={downloadButton}
             type="button"
             onClick={onDownload}
             disabled={building}
             data-building-return="download"
             className={
-              "ui-interactive flex h-9 items-center justify-center rounded-ui px-[18px] text-sm font-semibold text-white phone:order-1 " +
+              "ui-magnet ui-interactive flex h-9 items-center justify-center rounded-ui px-[18px] text-sm font-semibold text-white phone:order-1 " +
               (building ? "bg-ui-brand opacity-65" : "cursor-pointer bg-ui-brand hover:shadow-ui-2")
             }
           >

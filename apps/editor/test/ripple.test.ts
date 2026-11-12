@@ -35,8 +35,8 @@ describe("the one listener", () => {
   function shell(): { root: HTMLElement; button: HTMLButtonElement; plain: HTMLButtonElement } {
     document.body.innerHTML = `
       <div id="root">
-        <button type="button" class="ui-interactive ui-ripple"><span>Descargar</span></button>
-        <button type="button" class="ui-interactive" id="plain">Volver</button>
+        <button type="button" class="ui-interactive"><span>Descargar</span><svg></svg></button>
+        <button type="button" id="plain">Volver</button>
       </div>`;
     const root = document.getElementById("root") as HTMLElement;
     return {
@@ -60,7 +60,7 @@ describe("the one listener", () => {
     expect(button.hasAttribute(PRESS_ATTRIBUTE)).toBe(true);
   });
 
-  it("leaves a control without the class, and a disabled one, alone", () => {
+  it("rings on every button of the chrome, and leaves a plain one and a disabled one alone", () => {
     const { root, plain, button } = shell();
     wireRipples(root);
     plain.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }) as PointerEvent);
@@ -70,14 +70,37 @@ describe("the one listener", () => {
     expect(button.hasAttribute(PRESS_ATTRIBUTE)).toBe(false);
   });
 
-  it("replays on a second press and lets go at the animation's end", () => {
+  it("replays on a second press and lets go on the ring's own end, not a child's", () => {
     const { button } = shell();
+    const end = (pseudoElement: string) =>
+      Object.assign(new Event("animationend", { bubbles: true }), { pseudoElement });
     press(button, { clientX: 0, clientY: 0 });
     expect(button.hasAttribute(PRESS_ATTRIBUTE)).toBe(true);
     press(button, { clientX: 0, clientY: 0 });
     expect(button.hasAttribute(PRESS_ATTRIBUTE)).toBe(true);
-    button.dispatchEvent(new Event("animationend"));
+    // Undo's arrow turning on the same press ends first sometimes; it must not cut the ring.
+    button.querySelector("svg")?.dispatchEvent(end(""));
+    expect(button.hasAttribute(PRESS_ATTRIBUTE), "a child's end let the ring go").toBe(true);
+    button.dispatchEvent(end("::after"));
+    expect(button.hasAttribute(PRESS_ATTRIBUTE), "another pseudo-element's end").toBe(true);
+    button.dispatchEvent(end("::before"));
     expect(button.hasAttribute(PRESS_ATTRIBUTE)).toBe(false);
+  });
+
+  it("rings the part of a button that looks like one, from a press anywhere on the button", () => {
+    document.body.innerHTML = `
+      <div id="root"><button type="button">
+        <span class="ui-interactive ui-ripple" data-rail-tile=""><svg></svg></span>
+        <span class="ui-interactive" id="word">Estilo</span>
+      </button></div>`;
+    wireRipples(document.getElementById("root") as HTMLElement);
+    const tile = document.querySelector("[data-rail-tile]") as HTMLElement;
+    document
+      .getElementById("word")
+      ?.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }) as PointerEvent);
+    expect(tile.hasAttribute(PRESS_ATTRIBUTE), "a press on the word did not ring the tile").toBe(
+      true,
+    );
   });
 
   it("is removed by what it returns", () => {

@@ -131,7 +131,11 @@ function Stepper({
           aria-live="polite"
           className="w-8 text-center text-[13px] font-semibold text-ui-ink tabular-nums"
         >
-          {placement[field]}
+          {/* The new number rises into place (sprint 36 día 6), keyed by its value; the live region
+              itself stays the same node, which is what lets a reader hear the change. */}
+          <span key={placement[field]} className="ui-rise-in inline-block">
+            {placement[field]}
+          </span>
         </output>
         {arrow(up, "up", `${label}: ${es["editor.design.more"]}`)}
       </div>

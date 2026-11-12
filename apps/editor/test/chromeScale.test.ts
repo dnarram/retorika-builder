@@ -265,6 +265,9 @@ describe("the canvas's copy of the scale", () => {
     // The count's own value (sprint 36 día 5), written by the caller on the number it counts and
     // started from zero by `@starting-style`: a number, not a value of the scale.
     "n",
+    // The ripple's radius (sprint 36 día 6), animated from 0 to 240 px on the press: a frame of an
+    // animation, not a value of the scale. The ripple is the chrome's buttons', not the preview's.
+    "ripple-r",
     // The one `filter` the editor may animate. Día 7 measures `ui-blur-in` on a phone before the
     // canvas's popups wear it; the day it does, this line goes and the pair above gains `blur`.
     "blur",
