@@ -680,6 +680,15 @@ async function axeSerious(page: Page, where: string): Promise<void> {
  * question: what the caller needs to know is that everything with an end has reached it.
  */
 async function motionSettled(page: Page): Promise<void> {
+  /*
+   * **A screen handing over is moving before anything in it is** (sprint 36 día 5, found by CI on
+   * #371). `transitionScreen` writes `data-rb-screen` on the root the instant «Siguiente» is pressed,
+   * and the next screen is mounted only a frame later, inside the view transition's update — so a
+   * wait right after the press found nothing in flight and returned, and axe read the next
+   * question's choices at 8 % of their opacity, mid-entrance. The attribute goes when the
+   * transition has finished, by which time the new screen's own entrances exist and are below.
+   */
+  await page.waitForFunction(() => !document.documentElement.hasAttribute("data-rb-screen"));
   // **Every frame of the page, not only the editor's own document** (sprint 35 día 1): the canvas
   // is an `<iframe>`, and the chrome drawn inside it — the text bar, the verbs, the zones, the bar
   // over an escalated section — moves on the frame's clock, which the editor's `getAnimations()`
@@ -12188,6 +12197,9 @@ describe("sprint 17 día 3 — axe sobre el documento del editor", () => {
        * client's generated site, whose contrast is that harness's subject across every palette, and
        * duplicating it would make one failure appear in two places with two different owners.
        */
+      // At rest (sprint 36 día 5): the keyboard's move changes the help line, whose new sentence
+      // fades in over 120 ms — half its opacity is not its contrast.
+      await motionSettled(page);
       const results = await new AxeBuilder({ page }).analyze();
       const serious = results.violations.filter(
         (rule) => rule.impact === "serious" || rule.impact === "critical",
@@ -16188,6 +16200,31 @@ describe("nada sobresale en un móvil", () => {
               `${gate.kind}: no llegó su diálogo`,
             ).toBeVisible({ timeout: 30_000 });
             await expect(dialog).toHaveCount(1);
+
+            /*
+             * **The weight counts up to itself, and ends where the file is** (sprint 36 día 5,
+             * `ui-count`). Read after the count, against the size the fixture wrote: the counter's
+             * last value, the number the element holds as text, and the bytes / 1024 of the file —
+             * three readings of one number, so a counter written from a copy is caught.
+             */
+            if (gate.kind === "heavyFonts") {
+              await motionSettled(walker);
+              const counted = await dialog.locator(".ui-count").evaluateAll((nodes) =>
+                nodes.map((node) => ({
+                  drawn: Number(getComputedStyle(node).getPropertyValue("--ui-n")),
+                  held: Number(node.textContent),
+                })),
+              );
+              // The faces above the gate's 300 KB, which are the ones the dialog lists.
+              const heavy = Object.entries(gate.fonts ?? {})
+                .filter(
+                  ([file, bytes]) => !file.startsWith("LICENCIA") && Number(bytes) > 300 * 1024,
+                )
+                .map(([, bytes]) => Math.round(Number(bytes) / 1024));
+              expect(heavy.length, "the fixture holds no heavy face").toBeGreaterThan(0);
+              expect(counted.map((c) => c.drawn)).toEqual(heavy);
+              expect(counted.map((c) => c.held)).toEqual(heavy);
+            }
 
             const where = `la puerta «${gate.kind}»`;
             // The page's own four eyes on a phone only. At 1024 `fit` reads the «Estilo» sheet's
@@ -26693,7 +26730,10 @@ describe("sprint 35 día 2 — lo que llega se va", () => {
       const notice = page.getByText(/Has borrado la sección/);
       await expect(notice).toBeVisible();
       const noticeMoves = await notice.evaluate((words) =>
-        (words.parentElement?.getAnimations() ?? []).map((animation) => animation.playState),
+        // Its words since sprint 36 día 5: the notice arrives by them, not by a rise of its own.
+        (words.parentElement?.getAnimations({ subtree: true }) ?? []).map(
+          (animation) => animation.playState,
+        ),
       );
       expect(noticeMoves, "the notice appeared rather than arriving").toContain("running");
       await motionSettled(page);
@@ -28603,4 +28643,268 @@ describe("sprint 36 día 4 — la propuesta se convierte en el lienzo", () => {
       await context.close();
     }
   }, 240_000);
+});
+
+describe("sprint 36 día 5 — la línea habla", () => {
+  /**
+   * **Every animation that starts, with where it ran**: the help line's live and quiet children, a
+   * word of the reveal, a skeleton, a panel's row — read off the target at `animationstart`, with
+   * the delay and duration the browser is running it at. And the sentences the quiet child says, as
+   * they change. Recorded from inside the page from its first script, because a 120 ms fade is over
+   * before a poll from the test could see it.
+   */
+  type Started = {
+    name: string;
+    where: string;
+    word: boolean;
+    skeleton: boolean;
+    delay: number;
+    duration: number;
+  };
+  async function recorded(context: BrowserContext): Promise<void> {
+    await context.addInitScript(() => {
+      const w = window as unknown as {
+        __started: Started[];
+        __said: string[];
+        __skeletons: number;
+      };
+      w.__started = [];
+      w.__said = [];
+      w.__skeletons = 0;
+      document.addEventListener(
+        "animationstart",
+        (event) => {
+          const target = event.target as HTMLElement;
+          // From the computed style, not `getAnimations()`: with less movement a 0.01 ms animation
+          // has already finished by the time its start is dispatched, and is gone from that list.
+          const style = getComputedStyle(target);
+          const at = style.animationName.split(", ").indexOf(event.animationName);
+          const seconds = (list: string) => {
+            const value = list.split(", ")[Math.max(0, at)] ?? "0s";
+            return value.endsWith("ms")
+              ? Number.parseFloat(value)
+              : Number.parseFloat(value) * 1000;
+          };
+          w.__started.push({
+            name: event.animationName,
+            where:
+              target.closest<HTMLElement>("[data-testid]")?.dataset["testid"] ??
+              target.tagName.toLowerCase(),
+            word: target.hasAttribute("data-ui-word"),
+            skeleton: target.hasAttribute("data-ui-skeleton"),
+            delay: Math.round(seconds(style.animationDelay) * 1000) / 1000,
+            duration: Math.round(seconds(style.animationDuration) * 1000) / 1000,
+          });
+        },
+        true,
+      );
+      new MutationObserver((records) => {
+        for (const record of records) {
+          for (const node of record.addedNodes) {
+            if (!(node instanceof HTMLElement)) continue;
+            if (node.matches('[data-testid="help-line-quiet"]'))
+              w.__said.push(node.textContent ?? "");
+            // The three proposals mount in one subtree: each skeleton inside it counts.
+            w.__skeletons +=
+              (node.matches("[data-ui-skeleton]") ? 1 : 0) +
+              node.querySelectorAll("[data-ui-skeleton]").length;
+          }
+        }
+      }).observe(document, { childList: true, subtree: true });
+    });
+  }
+  const started = (page: Page) =>
+    page.evaluate(() => (window as unknown as { __started: Started[] }).__started);
+  const resetRecords = (page: Page) =>
+    page.evaluate(() => {
+      const w = window as unknown as { __started: Started[]; __said: string[] };
+      w.__started = [];
+      w.__said = [];
+    });
+
+  it("lo que llega a la línea llega palabra a palabra; lo que cambia se funde, sin mover nada", async () => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    await recorded(context);
+    const page = await context.newPage();
+    try {
+      await intoTheCanvas(page);
+      await motionSettled(page);
+      const frame = page.frameLocator(PREVIEW).first();
+      const boxes = () =>
+        page.evaluate(() =>
+          ["help-line", "canvas-card"].map((id) => {
+            const box = document.querySelector(`[data-testid="${id}"]`)?.getBoundingClientRect();
+            return box ? [box.x, box.y, box.width, box.height].map(Math.round).join(",") : "";
+          }),
+        );
+      const atRest = await boxes();
+
+      // 1. A delete: the notice arrives word by word in the live child, six words, six steps.
+      await resetRecords(page);
+      const services = frame.locator('[data-section="sec-services"]');
+      await services.click();
+      await services.locator('.rb-action[aria-label="Borrar esta sección"]').click();
+      const live = page.getByTestId("help-line-live");
+      await expect(live).toContainText("Has borrado la sección «Qué hago»");
+      const sampled = await page.evaluate(
+        () =>
+          new Promise<string[]>((resolve) => {
+            const out: string[] = [];
+            const end = performance.now() + 400;
+            const tick = () => {
+              out.push(
+                ["help-line", "canvas-card"]
+                  .map((id) => {
+                    const box = document
+                      .querySelector(`[data-testid="${id}"]`)
+                      ?.getBoundingClientRect();
+                    return box
+                      ? [box.x, box.y, box.width, box.height].map(Math.round).join(",")
+                      : "";
+                  })
+                  .join(" | "),
+              );
+              if (performance.now() < end) requestAnimationFrame(tick);
+              else resolve(out);
+            };
+            requestAnimationFrame(tick);
+          }),
+      );
+      await motionSettled(page);
+      const words = (await started(page)).filter((s) => s.name === "ui-words");
+      expect(words.length, JSON.stringify(words)).toBe(6);
+      for (const word of words) {
+        expect(word.where).toBe("help-line-live");
+        expect(word.word).toBe(true);
+      }
+      expect(words.map((w) => w.delay)).toEqual([0, 40, 80, 120, 160, 200]);
+      // Nothing moved while it spoke: the line is 32 px and the card where it was, in every frame.
+      expect(new Set(sampled), "a frame moved the line or the card").toEqual(
+        new Set([atRest.join(" | ")]),
+      );
+      // And once the last word has landed it is plain text again, so the ellipsis works on it.
+      await expect(live.locator("[data-ui-word]")).toHaveCount(0);
+      await expect(live).toContainText("Has borrado la sección «Qué hago»");
+      await page.locator("button", { hasText: "Deshacer" }).click();
+      await expect(services).toBeVisible();
+      await expect(live).toHaveText("");
+      await motionSettled(page);
+
+      // 2. The quiet child changes with every Tab, and each change is a fade and never a reveal.
+      await frame.locator('[data-section="sec-cover"] [data-id="el-headline"]').click();
+      await motionSettled(page);
+      await resetRecords(page);
+      for (let press = 0; press < 5; press += 1) {
+        await page.keyboard.press("Tab");
+        await page.waitForTimeout(160);
+      }
+      await motionSettled(page);
+      const said = await page.evaluate(() => (window as unknown as { __said: string[] }).__said);
+      const after = await started(page);
+      const fades = after.filter((s) => s.name === "ui-fade-in" && s.where === "help-line-quiet");
+      expect(said.length, `five Tabs said ${JSON.stringify(said)}`).toBeGreaterThanOrEqual(3);
+      expect(fades.length, "a sentence changed without its fade").toBe(said.length);
+      for (const fade of fades) expect(fade.duration).toBe(120);
+      expect(
+        after.filter((s) => s.name === "ui-words"),
+        "a change was revealed by words",
+      ).toEqual([]);
+      expect(await boxes()).toEqual(atRest);
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
+
+  it("las propuestas tienen esqueleto hasta que su página llega, y se va sin bucle; un panel llega fila a fila", async () => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    await recorded(context);
+    const page = await context.newPage();
+    try {
+      await page.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
+      await page.fill("#nombre", "Taberna del Puerto");
+      await page.getByRole("button", { name: "Siguiente" }).click();
+      await page.getByText("Restaurante y bar", { exact: true }).click();
+      await page.getByRole("button", { name: "Siguiente" }).click();
+      await page.getByText("Comidas", { exact: true }).click();
+      await page.getByRole("button", { name: "Siguiente" }).click();
+      await page.fill("#direccion", "Muelle 3, Ronda");
+      await page.getByRole("button", { name: "Siguiente" }).click();
+      await page.getByText("Que reserven", { exact: true }).click();
+      await page.fill("#enlace", "https://reservas.example.com/taberna");
+      await page.getByRole("button", { name: "Crear mi web" }).click();
+      await page.getByText("Ver a tamaño real →").first().waitFor();
+      // Each card's skeleton is drawn, fades when its page has arrived, and is gone.
+      await expect(page.locator("[data-ui-skeleton]")).toHaveCount(0, { timeout: 15_000 });
+      expect(
+        await page.evaluate(() => (window as unknown as { __skeletons: number }).__skeletons),
+      ).toBeGreaterThanOrEqual(3);
+      const leaving = (await started(page)).filter((s) => s.skeleton);
+      expect(leaving.map((s) => s.name)).toEqual(["ui-fade-out", "ui-fade-out", "ui-fade-out"]);
+      for (const s of leaving) expect(Number.isFinite(s.duration) && s.duration <= 120).toBe(true);
+      await motionSettled(page);
+      expect(
+        await page.evaluate(
+          () =>
+            document
+              .getAnimations()
+              .filter((a) => a.effect?.getTiming().iterations === Number.POSITIVE_INFINITY).length,
+        ),
+      ).toBe(0);
+
+      // A panel's rows: the header first, then each block 40 ms after the one before, six steps.
+      await page.getByText("Ver a tamaño real →").first().click();
+      await sceneOver(page);
+      await page.frameLocator(PREVIEW).first().locator('[data-section="sec-cover"]').waitFor();
+      await motionSettled(page);
+      await resetRecords(page);
+      await page.getByRole("button", { name: "Estilo", exact: true }).click();
+      const panel = page.locator('[data-testid="canvas-and-panel"] > :last-child');
+      await expect(panel).toBeVisible();
+      await motionSettled(page);
+      const rows = (await started(page)).filter(
+        (s) => s.name === "ui-fade-in" && s.where !== "help-line-quiet",
+      );
+      const delays = rows.map((r) => r.delay);
+      expect(delays.slice(0, 4), JSON.stringify(rows)).toEqual([0, 40, 80, 120]);
+      for (const delay of delays) expect(delay).toBeLessThanOrEqual(200);
+      expect(Math.max(...delays) + 120).toBeLessThanOrEqual(350);
+      // And unmarked once they have landed: a block that appears later waits for nothing.
+      await expect(panel).not.toHaveAttribute("data-ui-rows", "");
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
+
+  it("con menos movimiento: las palabras llegan juntas, las filas también, y nada espera su turno", async () => {
+    const context = await browser.newContext({
+      viewport: { width: 1280, height: 900 },
+      reducedMotion: "reduce",
+    });
+    await recorded(context);
+    const page = await context.newPage();
+    try {
+      await intoTheCanvas(page);
+      await motionSettled(page);
+      await resetRecords(page);
+      const frame = page.frameLocator(PREVIEW).first();
+      const services = frame.locator('[data-section="sec-services"]');
+      await services.click();
+      await services.locator('.rb-action[aria-label="Borrar esta sección"]').click();
+      await expect(page.getByTestId("help-line-live")).toContainText("Has borrado la sección");
+      await motionSettled(page);
+      await page.getByRole("button", { name: "Estilo", exact: true }).click();
+      await motionSettled(page);
+      const all = await started(page);
+      const words = all.filter((s) => s.name === "ui-words");
+      expect(words.length).toBe(6);
+      const rows = all.filter((s) => s.name === "ui-fade-in" && s.where !== "help-line-quiet");
+      expect(rows.length).toBeGreaterThan(2);
+      for (const s of [...words, ...rows]) {
+        expect(s.delay, `${s.name} waited its turn`).toBe(0);
+        expect(s.duration, `${s.name} travelled`).toBeLessThan(1);
+      }
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
 });

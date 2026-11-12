@@ -787,9 +787,28 @@ export function FontFilesDialog({
                   key={index}
                   className="rounded-[9px] border border-ui-border px-3 py-2.5 text-[13px] text-ui-ink"
                 >
+                  {/* The weight counts up to itself as the dialog arrives (sprint 36 día 5,
+                      `ui-count`): the number is drawn by the counter and never read; the element's
+                      own text is the real number, hidden from the eye, so a reader and a search
+                      find «310» and never a frame of the count. */}
                   {es["editor.download.heavyFonts.file"]
                     .replace("{family}", file.family)
-                    .replace("{kb}", String(file.kb))}
+                    .split("{kb}")
+                    .map((part, at, parts) => (
+                      // biome-ignore lint/suspicious/noArrayIndexKey: the two halves of one sentence
+                      <span key={at}>
+                        {part}
+                        {at < parts.length - 1 ? (
+                          <span
+                            className="ui-count"
+                            data-count={file.kb}
+                            style={{ "--ui-n": file.kb } as React.CSSProperties}
+                          >
+                            <span className="sr-only">{file.kb}</span>
+                          </span>
+                        ) : null}
+                      </span>
+                    ))}
                 </div>
               ))}
             </div>

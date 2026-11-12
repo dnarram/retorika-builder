@@ -301,6 +301,9 @@ export type RailItemId =
  * exit and the zoom changes once; a panel replaced by another keeps the slot at its width and the
  * zoom does not change at all.
  */
+/** Longer than the last row's arrival (5 × 40 + 120 = 320 ms), with room for a slow frame. */
+const PANEL_ROWS_MS = 450;
+
 function PanelHost({
   row,
   children,
@@ -316,6 +319,20 @@ function PanelHost({
     },
     [row],
   );
+  /**
+   * **And a panel that comes is seen to arrive row by row** (sprint 36 día 5): marked
+   * `data-ui-rows` the moment it is in the row, so its blocks fade in one after another, and unmarked
+   * once the last of them has landed, so a block that appears later — an option chosen — is not
+   * held back by a queue that has already gone (`globals.css`).
+   */
+  useLayoutEffect(() => {
+    const box = row.current;
+    const node = box?.lastElementChild;
+    if (!box || !node || node === box.firstElementChild) return;
+    node.setAttribute("data-ui-rows", "");
+    const done = setTimeout(() => node.removeAttribute("data-ui-rows"), PANEL_ROWS_MS);
+    return () => clearTimeout(done);
+  }, [row]);
   return <>{children}</>;
 }
 

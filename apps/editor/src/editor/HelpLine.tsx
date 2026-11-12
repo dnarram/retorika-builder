@@ -1,5 +1,6 @@
 "use client";
 
+import { Fragment, useLayoutEffect, useRef, useState } from "react";
 import es from "../locales/es.json" with { type: "json" };
 import type { HelpLineSays } from "./helpLine.ts";
 import { leave } from "./leaving.ts";
@@ -39,6 +40,34 @@ export function HelpLine({
   style?: React.CSSProperties | undefined;
 }) {
   const shown = live.text !== "" ? live : quiet;
+
+  /**
+   * **What arrives reveals itself; what changes cross-fades** (sprint 36 día 5, David's adjustment
+   * 2: «el ritmo es para lo que llega, no para lo que cambia»). The live child's sentence — an
+   * announcement, the delete notice, an error — arrives word by word (`ui-words`, at most seven
+   * steps, the seventh carrying the rest), and once its last word has landed it is plain text again,
+   * so the line's ellipsis works on it (an `inline-block` word is clipped, never ellipsised). The
+   * quiet child's sentence changes with every Tab and every hovered choice, so it never reveals: the
+   * new one fades in over a copy of the old one fading out, in the same box, on `--ui-fast`, with no
+   * travel. The copy is outside the quiet child, `aria-hidden`, and takes no pointer, so the child's
+   * own text is always exactly the current sentence.
+   */
+  const [revealed, setRevealed] = useState<string | null>(null);
+  const [leaving, setLeaving] = useState<{
+    text: string;
+    tone: HelpLineSays["tone"];
+    n: number;
+  } | null>(null);
+  const lastQuiet = useRef(quiet);
+  const changes = useRef(0);
+  useLayoutEffect(() => {
+    const before = lastQuiet.current;
+    lastQuiet.current = quiet;
+    if (before.text === quiet.text) return;
+    changes.current += 1;
+    setLeaving({ text: before.text, tone: before.tone, n: changes.current });
+  }, [quiet]);
+
   return (
     <div
       data-testid="help-line"
@@ -57,28 +86,55 @@ export function HelpLine({
         // whose next sentence may not be read. It keeps its place at zero width instead, and takes
         // the row when it has something to say.
         className={`m-0 min-w-0 truncate ${toneClass(live.tone)} ${live.text === "" ? "w-0 flex-none" : "flex-grow"}`}
+        // The tone's colour changes on the same 120 ms as everything that answers in this line.
+        style={{ transition: "color var(--ui-fast) var(--ui-ease)" }}
       >
         {live.text === "" ? null : (
           <span
-            // Keyed by the sentence so a new notice is a new arrival, and a notice that goes
-            // leaves a copy sinking the eight pixels it rose (`leaving.ts`).
+            // Keyed by the sentence, so a new one is a new arrival; a notice that goes leaves a
+            // copy sinking away (`leaving.ts`). The words are its arrival now, not a rise.
             key={live.text}
             ref={live.notice ? leavesAsNotice : undefined}
-            className={live.notice ? "ui-rise-in inline-block" : undefined}
+            className={revealed === live.text ? undefined : "ui-words"}
+            onAnimationEnd={(event) => {
+              if ((event.target as HTMLElement).hasAttribute("data-ui-word-last")) {
+                setRevealed(live.text);
+              }
+            }}
           >
-            <span>{live.text}</span>
+            {revealed === live.text ? live.text : wordsOf(live.text)}
           </span>
         )}
       </p>
-      <p
-        data-testid="help-line-quiet"
-        aria-live="off"
-        title={quiet.text}
-        hidden={live.text !== ""}
-        className={`m-0 min-w-0 flex-grow truncate ${toneClass(quiet.tone)}`}
+      <div
+        className={`relative min-w-0 flex-grow ${live.text === "" ? "" : "hidden"}`}
+        data-help-quiet-box=""
       >
-        {quiet.text}
-      </p>
+        <p
+          // A new sentence is a new node, which is what makes its fade an arrival.
+          key={quiet.text}
+          data-testid="help-line-quiet"
+          aria-live="off"
+          title={quiet.text}
+          hidden={live.text !== ""}
+          className={`ui-cross-in m-0 truncate ${toneClass(quiet.tone)}`}
+        >
+          {quiet.text}
+        </p>
+        {leaving && live.text === "" ? (
+          <span
+            key={leaving.n}
+            aria-hidden="true"
+            data-help-leaving=""
+            // Its words painted, never written (`[data-leaving-text]::before`), like every exit copy
+            // since sprint 35: nothing — a search, a locator, axe's contrast — can take a sentence
+            // on its way out at half its opacity for the line's own.
+            data-leaving-text={leaving.text}
+            className={`ui-cross-out pointer-events-none absolute inset-0 truncate ${toneClass(leaving.tone)}`}
+            onAnimationEnd={() => setLeaving((now) => (now?.n === leaving.n ? null : now))}
+          />
+        ) : null}
+      </div>
       {live.notice ? (
         <>
           <button
@@ -113,6 +169,37 @@ export function HelpLine({
       ) : null}
     </div>
   );
+}
+
+/** The cap of the reveal: seven steps of `--ui-stagger`, the proposals' own, so the longest sentence
+ * is at rest inside the budget's 600 ms (120 + 6 × 40). */
+export const WORD_STEPS = 7;
+
+/**
+ * A sentence as the words that arrive: one span per word up to the sixth, and the seventh carrying
+ * the rest, so a long notice is still seven steps. Separated by real spaces, so the text the line
+ * holds is the sentence exactly; the last span is marked, and its end is when the sentence is plain
+ * text again.
+ */
+export function wordsOf(sentence: string) {
+  const all = sentence.split(" ");
+  const parts =
+    all.length <= WORD_STEPS
+      ? all
+      : [...all.slice(0, WORD_STEPS - 1), all.slice(WORD_STEPS - 1).join(" ")];
+  return parts.map((part, index) => (
+    // biome-ignore lint/suspicious/noArrayIndexKey: a word's place is what it is; words repeat
+    <Fragment key={index}>
+      {index === 0 ? null : " "}
+      <span
+        data-ui-word=""
+        data-ui-word-last={index === parts.length - 1 ? "" : undefined}
+        style={{ "--ui-word-delay": `calc(var(--ui-stagger) * ${index})` } as React.CSSProperties}
+      >
+        {part}
+      </span>
+    </Fragment>
+  ));
 }
 
 function toneClass(tone: HelpLineSays["tone"]): string {

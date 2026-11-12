@@ -262,6 +262,9 @@ describe("the canvas's copy of the scale", () => {
     // and zeroed under reduced motion. The preview has no queue to pace.
     "row-delay",
     "word-delay",
+    // The count's own value (sprint 36 día 5), written by the caller on the number it counts and
+    // started from zero by `@starting-style`: a number, not a value of the scale.
+    "n",
     // The one `filter` the editor may animate. Día 7 measures `ui-blur-in` on a phone before the
     // canvas's popups wear it; the day it does, this line goes and the pair above gains `blur`.
     "blur",

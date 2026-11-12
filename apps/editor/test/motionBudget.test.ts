@@ -303,6 +303,8 @@ describe("the budget in the editor", () => {
     ...panels.map((file) => [QUESTIONNAIRE, file]),
     ...dialogs.map((file) => [QUESTIONNAIRE, file]),
     [EDITOR_SRC, "account", "SaveToAccountDialog.tsx"],
+    // The help line (sprint 36 día 1), whose two voices move since día 5.
+    [EDITOR_SRC, "editor", "HelpLine.tsx"],
   ];
 
   /**
@@ -802,6 +804,52 @@ describe("a screen hands over to the next", () => {
     const chained =
       RULES_ALL.find((rule) => rule.prelude.includes("[data-rb-chained]"))?.body ?? "";
     expect(chained).toMatch(/animation:\s*none/);
+  });
+});
+
+/**
+ * **The line speaks, the panels arrive row by row, a number counts** (sprint 36 día 5). Read off the
+ * stylesheet, where each of these can be broken by one line.
+ */
+describe("the line's voice, a panel's rows and a count", () => {
+  const RULES_ALL = cssRules(CSS);
+  const body = (prelude: string) => RULES_ALL.find((rule) => rule.prelude === prelude)?.body ?? "";
+
+  it("changes a sentence by opacity alone, on --ui-fast, in and out", () => {
+    for (const name of ["ui-cross-in", "ui-cross-out"]) {
+      const utility = UTILITIES.get(name) ?? "";
+      expect(utility, `globals.css declares no ${name}`).toMatch(
+        /animation:\s*ui-fade-(in|out) var\(--ui-fast\)/,
+      );
+    }
+    for (const frames of ["ui-fade-in", "ui-fade-out"]) {
+      expect(KEYFRAMES.get(frames), `${frames} travels`).not.toMatch(/transform|translate/);
+    }
+  });
+
+  it("lets a panel's rows arrive by opacity only, at rest inside the panel guard's 350 ms", () => {
+    expect(body("[data-ui-rows] > *")).toMatch(/animation:\s*ui-fade-in var\(--ui-fast\)/);
+    expect(body("[data-ui-rows] > *")).toMatch(/animation-delay:\s*var\(--ui-row-delay, 0ms\)/);
+    const steps = RULES_ALL.filter((rule) =>
+      rule.prelude.startsWith("[data-ui-rows] > :nth-child"),
+    ).map((rule) => Number(/var\(--ui-stagger\) \* (\d+)/.exec(rule.body)?.[1] ?? Number.NaN));
+    expect(steps).toEqual([1, 2, 3, 4, 5]);
+    expect(Math.max(...steps) * ms("stagger") + ms("fast")).toBeLessThanOrEqual(350);
+    // And no row waits its turn for somebody who asked for less movement.
+    expect(CSS).toMatch(/--ui-row-delay:\s*0ms !important/);
+  });
+
+  it("draws a count and never reads it, from zero the first time", () => {
+    const count = UTILITIES.get("ui-count") ?? "";
+    expect(count, "the counter is read out: frames of the count reach a reader").toMatch(
+      /content:\s*counter\(ui-n\)\s*\/\s*""/,
+    );
+    expect(count).toMatch(/@starting-style\s*\{\s*--ui-n:\s*0/);
+  });
+
+  it("lets a skeleton leave by opacity, and never loop", () => {
+    expect(body('[data-ui-skeleton="gone"]')).toMatch(/animation:\s*ui-fade-out var\(--ui-fast\)/);
+    expect(UTILITIES.get("ui-skeleton")).not.toMatch(/animation|transition/);
   });
 });
 

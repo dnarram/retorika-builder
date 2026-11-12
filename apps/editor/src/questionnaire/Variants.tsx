@@ -196,6 +196,14 @@ function ThumbnailFrame({
 }) {
   const box = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(DESKTOP_THUMBNAIL_SCALE);
+  /**
+   * **A skeleton until the page inside has arrived** (sprint 36 día 5): where the thumbnail's
+   * document has not loaded yet, a few still bars in the place of its bar, its cover and its lines,
+   * so the card is never a white box. No pulse in it — a loading state is not one of the three things
+   * allowed to loop. On the frame's first `load` it fades on `--ui-fast` and is gone; a later
+   * reload of the same frame (the photographs arriving) keeps the page on screen and needs none.
+   */
+  const [skeleton, setSkeleton] = useState<"up" | "gone" | "none">("up");
   useEffect(() => {
     const el = box.current;
     if (!el) return;
@@ -221,6 +229,8 @@ function ThumbnailFrame({
       style={{
         width: "100%",
         height: thumbnailHeight(scale),
+        // The skeleton's containing block; nothing else in the box is positioned.
+        position: "relative",
         overflow: "hidden",
         borderRadius: 8,
         /* The width stays here, because `thumbnailHeight` adds exactly these two hairlines back.
@@ -252,8 +262,31 @@ function ThumbnailFrame({
           }}
           tabIndex={-1}
           aria-hidden="true"
+          onLoad={() => setSkeleton((now) => (now === "up" ? "gone" : now))}
         />
       </div>
+      {skeleton === "none" ? null : (
+        <div
+          aria-hidden="true"
+          data-ui-skeleton={skeleton}
+          onAnimationEnd={() => setSkeleton("none")}
+          style={{
+            position: "absolute",
+            inset: 0,
+            pointerEvents: "none",
+            background: "var(--ui-surface)",
+            display: "flex",
+            flexDirection: "column",
+            gap: 8,
+            padding: 10,
+          }}
+        >
+          <span className="ui-skeleton" style={{ height: 8, width: "38%" }} />
+          <span className="ui-skeleton" style={{ flexGrow: 1, borderRadius: 6 }} />
+          <span className="ui-skeleton" style={{ height: 6, width: "72%" }} />
+          <span className="ui-skeleton" style={{ height: 6, width: "54%" }} />
+        </div>
+      )}
     </div>
   );
 }
