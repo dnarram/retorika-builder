@@ -711,6 +711,23 @@ function DeviceToggle({
   );
 }
 
+/**
+ * The chrome's place in the queue when it arrives after the canvas scene (`arriving`): the header
+ * first, then the rail, then the help line, each `--ui-stagger` after the one before, and all of them
+ * starting at 60 % of the scene — late enough that the canvas has all but landed, early enough that
+ * the whole screen is at rest inside the budget's 600 ms (0.6 × 400 + 2 × 40 + 180 = 500).
+ */
+function arrival(arriving: boolean, _row: number): string {
+  return arriving ? "ui-rise-in " : "";
+}
+
+function arrivalDelay(arriving: boolean, row: number): React.CSSProperties | undefined {
+  if (!arriving) return undefined;
+  return {
+    "--ui-row-delay": `calc(var(--ui-scene) * 0.6 + var(--ui-stagger) * ${row})`,
+  } as React.CSSProperties;
+}
+
 export function EditorShell({
   siteName,
   pages,
@@ -743,6 +760,7 @@ export function EditorShell({
   children,
   overlay,
   helpLine,
+  arriving = false,
   onZoomChange,
   onLayoutWidthChange,
 }: {
@@ -800,6 +818,14 @@ export function EditorShell({
    * draws the panel — the panel is `panel`, and cannot read the room it is part of.
    */
   onLayoutWidthChange?: (layoutWidth: number) => void;
+  /**
+   * **The chrome arrives around a canvas that has just landed** (sprint 36 día 4): when the editor
+   * opens by the scene — a proposal's thumbnail becoming the canvas — the header, the rail and the
+   * help line rise into place one after another, each starting once the scene is well under way, so
+   * none of the chrome is painted before the canvas is there. `false` for an editor restored from
+   * this browser, which has no scene to arrive after.
+   */
+  arriving?: boolean;
   device: "desktop" | "mobile";
   onDeviceChange: (device: "desktop" | "mobile") => void;
   canUndo: boolean;
@@ -1033,6 +1059,23 @@ export function EditorShell({
     // length is what actually changes, and a rename is a width change the observer already sees.
   }, [currentPageId, pages.length]);
 
+  /**
+   * **The room is measured on mount, synchronously, and watched after** (sprint 36 día 4). A
+   * `ResizeObserver` is delivered in the rendering steps, and while the document is frozen for a
+   * view transition's capture there are none: the editor opened by the scene was captured at the
+   * «no zoom» fallback below, and the real zoom arrived only once the page was unfrozen — a card
+   * that jumped mid-scene, and eighty walks whose press landed where a section no longer was. A
+   * layout effect reads the box's size the moment the shell is in the DOM, frozen or not, so the
+   * first paint is the measured one; the observer keeps it true from then on.
+   */
+  useLayoutEffect(() => {
+    const box = canvasArea.current;
+    if (!box) return;
+    const rect = box.getBoundingClientRect();
+    setAvailable(rect.width);
+    setRowHeight(rect.height);
+  }, []);
+
   useEffect(() => {
     const box = canvasArea.current;
     if (!box) return;
@@ -1044,6 +1087,11 @@ export function EditorShell({
     });
     observer.observe(box);
     return () => observer.disconnect();
+  }, []);
+
+  useLayoutEffect(() => {
+    const bar = header.current;
+    if (bar) setHeaderHeight(bar.offsetHeight);
   }, []);
 
   useEffect(() => {
@@ -1124,7 +1172,8 @@ export function EditorShell({
       <header
         ref={header}
         aria-label={es["editor.header.label"]}
-        className="flex h-[58px] shrink-0 items-center border-b border-ui-border bg-ui-surface px-4 phone:h-auto phone:flex-wrap phone:gap-x-2.5 phone:gap-y-2 phone:px-3 phone:py-2 tablet:h-auto tablet:flex-wrap tablet:gap-x-2.5 tablet:gap-y-2 tablet:py-2"
+        className={`${arrival(arriving, 0)}flex h-[58px] shrink-0 items-center border-b border-ui-border bg-ui-surface px-4 phone:h-auto phone:flex-wrap phone:gap-x-2.5 phone:gap-y-2 phone:px-3 phone:py-2 tablet:h-auto tablet:flex-wrap tablet:gap-x-2.5 tablet:gap-y-2 tablet:py-2`}
+        style={arrivalDelay(arriving, 0)}
       >
         <button
           type="button"
@@ -1456,7 +1505,8 @@ export function EditorShell({
           // row with icon and word, above the home indicator. The same five buttons — nothing is
           // added or taken away by the move; the studio items and the switch are already absent
           // below 1024 (ADR 0025 §5). An 80px rail took a quarter of a 320px screen.
-          className="relative flex w-20 shrink-0 flex-col items-center gap-3.5 overflow-y-auto border-r border-ui-border bg-ui-surface py-3.5 phone:fixed phone:inset-x-0 phone:bottom-0 phone:z-20 phone:h-auto phone:w-auto phone:flex-row phone:items-stretch phone:justify-around phone:gap-0 phone:overflow-visible phone:border-t phone:border-r-0 phone:pt-1 phone:pb-[calc(4px+env(safe-area-inset-bottom))]"
+          className={`${arrival(arriving, 1)}relative flex w-20 shrink-0 flex-col items-center gap-3.5 overflow-y-auto border-r border-ui-border bg-ui-surface py-3.5 phone:fixed phone:inset-x-0 phone:bottom-0 phone:z-20 phone:h-auto phone:w-auto phone:flex-row phone:items-stretch phone:justify-around phone:gap-0 phone:overflow-visible phone:border-t phone:border-r-0 phone:pt-1 phone:pb-[calc(4px+env(safe-area-inset-bottom))]`}
+          style={arrivalDelay(arriving, 1)}
         >
           {/* **The chosen item's mark: one for the whole rail, and it travels** (sprint 35 día 2).
               It used to be three cues on each item, appearing and disappearing — the square's tint,
@@ -1667,7 +1717,8 @@ export function EditorShell({
                 quiet={helpLine.quiet}
                 onUndo={helpLine.onUndo}
                 onDismiss={helpLine.onDismiss}
-                className="phone:order-first"
+                className={`${arrival(arriving, 2)}phone:order-first`}
+                style={arrivalDelay(arriving, 2)}
               />
             ) : null}
           </div>

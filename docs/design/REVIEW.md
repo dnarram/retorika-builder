@@ -8744,3 +8744,113 @@ suman menos de lo que varía la suite de una pasada a otra. Y una mirada en el n
 transición ralentizada diez veces: la pregunta vieja yéndose a la izquierda mientras la nueva llega,
 los puntos aparte, el resto quieto.
 
+### Día 4 — la propuesta se convierte en el lienzo (PR de `feat/la-propuesta-se-convierte-en-el-lienzo`)
+
+Las dos escenas del segundo registro: la propuesta elegida que crece hasta ser el lienzo del editor —y
+el lienzo que vuelve a su propuesta—, y la construcción que se despide hacia «Descargar».
+
+**La escena** (`Variants.tsx`, `screenTransition.ts`): pulsar una propuesta nombra su miniatura
+(`data-rb-scene-from`, escrito con `flushSync` antes de que el navegador capture la pantalla vieja)
+y abre el editor dentro de la transición de vista con `scene: "canvas"`: la hoja nombra
+`rb-scene-canvas` la miniatura y `[data-testid="canvas-card"]` **solo bajo `:root[data-rb-scene]`**, el
+grupo viaja a `--ui-scene` con la curva de forma (reglas del día 2) y la raíz no se funde (la del día 3):
+la miniatura se convierte en el lienzo mientras la pantalla de las propuestas se va de golpe y el cromo
+del editor llega después. **La escena no arranca hasta que el lienzo está pintado** (condición 1 de
+David): `transitionScreen` gana `settled`, una promesa que la actualización espera dentro del
+`startViewTransition` antes de que el navegador capture la pantalla nueva —la propuesta sigue en
+pantalla, congelada, hasta entonces—, y el editor la resuelve desde el `load` del iframe
+(`onCanvasPainted`). **Con tope de 500 ms** (ajuste 3): la promesa corre contra `SCENE_WAIT_CAP_MS`
+y, si gana el tope, `skipTransition()` descongela la página y el editor aparece sin escena. **La
+vuelta** («Volver a las tres variantes») es la misma escena al revés: el lienzo se convierte en la
+tarjeta de la que salió, que llega marcada `data-rb-returned` y no vuelve a tocar su `ui-reveal`.
+**El cromo llega después** (`EditorShell`, `arriving`): la cabecera, el raíl y la línea de ayuda suben
+con `ui-rise-in` escalonados —`--ui-row-delay` desde el 60 % de la escena más `--ui-stagger` por fila:
+240, 280, 320 ms; todo en reposo a los 500— y `backwards`, así que nada del cromo se pinta antes de que
+el lienzo aterrice. Una sesión restaurada no llega por escena y su cromo está sin más.
+
+**Lo que midió la primera pasada, antes de aceptar la escena** (`--silent=false`, Chromium con el
+servidor de desarrollo, una tarjeta con iframe vivo): **la escena se saltaba siempre**: `load` a los
+33 ms de la pulsación, `ready` nunca, `finished` a los 529 —el tope. La señal de «pintado» esperaba dos
+`requestAnimationFrame` tras `load`, y mientras el documento está congelado para la captura no hay
+oportunidades de render: los fotogramas no llegaban. La señal es ahora el propio `load` (la captura
+maqueta el documento cargado de todos modos) y la escena corre: **`load` a +33 ms, `ready` a +47,
+`finished` a +473; 27 fotogramas, el más largo 18,4 ms, media 16,5, ninguno sobre 32** (seis
+ligeramente sobre 16,8: el servidor de desarrollo y un iframe vivo). La vuelta: 27 fotogramas, el más
+largo 20,9. **La escena se acepta tal cual, con morph.** Y a la vista, con la transición diez veces más
+lenta: la página creciendo desde el tamaño de la miniatura hasta el lienzo, sola, y el cromo llegando
+cuando ya está.
+
+**La construcción dice cada etapa real** (`BuildingScreen.tsx`, `Editor.tsx`): «Midiendo la página en
+un móvil…» al empezar `measureOverflow`, «Reuniendo las fotos y las letras…» al empezar a reunirlas,
+«Preparando los archivos…» antes de pedir `/api/download` — **cada línea con `flushSync` antes de que
+la etapa empiece**, nunca por temporizador, y nada sobre la compresión, que ocurre en el servidor y no
+se ve. Las palabras llegan una tras otra (`ui-words`, lo que llega). Tres etapas y no cuatro: el plan
+decía «Comprimiendo…», y eso sería afirmar lo que no se ve. **Y se despide hacia «Descargar»**
+(`ui-scene-build`): cuando el mínimo de 2 s acaba y el ZIP está entregado, la tarjeta se contrae a
+`--ui-scene` desde un `transform-origin` medido en ese instante sobre el centro del botón, mientras el
+velo se funde en `--ui-fast` (`[data-leaving="build"]`, sin puntero); el armazón sigue `inert` hasta
+que la tarjeta se ha ido (`onLeft` en su `animationend`, o a los 650 ms), y entonces el foco vuelve a
+«Descargar». Bajo `reduce`, la tarjeta es un fundido de `--ui-fast` (regla del día 2) y **los lugares
+en una cola también se anulan**: el bloque global de `reduce` pone `--ui-row-delay` y `--ui-word-delay`
+a 0 con `!important` — sin eso, con menos movimiento el cromo esperaba sus 240–320 ms y aparecía de
+golpe: una espera sin nada que esperar.
+
+**Pruebas.** `screenTransition.test.ts` (+3: la captura nueva espera al destino; a los 500 ms se salta;
+el tope es medio segundo); `chromeScale.test.ts` nombra `row-delay` y `word-delay` como lo que el lienzo
+no lleva; el presupuesto admite nombres bajo `:root[data-rb-scene]`. **Cuatro caminatas** («sprint 36
+día 4»), grabando desde dentro cada transición con sus tiempos y el `load` del lienzo, y muestreando
+cada fotograma de la escena: la propuesta se convierte en el lienzo (`load` ≤ `ready`; grupo, captura
+vieja y nueva de `rb-scene-canvas` a 400 y ninguna animación en la raíz; `finished − ready` entre 350 y
+700; **en ningún fotograma el documento del lienzo sin completar**; el cromo con `ui-rise-in` a 0,24 /
+0,28 / 0,32 s; sin atributo ni nombre en reposo) y vuelve (la tarjeta devuelta sin `ui-reveal`, las otras
+dos con él); **un lienzo retenido 700 ms** (`__rbHoldCanvasMs`): `ready` nunca, `finished` entre 400 y
+700 desde el arranque, el editor a la vista y el lienzo llegando; el gemelo con menos movimiento (sin
+grupo, capturas a 120, nada a 400, las tres subidas del cromo a 0,01 ms); y la construcción (las tres
+etapas en orden; **la etapa en pantalla en el instante exacto de la petición, leída en el mismo `task`
+que el `fetch`** —un `MutationObserver` la sellaba una micro-tarea tarde, 0,7 ms, y la primera aserción
+fue roja por el reloj y no por el código—; el `transform-origin` sobre el centro del botón a menos de
+2 px; `ui-scene-build` a 400; la pantalla fuera y el foco en «Descargar»).
+
+**Saboteos**, deshechos por sustitución inversa: sin `settled` → «the scene captured a canvas that had
+not loaded» roja (y el lienzo retenido con escena, roja); las etapas «fotos» y «preparando» cambiadas de
+orden → roja; sin `skipTransition()` en el tope, solo → el lienzo retenido con `ready` y `finished` a
+1,1 s → roja; el `transform-origin` sin unidades leído con `Number` → `NaN` (el walk, no el código). **Lo
+que costó**: la puerta de la descarga abre su aviso después de medir, y el bucle que lo aceptaba miraba
+antes: una pasada sin ZIP en 60 s; el bucle espera ahora a lo primero que llegue, el diálogo o el ZIP.
+
+**Lo que enseñó la primera pasada completa: 80 rojos de una causa, y tres cosas que cambiar.** Toda
+caminata que abre el editor y pulsa una sección al instante pulsaba *durante la escena*, y la pulsación
+no llegaba a nada. Por partes: (1) **el árbol de pseudoelementos de una transición es alcanzable por el
+puntero**, así que una pulsación durante ella aterrizaba en la capa y no en la página — la lección del
+35 día 1 («a raw click lands on the root»), vista ahora por ochenta caminatas; la capa es pintura y
+ahora no toma el puntero (`::view-transition { pointer-events: none }`, heredado por cada grupo y
+captura; el presupuesto lo exige). (2) **El armazón medía su sitio con un `ResizeObserver`, y un
+observador se entrega en los pasos de render, que no existen mientras el documento está congelado para
+la captura**: el editor abierto por la escena se capturaba en la maquetación «sin zoom» de reserva y
+el zoom real llegaba al descongelar, con la tarjeta saltando a mitad de escena; el sitio se mide ahora
+en un efecto de maquetación al montar, síncrono, congelado o no, y el observador lo mantiene después.
+(3) **Y lo que no se arregla en el producto: un elemento con `view-transition-name` se pinta solo por su
+instantánea y queda fuera de la prueba de impacto mientras dura la transición** — una pulsación sobre
+el lienzo en sus 400 ms no cae en nada (`elementFromPoint` nulo en la propia diagnosis de una de las
+caminatas), como no cae en una pregunta en sus 180, que nadie nota. Las caminatas esperan a que la
+escena acabe, como esperan a todo lo que llega desde el 35: `sceneOver(page)` tras cada una de las 63
+aperturas del editor (`data-rb-scene` en la raíz desde la pulsación hasta `finished`, saltada o no),
+puesto por guion. **La pasada filtrada del día no vio nada de esto**: sus cuatro caminatas no pulsan en
+el lienzo durante la escena; la completa es la que cuenta, otra vez. **Y la segunda pasada completa,
+dos rojos de otra causa mía**: tras entregar el ZIP, la pantalla de construcción se quedaba 400 ms para
+su salida con el armazón aún `inert` y el estado aún «descargando», así que una pulsación en el lienzo
+o una letra en un panel justo después de la descarga no llegaban a nada — la regla del 35 para toda
+salida, «lo que se va no bloquea», rota por la mía. El estado acaba en el instante en que el ZIP se
+entrega: el armazón es interactivo y el foco vuelve a «Descargar» en ese fotograma; la pantalla se queda
+sus 400 ms solo como superficie sin puntero, y `buildLeft` la retira.
+
+**Suites.** `typecheck`, `lint`, `test` (3908 en 185 ficheros, 4 más), invariantes (27), golden (27,
+cero cambios: nada viaja), e2e completa: primera pasada 80 rojos de la causa de arriba (2541 s por los
+tiempos agotados); segunda, 319 verdes y 2 rojos (la salida que bloqueaba); **tercera, 321 verdes y 1
+omitida en 1475 s, limpia** — las 317 de antes y las 4 nuevas. **Y en la CI, el límite del paso**: 28,8
+min en el runner de la #369 y cortado a los 30 en el de la #370 con todo verde en local; los ~100 s del
+día son la escena y la espera de las caminatas tras cada una de las 63 aperturas, tiempo real y no
+desperdicio. El paso pasa a 35 y el trabajo a 45 (`ci.yml`, con la medida escrita donde están las
+anteriores), para que David lo acepte con la PR; partir la suite en dos *shards* es la forma de bajar
+el reloj sin bajar los minutos, y es una decisión sobre los minutos de Actions, no de este día.
+

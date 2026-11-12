@@ -2,9 +2,11 @@
 import { createElement, useState } from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   canTransition,
+  SCENE_ATTRIBUTE,
+  SCENE_WAIT_CAP_MS,
   SCREEN_ATTRIBUTE,
   transitionScreen,
 } from "../src/editor/screenTransition.ts";
@@ -45,6 +47,7 @@ function fakeTransitions(capture: () => string) {
 
 let root: Root | null = null;
 afterEach(() => {
+  vi.useRealTimers();
   root?.unmount();
   root = null;
   delete loose().startViewTransition;
@@ -124,5 +127,83 @@ describe("a screen handing over", () => {
     expect(calls[0]?.after, "the browser would capture the old screen as the new one").toBe(
       "Pregunta 2",
     );
+  });
+});
+
+/**
+ * **A scene waits for its destination, and no longer than the cap** (sprint 36 día 4, David's
+ * condition 1 and adjustment 3). The browser's own `startViewTransition` awaits the update's
+ * promise before capturing the new screen — so the old one stays on screen, frozen, until the
+ * canvas has painted; at `SCENE_WAIT_CAP_MS` the transition is skipped and the page is shown as it
+ * is. Modelled here with a transition that records when its update settled and whether it was
+ * skipped.
+ */
+describe("a scene waiting for its destination", () => {
+  function sceneTransitions() {
+    const calls: { settledAt: number | null; skipped: boolean; finish: () => void }[] = [];
+    loose().startViewTransition = (update: () => Promise<void> | void) => {
+      const entry = { settledAt: null as number | null, skipped: false, finish: () => {} };
+      const started = Date.now();
+      calls.push(entry);
+      const finished = new Promise<void>((resolve) => {
+        entry.finish = resolve;
+      });
+      const updateCallbackDone = Promise.resolve(update()).then(() => {
+        entry.settledAt = Date.now() - started;
+      });
+      return {
+        finished,
+        ready: Promise.resolve(),
+        updateCallbackDone,
+        skipTransition: () => {
+          entry.skipped = true;
+        },
+      };
+    };
+    return calls;
+  }
+
+  it("captures the new screen only once the destination says it has painted", async () => {
+    const calls = sceneTransitions();
+    let painted = () => {};
+    const destination = new Promise<void>((resolve) => {
+      painted = resolve;
+    });
+    transitionScreen(() => {}, {
+      direction: "forward",
+      scene: "canvas",
+      settled: () => destination,
+    });
+    expect(document.documentElement.getAttribute(SCENE_ATTRIBUTE)).toBe("canvas");
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(calls[0]?.settledAt, "the update settled before the destination painted").toBeNull();
+    painted();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(calls[0]?.settledAt).not.toBeNull();
+    expect(calls[0]?.skipped).toBe(false);
+    calls[0]?.finish();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(document.documentElement.hasAttribute(SCENE_ATTRIBUTE)).toBe(false);
+  });
+
+  it(`skips the scene at ${SCENE_WAIT_CAP_MS} ms when the destination is still not painted`, async () => {
+    vi.useFakeTimers();
+    const calls = sceneTransitions();
+    transitionScreen(() => {}, {
+      direction: "forward",
+      scene: "canvas",
+      settled: () => new Promise(() => {}),
+    });
+    await vi.advanceTimersByTimeAsync(SCENE_WAIT_CAP_MS - 1);
+    expect(calls[0]?.skipped, "skipped before the cap").toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(calls[0]?.skipped, "the page stayed frozen past the cap").toBe(true);
+    expect(calls[0]?.settledAt).not.toBeNull();
+  });
+
+  it("caps at half a second, which is a transition and not a hang", () => {
+    expect(SCENE_WAIT_CAP_MS).toBe(500);
   });
 });

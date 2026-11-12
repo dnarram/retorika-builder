@@ -271,6 +271,17 @@ async function expectModalTrap(
 
 /** The five questions answered and one of the three proposals opened — the first by default; the
  * second is the one whose cover is a photograph under the words (`image-background`). */
+/**
+ * **The scene that turns a proposal into the canvas, over** (sprint 36 día 4). For the length of a
+ * view transition an element that carries a `view-transition-name` is painted only through its
+ * snapshot and is out of hit-testing, so a press on the canvas while its image travels lands
+ * nowhere — eighty walks found it by pressing a section the instant the cover was on the page. The
+ * root carries `data-rb-scene` from the press until the transition's `finished`, skipped or not.
+ */
+async function sceneOver(page: Page): Promise<void> {
+  await page.waitForFunction(() => !document.documentElement.hasAttribute("data-rb-scene"));
+}
+
 async function intoTheCanvas(page: Page, card = 0): Promise<void> {
   await page.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
   await page.fill("#nombre", "Taberna Santo Domingo");
@@ -285,6 +296,7 @@ async function intoTheCanvas(page: Page, card = 0): Promise<void> {
   await page.fill("#enlace", "https://reservas.example.com/taberna");
   await page.getByRole("button", { name: "Crear mi web" }).click();
   await page.getByText("Ver a tamaño real →").nth(card).click();
+  await sceneOver(page);
   const frame = page.frameLocator(PREVIEW).first();
   await frame.locator('[data-section="sec-cover"]').waitFor();
   await waitForBankPhoto(frame);
@@ -1203,6 +1215,7 @@ describe("critical flow 1 — cuestionario hasta web generada", () => {
 describe("critical flow 2 — edición de un texto y recarga", () => {
   it("commits a click-to-edit change and survives a reload", async () => {
     await page.getByText("Ver a tamaño real →").first().click();
+    await sceneOver(page);
 
     const frame = page.frameLocator(PREVIEW).first();
     // Scoped to the cover: "headline" is a slot name every section declares its own version
@@ -1855,6 +1868,7 @@ describe("sprint 6 día 7 — fotos subidas desde el panel y desde el aviso, log
       await walkPage.fill("#enlace", "https://reservas.example.com/taberna");
       await walkPage.getByRole("button", { name: "Crear mi web" }).click();
       await walkPage.getByText("Ver a tamaño real →").first().click();
+      await sceneOver(walkPage);
 
       const frame = walkPage.frameLocator(PREVIEW).first();
       await frame.locator('[data-section="sec-cover"]').waitFor();
@@ -2085,6 +2099,7 @@ describe("sprint 7 día 3 — deshacer una conversión desde «Páginas»", () =
       await walkPage.fill("#enlace", "https://reservas.example.com/taberna");
       await walkPage.getByRole("button", { name: "Crear mi web" }).click();
       await walkPage.getByText("Ver a tamaño real →").first().click();
+      await sceneOver(walkPage);
 
       const frame = walkPage.frameLocator(PREVIEW).first();
       await frame.locator('[data-section="sec-cover"]').waitFor();
@@ -2278,6 +2293,7 @@ describe("sprint 7 día 6 — «Equipo» en el menú, y «Avance» nunca ofrecid
       await walkPage.fill("#telefono", "600111222");
       await walkPage.getByRole("button", { name: "Crear mi web" }).click();
       await walkPage.getByText("Ver a tamaño real →").first().click();
+      await sceneOver(walkPage);
 
       const frame = walkPage.frameLocator(PREVIEW).first();
       await frame.locator('[data-section="sec-cover"]').waitFor();
@@ -2342,6 +2358,7 @@ describe("sprint 7 día 7 — dos hallazgos de esta semana, cerrados", () => {
       await walkPage.fill("#enlace", "https://reservas.example.com/taberna");
       await walkPage.getByRole("button", { name: "Crear mi web" }).click();
       await walkPage.getByText("Ver a tamaño real →").first().click();
+      await sceneOver(walkPage);
 
       const frame = walkPage.frameLocator(PREVIEW).first();
       await frame.locator('[data-section="sec-cover"]').waitFor();
@@ -2477,6 +2494,7 @@ describe("sprint 7 día 7 — el recorrido completo del sprint", () => {
       await walkPage.fill("#telefono", "600111222");
       await walkPage.getByRole("button", { name: "Crear mi web" }).click();
       await walkPage.getByText("Ver a tamaño real →").first().click();
+      await sceneOver(walkPage);
 
       const frame = walkPage.frameLocator(PREVIEW).first();
       await frame.locator('[data-section="sec-cover"]').waitFor();
@@ -2629,6 +2647,7 @@ describe("sprint 8 — el modo estudio: encender, diseñar a mano, colocar, y vo
       await studio.fill("#telefono", "600111222");
       await studio.getByRole("button", { name: "Crear mi web" }).click();
       await studio.getByText("Ver a tamaño real →").first().click();
+      await sceneOver(studio);
 
       const frame = studio.frameLocator(PREVIEW).first();
       await frame.locator('[data-section="sec-cover"]').waitFor();
@@ -2869,6 +2888,7 @@ describe("sprint 8 día 7 — el recorrido completo del sprint", () => {
       await studio.fill("#telefono", "600111222");
       await studio.getByRole("button", { name: "Crear mi web" }).click();
       await studio.getByText("Ver a tamaño real →").first().click();
+      await sceneOver(studio);
 
       const frame = studio.frameLocator(PREVIEW).first();
       await frame.locator('[data-section="sec-cover"]').waitFor();
@@ -3066,6 +3086,7 @@ describe("el lienzo no dibuja tiradores en las esquinas, y sigue sin desplazarse
       await page.fill("#enlace", "https://reservas.example.com/taberna");
       await page.getByRole("button", { name: "Crear mi web" }).click();
       await page.getByText("Ver a tamaño real →").first().click();
+      await sceneOver(page);
 
       const frame = page.frameLocator(PREVIEW).first();
       // One of the walks that inline their own steps and did not wait: it clicks inside the frame
@@ -3148,6 +3169,7 @@ describe("sprint 9 día 4 — la barra flotante", () => {
       await studio.fill("#telefono", "600111222");
       await studio.getByRole("button", { name: "Crear mi web" }).click();
       await studio.getByText("Ver a tamaño real →").first().click();
+      await sceneOver(studio);
 
       const frame = studio.frameLocator(PREVIEW).first();
       await frame.locator('[data-section="sec-cover"]').waitFor();
@@ -3275,6 +3297,7 @@ describe("sprint 9 día 5 — medidas, espaciado y la excepción marcada", () =>
       await studio.fill("#telefono", "600111222");
       await studio.getByRole("button", { name: "Crear mi web" }).click();
       await studio.getByText("Ver a tamaño real →").first().click();
+      await sceneOver(studio);
 
       const frame = studio.frameLocator(PREVIEW).first();
       await frame.locator('[data-section="sec-cover"]').waitFor();
@@ -3401,6 +3424,7 @@ describe("sprint 9 día 6 — la revisión de contraste", () => {
     await studio.fill("#telefono", "600111222");
     await studio.getByRole("button", { name: "Crear mi web" }).click();
     await studio.getByText("Ver a tamaño real →").first().click();
+    await sceneOver(studio);
     await studio.frameLocator(PREVIEW).first().locator('[data-section="sec-cover"]').waitFor();
     await studio.getByRole("switch", { name: "Herramientas de diseño" }).click();
     await studio.getByRole("button", { name: "Sí, enciéndelas" }).click();
@@ -3525,6 +3549,7 @@ describe("sprint 9 día 7 — el recorrido completo del sprint", () => {
       await studio.fill("#telefono", "600111222");
       await studio.getByRole("button", { name: "Crear mi web" }).click();
       await studio.getByText("Ver a tamaño real →").first().click();
+      await sceneOver(studio);
 
       const frame = studio.frameLocator(PREVIEW).first();
       await frame.locator('[data-section="sec-cover"]').waitFor();
@@ -3679,6 +3704,7 @@ describe("sprint 9 día 7 — colchón: el diálogo se queda sobre lo que sigue 
       await studio.fill("#telefono", "600111222");
       await studio.getByRole("button", { name: "Crear mi web" }).click();
       await studio.getByText("Ver a tamaño real →").first().click();
+      await sceneOver(studio);
 
       const frame = studio.frameLocator(PREVIEW).first();
       await frame.locator('[data-section="sec-cover"]').waitFor();
@@ -3780,6 +3806,7 @@ describe("sprint 9 día 7 — colchón: la barra no traga un clic que era para o
       await studio.fill("#telefono", "600111222");
       await studio.getByRole("button", { name: "Crear mi web" }).click();
       await studio.getByText("Ver a tamaño real →").first().click();
+      await sceneOver(studio);
 
       const frame = studio.frameLocator(PREVIEW).first();
       await frame.locator('[data-section="sec-cover"]').waitFor();
@@ -4119,6 +4146,7 @@ describe("sprint 10 día 7 — el recorrido completo del sprint", () => {
       await studio.fill("#enlace", "https://reservas.example.com/taberna");
       await studio.getByRole("button", { name: "Crear mi web" }).click();
       await studio.getByText("Ver a tamaño real →").first().click();
+      await sceneOver(studio);
 
       const frame = studio.frameLocator(PREVIEW).first();
       await frame.locator('[data-section="sec-cover"]').waitFor();
@@ -4316,6 +4344,7 @@ describe("sprint 11 día 7 — el recorrido completo del sprint", () => {
       await studio.fill("#telefono", "600111222");
       await studio.getByRole("button", { name: "Crear mi web" }).click();
       await studio.getByText("Ver a tamaño real →").first().click();
+      await sceneOver(studio);
 
       const frame = studio.frameLocator(PREVIEW).first();
       await frame.locator('[data-section="sec-cover"]').waitFor();
@@ -4515,6 +4544,7 @@ describe("sprint 12 día 3 — el input anclado y el atajo de deshacer", () => {
     await studio.fill("#enlace", "https://reservas.example.com/taberna");
     await studio.getByRole("button", { name: "Crear mi web" }).click();
     await studio.getByText("Ver a tamaño real →").first().click();
+    await sceneOver(studio);
     await studio.frameLocator(PREVIEW).first().locator('[data-section="sec-cover"]').waitFor();
     await waitForBankPhoto(studio.frameLocator(PREVIEW).first());
     return studio;
@@ -4656,6 +4686,7 @@ describe("sprint 12 día 7 — el recorrido completo del sprint", () => {
       await walk.fill("#enlace", "https://reservas.example.com/taberna");
       await walk.getByRole("button", { name: "Crear mi web" }).click();
       await walk.getByText("Ver a tamaño real →").first().click();
+      await sceneOver(walk);
 
       const frame = walk.frameLocator(PREVIEW).first();
       await frame.locator('[data-section="sec-cover"]').waitFor();
@@ -4915,6 +4946,7 @@ describe("sprint 13 día 2 — la barra se deja usar con el ratón", () => {
     await studio.fill("#enlace", "https://reservas.example.com/taberna");
     await studio.getByRole("button", { name: "Crear mi web" }).click();
     await studio.getByText("Ver a tamaño real →").first().click();
+    await sceneOver(studio);
     const frame = studio.frameLocator(PREVIEW).first();
     await frame.locator('[data-section="sec-cover"]').waitFor();
     await waitForBankPhoto(frame);
@@ -5076,6 +5108,7 @@ describe("sprint 13 día 3 — lo que solo informaba", () => {
     await studio.fill("#enlace", "https://reservas.example.com/taberna");
     await studio.getByRole("button", { name: "Crear mi web" }).click();
     await studio.getByText("Ver a tamaño real →").first().click();
+    await sceneOver(studio);
     const frame = studio.frameLocator(PREVIEW).first();
     await frame.locator('[data-section="sec-cover"]').waitFor();
     await waitForBankPhoto(frame);
@@ -5184,6 +5217,7 @@ describe("sprint 13 día 5 — el «Aa» de la barra", () => {
     await studio.fill("#enlace", "https://reservas.example.com/taberna");
     await studio.getByRole("button", { name: "Crear mi web" }).click();
     await studio.getByText("Ver a tamaño real →").first().click();
+    await sceneOver(studio);
     const frame = studio.frameLocator(PREVIEW).first();
     await frame.locator('[data-section="sec-cover"]').waitFor();
     await waitForBankPhoto(frame);
@@ -5366,6 +5400,7 @@ describe("sprint 13 día 6 — las pantallas que faltaban, y los dos fallos sile
       await answered(page);
       await page.getByRole("button", { name: "Crear mi web" }).click();
       await page.getByText("Ver a tamaño real →").first().click();
+      await sceneOver(page);
       const frame = page.frameLocator(PREVIEW).first();
       await frame.locator('[data-section="sec-cover"]').waitFor();
       await waitForBankPhoto(frame);
@@ -5420,6 +5455,7 @@ describe("sprint 13 día 6 — las pantallas que faltaban, y los dos fallos sile
       await answered(page);
       await page.getByRole("button", { name: "Crear mi web" }).click();
       await page.getByText("Ver a tamaño real →").first().click();
+      await sceneOver(page);
       const frame = page.frameLocator(PREVIEW).first();
       await frame.locator('[data-section="sec-cover"]').waitFor();
       await waitForBankPhoto(frame);
@@ -5521,6 +5557,7 @@ describe("sprint 13 día 6 — las pantallas que faltaban, y los dos fallos sile
       await answered(page);
       await page.getByRole("button", { name: "Crear mi web" }).click();
       await page.getByText("Ver a tamaño real →").first().click();
+      await sceneOver(page);
 
       await expect(page.getByText("No se recordará")).toHaveCount(0);
       await page.getByRole("switch", { name: "Herramientas de diseño" }).click();
@@ -5701,6 +5738,7 @@ describe("sprint 13 día 7 — el clic que se perdía mientras la vista previa p
     await page.getByRole("button", { name: "Crear mi web" }).click();
     await beforeOpening?.();
     await page.getByText("Ver a tamaño real →").first().click();
+    await sceneOver(page);
     const frame = page.frameLocator(PREVIEW).first();
     /**
      * **Returned only once the bank photograph is in the frame, since 9 October 2026.**
@@ -5894,6 +5932,7 @@ describe("la ficha nueva nace con el cursor dentro, y quitar una no lo tira al s
     await page.fill("#enlace", "https://reservas.example.com/taberna");
     await page.getByRole("button", { name: "Crear mi web" }).click();
     await page.getByText("Ver a tamaño real →").first().click();
+    await sceneOver(page);
     const frame = page.frameLocator(PREVIEW).first();
     await frame.locator('[data-section="sec-cover"]').waitFor();
     await waitForBankPhoto(frame);
@@ -6089,6 +6128,9 @@ describe("sprint 13 día 7 — el recorrido completo del sprint", () => {
       await expect(walk.getByText("Estamos montando tu web")).toHaveCount(0);
 
       await walk.getByText("Ver a tamaño real →").first().click();
+      await sceneOver(walk);
+
+      await sceneOver(walk);
       const frame = walk.frameLocator(PREVIEW).first();
       await frame.locator('[data-section="sec-cover"]').waitFor();
       // The same wait flow 2 now takes, for the same reason: this sector has photographs, their
@@ -6314,6 +6356,7 @@ describe("sprint 14 día 2 — la vista previa enseña la letra que envía", () 
     await page.fill("#enlace", "https://reservas.example.com/taberna");
     await page.getByRole("button", { name: "Crear mi web" }).click();
     await page.getByText("Ver a tamaño real →").first().click();
+    await sceneOver(page);
     const frame = page.frameLocator(PREVIEW).first();
     // The bank photograph, not just the cover: when its bytes arrive after the editor opens, the
     // frame is replaced once, and `document.fonts.ready` evaluated in the first document dies with
@@ -6829,6 +6872,7 @@ describe("sprint 14 día 6 — enlazar, avisar y desenlazar", () => {
     await page.fill("#enlace", "https://reservas.example.com/taberna");
     await page.getByRole("button", { name: "Crear mi web" }).click();
     await page.getByText("Ver a tamaño real →").first().click();
+    await sceneOver(page);
     const frame = page.frameLocator(PREVIEW).first();
     await frame.locator('[data-section="sec-cover"]').waitFor();
     await afterTheEdit(page, async () => {
@@ -7058,6 +7102,7 @@ describe("sprint 14 día 7 — el recorrido completo del sprint", () => {
       await walk.fill("#enlace", "https://reservas.example.com/taberna");
       await walk.getByRole("button", { name: "Crear mi web" }).click();
       await walk.getByText("Ver a tamaño real →").first().click();
+      await sceneOver(walk);
       const frame = walk.frameLocator(PREVIEW).first();
       await frame.locator('[data-section="sec-cover"]').waitFor();
       await waitForBankPhoto(frame);
@@ -7211,6 +7256,7 @@ describe("sprint 14 día 7 — la oferta que no se hace", () => {
       await page.fill("#enlace", "https://reservas.example.com/taberna");
       await page.getByRole("button", { name: "Crear mi web" }).click();
       await page.getByText("Ver a tamaño real →").first().click();
+      await sceneOver(page);
       const frame = page.frameLocator(PREVIEW).first();
       await frame.locator('[data-section="sec-cover"]').waitFor();
       await waitForBankPhoto(frame);
@@ -7288,6 +7334,7 @@ describe("sprint 14 día 7 — colchón: el segundo deshacer", () => {
       await page.fill("#enlace", "https://reservas.example.com/taberna");
       await page.getByRole("button", { name: "Crear mi web" }).click();
       await page.getByText("Ver a tamaño real →").first().click();
+      await sceneOver(page);
       const frame = page.frameLocator(PREVIEW).first();
       await frame.locator('[data-section="sec-cover"]').waitFor();
       await waitForBankPhoto(frame);
@@ -7446,6 +7493,7 @@ describe("sprint 15 día 4 — el diálogo de la cuenta, y las cuatro cosas que 
     await accountPage.fill("#enlace", "https://reservas.example.com/vega");
     await accountPage.getByRole("button", { name: "Crear mi web" }).click();
     await accountPage.getByText("Ver a tamaño real →").first().click();
+    await sceneOver(accountPage);
   }, 240_000);
 
   afterAll(async () => {
@@ -7637,6 +7685,7 @@ describe("sprint 16 día 6 — guardar en la cuenta sube la foto", () => {
       await page.fill("#enlace", "https://reservas.example.com/taberna");
       await page.getByRole("button", { name: "Crear mi web" }).click();
       await page.getByText("Ver a tamaño real →").first().click();
+      await sceneOver(page);
 
       const frame = page.frameLocator(PREVIEW).first();
       await waitForBankPhoto(frame);
@@ -7749,6 +7798,7 @@ describe.skipIf(process.env["RETORIKA_E2E_ACCOUNT"] !== "1")(
         await first.fill("#enlace", "https://reservas.example.com/taberna");
         await first.getByRole("button", { name: "Crear mi web" }).click();
         await first.getByText("Ver a tamaño real →").first().click();
+        await sceneOver(first);
 
         const frame = first.frameLocator(PREVIEW).first();
         await waitForBankPhoto(frame);
@@ -9435,6 +9485,7 @@ describe("el texto de un botón nunca sale del botón", () => {
       await walker.fill("#enlace", "https://reservas.example.com/t");
       await walker.getByRole("button", { name: "Crear mi web" }).click();
       await walker.getByText("Ver a tamaño real →").first().click();
+      await sceneOver(walker);
       await walker.getByRole("button", { name: "Guardar en mi cuenta" }).click();
       await expect(walker.getByRole("dialog")).toBeVisible();
 
@@ -9591,6 +9642,7 @@ describe("un panel que no cabe se puede desplazar hasta el final", () => {
       await walker.fill("#enlace", "https://reservas.example.com/taberna");
       await walker.getByRole("button", { name: "Crear mi web" }).click();
       await walker.getByText("Ver a tamaño real →").first().click();
+      await sceneOver(walker);
 
       // The reported case, built rather than imagined: a list with its fichas is what makes this
       // panel longer than the window. A fresh site's panels are all short enough to fit, which is
@@ -9702,6 +9754,7 @@ describe("abrir un panel no tapa la página ni la convierte en otra", () => {
       await walker.fill("#enlace", "https://reservas.example.com/taberna");
       await walker.getByRole("button", { name: "Crear mi web" }).click();
       await walker.getByText("Ver a tamaño real →").first().click();
+      await sceneOver(walker);
 
       const widths: Record<string, number[]> = {};
       let lastCanvasWidth = -1;
@@ -10081,6 +10134,7 @@ describe("la barra superior reparte su ancho entre el logo y las pestañas", () 
       await walker.fill("#enlace", "https://reservas.example.com/taberna");
       await walker.getByRole("button", { name: "Crear mi web" }).click();
       await walker.getByText("Ver a tamaño real →").first().click();
+      await sceneOver(walker);
 
       const frame = walker.frameLocator(PREVIEW).first();
       await frame.locator('[data-section="sec-cover"]').waitFor();
@@ -10227,6 +10281,7 @@ describe("lo que el cromo del editor dibuja dentro del lienzo, y el aviso del in
       await walker.fill("#enlace", "https://reservas.example.com/taberna");
       await walker.getByRole("button", { name: "Crear mi web" }).click();
       await walker.getByText("Ver a tamaño real →").first().click();
+      await sceneOver(walker);
 
       const frame = walker.frameLocator(PREVIEW).first();
       await frame.locator('[data-section="sec-cover"]').waitFor();
@@ -10486,6 +10541,7 @@ describe("lo que el cromo del editor dibuja dentro del lienzo, y el aviso del in
       await walker.fill("#enlace", "https://reservas.example.com/taberna");
       await walker.getByRole("button", { name: "Crear mi web" }).click();
       await walker.getByText("Ver a tamaño real →").first().click();
+      await sceneOver(walker);
       await walker.frameLocator(PREVIEW).first().locator('[data-section="sec-cover"]').waitFor();
       await waitForBankPhoto(walker.frameLocator(PREVIEW).first());
 
@@ -10621,6 +10677,7 @@ describe("el interruptor de diseño llega a la cuenta", () => {
     await page.fill("#enlace", "https://reservas.example.com/taberna");
     await page.getByRole("button", { name: "Crear mi web" }).click();
     await page.getByText("Ver a tamaño real →").first().click();
+    await sceneOver(page);
     await page.frameLocator(PREVIEW).first().locator('[data-section="sec-cover"]').waitFor();
     await waitForBankPhoto(page.frameLocator(PREVIEW).first());
   }
@@ -12065,6 +12122,7 @@ describe("sprint 17 día 3 — axe sobre el documento del editor", () => {
       await page.fill("#enlace", "https://reservas.example.com/taberna");
       await page.getByRole("button", { name: "Crear mi web" }).click();
       await page.getByText("Ver a tamaño real →").first().click();
+      await sceneOver(page);
       const frame = page.frameLocator(PREVIEW).first();
       await frame.locator('[data-section="sec-cover"]').waitFor();
       await waitForBankPhoto(frame);
@@ -13472,6 +13530,9 @@ describe("sprint 18 día 7 — el recorrido como un desconocido, de la landing a
       expect(new Set(covers).size, `three covers: ${covers.join(" | ")}`).toBe(3);
 
       await page.getByText("Ver a tamaño real →").first().click();
+      await sceneOver(page);
+
+      await sceneOver(page);
       const frame = page.frameLocator(PREVIEW).first();
       await frame.locator('[data-section="sec-cover"]').waitFor();
       await waitForBankPhoto(frame);
@@ -13605,6 +13666,7 @@ async function withToolsAndList(page: Page): Promise<FrameLocator> {
   await page.fill("#enlace", "https://reservas.example.com/taberna");
   await page.getByRole("button", { name: "Crear mi web" }).click();
   await page.getByText("Ver a tamaño real →").first().click();
+  await sceneOver(page);
   const frame = page.frameLocator(PREVIEW).first();
   await frame.locator('[data-section="sec-cover"]').waitFor();
   await waitForBankPhoto(frame);
@@ -13852,6 +13914,7 @@ describe("sprint 19 día 7 — el recorrido como un desconocido, con fichas y si
       await page.getByRole("button", { name: "Crear mi web" }).click();
       await expect(page.locator(PREVIEW)).toHaveCount(3);
       await page.getByText("Ver a tamaño real →").first().click();
+      await sceneOver(page);
       const frame = page.frameLocator(PREVIEW).first();
       await frame.locator('[data-section="sec-cover"]').waitFor();
       await waitForBankPhoto(frame);
@@ -13999,6 +14062,7 @@ describe("la pantalla de construcción al descargar", () => {
     await page.fill("#enlace", "https://reservas.example.com/taberna");
     await page.getByRole("button", { name: "Crear mi web" }).click();
     await page.getByText("Ver a tamaño real →").first().click();
+    await sceneOver(page);
     const frame = page.frameLocator(PREVIEW).first();
     await frame.locator('[data-section="sec-cover"]').waitFor();
     await waitForBankPhoto(frame);
@@ -15651,6 +15715,7 @@ describe("nada sobresale en un móvil", () => {
       it("el editor, sus paneles, una sección y un texto elegidos, y los dos dispositivos", async () => {
         found.length = 0;
         await walker.getByText("Ver a tamaño real →").first().click();
+        await sceneOver(walker);
         const frame = walker.frameLocator(PREVIEW).first();
         await frame.locator('[data-section="sec-cover"]').waitFor();
         await waitForBankPhoto(frame);
@@ -23329,6 +23394,7 @@ describe("sprint 30 día 5 — el logo viaja como una foto", () => {
       await studio.fill("#enlace", "https://reservas.example.com/taberna");
       await studio.getByRole("button", { name: "Crear mi web" }).click();
       await studio.getByText("Ver a tamaño real →").first().click();
+      await sceneOver(studio);
       const frame = studio.frameLocator(PREVIEW).first();
       await frame.locator('[data-section="sec-cover"]').waitFor();
       await waitForBankPhoto(frame);
@@ -23685,6 +23751,7 @@ describe("sprint 30 día 7 — lo que la lista pedía y nadie había caminado", 
       await studio.fill("#enlace", "https://reservas.example.com/taberna");
       await studio.getByRole("button", { name: "Crear mi web" }).click();
       await studio.getByText("Ver a tamaño real →").nth(1).click();
+      await sceneOver(studio);
       const frame = studio.frameLocator(CANVAS);
       const cover = frame.locator('[data-section="sec-cover"]');
       await cover.waitFor();
@@ -28133,4 +28200,407 @@ describe("sprint 36 día 3 — las pantallas se encadenan", () => {
       await context.close();
     }
   }, 180_000);
+});
+
+describe("sprint 36 día 4 — la propuesta se convierte en el lienzo", () => {
+  /**
+   * **Every view transition and the canvas's own load, on the page's clock.** The scene is 400 ms
+   * and waits for the canvas before it starts, so what is asserted is when things happened: the
+   * canvas's `load` before the scene's `ready`, the scene's length from `ready` to `finished`, and —
+   * while it ran — that the canvas's document was complete in every frame, which is what «never a
+   * hole» means in a number. Recorded from inside the page, like día 3's.
+   */
+  type Scene = {
+    screen: string | null;
+    scene: string | null;
+    startedAt: number;
+    readyAt: number;
+    finishedAt: number;
+    loadAt: number;
+    names: [string, string, number][];
+    holes: number;
+    samples: number;
+  };
+  async function recordedScenes(context: BrowserContext, holdCanvasMs = 0): Promise<void> {
+    await context.addInitScript((hold: number) => {
+      const w = window as unknown as {
+        __scenes: Scene[];
+        __rbHoldCanvasMs?: number;
+        __anims: { name: string; target: string; delay: number; duration: number }[];
+      };
+      if (hold > 0) w.__rbHoldCanvasMs = hold;
+      w.__scenes = [];
+      w.__anims = [];
+      document.addEventListener(
+        "animationstart",
+        (event) => {
+          const target = event.target as HTMLElement;
+          const running = target
+            .getAnimations()
+            .find((a) => (a as CSSAnimation).animationName === event.animationName);
+          const timing = running?.effect?.getTiming();
+          w.__anims.push({
+            name: event.animationName,
+            target: target.dataset["testid"] ?? target.tagName.toLowerCase(),
+            delay: Number(timing?.delay ?? -1),
+            duration: Number(timing?.duration ?? -1),
+          });
+        },
+        true,
+      );
+      document.addEventListener(
+        "load",
+        (event) => {
+          const target = event.target as HTMLElement;
+          if (target.tagName !== "IFRAME" || !target.className.includes("absolute")) return;
+          const last = w.__scenes[w.__scenes.length - 1];
+          if (last && last.loadAt < 0) last.loadAt = performance.now();
+        },
+        true,
+      );
+      const original = Document.prototype.startViewTransition;
+      if (typeof original !== "function") return;
+      Document.prototype.startViewTransition = function (
+        this: Document,
+        ...args: Parameters<Document["startViewTransition"]>
+      ) {
+        const transition = original.apply(this, args);
+        if (this !== document) return transition;
+        const entry: Scene = {
+          screen: document.documentElement.getAttribute("data-rb-screen"),
+          scene: document.documentElement.getAttribute("data-rb-scene"),
+          startedAt: performance.now(),
+          readyAt: -1,
+          finishedAt: -1,
+          loadAt: -1,
+          names: [],
+          holes: 0,
+          samples: 0,
+        };
+        w.__scenes.push(entry);
+        transition.ready.then(
+          () => {
+            entry.readyAt = performance.now();
+            entry.names = document
+              .getAnimations()
+              .map((a) => [
+                String((a.effect as KeyframeEffect | null)?.pseudoElement ?? ""),
+                (a as CSSAnimation).animationName ?? "",
+                Number(a.effect?.getTiming().duration ?? 0),
+              ]);
+            const tick = () => {
+              if (entry.finishedAt >= 0) return;
+              const frame = document.querySelector<HTMLIFrameElement>("iframe.absolute");
+              entry.samples += 1;
+              if (!frame || frame.contentDocument?.readyState !== "complete") entry.holes += 1;
+              requestAnimationFrame(tick);
+            };
+            requestAnimationFrame(tick);
+          },
+          () => undefined,
+        );
+        transition.finished.then(
+          () => {
+            entry.finishedAt = performance.now();
+          },
+          () => {
+            entry.finishedAt = performance.now();
+          },
+        );
+        return transition;
+      };
+    }, holdCanvasMs);
+  }
+  const scenes = (page: Page) =>
+    page.evaluate(() => (window as unknown as { __scenes: Scene[] }).__scenes);
+  async function scene(page: Page, index: number): Promise<Scene> {
+    await expect
+      .poll(async () => (await scenes(page))[index]?.finishedAt ?? -1, {
+        message: `scene ${index + 1} never finished`,
+        timeout: 15_000,
+      })
+      .toBeGreaterThan(0);
+    return (await scenes(page))[index] as Scene;
+  }
+  const partsOf = (s: Scene, part: string) => s.names.filter((n) => n[0].includes(part));
+
+  async function toTheProposals(page: Page): Promise<void> {
+    await page.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
+    await page.fill("#nombre", "Taberna del Puerto");
+    await page.getByRole("button", { name: "Siguiente" }).click();
+    await page.getByText("Restaurante y bar", { exact: true }).click();
+    await page.getByRole("button", { name: "Siguiente" }).click();
+    await page.getByText("Comidas", { exact: true }).click();
+    await page.getByRole("button", { name: "Siguiente" }).click();
+    await page.fill("#direccion", "Muelle 3, Ronda");
+    await page.getByRole("button", { name: "Siguiente" }).click();
+    await page.getByText("Que reserven", { exact: true }).click();
+    await page.fill("#enlace", "https://reservas.example.com/taberna");
+    await page.getByRole("button", { name: "Crear mi web" }).click();
+    await page.getByText("Ver a tamaño real →").first().waitFor();
+    await motionSettled(page);
+  }
+
+  it("la propuesta elegida se convierte en el lienzo cuando el lienzo ya está pintado, el cromo llega después, y el lienzo vuelve a su propuesta", async () => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    await recordedScenes(context);
+    const page = await context.newPage();
+    try {
+      await toTheProposals(page);
+      const frame = page.frameLocator(PREVIEW).first();
+      await page.getByText("Ver a tamaño real →").first().click();
+      await sceneOver(page);
+      await frame.locator('[data-section="sec-cover"]').waitFor();
+      // The questions handed over to the proposals already (día 3): the scene is the next one.
+      const opening = await scene(page, 5);
+      expect(opening.screen).toBe("forward");
+      expect(opening.scene).toBe("canvas");
+      // The canvas painted before the scene captured it (David's condition 1).
+      expect(opening.loadAt, "the canvas never loaded").toBeGreaterThan(0);
+      expect(opening.readyAt, "the scene was skipped").toBeGreaterThan(0);
+      expect(opening.loadAt, "the scene captured a canvas that had not loaded").toBeLessThanOrEqual(
+        opening.readyAt,
+      );
+      // It is the scene of the second register: the two ends named, at --ui-scene, and nothing on
+      // the root — the page around them does not fade.
+      expect(partsOf(opening, "group(rb-scene-canvas)").map((n) => n[2])).toEqual([400]);
+      for (const part of ["old(rb-scene-canvas)", "new(rb-scene-canvas)"]) {
+        expect(partsOf(opening, part).length, part).toBeGreaterThan(0);
+        for (const n of partsOf(opening, part)) expect(n[2], n.join(" ")).toBe(400);
+      }
+      expect(partsOf(opening, "(root)")).toEqual([]);
+      expect(opening.finishedAt - opening.readyAt).toBeGreaterThan(350);
+      expect(opening.finishedAt - opening.readyAt).toBeLessThan(700);
+      // Never a hole: in every frame of the scene the canvas's document was complete.
+      expect(opening.samples).toBeGreaterThan(10);
+      expect(opening.holes, "frames with the canvas not yet loaded").toBe(0);
+      // The chrome arrives after: header, rail and help line rise once the scene is well under way.
+      const chrome = await page.evaluate(() =>
+        ["header", 'nav[data-testid="rail"]', '[data-testid="help-line"]'].map((selector) => {
+          const style = getComputedStyle(document.querySelector(selector) as HTMLElement);
+          return [style.animationName, style.animationDelay];
+        }),
+      );
+      expect(chrome).toEqual([
+        ["ui-rise-in", "0.24s"],
+        ["ui-rise-in", "0.28s"],
+        ["ui-rise-in", "0.32s"],
+      ]);
+      await motionSettled(page);
+      expect(
+        await page.evaluate(() => document.documentElement.hasAttribute("data-rb-scene")),
+      ).toBe(false);
+      expect(await page.locator("[data-rb-scene-from]").count()).toBe(0);
+
+      // And back: the canvas becomes its proposal, which does not arrive a second time.
+      await page.getByRole("button", { name: "Volver a las tres variantes" }).click();
+      await page.getByText("Ver a tamaño real →").first().waitFor();
+      const closing = await scene(page, 6);
+      expect(closing.screen).toBe("back");
+      expect(closing.scene).toBe("canvas");
+      expect(partsOf(closing, "group(rb-scene-canvas)").map((n) => n[2])).toEqual([400]);
+      expect(partsOf(closing, "(root)")).toEqual([]);
+      await motionSettled(page);
+      const cards = await page
+        .locator("div.ui-reveal.ui-lift")
+        .evaluateAll((els) =>
+          els.map((el) => [
+            el.hasAttribute("data-rb-returned"),
+            getComputedStyle(el).animationName,
+          ]),
+        );
+      expect(cards).toEqual([
+        [true, "none"],
+        [false, "ui-reveal"],
+        [false, "ui-reveal"],
+      ]);
+      expect(
+        await page.evaluate(() => document.documentElement.hasAttribute("data-rb-scene")),
+      ).toBe(false);
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
+
+  it("un lienzo retenido 700 ms: a los 500 el editor aparece sin escena, y el lienzo acaba de llegar a la vista", async () => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    await recordedScenes(context, 700);
+    const page = await context.newPage();
+    try {
+      await toTheProposals(page);
+      await page.getByText("Ver a tamaño real →").first().click();
+      await sceneOver(page);
+      const held = await scene(page, 5);
+      // Skipped at the cap: no scene ran, and the page was held for half a second, not a second.
+      expect(held.readyAt, "a scene ran over a canvas that had not painted").toBe(-1);
+      expect(held.finishedAt - held.startedAt).toBeGreaterThan(400);
+      expect(held.finishedAt - held.startedAt, "the page was frozen past the cap").toBeLessThan(
+        700,
+      );
+      await expect(page.getByTestId("editor-shell")).toBeVisible();
+      await page.frameLocator(PREVIEW).first().locator('[data-section="sec-cover"]').waitFor();
+      await motionSettled(page);
+      expect(
+        await page.evaluate(() => document.documentElement.hasAttribute("data-rb-scene")),
+      ).toBe(false);
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
+
+  it("con menos movimiento la escena es un fundido de 120 ms, nunca un corte, y el cromo está sin más", async () => {
+    const context = await browser.newContext({
+      viewport: { width: 1280, height: 900 },
+      reducedMotion: "reduce",
+    });
+    await recordedScenes(context);
+    const page = await context.newPage();
+    try {
+      await toTheProposals(page);
+      await page.getByText("Ver a tamaño real →").first().click();
+      await sceneOver(page);
+      await page.frameLocator(PREVIEW).first().locator('[data-section="sec-cover"]').waitFor();
+      const opening = await scene(page, 5);
+      expect(opening.readyAt).toBeGreaterThan(0);
+      expect(opening.loadAt).toBeLessThanOrEqual(opening.readyAt);
+      // No travel: the group is still; the two captures cross in --ui-fast; nothing lasts 400.
+      expect(partsOf(opening, "group(rb-scene-canvas)")).toEqual([]);
+      for (const part of ["old(rb-scene-canvas)", "new(rb-scene-canvas)"]) {
+        expect(partsOf(opening, part).length, part).toBeGreaterThan(0);
+        for (const n of partsOf(opening, part)) expect(n[2], n.join(" ")).toBe(120);
+      }
+      for (const n of opening.names) expect(n[2], n.join(" ")).toBeLessThanOrEqual(120);
+      await motionSettled(page);
+      const rises = await page.evaluate(() =>
+        (window as unknown as { __anims: { name: string; duration: number }[] }).__anims
+          .filter((a) => a.name === "ui-rise-in")
+          .map((a) => a.duration),
+      );
+      expect(rises.length).toBeGreaterThanOrEqual(3);
+      for (const duration of rises) expect(duration).toBeLessThan(1);
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
+
+  it("la construcción dice cada etapa real cuando empieza, y se despide hacia «Descargar» cuando el ZIP está entregado", async () => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    await recordedScenes(context);
+    const page = await context.newPage();
+    try {
+      await intoTheCanvas(page);
+      await page.evaluate(() => {
+        const w = window as unknown as {
+          __stages: { stage: string; at: number }[];
+          __asked: number;
+          __askedWhile: string | null;
+          __pressedAt: number;
+        };
+        w.__stages = [];
+        w.__asked = -1;
+        w.__askedWhile = null;
+        w.__pressedAt = -1;
+        document.addEventListener("pointerdown", () => (w.__pressedAt = performance.now()), true);
+        new MutationObserver(() => {
+          const screen = document.querySelector('[data-testid="building-screen"]');
+          const stage = screen?.getAttribute("data-stage") ?? null;
+          const last = w.__stages[w.__stages.length - 1]?.stage ?? null;
+          if (stage && stage !== last) w.__stages.push({ stage, at: performance.now() });
+        }).observe(document.body, { subtree: true, childList: true, attributes: true });
+        const original = window.fetch;
+        window.fetch = function (this: unknown, ...args: Parameters<typeof fetch>) {
+          const [input] = args;
+          const url =
+            typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+          if (new URL(url, location.href).pathname === "/api/download") {
+            w.__asked = performance.now();
+            // What the screen says at the instant the files are asked for — read here, in the
+            // same task as the request, which an observer's microtask would stamp too late.
+            w.__askedWhile =
+              document
+                .querySelector('[data-testid="building-screen"]')
+                ?.getAttribute("data-stage") ?? null;
+          }
+          return original.apply(this, args);
+        } as typeof fetch;
+      });
+      // Through the gate the way the ZIP walks do: each warning is accepted as it opens — it opens
+      // only after the measurement, so what is waited for is whichever comes first, the dialog or
+      // the ZIP. A minute, because on a development server the first request compiles the route.
+      const download = page.waitForEvent("download", { timeout: 60_000 });
+      await page.getByRole("button", { name: "Descargar", exact: true }).click();
+      for (let tries = 0; tries < 4; tries += 1) {
+        const dialog = page.locator('[role="dialog"]').first();
+        const outcome = await Promise.race([
+          download.then(() => "download" as const),
+          dialog
+            .waitFor({ state: "visible", timeout: 20_000 })
+            .then(() => "dialog" as const)
+            .catch(() => "none" as const),
+        ]);
+        if (outcome !== "dialog") break;
+        const anyway = dialog.getByRole("button", { name: /Descargar igualmente|^Descargar$/ });
+        if ((await anyway.count()) === 0) break;
+        await anyway.last().click();
+        await expect(dialog).toBeHidden();
+      }
+      await download;
+      const timed = await page.evaluate(() => {
+        const w = window as unknown as {
+          __stages: { stage: string; at: number }[];
+          __asked: number;
+          __askedWhile: string | null;
+          __pressedAt: number;
+        };
+        return {
+          stages: w.__stages,
+          asked: w.__asked,
+          askedWhile: w.__askedWhile,
+          pressedAt: w.__pressedAt,
+        };
+      });
+      // The real stages, in the order they run, each after the one before.
+      expect(timed.stages.map((s) => s.stage)).toEqual(["measuring", "photos", "preparing"]);
+      // «Preparando los archivos…» is on screen at the instant the files are asked for.
+      expect(timed.asked).toBeGreaterThan(0);
+      expect(timed.askedWhile, "the request went out before its stage was said").toBe("preparing");
+      // The card leaves toward «Descargar»: the second scene, 400 ms, from an origin on the button.
+      await expect(
+        page.locator('[data-testid="building-screen"][data-leaving="build"]'),
+      ).toHaveCount(1);
+      const exit = await page.evaluate(() => {
+        const screen = document.querySelector('[data-testid="building-screen"]') as HTMLElement;
+        const card = screen.querySelector('[role="status"]') as HTMLElement;
+        const button = document.querySelector('[data-building-return="download"]') as HTMLElement;
+        const box = card.getBoundingClientRect();
+        const target = button.getBoundingClientRect();
+        const origin = getComputedStyle(card).transformOrigin.split(" ").map(parseFloat);
+        return {
+          originAt: [box.left + (origin[0] ?? 0), box.top + (origin[1] ?? 0)],
+          button: [target.left + target.width / 2, target.top + target.height / 2],
+        };
+      });
+      expect(Math.abs((exit.originAt[0] ?? 0) - (exit.button[0] ?? 0))).toBeLessThan(2);
+      expect(Math.abs((exit.originAt[1] ?? 0) - (exit.button[1] ?? 0))).toBeLessThan(2);
+      // The contraction starts a frame after the mark: polled, not read at once.
+      await expect
+        .poll(() =>
+          page.evaluate(() =>
+            (window as unknown as { __anims: { name: string; duration: number }[] }).__anims
+              .filter((a) => a.name === "ui-scene-build")
+              .map((a) => a.duration),
+          ),
+        )
+        .toEqual([400]);
+      // Gone, the keyboard back on «Descargar», and the hold of two seconds untouched.
+      await expect(page.locator('[data-testid="building-screen"]')).toHaveCount(0);
+      expect(await page.evaluate(() => document.activeElement?.textContent)).toBe("Descargar");
+      const leftAt = await page.evaluate(
+        () => (window as unknown as { __anims: { name: string; at?: number }[] }).__anims.length,
+      );
+      expect(leftAt).toBeGreaterThan(0);
+    } finally {
+      await context.close();
+    }
+  }, 240_000);
 });
