@@ -27748,3 +27748,389 @@ describe("sprint 36 día 1 — la línea de ayuda sale de la página", () => {
     }
   }, 180_000);
 });
+
+describe("sprint 36 día 3 — las pantallas se encadenan", () => {
+  /**
+   * **Every view transition the page starts, with what it animated**, recorded from inside the page
+   * because a transition lasts 180 ms and a poll from the test would miss it: the document's own
+   * `startViewTransition` is wrapped before anything runs, and at `ready` — when the pseudo-elements
+   * exist and their animations have started — the animations are read by pseudo-element. Every CSS
+   * animation that starts is recorded too, with its target and its iteration count, for the shake
+   * and the landing's exit.
+   */
+  async function recorded(context: BrowserContext): Promise<void> {
+    await context.addInitScript(() => {
+      type Entry = {
+        screen: string | null;
+        animations: { pseudo: string; name: string; duration: number }[];
+      };
+      const w = window as unknown as {
+        __vt: Entry[];
+        __anims: { name: string; target: string; iterations: number; duration: number }[];
+      };
+      w.__vt = [];
+      w.__anims = [];
+      document.addEventListener(
+        "animationstart",
+        (event) => {
+          const target = event.target as HTMLElement;
+          const running = target
+            .getAnimations()
+            .find((a) => (a as CSSAnimation).animationName === event.animationName);
+          w.__anims.push({
+            name: event.animationName,
+            target:
+              target.id || target.getAttribute("data-field-error") || target.tagName.toLowerCase(),
+            iterations: Number(running?.effect?.getTiming().iterations ?? 0),
+            duration: Number(running?.effect?.getTiming().duration ?? -1),
+          });
+        },
+        true,
+      );
+      const original = Document.prototype.startViewTransition;
+      if (typeof original !== "function") return;
+      Document.prototype.startViewTransition = function (
+        this: Document,
+        ...args: Parameters<Document["startViewTransition"]>
+      ) {
+        const transition = original.apply(this, args);
+        if (this !== document) return transition;
+        const entry: Entry = {
+          screen: document.documentElement.getAttribute("data-rb-screen"),
+          animations: [],
+        };
+        w.__vt.push(entry);
+        transition.ready.then(
+          () => {
+            entry.animations = document
+              .getAnimations()
+              .filter((a) =>
+                String((a.effect as KeyframeEffect | null)?.pseudoElement ?? "").startsWith(
+                  "::view-transition",
+                ),
+              )
+              .map((a) => ({
+                pseudo: String((a.effect as KeyframeEffect).pseudoElement),
+                name: (a as CSSAnimation).animationName ?? "",
+                duration: Number(a.effect?.getTiming().duration ?? 0),
+              }));
+          },
+          () => undefined,
+        );
+        return transition;
+      };
+    });
+  }
+
+  type Transition = {
+    screen: string | null;
+    animations: { pseudo: string; name: string; duration: number }[];
+  };
+  const transitions = (page: Page) =>
+    page.evaluate(() => (window as unknown as { __vt: Transition[] }).__vt);
+  /** The n-th transition, once its animations have been read. */
+  async function transition(page: Page, index: number): Promise<Transition> {
+    await expect
+      .poll(async () => (await transitions(page))[index]?.animations.length ?? 0, {
+        message: `the screen did not hand over (transition ${index + 1})`,
+      })
+      .toBeGreaterThan(0);
+    return (await transitions(page))[index] as Transition;
+  }
+  const animationsOf = (t: Transition, pseudo: string) =>
+    t.animations.filter((a) => a.pseudo === pseudo);
+
+  /**
+   * **When the questions are asked for, against when the landing finished leaving.** The URL is no
+   * witness — in development the questions' route arrives late whatever the order — so what is timed
+   * is the router's own request for `/empezar` (its `rsc` header, never a prefetch), against the
+   * press and against the end of the landing's fade, all on the page's clock.
+   */
+  async function navigationTimed(context: BrowserContext): Promise<void> {
+    await context.addInitScript(() => {
+      const w = window as unknown as {
+        __nav: { pressedAt: number; fadedAt: number; askedAt: number[] };
+      };
+      w.__nav = { pressedAt: -1, fadedAt: -1, askedAt: [] };
+      document.addEventListener("pointerdown", () => (w.__nav.pressedAt = performance.now()), true);
+      document.addEventListener(
+        "animationend",
+        (event) => {
+          if (
+            event.animationName === "ui-fade-out" &&
+            (event.target as Element).tagName === "MAIN"
+          ) {
+            w.__nav.fadedAt = performance.now();
+          }
+        },
+        true,
+      );
+      const original = window.fetch;
+      window.fetch = function (this: unknown, ...args: Parameters<typeof fetch>) {
+        const [input, init] = args;
+        const url =
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+        const headers = new Headers(
+          init?.headers ?? (input instanceof Request ? input.headers : {}),
+        );
+        if (
+          new URL(url, location.href).pathname === "/empezar" &&
+          headers.has("rsc") &&
+          !headers.has("next-router-prefetch") &&
+          !headers.has("next-router-segment-prefetch")
+        ) {
+          w.__nav.askedAt.push(performance.now());
+        }
+        return original.apply(this, args);
+      } as typeof fetch;
+    });
+  }
+  const navigation = (page: Page) =>
+    page.evaluate(
+      () =>
+        (window as unknown as { __nav: { pressedAt: number; fadedAt: number; askedAt: number[] } })
+          .__nav,
+    );
+
+  it("una pregunta da paso a la siguiente deslizándose, «Atrás» la desliza al revés, y escribir no anima nada", async () => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    await recorded(context);
+    const page = await context.newPage();
+    try {
+      await page.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
+      await motionSettled(page);
+      // The first question arrives with its card's own entrance, as it always did.
+      const card = page.locator("[data-rb-card]");
+      expect(await card.evaluate((el) => getComputedStyle(el).animationName)).toBe("ui-reveal");
+
+      // A letter typed is not a screen handing over.
+      await page.locator("#nombre").pressSequentially("Taberna");
+      expect(await transitions(page)).toEqual([]);
+
+      await page.getByRole("button", { name: "Siguiente" }).click();
+      const forward = await transition(page, 0);
+      expect(forward.screen).toBe("forward");
+      const group = animationsOf(forward, "::view-transition-group(rb-question)");
+      expect(group.length, JSON.stringify(forward)).toBeGreaterThan(0);
+      for (const a of forward.animations) {
+        expect(a.duration, `${a.pseudo} ${a.name}`).toBeLessThanOrEqual(200);
+        expect(Number.isFinite(a.duration)).toBe(true);
+      }
+      expect(animationsOf(forward, "::view-transition-old(rb-question)")[0]?.name).toBe(
+        "ui-question-out",
+      );
+      expect(animationsOf(forward, "::view-transition-new(rb-question)")[0]?.name).toBe(
+        "ui-question-in",
+      );
+      // The dots travel on their own, and the page around the question does not fade.
+      expect(animationsOf(forward, "::view-transition-group(rb-progress)").length).toBeGreaterThan(
+        0,
+      );
+      expect(forward.animations.filter((a) => a.pseudo.includes("(root)"))).toEqual([]);
+
+      await motionSettled(page);
+      await expect(page.getByText("Paso 2 de 5")).toBeVisible();
+      // Arrived by the transition, not a second time by its own entrance; and nothing named at rest.
+      expect(await card.evaluate((el) => getComputedStyle(el).animationName)).toBe("none");
+      expect(await card.evaluate((el) => getComputedStyle(el).viewTransitionName)).toBe("none");
+      expect(
+        await page.evaluate(() => document.documentElement.hasAttribute("data-rb-screen")),
+      ).toBe(false);
+
+      await page.getByRole("button", { name: "Atrás" }).click();
+      const back = await transition(page, 1);
+      expect(back.screen).toBe("back");
+      expect(animationsOf(back, "::view-transition-old(rb-question)")[0]?.name).toBe(
+        "ui-question-out-back",
+      );
+      expect(animationsOf(back, "::view-transition-new(rb-question)")[0]?.name).toBe(
+        "ui-question-in-back",
+      );
+      await expect(page.getByText("Paso 1 de 5")).toBeVisible();
+      await expect(page.locator("#nombre")).toHaveValue("Taberna");
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
+
+  it("la quinta da paso a las propuestas: la pregunta se va y las tres llegan con su entrada", async () => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    await recorded(context);
+    const page = await context.newPage();
+    try {
+      await page.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
+      await page.fill("#nombre", "Taberna del Puerto");
+      await page.getByRole("button", { name: "Siguiente" }).click();
+      await page.getByText("Restaurante y bar", { exact: true }).click();
+      await page.getByRole("button", { name: "Siguiente" }).click();
+      await page.getByText("Comidas", { exact: true }).click();
+      await page.getByRole("button", { name: "Siguiente" }).click();
+      await page.fill("#direccion", "Muelle 3, Ronda");
+      await page.getByRole("button", { name: "Siguiente" }).click();
+      await page.getByText("Que reserven", { exact: true }).click();
+      await page.fill("#enlace", "https://reservas.example.com/taberna");
+      await page.getByRole("button", { name: "Crear mi web" }).click();
+      const last = await transition(page, 4);
+      expect(last.screen).toBe("forward");
+      expect(animationsOf(last, "::view-transition-old(rb-question)")[0]?.name).toBe(
+        "ui-question-out",
+      );
+      // Nothing new is named: the proposals are the root, and arrive by their own entrances.
+      expect(animationsOf(last, "::view-transition-new(rb-question)")).toEqual([]);
+      await expect(page.getByText("Ver a tamaño real →").first()).toBeVisible();
+      await motionSettled(page);
+      const entrances = await page
+        .locator("div.ui-reveal.ui-lift")
+        .evaluateAll((els) => els.map((el) => getComputedStyle(el).animationName));
+      expect(entrances).toEqual(["ui-reveal", "ui-reveal", "ui-reveal"]);
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
+
+  it("una respuesta que falta: el campo y su error tiemblan una vez, y otra vez en la siguiente pulsación", async () => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    await recorded(context);
+    const page = await context.newPage();
+    try {
+      await page.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
+      await motionSettled(page);
+      const shakes = () =>
+        page.evaluate(() =>
+          (
+            window as unknown as { __anims: { name: string; target: string; iterations: number }[] }
+          ).__anims.filter((a) => a.name === "ui-shake"),
+        );
+      await page.getByRole("button", { name: "Siguiente" }).click();
+      await expect(page.locator("#nombre")).toHaveAttribute("aria-invalid", "true");
+      await expect
+        .poll(async () => (await shakes()).map((s) => s.target).sort())
+        .toEqual(["invalid", "nombre"]);
+      for (const shake of await shakes()) expect(shake.iterations, shake.target).toBe(1);
+      // No transition: an invalid press is not a screen handing over.
+      expect(await transitions(page)).toEqual([]);
+
+      await motionSettled(page);
+      await page.getByRole("button", { name: "Siguiente" }).click();
+      await expect.poll(async () => (await shakes()).length).toBe(4);
+      await motionSettled(page);
+      // At rest, nothing left displaced.
+      expect(await page.locator("#nombre").evaluate((el) => getComputedStyle(el).transform)).toBe(
+        "none",
+      );
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
+
+  it("la landing se despide antes de pedir las preguntas, y su enlace se subraya bajo el puntero", async () => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    await recorded(context);
+    await navigationTimed(context);
+    const page = await context.newPage();
+    try {
+      await page.goto(BASE_URL, { waitUntil: "networkidle" });
+      await motionSettled(page);
+
+      // «Ya tengo cuenta» draws its line under the pointer, and has none at rest.
+      const enter = page.getByRole("link", { name: "Ya tengo cuenta" });
+      const line = () => enter.evaluate((el) => getComputedStyle(el, "::after").transform);
+      expect(await line()).toBe("matrix(0, 0, 0, 1, 0, 0)");
+      await enter.hover();
+      await motionSettled(page);
+      expect(await line()).toBe("matrix(1, 0, 0, 1, 0, 0)");
+
+      await page.getByRole("link", { name: "Crear mi web" }).click();
+      await expect(page.locator("#nombre")).toBeVisible();
+      const timed = await navigation(page);
+      expect(timed.fadedAt, "the landing never finished leaving").toBeGreaterThan(timed.pressedAt);
+      expect(timed.askedAt.length, "the router never asked for the questions").toBeGreaterThan(0);
+      expect(
+        timed.askedAt[0] ?? 0,
+        `the questions were asked for before the landing had left ${JSON.stringify(timed)}`,
+      ).toBeGreaterThanOrEqual(timed.fadedAt - 1);
+      const faded = await page.evaluate(() =>
+        (window as unknown as { __anims: { name: string; target: string }[] }).__anims.filter(
+          (a) => a.name === "ui-fade-out" && a.target === "main",
+        ),
+      );
+      expect(faded.length, "the landing did not fade").toBeGreaterThan(0);
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
+
+  it("con menos movimiento: la pregunta se funde en su sitio, nada tiembla y la landing se va sin despedirse", async () => {
+    const context = await browser.newContext({
+      viewport: { width: 1280, height: 900 },
+      reducedMotion: "reduce",
+    });
+    await recorded(context);
+    await navigationTimed(context);
+    const page = await context.newPage();
+    try {
+      await page.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
+      // An invalid press says so, and shakes nothing: the shake is flattened to nothing.
+      await page.getByRole("button", { name: "Siguiente" }).click();
+      await expect(page.locator("#nombre")).toHaveAttribute("aria-invalid", "true");
+      const shakes = () =>
+        page.evaluate(() =>
+          (
+            window as unknown as {
+              __anims: { name: string; target: string; duration: number }[];
+            }
+          ).__anims.filter((a) => a.name === "ui-shake"),
+        );
+      await expect.poll(async () => (await shakes()).length).toBe(2);
+      for (const shake of await shakes()) expect(shake.duration, shake.target).toBeLessThan(1);
+
+      await page.fill("#nombre", "Taberna");
+      await page.getByRole("button", { name: "Siguiente" }).click();
+      const faded = await transition(page, 0);
+      // A fade, never a cut: the transition runs, and nothing in it travels or lasts past --ui-fast.
+      expect(animationsOf(faded, "::view-transition-group(rb-question)")).toEqual([]);
+      expect(animationsOf(faded, "::view-transition-old(rb-question)")[0]).toMatchObject({
+        name: "ui-fade-out",
+        duration: 120,
+      });
+      expect(animationsOf(faded, "::view-transition-new(rb-question)")[0]).toMatchObject({
+        name: "ui-fade-in",
+        duration: 120,
+      });
+      for (const a of faded.animations) expect(a.name, a.pseudo).not.toMatch(/ui-question-/);
+      await expect(page.getByText("Paso 2 de 5")).toBeVisible();
+
+      // At rest, the same question in the same place as with movement.
+      const card = await page.locator("[data-rb-card]").boundingBox();
+      const moving = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+      try {
+        const other = await moving.newPage();
+        await other.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
+        await other.fill("#nombre", "Taberna");
+        await other.getByRole("button", { name: "Siguiente" }).click();
+        await expect(other.getByText("Paso 2 de 5")).toBeVisible();
+        await motionSettled(other);
+        await motionSettled(page);
+        expect(await other.locator("[data-rb-card]").boundingBox()).toEqual(
+          await page.locator("[data-rb-card]").boundingBox(),
+        );
+        expect(card).not.toBeNull();
+      } finally {
+        await moving.close();
+      }
+
+      // The landing goes without fading: the navigation is the exit, asked for at the press.
+      await page.goto(BASE_URL, { waitUntil: "networkidle" });
+      await page.getByRole("link", { name: "Crear mi web" }).click();
+      await expect(page.locator("#nombre")).toBeVisible();
+      const timed = await navigation(page);
+      expect(timed.fadedAt, "the landing faded for somebody who asked for less").toBe(-1);
+      expect(
+        (timed.askedAt[0] ?? Number.POSITIVE_INFINITY) - timed.pressedAt,
+        JSON.stringify(timed),
+      ).toBeLessThan(50);
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
+});

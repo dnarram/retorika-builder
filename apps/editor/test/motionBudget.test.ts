@@ -684,6 +684,120 @@ describe("the vocabulary of sprint 36 and the second register", () => {
   });
 });
 
+/**
+ * **A screen hands over to the next** (sprint 36 día 3): the questions slide, the fifth gives way to
+ * the proposals, the landing fades before it asks for the questions. Read off the stylesheet, which
+ * is where each of these can be broken by one line.
+ */
+describe("a screen hands over to the next", () => {
+  const RULES_ALL = cssRules(CSS);
+  const underReduce = (rule: CssRule) =>
+    rule.at.some((query) => query.includes("prefers-reduced-motion: reduce"));
+  const VT_NAME = /::view-transition-(?:group|old|new|image-pair)\(([\w-]+)\)/g;
+  const namesIn = (prelude: string) => [...prelude.matchAll(VT_NAME)].map((m) => m[1] as string);
+  const SCENES = ["rb-scene-canvas"];
+
+  it("names what travels only while a screen transition is in flight", () => {
+    const naming = RULES_ALL.filter((rule) => /view-transition-name\s*:/.test(rule.body));
+    expect(naming.length, "nothing is named: the screens cannot hand over").toBeGreaterThan(0);
+    for (const rule of naming) {
+      expect(
+        rule.prelude,
+        `«${rule.prelude}» names an element at rest: a name is a stacking context nobody asked for`,
+      ).toMatch(/^:root\[data-rb-screen\]/);
+    }
+  });
+
+  it("never fades the page around what travels", () => {
+    const rule = (prelude: string) => RULES_ALL.find((r) => r.prelude === prelude)?.body ?? "";
+    expect(rule("::view-transition-old(root)")).toMatch(/display:\s*none/);
+    expect(rule("::view-transition-new(root)")).toMatch(/animation:\s*none/);
+    expect(rule("::view-transition-group(root)")).toMatch(/animation:\s*none/);
+  });
+
+  /**
+   * **Each pseudo-element, not each name.** A name with a reduced-motion rule for its group and none
+   * for its old capture still cuts that capture: under `reduce` the travel rule does not apply, the
+   * group's `animation: none` leaves a duration of 0 s, and the old capture inherits it. Found by
+   * sabotage on the day this was written — the first version asked only that the name had a rule.
+   */
+  it("fades in --ui-fast, in place, every part of everything that travels, for somebody who asked for less", () => {
+    const PART = /::view-transition-(group|old|new|image-pair)\(([\w-]+)\)/g;
+    const partsIn = (prelude: string) => [...prelude.matchAll(PART)].map((m) => `${m[1]}(${m[2]})`);
+    const travelling = new Set(
+      RULES_ALL.filter((rule) => !underReduce(rule) && /animation/.test(rule.body))
+        .flatMap((rule) => partsIn(rule.prelude))
+        .filter((part) => !part.endsWith("(root)")),
+    );
+    expect([...travelling]).toEqual(
+      expect.arrayContaining(["group(rb-question)", "old(rb-progress)", "new(rb-question)"]),
+    );
+    const reduced = RULES_ALL.filter(underReduce);
+    for (const part of travelling) {
+      const rules = reduced.filter((rule) => partsIn(rule.prelude).includes(part));
+      expect(
+        rules.length,
+        `::view-transition-${part} has no rule under reduced motion: it is cut`,
+      ).toBeGreaterThan(0);
+      for (const rule of rules) {
+        expect(rule.body, `${part} under reduced motion is a cut`).not.toMatch(/0\.01ms/);
+        expect(
+          /animation:\s*none/.test(rule.body) || /var\(--ui-fast\)/.test(rule.body),
+          `«${rule.prelude}» under reduced motion is neither still nor a --ui-fast fade`,
+        ).toBe(true);
+        expect(rule.body, `«${rule.prelude}» still travels under reduced motion`).not.toMatch(
+          /ui-question-/,
+        );
+      }
+    }
+  });
+
+  it(`moves no screen for longer than ${INTERACTION_CAP_MS} ms but the named scenes`, () => {
+    const transitions = RULES_ALL.filter(
+      (rule) =>
+        namesIn(rule.prelude).length > 0 && !namesIn(rule.prelude).some((n) => SCENES.includes(n)),
+    );
+    const times = transitions.flatMap((rule) => timesIn(rule.body));
+    expect(times.length, "no duration found in the screen transition").toBeGreaterThan(0);
+    for (const { declaration, ms: time } of times) {
+      expect(time, `«${declaration}»`).toBeLessThanOrEqual(INTERACTION_CAP_MS);
+    }
+  });
+
+  it("moves the question sideways only as a pseudo-element, never as a box on the page", () => {
+    // The overflow walk at 320/390/768 measures every box on the page; a box that arrived sideways
+    // would be briefly outside the screen. A view transition's capture is not a box on the page.
+    const sideways = [...KEYFRAMES.entries()]
+      .filter(([, body]) => /translateX/.test(body))
+      .map(([name]) => name)
+      .filter((name) => name.startsWith("ui-question"));
+    expect(sideways.length).toBe(4);
+    for (const name of sideways) {
+      const users = RULES_ALL.filter(
+        (rule) =>
+          !rule.prelude.startsWith("@keyframes") && new RegExp(`\\b${name}\\b`).test(rule.body),
+      );
+      expect(users.length, `${name} is used nowhere`).toBeGreaterThan(0);
+      for (const rule of users) {
+        expect(rule.prelude, `${name} moves a box on the page`).toMatch(/::view-transition-/);
+      }
+    }
+  });
+
+  it("lets the landing leave in --ui-fast, taking no pointer while it goes", () => {
+    const leaving =
+      RULES_ALL.find((rule) => rule.prelude === '[data-leaving="screen"]')?.body ?? "";
+    expect(leaving).toMatch(/animation:\s*ui-fade-out var\(--ui-fast\)/);
+    expect(leaving).toMatch(/pointer-events:\s*none/);
+  });
+
+  it("does not let a question arrive twice", () => {
+    const chained =
+      RULES_ALL.find((rule) => rule.prelude.includes("[data-rb-chained]"))?.body ?? "";
+    expect(chained).toMatch(/animation:\s*none/);
+  });
+});
+
 /** Every `.ts`/`.tsx` under `src`, by path. */
 function allSourceFiles(): string[] {
   const out: string[] = [];

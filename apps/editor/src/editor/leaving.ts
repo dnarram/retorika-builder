@@ -47,6 +47,43 @@ export type LeavingKind = "panel" | "dialog" | "toast" | "popup" | "zone";
  * that a copy left by an animation that never ran is gone before anybody could act on it. */
 export const LEAVING_FALLBACK_MS = 250;
 
+/**
+ * **A whole screen leaving before the next one is asked for** (sprint 36 día 3): the landing, when
+ * «Crear mi web» is pressed. Not a copy: there is no React exit to stand in for, because the screen
+ * is still here until the navigation replaces it — so the real element is marked
+ * `data-leaving="screen"`, fades on `--ui-fast` (`globals.css`, and takes no pointer meanwhile), and
+ * `then` runs on its own `animationend` or after `LEAVING_FALLBACK_MS`, once. For somebody who asked
+ * for less movement `then` runs at once and nothing is marked: the navigation is the exit.
+ *
+ * Returns the way to take the mark off, for a screen that comes back without being rebuilt (a
+ * back navigation that restores the page as it was).
+ */
+export function leaveScreen(screen: HTMLElement, then: () => void): () => void {
+  const view = screen.ownerDocument.defaultView;
+  const unmark = () => {
+    if (screen.getAttribute("data-leaving") === "screen") screen.removeAttribute("data-leaving");
+  };
+  if (!view || view.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+    then();
+    return unmark;
+  }
+  let gone = false;
+  const go = () => {
+    if (gone) return;
+    gone = true;
+    view.clearTimeout(fallback);
+    screen.removeEventListener("animationend", onEnd);
+    then();
+  };
+  const onEnd = (event: Event) => {
+    if (event.target === screen) go();
+  };
+  screen.addEventListener("animationend", onEnd);
+  const fallback = view.setTimeout(go, LEAVING_FALLBACK_MS);
+  screen.setAttribute("data-leaving", "screen");
+  return unmark;
+}
+
 /** The attributes something could find a node by, or point at it with. */
 const FINDABLE = [
   "id",

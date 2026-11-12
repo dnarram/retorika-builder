@@ -210,7 +210,13 @@ export function Shell({ caption, children }: { caption?: string; children: React
 
 export function ProgressDots({ current }: { current: number }) {
   return (
-    <div style={{ display: "flex", justifyContent: "center", gap: 7 }}>
+    <div
+      // Named `rb-progress` while a screen transition is in flight (sprint 36 día 3): the row of dots
+      // is taken out of the question that slides away and travels on its own from where it was to
+      // where it is, so the progress stays put while the question changes.
+      data-rb-progress=""
+      style={{ display: "flex", justifyContent: "center", gap: 7 }}
+    >
       {[1, 2, 3, 4, 5].map((step) => (
         <span
           key={step}
@@ -286,6 +292,8 @@ export function Card({
          rather than once for the whole flow. `ui-reveal` fills `backwards`, so it holds nothing
          after it lands — see `globals.css`. */
       className="ui-reveal"
+      // What the shake looks in for (`shakeInvalid`), and the one box a question is.
+      data-rb-card=""
       style={{
         width,
         maxWidth: "100%",
@@ -403,6 +411,9 @@ export function TextField({
       )}
       <input
         id={id}
+        // Said, not only drawn (sprint 36 día 3): the red border is the eye's, this is everybody's —
+        // and it is what the shake finds after an invalid press (`shakeInvalid`).
+        aria-invalid={variant === "error" ? true : undefined}
         style={{
           ...fieldBase,
           height,
@@ -421,9 +432,18 @@ export function TextField({
   );
 }
 
-export function FieldError({ children }: { children: ReactNode }) {
+export function FieldError({
+  children,
+  notice = false,
+}: {
+  children: ReactNode;
+  notice?: boolean;
+}) {
   return (
     <span
+      /* An answer that failed the press, or a notice beside it (`notice`, the logo that could not
+         be kept): only the first shakes when «Siguiente» is pressed again (`shakeInvalid`). */
+      data-field-error={notice ? "notice" : "invalid"}
       /* **Opacity only, which is the whole reason this is `ui-fade-in` and not `ui-reveal`.** An
          error takes its space the instant it appears — that is honest, and it is what the e2e
          «el aviso reserva su sitio» measures — so only its ink arrives late. A `translateY` here
@@ -614,6 +634,26 @@ export function CheckboxCard({
   );
 }
 
+/**
+ * **The questionnaire's one answer to an invalid press** (sprint 36 día 3): every field marked
+ * invalid in the card, and every error that is about the press, shakes its head once — four pixels
+ * each way, inside `--ui-base` (`ui-shake`). Not a pulse of attention: it happens because the
+ * person pressed, on the thing the press failed on, and a second press shakes again. The class is
+ * taken off and put back with a style read between, which restarts it; it is never taken off at the
+ * end, because on an error that would hand the element back to its own entrance (`ui-fade-in`) and
+ * replay it. Under reduced motion the global block makes the shake nothing.
+ */
+export function shakeInvalid(card: Element | null): void {
+  if (!card?.isConnected) return;
+  for (const el of card.querySelectorAll<HTMLElement>(
+    '[aria-invalid="true"], [data-field-error="invalid"]',
+  )) {
+    el.classList.remove("ui-shake");
+    void el.offsetWidth;
+    el.classList.add("ui-shake");
+  }
+}
+
 export function NavRow({
   onBack,
   onSkip,
@@ -653,7 +693,7 @@ export function NavRow({
            * `hover:` is already behind `@media (hover: hover)` in Tailwind v4, for the same reason
            * `ui-lift` is.
            */
-          className="ui-interactive text-ui-muted hover:text-ui-ink"
+          className="ui-interactive ui-underline text-ui-muted hover:text-ui-ink"
           style={{
             font: "inherit",
             fontSize: 15,
@@ -674,7 +714,7 @@ export function NavRow({
           <button
             type="button"
             onClick={onSkip}
-            className="ui-interactive text-ui-muted hover:text-ui-ink"
+            className="ui-interactive ui-underline text-ui-muted hover:text-ui-ink"
             style={{
               font: "inherit",
               fontSize: 15,
@@ -690,7 +730,13 @@ export function NavRow({
         ) : null}
         <button
           type="button"
-          onClick={onPrimary}
+          onClick={(event) => {
+            const card = event.currentTarget.closest("[data-rb-card]");
+            onPrimary();
+            // After React has drawn what the press decided: a valid press has handed the screen
+            // over and left nothing invalid to find; an invalid one has its errors on the page.
+            requestAnimationFrame(() => shakeInvalid(card));
+          }}
           disabled={!primaryEnabled}
           /* `:not(:disabled)` inside `ui-lift` is what keeps «Siguiente» still while it is not
              answerable: a disabled button that rises to the pointer is an invitation it cannot

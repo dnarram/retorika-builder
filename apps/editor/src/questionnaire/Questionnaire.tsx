@@ -4,6 +4,7 @@ import { type Answers, EMPTY_ANSWERS } from "@retorika/generator";
 import type { RetorikaDocument } from "@retorika/schema";
 import { useEffect, useState } from "react";
 import { clearSession, loadSession } from "../editor/autosave.ts";
+import { type ScreenDirection, transitionScreen } from "../editor/screenTransition.ts";
 import es from "../locales/es.json" with { type: "json" };
 import { Step1Name } from "./steps/Step1Name.tsx";
 import { Step2Sector } from "./steps/Step2Sector.tsx";
@@ -59,6 +60,26 @@ export function Questionnaire() {
 
   const [step, setStep] = useState(1);
   const [done, setDone] = useState(false);
+  /**
+   * **Whether the question on screen arrived by a transition** (sprint 36 día 3). The first one
+   * arrives with its card's own entrance (`ui-reveal`); every one after it arrives by the view
+   * transition that slides it in, and the card's entrance would be a second arrival on top of the
+   * first. Set inside the transition's update, so the new card is mounted already knowing; the
+   * stylesheet reads it off the steps' wrapper (`[data-rb-chained]`).
+   */
+  const [chained, setChained] = useState(false);
+
+  /** Another question, or the proposals: the screen hands over (`screenTransition.ts`). */
+  function go(next: number | "done", direction: ScreenDirection = "forward") {
+    transitionScreen(
+      () => {
+        setChained(true);
+        if (next === "done") setDone(true);
+        else setStep(next);
+      },
+      { direction },
+    );
+  }
   const [answers, setAnswers] = useState<Answers>(EMPTY_ANSWERS);
 
   useEffect(() => {
@@ -90,6 +111,7 @@ export function Questionnaire() {
     setRejected(false);
     setAnswers(EMPTY_ANSWERS);
     setStep(1);
+    setChained(false);
     setDone(false);
   }
 
@@ -143,41 +165,51 @@ export function Questionnaire() {
           </span>
         </div>
       ) : null}
-      {step === 1 && <Step1Name answers={answers} update={update} onNext={() => setStep(2)} />}
-      {step === 2 && (
-        <Step2Sector
-          answers={answers}
-          update={update}
-          onNext={() => setStep(3)}
-          onBack={() => setStep(1)}
-        />
-      )}
-      {step === 3 && (
-        <Step3Services
-          answers={answers}
-          update={update}
-          onNext={() => setStep(4)}
-          onSkip={() => setStep(4)}
-          onBack={() => setStep(2)}
-        />
-      )}
-      {step === 4 && (
-        <Step4Location
-          answers={answers}
-          update={update}
-          onNext={() => setStep(5)}
-          onSkip={() => setStep(5)}
-          onBack={() => setStep(3)}
-        />
-      )}
-      {step === 5 && (
-        <Step5Action
-          answers={answers}
-          update={update}
-          onSubmit={() => setDone(true)}
-          onBack={() => setStep(4)}
-        />
-      )}
+      {/* **The question on screen, and only it** (sprint 36 día 3): the stylesheet names this
+          wrapper's one child `rb-question` while a screen transition is in flight, so the card
+          slides out and the next slides in while the page around them stays where it is.
+          `display: contents`, so the card is still the shell's own flex item and nothing moves. */}
+      <div
+        data-rb-steps=""
+        data-rb-chained={chained ? "" : undefined}
+        style={{ display: "contents" }}
+      >
+        {step === 1 && <Step1Name answers={answers} update={update} onNext={() => go(2)} />}
+        {step === 2 && (
+          <Step2Sector
+            answers={answers}
+            update={update}
+            onNext={() => go(3)}
+            onBack={() => go(1, "back")}
+          />
+        )}
+        {step === 3 && (
+          <Step3Services
+            answers={answers}
+            update={update}
+            onNext={() => go(4)}
+            onSkip={() => go(4)}
+            onBack={() => go(2, "back")}
+          />
+        )}
+        {step === 4 && (
+          <Step4Location
+            answers={answers}
+            update={update}
+            onNext={() => go(5)}
+            onSkip={() => go(5)}
+            onBack={() => go(3, "back")}
+          />
+        )}
+        {step === 5 && (
+          <Step5Action
+            answers={answers}
+            update={update}
+            onSubmit={() => go("done")}
+            onBack={() => go(4, "back")}
+          />
+        )}
+      </div>
     </Shell>
   );
 }

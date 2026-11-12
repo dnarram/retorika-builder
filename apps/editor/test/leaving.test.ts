@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ghostOf, LEAVING_FALLBACK_MS, leave } from "../src/editor/leaving.ts";
+import { ghostOf, LEAVING_FALLBACK_MS, leave, leaveScreen } from "../src/editor/leaving.ts";
 
 /**
  * The exit copy (sprint 35 día 2). What a browser alone can show — that the copy is drawn where
@@ -194,5 +194,60 @@ describe("it always ends", () => {
     expect(document.querySelector("[data-leaving]"), "gone before its time").not.toBeNull();
     vi.advanceTimersByTime(1);
     expect(document.querySelector("[data-leaving]")).toBeNull();
+  });
+});
+
+/**
+ * **A whole screen leaving** (sprint 36 día 3): the landing, before «Crear mi web» asks for the
+ * questions. The real element is marked, never copied; the navigation runs once, on the screen's
+ * own end or after the fallback; and for somebody who asked for less movement it runs at once with
+ * nothing marked.
+ */
+describe("a screen leaving before the next is asked for", () => {
+  function screen(): HTMLElement {
+    document.body.innerHTML = '<main><a href="/empezar">Crear mi web</a></main>';
+    return document.querySelector("main") as HTMLElement;
+  }
+
+  it("marks the real screen and asks for the next on its own end, once", () => {
+    const main = screen();
+    let asked = 0;
+    leaveScreen(main, () => (asked += 1));
+    expect(main.getAttribute("data-leaving")).toBe("screen");
+    expect(document.querySelectorAll("[data-leaving]")).toHaveLength(1);
+    main.querySelector("a")?.dispatchEvent(new Event("animationend", { bubbles: true }));
+    expect(asked, "a child's end asked for the next screen").toBe(0);
+    main.dispatchEvent(new Event("animationend"));
+    main.dispatchEvent(new Event("animationend"));
+    expect(asked).toBe(1);
+  });
+
+  it(`asks after ${LEAVING_FALLBACK_MS} ms when the fade never runs, and only then`, () => {
+    vi.useFakeTimers();
+    const main = screen();
+    let asked = 0;
+    leaveScreen(main, () => (asked += 1));
+    vi.advanceTimersByTime(LEAVING_FALLBACK_MS - 1);
+    expect(asked).toBe(0);
+    vi.advanceTimersByTime(1);
+    expect(asked).toBe(1);
+    main.dispatchEvent(new Event("animationend"));
+    expect(asked).toBe(1);
+  });
+
+  it("asks at once and marks nothing for somebody who asked for less movement", () => {
+    reduced = true;
+    const main = screen();
+    let asked = 0;
+    leaveScreen(main, () => (asked += 1));
+    expect(asked).toBe(1);
+    expect(main.hasAttribute("data-leaving")).toBe(false);
+  });
+
+  it("takes its mark off a screen that comes back as it was", () => {
+    const main = screen();
+    const unmark = leaveScreen(main, () => {});
+    unmark();
+    expect(main.hasAttribute("data-leaving")).toBe(false);
   });
 });

@@ -5,6 +5,7 @@ import { reveal } from "../questionnaire/ui.tsx";
 import { LandingHero } from "./LandingHero.tsx";
 import { LANDING_LOCKUP_WIDTH, markHeight, markOverlay } from "./landingMark.ts";
 import { landingSampleHtml } from "./landingSample.ts";
+import { StartLink } from "./StartLink.tsx";
 
 /**
  * The landing. Minimal, which is what David asked for, and deliberately **inert**.
@@ -267,7 +268,7 @@ export default function Page() {
             className="ui-reveal flex flex-col items-center gap-2.5 studio:items-start"
             style={{ ...reveal(3), marginTop: 8 }}
           >
-            <Link
+            <StartLink
               href="/empezar"
               /**
                * `minHeight` and real padding, like every other button in the application — see
@@ -299,7 +300,7 @@ export default function Page() {
               }}
             >
               {es["landing.start"]}
-            </Link>
+            </StartLink>
             {/* `#5B6B82`, not the mockups' `#64748B`: on this page's `#F5F7FA` the latter is 4.43:1
               and the former 5.06, the same correction `questionnaire/ui.tsx` made on sprint 1 day
               2 and this page missed — found by sprint 21 day 5, the first time axe ran on the
@@ -310,10 +311,18 @@ export default function Page() {
             {/* The brand blue is for white text on it and for black-ink pages; as 15px text on this
               grey it measures 4.39:1. `#105CB1` is the palette's own secondary (ADR 0041 §3), 6.14
               here. Same day, same first run of axe on this page. */}
+            {/* The underline draws itself under the pointer and the keyboard (sprint 36 día 3,
+              `ui-underline`) instead of standing there drawn: a link on its own line, not inside a
+              sentence, so the colour and its own line already say it is one. */}
             <Link
               href="/entrar"
-              className="ui-interactive"
-              style={{ fontSize: 15, color: "var(--ui-brand-deep)", marginTop: 8 }}
+              className="ui-interactive ui-underline"
+              style={{
+                fontSize: 15,
+                color: "var(--ui-brand-deep)",
+                marginTop: 8,
+                textDecoration: "none",
+              }}
             >
               {es["landing.enter"]}
             </Link>
