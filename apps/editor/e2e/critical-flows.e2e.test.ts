@@ -680,6 +680,15 @@ async function axeSerious(page: Page, where: string): Promise<void> {
  * question: what the caller needs to know is that everything with an end has reached it.
  */
 async function motionSettled(page: Page): Promise<void> {
+  /*
+   * **A screen handing over is moving before anything in it is** (sprint 36 día 5, found by CI on
+   * #371). `transitionScreen` writes `data-rb-screen` on the root the instant «Siguiente» is pressed,
+   * and the next screen is mounted only a frame later, inside the view transition's update — so a
+   * wait right after the press found nothing in flight and returned, and axe read the next
+   * question's choices at 8 % of their opacity, mid-entrance. The attribute goes when the
+   * transition has finished, by which time the new screen's own entrances exist and are below.
+   */
+  await page.waitForFunction(() => !document.documentElement.hasAttribute("data-rb-screen"));
   // **Every frame of the page, not only the editor's own document** (sprint 35 día 1): the canvas
   // is an `<iframe>`, and the chrome drawn inside it — the text bar, the verbs, the zones, the bar
   // over an escalated section — moves on the frame's clock, which the editor's `getAnimations()`

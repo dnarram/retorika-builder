@@ -8928,6 +8928,18 @@ a media opacidad), y la caminata **mide en reposo** (`motionSettled` antes de ax
 también está a media opacidad sus 120 ms, y eso no es su contraste. Repetidas después la de axe, las
 del día 1 y del día 5, la del aviso del 35 y las de la pista y la leyenda: 14 verdes.
 
+**Y la CI de la PR, tres rojos de una causa del día 3**: «nada sobresale en un móvil» a 390 pasa axe
+sobre el paso 2 justo después de «Siguiente», y axe leyó las opciones al 8 % de su opacidad
+(`color-contrast` 1,08:1). `look` espera el movimiento antes de medir, pero `transitionScreen` monta el
+paso siguiente un fotograma después de la pulsación, dentro de la actualización de la transición: la
+espera no encontraba nada en vuelo y volvía. Las otras dos rojas eran las pruebas siguientes del mismo
+recorrido, que encontraron la página parada en el paso 2. **`motionSettled` espera ahora a que no haya
+transición de pantalla en vuelo** (`data-rb-screen` fuera de la raíz) antes de reunir lo que se mueve:
+para entonces el paso nuevo existe y sus entradas están en la lista. Una carrera de un fotograma que
+pasó en la CI de la #369 y la #370 y en tres pasadas locales completas; no se puede forzar a voluntad,
+así que no hay saboteo, solo el mecanismo, que está en el código. Repetidas el recorrido del móvil y
+todas las del sprint 36: 29 verdes.
+
 **Suites.** `typecheck`, `lint`, `test` (3919 en 186 ficheros, 11 más), invariantes (27), golden (27,
 cero cambios), e2e completa como arriba; la suite completa vuelve a correr en la CI de la PR.
 
