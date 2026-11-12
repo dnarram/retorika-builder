@@ -8854,3 +8854,80 @@ desperdicio. El paso pasa a 35 y el trabajo a 45 (`ci.yml`, con la medida escrit
 anteriores), para que David lo acepte con la PR; partir la suite en dos *shards* es la forma de bajar
 el reloj sin bajar los minutos, y es una decisión sobre los minutos de Actions, no de este día.
 
+### Día 5 — la línea habla (PR de `feat/la-linea-habla`)
+
+**Lo que llega revela; lo que cambia se funde** (ajuste 2 de David). En la línea de ayuda, lo que entra
+por el hijo vivo —un anuncio, el aviso de borrado, un error— llega palabra a palabra (`ui-words`): una
+`<span data-ui-word>` por palabra hasta la sexta y **la séptima con el resto**, así que una frase larga
+son siete pasos y no veinte (120 + 6 × 40 = 360 ms, dentro de los 600 del presupuesto); separadas por
+espacios de verdad, así que el texto del hijo es la frase exacta. **Y en cuanto la última palabra
+aterriza, vuelve a ser texto plano**: una palabra `inline-block` se recorta, nunca lleva elipsis, y el
+aviso con los botones rotos a 320 es largo. Lo que cambia en el hijo silencioso —el reposo, las teclas,
+la pista del elegido, la nota de un menú, que cambian con cada Tab— **no se revela nunca**: la frase
+nueva se funde sobre una copia de la vieja que se funde al revés, en la misma caja, en `--ui-fast`, solo
+opacidad (`ui-cross-in`, `ui-cross-out`); la copia está fuera del hijo, `aria-hidden` y sin puntero,
+así que el texto del hijo es siempre la frase actual. El color del tono cambia en los mismos 120 ms. Y
+el aviso de borrado deja de subir por su cuenta: llega por sus palabras, y se sigue yendo como copia.
+
+**Las filas de un panel llegan una tras otra.** Los bloques de cada panel son los hijos directos de su
+tarjeta, así que no hace falta tocar ninguno de los ocho: el anfitrión del panel lo marca
+`data-ui-rows` en el instante en que entra y lo desmarca a los 450 ms, y la hoja funde cada hijo con
+`--ui-stagger` de diferencia. **Solo opacidad**, y no `ui-rise-in` como decía el plan: son controles a
+punto de pulsarse, y lo que se va a pulsar no se mueve bajo la mano (la regla del 35, día 3) — además
+de que un recorrido haría esperar a cada caminata que abre un panel y pulsa. **Seis pasos y no siete**:
+la guarda de los paneles mide a los 350 ms, y la sexta fila está en reposo a los 5 × 40 + 120 = 320. Un
+bloque que aparece después (una opción elegida) no espera a una cola que ya pasó.
+
+**Esqueletos sin bucle.** Cada propuesta, hasta que el documento de su miniatura carga, muestra cuatro
+barras quietas del color de un borde donde irían la barra, la portada y las líneas; con el primer
+`load` se funden en `--ui-fast` y se van — una recarga posterior (las fotos llegando) no vuelve a
+ponerlas. «Mis webs», mientras busca, tres filas quietas bajo su frase «Buscando tus webs…», que sigue
+siendo lo que dice que carga. Nada late: un cuarto nombre en bucle es una decisión del presupuesto.
+
+**El número cuenta hasta sí mismo, donde hay uno que llega.** El plan decía «el peso del ZIP en la
+revisión de descarga», y **la revisión de descarga no muestra el peso del ZIP** —ni podría antes de que
+el servidor lo construya—: lo que muestra es el peso de cada fuente propia que pasa de 300 KB, y es ahí
+donde cuenta (`ui-count`). El contador se **dibuja y no se lee** (`content: counter(ui-n) / ""`, el
+texto alternativo vacío de CSS), y el elemento guarda el número real como texto oculto a la vista: un
+lector y una búsqueda encuentran «310» y nunca un fotograma de la cuenta; `@starting-style` lo hace
+empezar en cero. **«Quedan {n} textos de ejemplo» no cuenta**: cambia de uno en uno, y un número que
+baja una unidad en 180 ms no es una cuenta sino un parpadeo; la frase entera se funde, como todo lo que
+cambia en la línea. `ui-count` queda así con un sitio, y el resto de su sitio con nombre.
+
+**Pruebas.** `helpLineVoice.test.ts` (5, React de verdad en happy-dom: seis palabras, seis pasos y la
+frase exacta; una frase larga, siete con el resto en la última; texto plano al aterrizar la última y no
+la primera; el silencioso nunca por palabras y su copia fuera de él; ninguna copia mientras habla el
+vivo). `motionBudget.test.ts` +4 y `HelpLine.tsx` entre los ficheros del editor: el fundido solo
+opacidad en `--ui-fast`; las filas solo opacidad, cinco pasos y en reposo dentro de 350, anuladas bajo
+`reduce`; el contador dibujado sin leerse y desde cero; el esqueleto sin tiempo y saliendo por
+opacidad. `chromeScale.test.ts` nombra `--ui-n` como lo que el lienzo no lleva. **Tres caminatas**
+(«sprint 36 día 5»), grabando cada animación que empieza con su sitio, su retardo y su duración —leídos
+del estilo calculado, porque con menos movimiento una animación de 0,01 ms ya ha acabado cuando llega
+su `animationstart` y no está en `getAnimations()`—: el aviso en seis palabras a 0/40/…/200 ms en el
+hijo vivo y la línea y la tarjeta quietas en cada fotograma, luego texto plano; cinco Tab, tantos
+fundidos como frases y ninguna revelación; los tres esqueletos dibujados, fundidos y fuera, y ninguna
+animación infinita; las filas de «Estilo» a 0/40/80/120 y desmarcadas; y el gemelo con menos movimiento
+(palabras y filas sin esperar y sin recorrido). **La cuenta**, en la caminata de las ocho puertas: el
+valor final del contador, el texto que guarda y los bytes / 1024 del fichero del dato, iguales. La
+caminata del 35 que leía la llegada del aviso en su padre lee ahora su subárbol (llega por sus
+palabras).
+
+**Saboteos**, deshechos por sustitución inversa: el silencioso por palabras → la prueba de unidad y la
+caminata rojas (13 animaciones por palabra donde debían ser 6); las filas con `ui-rise-in` → presupuesto
+rojo; el contador leído (`counter(ui-n)` sin `/ ""`) → rojo; el esqueleto que nunca se va → caminata roja;
+el contador escrito desde una copia (`kb − 1`) → **verde la primera vez, porque el filtro había casado
+con la prueba de la lista de puertas y no con la que las abre**; con el filtro bueno, las tres anchuras
+rojas.
+
+**La pasada completa: 323 verdes, 1 omitida y 1 roja en 1489 s**, y la roja era mía: la caminata de axe
+del 17 elige una sección con el teclado —lo que cambia la frase de la línea— y mide al instante, y axe
+encontró la copia de la frase saliente a media opacidad (`color-contrast` en `.ui-cross-out`). La copia
+**pinta sus palabras y no las escribe** (`data-leaving-text`, la regla del 35 para toda copia de
+salida: nada —una búsqueda, un localizador, el contraste de axe— toma por la línea una frase que se va
+a media opacidad), y la caminata **mide en reposo** (`motionSettled` antes de axe): la frase que llega
+también está a media opacidad sus 120 ms, y eso no es su contraste. Repetidas después la de axe, las
+del día 1 y del día 5, la del aviso del 35 y las de la pista y la leyenda: 14 verdes.
+
+**Suites.** `typecheck`, `lint`, `test` (3919 en 186 ficheros, 11 más), invariantes (27), golden (27,
+cero cambios), e2e completa como arriba; la suite completa vuelve a correr en la CI de la PR.
+

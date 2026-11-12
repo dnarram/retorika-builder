@@ -53,9 +53,23 @@ export function MyWebs() {
         <TitleBlock title={es["myWebs.title"]} subtitle={es["myWebs.subtitle"]} />
 
         {sites === null ? (
-          <p role="status" style={{ margin: 0, fontSize: 15, color: "#64748B" }}>
-            {es["myWebs.loading"]}
-          </p>
+          <>
+            <p role="status" style={{ margin: 0, fontSize: 15, color: "#64748B" }}>
+              {es["myWebs.loading"]}
+            </p>
+            {/* The list's place, still, while it is looked for (sprint 36 día 5): three bars the
+                height of a row, no pulse in them — the sentence above is what says it is loading. */}
+            <div aria-hidden="true" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {[0, 1, 2].map((row) => (
+                <span
+                  key={row}
+                  className="ui-skeleton"
+                  data-ui-skeleton="up"
+                  style={{ display: "block", height: 58, borderRadius: 12 }}
+                />
+              ))}
+            </div>
+          </>
         ) : sites.length === 0 ? (
           <>
             <p style={{ margin: 0, fontSize: 15, color: "#334155" }}>{es["myWebs.empty"]}</p>

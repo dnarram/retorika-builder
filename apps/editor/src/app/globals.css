@@ -872,6 +872,62 @@
 }
 
 /**
+ * **A sentence changing in place** (sprint 36 día 5): the new one fades in over a copy of the old one
+ * fading out, in the same box, on `--ui-fast`. Opacity only — what changes with the focus has no
+ * travel and no rhythm, which is what arrives (`ui-words`). The copy fills `forwards`, so it is
+ * transparent for the frame before it is removed on its own `animationend`.
+ */
+@utility ui-cross-in {
+  animation: ui-fade-in var(--ui-fast) var(--ui-ease) backwards;
+}
+
+@utility ui-cross-out {
+  animation: ui-fade-out var(--ui-fast) var(--ui-ease) forwards;
+}
+
+/**
+ * **A panel's rows arrive one after another** (sprint 36 día 5): the panel host marks a panel the
+ * moment it opens (`data-ui-rows`, for 450 ms) and its blocks — the card's own children, the header
+ * first — fade in `--ui-stagger` apart. **Opacity only**: these are controls about to be pressed, and
+ * what is about to be pressed does not move under the hand (sprint 35 día 3, the canvas's popups).
+ * **Six steps, not seven**: the panel guard measures at 350 ms, and the sixth row is at rest at
+ * 5 × 40 + 120 = 320. Only on opening — a block that appears later, because an option was chosen,
+ * arrives with nothing to wait for. Under reduced motion the delays are zeroed with the travel.
+ */
+[data-ui-rows] > * {
+  animation: ui-fade-in var(--ui-fast) var(--ui-ease) backwards;
+  animation-delay: var(--ui-row-delay, 0ms);
+}
+
+[data-ui-rows] > :nth-child(2) {
+  --ui-row-delay: calc(var(--ui-stagger) * 1);
+}
+
+[data-ui-rows] > :nth-child(3) {
+  --ui-row-delay: calc(var(--ui-stagger) * 2);
+}
+
+[data-ui-rows] > :nth-child(4) {
+  --ui-row-delay: calc(var(--ui-stagger) * 3);
+}
+
+[data-ui-rows] > :nth-child(5) {
+  --ui-row-delay: calc(var(--ui-stagger) * 4);
+}
+
+[data-ui-rows] > :nth-child(n + 6) {
+  --ui-row-delay: calc(var(--ui-stagger) * 5);
+}
+
+/**
+ * **A skeleton leaving** when what it stood in for has arrived: it fades on `--ui-fast` and is
+ * removed on its own `animationend`.
+ */
+[data-ui-skeleton="gone"] {
+  animation: ui-fade-out var(--ui-fast) var(--ui-ease) forwards;
+}
+
+/**
  * **A ring from where the finger or the pointer pressed.** The press writes `--ui-x` and `--ui-y`
  * (`editor/ripple.ts`, one delegated listener per shell) and restarts the animation by the
  * `data-ui-press` attribute; the circle grows from that point to past the control's corners and
@@ -1039,9 +1095,17 @@
   counter-reset: ui-n var(--ui-n, 0);
 
   /* `::after`, so a counted number inside a control that ripples keeps its ring (the ripple is on
-     `::before`); a number is never a tab, so it never meets the underline that also draws there. */
+     `::before`); a number is never a tab, so it never meets the underline that also draws there.
+     **`/ ""`: the counter is drawn and never read** (sprint 36 día 5) — the element holds the real
+     number as its own text, hidden from the eye, so a reader and a search find the number and never
+     the frames of the count. */
   &::after {
-    content: counter(ui-n);
+    content: counter(ui-n) / "";
+  }
+
+  /* From zero the first time it is drawn: a transition has no «before» on a new element. */
+  @starting-style {
+    --ui-n: 0;
   }
 }
 
