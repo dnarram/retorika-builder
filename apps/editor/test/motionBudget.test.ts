@@ -704,8 +704,15 @@ describe("a screen hands over to the next", () => {
       expect(
         rule.prelude,
         `«${rule.prelude}» names an element at rest: a name is a stacking context nobody asked for`,
-      ).toMatch(/^:root\[data-rb-screen\]/);
+      ).toMatch(/^:root\[data-rb-(screen|scene)/);
     }
+  });
+
+  it("takes no pointer while it runs: a press during a transition reaches the page", () => {
+    const layer = RULES_ALL.find((rule) => rule.prelude === "::view-transition")?.body ?? "";
+    expect(layer, "the transition's pseudo-element tree is hit-testable").toMatch(
+      /pointer-events:\s*none/,
+    );
   });
 
   it("never fades the page around what travels", () => {

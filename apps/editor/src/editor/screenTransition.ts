@@ -31,15 +31,42 @@ export type ScreenDirection = "forward" | "back";
 /** The root's attribute while a screen transition is in flight; its value is the direction. */
 export const SCREEN_ATTRIBUTE = "data-rb-screen";
 
+/** The root's second attribute while one of the two scenes is in flight (sprint 36 día 4): the
+ * stylesheet names the two ends of the scene only under it. */
+export const SCENE_ATTRIBUTE = "data-rb-scene";
+
+/**
+ * **The longest a scene may hold the page** (David's adjustment 3 of 11 November 2026). While the
+ * update callback's promise is pending the document is frozen — no scroll, no clicks — so a scene
+ * waiting for its destination to paint waits this long and no longer: at the cap the transition is
+ * skipped, rendering resumes and the destination appears without the scene. «Medio segundo se lee
+ * como una transición; un segundo, como un cuelgue.»
+ */
+export const SCENE_WAIT_CAP_MS = 500;
+
 interface TransitionLike {
   finished: Promise<unknown>;
   ready: Promise<unknown>;
   updateCallbackDone: Promise<unknown>;
+  skipTransition?: () => void;
 }
 
 type WithTransitions = Document & {
-  startViewTransition?: (update: () => void) => TransitionLike;
+  startViewTransition?: (update: () => void | Promise<void>) => TransitionLike;
 };
+
+export interface ScreenOptions {
+  direction: ScreenDirection;
+  /** One of the two scenes of the second register, named on the root while it runs. */
+  scene?: "canvas";
+  /**
+   * **The scene does not start until the destination is painted** (David's condition 1): a promise
+   * the update awaits before the browser captures the new screen, so the old one stays on screen,
+   * frozen, until the destination exists — never 400 ms of hole. Raced against `SCENE_WAIT_CAP_MS`.
+   */
+  settled?: () => Promise<unknown>;
+  cap?: number;
+}
 
 /** Whether this document can hand one screen over to the next: asked of the function itself. */
 export function canTransition(doc: Document): boolean {
@@ -58,7 +85,7 @@ let serial = 0;
  */
 export function transitionScreen(
   update: () => void,
-  { direction }: { direction: ScreenDirection },
+  { direction, scene, settled, cap = SCENE_WAIT_CAP_MS }: ScreenOptions,
   doc: Document = document,
 ): boolean {
   const start = (doc as WithTransitions).startViewTransition;
@@ -67,17 +94,31 @@ export function transitionScreen(
     return false;
   }
   const root = doc.documentElement;
+  const view = doc.defaultView;
   serial += 1;
   const mine = serial;
   owner.set(doc, mine);
   root.setAttribute(SCREEN_ATTRIBUTE, direction);
-  const transition = start.call(doc, () => {
+  if (scene) root.setAttribute(SCENE_ATTRIBUTE, scene);
+  let transition: TransitionLike | undefined;
+  transition = start.call(doc, async () => {
     flushSync(update);
+    if (!settled) return;
+    // The destination, or the cap — whichever comes first. At the cap the scene is skipped: the
+    // page is shown as it is, and the destination finishes arriving in plain sight.
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const capped = new Promise<"cap">((resolve) => {
+      timer = (view ?? globalThis).setTimeout(() => resolve("cap"), cap);
+    });
+    const first = await Promise.race([settled().then(() => "painted" as const), capped]);
+    if (timer !== undefined) (view ?? globalThis).clearTimeout(timer);
+    if (first === "cap") transition?.skipTransition?.();
   });
   const done = () => {
     if (owner.get(doc) !== mine) return;
     owner.delete(doc);
     root.removeAttribute(SCREEN_ATTRIBUTE);
+    root.removeAttribute(SCENE_ATTRIBUTE);
   };
   transition.finished.then(done, done);
   transition.ready.catch(() => undefined);

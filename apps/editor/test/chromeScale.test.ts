@@ -257,6 +257,11 @@ describe("the canvas's copy of the scale", () => {
     // becoming the canvas, the building screen handing over — and nothing inside the preview is a
     // scene. The ceiling inside the frame stays 200 ms.
     "scene",
+    // Not values of the scale at all: the place of a row of the chrome, or of a word, in a queue
+    // that arrives one after another (sprint 36 días 2 and 4) — set by the caller on each element
+    // and zeroed under reduced motion. The preview has no queue to pace.
+    "row-delay",
+    "word-delay",
     // The one `filter` the editor may animate. Día 7 measures `ui-blur-in` on a phone before the
     // canvas's popups wear it; the day it does, this line goes and the pair above gains `blur`.
     "blur",

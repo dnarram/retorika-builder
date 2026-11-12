@@ -64,8 +64,9 @@ import {
 } from "@retorika/schema";
 import type { FontKey } from "@retorika/tokens";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { type ArrowRun, accumulate, moves, RUN_IDLE_MS } from "../editor/arrowRun.ts";
-import { BuildingScreen } from "../editor/BuildingScreen.tsx";
+import { BuildingScreen, type BuildingStage } from "../editor/BuildingScreen.tsx";
 import {
   BAR_INSET,
   type Bounds,
@@ -720,6 +721,8 @@ export function Editor({
   toast,
   onDismissToast,
   onBack,
+  onCanvasPainted,
+  arrivedByScene = false,
 }: {
   title: string;
   document: RetorikaDocument;
@@ -918,8 +921,21 @@ export function Editor({
   toast: DeleteToast | null;
   onDismissToast: () => void;
   onBack: () => void;
+  /**
+   * **The canvas has painted** (sprint 36 día 4): called once, two frames after the canvas's first
+   * document has loaded, so the scene that turns a proposal into this canvas can wait for the
+   * destination before the browser captures it (David's condition 1). Nothing else is told.
+   */
+  onCanvasPainted?: (() => void) | undefined;
+  /** Opened by the scene, so the chrome arrives after the canvas lands (`EditorShell`'s
+   * `arriving`); `false` for a session restored from this browser. */
+  arrivedByScene?: boolean | undefined;
 }) {
   const [state, setState] = useState<DownloadState>("idle");
+  /** Which real stage of the download the building screen says, and whether it is on its way
+   * out toward «Descargar» (sprint 36 día 4). */
+  const [buildingStage, setBuildingStage] = useState<BuildingStage | null>(null);
+  const [buildingLeaving, setBuildingLeaving] = useState(false);
   /** When «Descargar» (or «Descargar igualmente») was pressed — what the minimum is measured from. */
   const buildingStartedAt = useRef(0);
   // What `requestDownload` found the last time «Descargar» was pressed — `null` means neither
@@ -1819,6 +1835,26 @@ export function Editor({
    * `ui-fade-in` is unconditional now: the one arrival is the first one, which has no previous
    * frame to carry and does briefly show the surface colour underneath.
    */
+  /**
+   * **On `load`, and not a frame later.** `load` is when the first document has its fonts and is
+   * laid out; the scene's capture paints it. The first version waited two `requestAnimationFrame`s
+   * after it, and that is the one thing that cannot be waited for here: while the document is frozen
+   * for the scene's capture there are no rendering opportunities, so the frames never came, the
+   * scene hit its cap every time and was skipped — measured on 12 November 2026, `ready` never
+   * resolving and `finished` at 529 ms. Once: the frame is never reloaded, but `load` is guarded all
+   * the same. `__rbHoldCanvasMs` is the harness's hand on the clock (a timer does run while the
+   * document is frozen), for the walk that holds the canvas past the cap and asserts the editor
+   * appears regardless.
+   */
+  const paintedOnce = useRef(false);
+  function canvasPainted() {
+    if (paintedOnce.current) return;
+    paintedOnce.current = true;
+    const hold = (window as unknown as { __rbHoldCanvasMs?: number }).__rbHoldCanvasMs ?? 0;
+    if (hold > 0) setTimeout(() => onCanvasPainted?.(), hold);
+    else onCanvasPainted?.();
+  }
+
   function previewFrame() {
     return (
       <iframe
@@ -1832,6 +1868,7 @@ export function Editor({
           // look-ahead has usually wired already and `wireOnce` returns at its first line.
           record("load", { wired: liveDoc()?.documentElement.dataset["rbWired"] === "1" });
           wireOnce(event.currentTarget, "onload");
+          canvasPainted();
         }}
         className="absolute inset-0 h-full w-full border-0 bg-ui-surface ui-fade-in"
       />
@@ -8843,6 +8880,8 @@ export function Editor({
 
   async function download() {
     setState("downloading");
+    // The stages the screen says, each written as it starts (sprint 36 día 4): never by a timer.
+    flushSync(() => setBuildingStage("photos"));
     try {
       // The screen is already up since `requestDownload`; a press that skipped the gate starts
       // the clock here, which the measurement's own start already set.
@@ -8873,8 +8912,10 @@ export function Editor({
           form.append(field, new File([blob], file, { type: blob.type }));
         }
       }
+      flushSync(() => setBuildingStage("preparing"));
       const response = await fetch("/api/download", { method: "POST", body: form });
       if (response.status === 429) {
+        setBuildingStage(null);
         setState("busy");
         return;
       }
@@ -8890,10 +8931,21 @@ export function Editor({
       link.download = filenameFrom(response, "mi-web.zip");
       link.click();
       URL.revokeObjectURL(url);
+      // The screen leaves toward «Descargar» (sprint 36 día 4), and **the state ends now**: what
+      // leaves must not block (sprint 35's rule for every exit). The shell is interactive and the
+      // keyboard is back on «Descargar» in this frame; the screen stays for its 400 ms only as a
+      // surface that takes no pointer (`[data-leaving="build"]`), and `buildLeft` takes it down.
+      setBuildingLeaving(true);
       setState("idle");
     } catch {
+      setBuildingStage(null);
       setState("error");
     }
+  }
+
+  function buildLeft() {
+    setBuildingLeaving(false);
+    setBuildingStage(null);
   }
 
   /**
@@ -8921,6 +8973,9 @@ export function Editor({
     // 13 October 2026 the one with no signal at all — is covered too.
     buildingStartedAt.current = performance.now();
     setState("preparing");
+    // Each stage is on screen before it starts, not when React next renders: `flushSync` commits
+    // the line, then the stage runs. The walk measures the line against the request it names.
+    flushSync(() => setBuildingStage("measuring"));
     const overflow = await measureOverflow(doc, { hostDocument: window.document, fontUrls });
     const gate = downloadGateFor(
       countPhotos(doc),
@@ -8935,6 +8990,7 @@ export function Editor({
       void download();
       return;
     }
+    setBuildingStage(null);
     // Back to idle **before** the dialog opens: the screen and the dialogs share `z-20`, and a
     // veil over the dialog would hide «Descargar igualmente» behind it.
     setState("idle");
@@ -9077,8 +9133,13 @@ export function Editor({
        */
       overlay={
         <>
-          {state === "preparing" || state === "downloading" ? (
-            <BuildingScreen returnFocusTo="download" />
+          {state === "preparing" || state === "downloading" || buildingLeaving ? (
+            <BuildingScreen
+              returnFocusTo="download"
+              stage={buildingStage}
+              leaving={buildingLeaving}
+              onLeft={buildLeft}
+            />
           ) : null}
           {downloadDialog?.kind === "photosFailed" ? (
             <PhotosFailedDialog
@@ -9238,6 +9299,7 @@ export function Editor({
       // on the warning path, because the blocking check runs before it, so the block dialog worked
       // perfectly and the warning silently did nothing.
       onDownload={() => void requestDownload()}
+      arriving={arrivedByScene}
       helpLine={{
         ...helpSays,
         onUndo: undoFromHistory,

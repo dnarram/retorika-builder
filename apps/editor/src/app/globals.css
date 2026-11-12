@@ -454,6 +454,9 @@
 
 @utility ui-rise-in {
   animation: ui-rise-in var(--ui-base) var(--ui-ease-shape) backwards;
+  /* After the shorthand, which resets the delay: the caller's place in a queue (sprint 36 día 4,
+     the chrome arriving row by row around a canvas that has just landed), `0ms` for everybody else. */
+  animation-delay: var(--ui-row-delay, 0ms);
 }
 
 :where([aria-modal="true"]) {
@@ -1075,6 +1078,27 @@
   animation-timing-function: var(--ui-ease-shape);
 }
 
+/**
+ * **The two ends of the canvas scene, named only while it runs** (sprint 36 día 4): the thumbnail
+ * of the proposal that was pressed and the editor's canvas card. In one direction the thumbnail is
+ * the old capture and the live canvas the new; on the way back, the other way round. The card that
+ * the canvas returns to has arrived already — it does not play its entrance a second time.
+ */
+:root[data-rb-scene="canvas"] [data-rb-scene-from],
+:root[data-rb-scene="canvas"] [data-testid="canvas-card"] {
+  view-transition-name: rb-scene-canvas;
+}
+
+[data-rb-returned].ui-reveal {
+  animation: none;
+}
+
+/* The building screen's veil, while its card contracts toward «Descargar» (`ui-scene-build`). */
+[data-leaving="build"] {
+  animation: ui-fade-out var(--ui-fast) var(--ui-ease) forwards;
+  pointer-events: none;
+}
+
 @keyframes ui-scene-build {
   to {
     opacity: 0;
@@ -1121,6 +1145,19 @@
 
 [data-rb-steps][data-rb-chained] > .ui-reveal {
   animation: none;
+}
+
+/**
+ * **The transition is paint, not a surface** (sprint 36 día 4). The pseudo-element tree of a view
+ * transition is hit-testable by default, so for the length of a scene a press landed on it and
+ * reached nothing — the sprint 35 lesson («a raw click lands on the root»), met again by eighty
+ * walks that open the editor and press a section at once. The real page is in its final state from
+ * the first frame, which is the whole argument for a view transition, so a press during one goes
+ * to the page: the layer is painted over it and takes no pointer. `pointer-events` inherits, so the
+ * root is enough for every group, old and new.
+ */
+::view-transition {
+  pointer-events: none;
 }
 
 ::view-transition-group(root) {
@@ -1227,6 +1264,10 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+    /* A queue's places too (sprint 36 día 4): a row of the chrome or a word that waited its turn
+       and then popped would be a wait with nothing to wait for. The travel goes; so does the order. */
+    --ui-row-delay: 0ms !important;
+    --ui-word-delay: 0ms !important;
   }
 }
 

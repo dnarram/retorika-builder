@@ -28,12 +28,15 @@ export function HelpLine({
   onUndo,
   onDismiss,
   className = "",
+  style,
 }: {
   live: HelpLineSays;
   quiet: HelpLineSays;
   onUndo: () => void;
   onDismiss: () => void;
   className?: string;
+  /** The shell's, for the line's place in the chrome's arrival (sprint 36 día 4). */
+  style?: React.CSSProperties | undefined;
 }) {
   const shown = live.text !== "" ? live : quiet;
   return (
@@ -42,6 +45,7 @@ export function HelpLine({
       data-help-tone={shown.tone}
       data-help-child={shown.child}
       className={`flex h-8 shrink-0 items-center gap-3 overflow-hidden px-1 text-[13px] leading-4 ${className}`}
+      style={style}
     >
       <p
         data-testid="help-line-live"

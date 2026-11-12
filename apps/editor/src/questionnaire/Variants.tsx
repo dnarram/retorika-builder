@@ -31,6 +31,7 @@ import {
 } from "@retorika/schema";
 import { withFamily, withOwnFont, withPalette, withScale, withTypePair } from "@retorika/tokens";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { loadAccountDesignTools, saveAccountDesignTools } from "../account/designTools.ts";
 import { fetchSiteFonts, reconcileSiteFonts, siteFontFiles } from "../account/fontStorage.ts";
 import {
@@ -88,6 +89,7 @@ import {
 import { withFontUrls, withPhotoUrls } from "../editor/previewDocument.ts";
 import { record } from "../editor/probe.ts";
 import { sampleUrl } from "../editor/samplePhotos.ts";
+import { transitionScreen } from "../editor/screenTransition.ts";
 import { useMediaQuery } from "../editor/viewport.ts";
 import es from "../locales/es.json" with { type: "json" };
 import { type DeleteToast, Editor, type SectionOffer } from "./Editor.tsx";
@@ -181,7 +183,17 @@ const CAPTIONS: readonly { titleKey: keyof typeof es; captionKey: keyof typeof e
  * page, whatever the row around it is doing. `srcDoc` never changes with the scale, so the frame
  * is not reloaded when the window is resized.
  */
-function ThumbnailFrame({ html, title }: { html: string; title: string }) {
+function ThumbnailFrame({
+  html,
+  title,
+  named = false,
+}: {
+  html: string;
+  title: string;
+  /** One end of the canvas scene (sprint 36 día 4): `data-rb-scene-from`, which the stylesheet
+   * names `rb-scene-canvas` while the scene runs. */
+  named?: boolean;
+}) {
   const box = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(DESKTOP_THUMBNAIL_SCALE);
   useEffect(() => {
@@ -197,6 +209,7 @@ function ThumbnailFrame({ html, title }: { html: string; title: string }) {
   return (
     <div
       ref={box}
+      data-rb-scene-from={named ? "" : undefined}
       /**
        * **The border is what answers the pointer here, and that is a decision rather than a
        * preference.** A scale on the thumbnail would be a `transform` on the ancestor of a live
@@ -373,6 +386,53 @@ export function Variants({
     initHistories(initialDocuments ?? generateVariants(initial).map((site) => site.document)),
   );
   const [openIndex, setOpenIndex] = useState<number | null>(initialOpenIndex);
+  /**
+   * **The proposal becomes the canvas, and the canvas becomes its proposal** (sprint 36 día 4, the
+   * first of the two scenes of the second register). `sceneFrom` is the card whose thumbnail is one
+   * end of the scene — named `rb-scene-canvas` by the stylesheet while the scene runs, the canvas
+   * card being the other end; `returned` is the card the canvas came back to, which has arrived
+   * already and skips its entrance. `arrivedByScene` is what the editor's chrome arrives after; a
+   * session restored from this browser has no scene, and its chrome is simply there.
+   *
+   * The scene does not start until the canvas has painted: `painted` is resolved by the editor two
+   * frames after its first document loads, and `transitionScreen` waits for it — at most 500 ms,
+   * after which the editor appears without the scene (David's adjustment 3).
+   */
+  const [sceneFrom, setSceneFrom] = useState<number | null>(null);
+  const [returned, setReturned] = useState<number | null>(null);
+  const [arrivedByScene, setArrivedByScene] = useState(false);
+  const painted = useRef<{ promise: Promise<void>; resolve: () => void } | null>(null);
+
+  function openProposal(index: number) {
+    let resolve = () => {};
+    const promise = new Promise<void>((done) => {
+      resolve = done;
+    });
+    painted.current = { promise, resolve };
+    // The thumbnail is named before the browser captures the old screen: synchronously.
+    flushSync(() => {
+      setSceneFrom(index);
+      setReturned(null);
+    });
+    transitionScreen(
+      () => {
+        setArrivedByScene(true);
+        setOpenIndex(index);
+      },
+      { direction: "forward", scene: "canvas", settled: () => promise },
+    );
+  }
+
+  function closeProposal() {
+    const index = openIndex;
+    transitionScreen(
+      () => {
+        setOpenIndex(null);
+        setReturned(index);
+      },
+      { direction: "back", scene: "canvas" },
+    );
+  }
 
   /**
    * Which page of the open variant the canvas is showing.
@@ -1773,8 +1833,10 @@ export function Variants({
           onDismissToast={dismissToast}
           onBack={() => {
             dismissToast();
-            setOpenIndex(null);
+            closeProposal();
           }}
+          onCanvasPainted={() => painted.current?.resolve()}
+          arrivedByScene={arrivedByScene}
         />
         {accountOpen ? (
           <SaveToAccountDialog
@@ -1902,6 +1964,7 @@ export function Variants({
                  * still move it — the defect that rule exists to prevent, on exactly these cards.
                  */
                 className={`ui-reveal ui-interactive ui-lift${highlighted ? " ui-ring-once" : ""}`}
+                data-rb-returned={returned === index ? "" : undefined}
                 style={{
                   ...reveal(index),
                   display: "flex",
@@ -1943,7 +2006,7 @@ export function Variants({
 
                 <button
                   type="button"
-                  onClick={() => setOpenIndex(index)}
+                  onClick={() => openProposal(index)}
                   style={{
                     padding: 0,
                     border: 0,
@@ -1953,7 +2016,11 @@ export function Variants({
                   }}
                   aria-label={`${es["variants.viewFull"]}: ${es[caption.titleKey]}`}
                 >
-                  <ThumbnailFrame html={html} title={es[caption.titleKey]} />
+                  <ThumbnailFrame
+                    html={html}
+                    title={es[caption.titleKey]}
+                    named={sceneFrom === index}
+                  />
                 </button>
 
                 <span style={{ fontSize: 12, lineHeight: 1.4, color: "#64748B" }}>
@@ -1962,7 +2029,7 @@ export function Variants({
 
                 <button
                   type="button"
-                  onClick={() => setOpenIndex(index)}
+                  onClick={() => openProposal(index)}
                   className="ui-interactive"
                   style={{
                     fontSize: 12,
@@ -1987,7 +2054,7 @@ export function Variants({
 
                 <button
                   type="button"
-                  onClick={() => setOpenIndex(index)}
+                  onClick={() => openProposal(index)}
                   className="ui-interactive ui-lift"
                   style={{
                     display: "flex",
