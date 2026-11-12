@@ -8847,5 +8847,10 @@ sus 400 ms solo como superficie sin puntero, y `buildLeft` la retira.
 **Suites.** `typecheck`, `lint`, `test` (3908 en 185 ficheros, 4 más), invariantes (27), golden (27,
 cero cambios: nada viaja), e2e completa: primera pasada 80 rojos de la causa de arriba (2541 s por los
 tiempos agotados); segunda, 319 verdes y 2 rojos (la salida que bloqueaba); **tercera, 321 verdes y 1
-omitida en 1475 s, limpia** — las 317 de antes y las 4 nuevas.
+omitida en 1475 s, limpia** — las 317 de antes y las 4 nuevas. **Y en la CI, el límite del paso**: 28,8
+min en el runner de la #369 y cortado a los 30 en el de la #370 con todo verde en local; los ~100 s del
+día son la escena y la espera de las caminatas tras cada una de las 63 aperturas, tiempo real y no
+desperdicio. El paso pasa a 35 y el trabajo a 45 (`ci.yml`, con la medida escrita donde están las
+anteriores), para que David lo acepte con la PR; partir la suite en dos *shards* es la forma de bajar
+el reloj sin bajar los minutos, y es una decisión sobre los minutos de Actions, no de este día.
 
