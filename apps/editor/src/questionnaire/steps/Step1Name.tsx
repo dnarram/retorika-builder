@@ -176,7 +176,7 @@ export function Step1Name({
               {es["questionnaire.step1.logo.title"]}
             </span>
             <span style={{ fontSize: 13, lineHeight: 1.45, color: "#64748B" }}>{logoHelp()}</span>
-            {rejection ? <FieldError>{rejection}</FieldError> : null}
+            {rejection ? <FieldError notice>{rejection}</FieldError> : null}
           </div>
           <label
             htmlFor="logo"

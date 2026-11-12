@@ -521,6 +521,13 @@
   animation: ui-rise-out var(--ui-fast) var(--ui-ease) forwards;
 }
 
+/* A whole screen fading before the next is asked for (`leaveScreen`, sprint 36 día 3): the real
+   element, not a copy, and no pointer while it goes — a second press would ask twice. */
+[data-leaving="screen"] {
+  animation: ui-fade-out var(--ui-fast) var(--ui-ease) forwards;
+  pointer-events: none;
+}
+
 /* The copy's words, painted rather than written (`wordsAsPaint` in `editor/leaving.ts`): the copy
    has no text a locator, a label or the browser's find-in-page could take for the real thing. */
 [data-leaving-text]::before {
@@ -1077,6 +1084,130 @@
 
 @utility ui-scene-build {
   animation: ui-scene-build var(--ui-scene) var(--ui-ease-shape) forwards;
+}
+
+/**
+ * ## A screen hands over to the next (sprint 36 día 3)
+ *
+ * `editor/screenTransition.ts` runs a view transition of the document when a question gives way to
+ * the next, or the fifth to the three proposals, and writes the direction on the root
+ * (`data-rb-screen`) for as long as it runs. **The names exist only then**, the way the canvas names
+ * its sections only while they slide: the question on screen is `rb-question`, its row of dots is
+ * `rb-progress`, and nothing else is named — a name on an element at rest is a stacking context
+ * nobody asked for.
+ *
+ * **The page around the question does not fade.** The root is the next screen at once — its old
+ * capture hidden, its new one unanimated — and only the named things travel over it: the question
+ * leaves 24 px towards where the person is going and the next comes from where they came from
+ * (reversed for «Volver»), on `--ui-base` and the shape curve; the dots go from where they were to
+ * where they are. The proposals arrive with their own entrances, live under the leaving question.
+ *
+ * **A question reached by a transition does not arrive twice**: its card's own entrance
+ * (`ui-reveal`) is for the first question, and `[data-rb-chained]` takes it off every one after —
+ * set in the transition's own update, so the card is mounted already without it.
+ *
+ * **Under `prefers-reduced-motion` nothing travels and nothing is cut**: the question and the dots
+ * cross-fade in `--ui-fast`, in place («retirar el recorrido, no la continuidad»). The travel is
+ * declared under `no-preference` and the fade under `reduce`, so neither can win the other's cascade
+ * by a more specific selector. The pseudo-elements are not reached by the global block's `*`.
+ */
+:root[data-rb-screen] [data-rb-steps] > * {
+  view-transition-name: rb-question;
+}
+
+:root[data-rb-screen] [data-rb-steps] [data-rb-progress] {
+  view-transition-name: rb-progress;
+}
+
+[data-rb-steps][data-rb-chained] > .ui-reveal {
+  animation: none;
+}
+
+::view-transition-group(root) {
+  animation: none;
+}
+
+::view-transition-old(root) {
+  display: none;
+}
+
+::view-transition-new(root) {
+  animation: none;
+}
+
+@keyframes ui-question-out {
+  to {
+    opacity: 0;
+    transform: translateX(-24px);
+  }
+}
+
+@keyframes ui-question-in {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+}
+
+@keyframes ui-question-out-back {
+  to {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+}
+
+@keyframes ui-question-in-back {
+  from {
+    opacity: 0;
+    transform: translateX(-24px);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  ::view-transition-group(rb-question),
+  ::view-transition-group(rb-progress) {
+    animation-duration: var(--ui-base);
+    animation-timing-function: var(--ui-ease-shape);
+  }
+
+  ::view-transition-old(rb-question) {
+    animation: ui-question-out var(--ui-base) var(--ui-ease-shape) both;
+  }
+
+  ::view-transition-new(rb-question) {
+    animation: ui-question-in var(--ui-base) var(--ui-ease-shape) both;
+  }
+
+  :root[data-rb-screen="back"]::view-transition-old(rb-question) {
+    animation-name: ui-question-out-back;
+  }
+
+  :root[data-rb-screen="back"]::view-transition-new(rb-question) {
+    animation-name: ui-question-in-back;
+  }
+
+  ::view-transition-old(rb-progress),
+  ::view-transition-new(rb-progress) {
+    animation-duration: var(--ui-base);
+    animation-timing-function: var(--ui-ease-shape);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(rb-question),
+  ::view-transition-group(rb-progress) {
+    animation: none;
+  }
+
+  ::view-transition-old(rb-question),
+  ::view-transition-old(rb-progress) {
+    animation: ui-fade-out var(--ui-fast) var(--ui-ease) both;
+  }
+
+  ::view-transition-new(rb-question),
+  ::view-transition-new(rb-progress) {
+    animation: ui-fade-in var(--ui-fast) var(--ui-ease) both;
+  }
 }
 
 /**

@@ -8652,3 +8652,95 @@ que no debía existir en ningún guion.
 **Suites.** `typecheck`, `lint`, `test` (3884 en 183 ficheros, 21 más), invariantes (27), golden (27,
 cero cambios), e2e filtrada a los sprints 35 y 36: **21 verdes en 105 s**.
 
+### Día 3 — las pantallas se encadenan (PR de `feat/las-pantallas-se-encadenan`)
+
+Una pregunta ya no se corta en la siguiente: se va, y la siguiente llega.
+
+**El módulo** (`editor/screenTransition.ts`, el molde de `sectionSlide.ts`): `transitionScreen(update,
+{ direction })` aplica la pantalla nueva dentro de `document.startViewTransition` y escribe la dirección
+en la raíz (`data-rb-screen="forward|back"`) mientras dura; donde el motor no tiene transiciones de
+vista, la pantalla cambia al instante, como siempre. **`flushSync`, porque la captura no espera a
+React**: el navegador llama a la actualización un fotograma después de capturar la pantalla vieja y
+captura la nueva en cuanto vuelve, y un `setState` hecho ahí sin `flushSync` solo se programa — la
+captura nueva sería la vieja otra vez. `screenTransition.test.ts` lo mide renderizando React de verdad
+en happy-dom, con un `startViewTransition` falso que captura antes y después (cinco pruebas; saboteo:
+sin `flushSync`, «renders React's new screen before the browser captures it» roja). Un fichero de
+servidor no lo toca: solo `Questionnaire.tsx`, que es cliente. Lo que pasa por aquí es solo lo que hace
+una persona: una sesión restaurada al cargar, una letra o una casilla, no.
+
+**El cuestionario.** Cada «Siguiente», «Saltar», «Atrás» y «Crear mi web» pasa por `go(next,
+direction)`. Las preguntas viven en un envoltorio `display: contents` (`[data-rb-steps]`: la tarjeta
+sigue siendo el elemento flexible del armazón y nada se mueve); **los nombres solo existen mientras hay
+transición** (`:root[data-rb-screen] [data-rb-steps] > *` es `rb-question`, sus puntos
+`[data-rb-progress]` son `rb-progress`), como el lienzo nombra sus secciones solo mientras se deslizan:
+un nombre en un elemento en reposo es un contexto de apilamiento que nadie pidió. **La raíz no se
+funde** —su captura vieja oculta, la nueva sin animar—: la pregunta se va 24 px hacia donde va la
+persona y la siguiente llega desde donde venía, en `--ui-base` con la curva de forma, al revés con
+«Atrás»; los puntos viajan solos de donde estaban a donde están. **Una pregunta que llega por la
+transición no llega dos veces**: la tarjeta trae su `ui-reveal` desde el sprint 22, y
+`[data-rb-chained]` —puesto dentro de la propia actualización, así que la tarjeta se monta ya sin él—
+se lo quita a toda pregunta después de la primera. «Volver a empezar» lo repone. La quinta da paso a
+las propuestas por el mismo camino: la pregunta se va y las tres llegan con su entrada de siempre,
+vivas bajo ella. **Bajo `prefers-reduced-motion` nada viaja y nada se corta**: pregunta y puntos se
+funden en su sitio en `--ui-fast`. El recorrido va bajo `no-preference` y el fundido bajo `reduce`, para
+que ninguno gane al otro por un selector más específico — el de «Atrás», `:root[...]::view-transition-old(...)`,
+habría ganado a cualquier regla de `reduce` sin el atributo.
+
+**La respuesta que falta tiembla** (`shakeInvalid` en `ui.tsx`): tras pulsar «Siguiente», en el
+fotograma siguiente —cuando React ya ha dibujado lo que la pulsación decidió—, cada campo marcado
+inválido y cada error de la pulsación tiemblan una vez (`ui-shake`); una segunda pulsación, otra vez. Es
+**la única respuesta a un error del cuestionario, y no es un pulso de atención**: ocurre porque la
+persona pulsó, sobre lo que la pulsación no pudo. `TextField` dice ahora `aria-invalid` (antes el error
+solo se dibujaba en rojo); `FieldError` distingue el error de la pulsación del aviso (`notice`: el logo
+que no se pudo guardar, que no tiembla porque no es lo que falló). La clase se quita y se pone con una
+lectura de estilo en medio, y **no se quita al final**: en un error, quitarla le devolvería su propia
+entrada (`ui-fade-in`), que se reproduciría. Bajo `reduce`, el bloque global la deja en nada.
+
+**La landing se despide** (`app/StartLink.tsx`, cliente porque la portada es de servidor): el mismo
+`Link` —misma dirección, mismo prefetch, Ctrl/Cmd sigue abriendo pestaña— cuyo `onNavigate` (Next 16.4,
+solo para la navegación que Next haría) cancela y vuelve a pedir lo mismo cuando la portada se ha
+fundido: `leaveScreen` en `leaving.ts` marca el `<main>` real `data-leaving="screen"` (`ui-fade-out` en
+`--ui-fast`, sin puntero mientras se va) y pide `/empezar` en su `animationend` o a los 250 ms, una vez;
+con menos movimiento, al instante y sin marcar. La marca se quita si la portada vuelve sin
+reconstruirse. **Subrayado que se dibuja**: «Ya tengo cuenta» pierde su subrayado fijo y lo dibuja bajo
+el puntero y el teclado (`ui-underline`; un enlace en su propia línea, no dentro de una frase), y
+«Atrás» y «Saltar» lo mismo.
+
+**El presupuesto** gana siete aserciones: los nombres solo con `:root[data-rb-screen]`; la raíz nunca
+se funde; **cada parte de cada nombre que viaja** (`group`, `old`, `new`) tiene regla bajo `reduce`,
+quieta o en `--ui-fast`, nunca `0.01ms` ni `ui-question-*`; ninguna pantalla pasa de 200 ms salvo las
+escenas; el recorrido lateral solo como pseudoelemento (la comprobación de desbordamiento a 320/390/768
+mide cajas de la página, y una captura no lo es); la salida de la landing en `--ui-fast` y sin puntero;
+y la pregunta encadenada sin su entrada. **La tercera la corrigió su saboteo**: la primera versión
+pedía solo que el nombre tuviera *alguna* regla bajo `reduce`, y quitar la de la captura vieja de los
+puntos la dejaba verde — con el grupo en `animation: none`, esa captura hereda 0 s y se corta. Ahora se
+pide por parte. `leaving.test.ts` (+4) y `shakeInvalid.test.ts` (4).
+
+**Cinco caminatas nuevas** («sprint 36 día 3»), que graban desde dentro de la página cada transición
+(envolviendo `Document.prototype.startViewTransition` y leyendo las animaciones de sus
+pseudoelementos en `ready`) y cada animación que empieza: una pregunta da paso a la siguiente (grupo,
+salida `ui-question-out`, llegada `ui-question-in`, puntos aparte, ninguna animación en la raíz, todo
+≤ 200 ms; en reposo, la tarjeta sin `ui-reveal` y sin nombre; «Atrás» con las `-back`; **escribir siete
+letras no inicia ninguna**); la quinta da paso a las propuestas (la pregunta se va, nada nuevo nombrado,
+las tres con `ui-reveal`); la respuesta que falta (campo y error, una iteración cada uno; la segunda
+pulsación, otros dos; en reposo, sin desplazamiento; ninguna transición); la landing (el subrayado de
+«Ya tengo cuenta» de `scaleX(0)` a `scaleX(1)` al pasar; y **la petición del router a `/empezar`
+—cabecera `rsc`, nunca un prefetch— llega después del final del fundido**); y el gemelo con menos
+movimiento (el error dicho y el temblor en nada; la pregunta fundida en 120 ms sin grupo; en reposo, la
+misma caja que con movimiento; la landing sin fundido y la petición a menos de 50 ms de la pulsación).
+
+**Saboteos**, deshechos por sustitución inversa: un nombre en reposo → presupuesto rojo; la captura
+vieja de los puntos sin regla bajo `reduce` → verde la primera vez, roja con la aserción corregida; la
+raíz con su captura vieja visible → roja; la pregunta encadenada con su entrada → caminata roja
+(`ui-reveal` en vez de `none`); el temblor quitado de «Siguiente» → caminata roja; **sin
+`preventDefault` en la landing → verde la primera vez**: la caminata miraba en qué fotograma cambiaba la
+URL, y en desarrollo la ruta de las preguntas llega tarde pase lo que pase. Ahora cronometra la
+petición del router contra el final del fundido, y el saboteo la pone roja.
+
+**Suites.** `typecheck`, `lint`, `test` (3904 en 185 ficheros, 20 más), invariantes (27), golden (27,
+cero cambios), e2e completa: **317 verdes y 1 omitida en 1377 s, a la primera** — las 312 de antes y las
+5 nuevas, sin coste medible: las caminatas que esperan a que acabe una transición antes de pulsar
+suman menos de lo que varía la suite de una pasada a otra. Y una mirada en el navegador real, con la
+transición ralentizada diez veces: la pregunta vieja yéndose a la izquierda mientras la nueva llega,
+los puntos aparte, el resto quieto.
+
