@@ -11057,19 +11057,27 @@ describe("el panel y las herramientas llegan, no aparecen", () => {
    * Both report how much they saw, and every caller asserts on that first: an instrument that
    * observed nothing passes every assertion about what it observed, which is how this repository's
    * in-canvas overflow walk once ran green over zero elements.
+   *
+   * **The sampler looks for at least `ms` and until `act` has finished**, whichever is later (sprint
+   * 36 día 6). It used to stop at `ms` from its start, so on a runner slow enough for the act to
+   * outlast it — twelve presses under a twentyfold throttle — the last presses would have been
+   * watched by nobody, and the walk would have passed on what it never saw.
    */
   type Watch = {
     samples: { opacity: string; sections: number }[];
     events: { frames: number }[];
   };
+  /** How many readings say «the sampler looked» under a twentyfold CPU throttle: half the fewest a
+   * runner has given (29 on CI, 4 s, sprint 36 día 6). Without the throttle it stays at thirty. */
+  const THROTTLED_FLOOR = 15;
   async function watchPreviewWhile(
     page: Page,
     act: () => Promise<void>,
     ms = 3_000,
   ): Promise<Watch> {
     await page.evaluate((limit: number) => {
-      const bag = window as unknown as { __w: Watch };
-      bag.__w = { samples: [], events: [] };
+      const bag = window as unknown as { __w: Watch & { acted: boolean; done: boolean } };
+      bag.__w = { samples: [], events: [], acted: false, done: false };
       const started = performance.now();
 
       const record = () => {
@@ -11088,13 +11096,26 @@ describe("el panel y las herramientas llegan, no aparecen", () => {
           opacity: live ? Number(getComputedStyle(live).opacity).toFixed(2) : "gone",
           sections: doc ? doc.querySelectorAll("[data-section]").length : -1,
         });
-        if (performance.now() - started < limit) requestAnimationFrame(tick);
+        if (performance.now() - started < limit || !bag.__w.acted) requestAnimationFrame(tick);
+        else bag.__w.done = true;
       };
       requestAnimationFrame(tick);
     }, ms);
     await act();
-    await page.waitForTimeout(ms + 200);
-    return page.evaluate(() => (window as unknown as { __w: Watch }).__w);
+    await page.evaluate(() => {
+      (window as unknown as { __w: { acted: boolean } }).__w.acted = true;
+    });
+    await page.waitForFunction(
+      () => (window as unknown as { __w: { done: boolean } }).__w.done,
+      null,
+      {
+        timeout: ms + 30_000,
+      },
+    );
+    return page.evaluate(() => {
+      const { samples, events } = (window as unknown as { __w: Watch }).__w;
+      return { samples, events };
+    });
   }
 
   /** The gesture that turns the tools on, confirmation card and all. */
@@ -11195,8 +11216,11 @@ describe("el panel y las herramientas llegan, no aparecen", () => {
 
       // The twelve clicks land on the one frame there is, throttled or not. The sampler has to
       // have looked — an instrument that saw nothing passes everything — and no frame was ever
-      // added or taken away while it looked.
-      expect(watch.samples.length, "el muestreo no miró nada").toBeGreaterThan(30);
+      // added or taken away while it looked. **Fifteen, not thirty, under the throttle** (sprint
+      // 36 día 6): what a twentyfold throttle leaves is the runner's speed, not the product's —
+      // about 210 readings in these 4 s on a Mac, 29 on the CI runner the day thirty failed — and
+      // that it looked through the whole act is the sampler's own guarantee now, not the count's.
+      expect(watch.samples.length, "el muestreo no miró nada").toBeGreaterThan(THROTTLED_FLOOR);
       expect(
         watch.events.filter((event) => event.frames !== 1).length,
         "apareció o desapareció un marco durante los clics",
@@ -11241,8 +11265,9 @@ describe("el panel y las herramientas llegan, no aparecen", () => {
 
       // On and off are two redraws of the same document (sprint 26 día 4), so there is never a
       // second frame — not two at a time, as the buffered swap allowed, and not one at a time
-      // either. The sampler has to have looked for that to mean anything.
-      expect(watch.samples.length, "el muestreo no miró nada").toBeGreaterThan(30);
+      // either. The sampler has to have looked for that to mean anything — under the same
+      // throttle, so to the same floor as the twelve presses.
+      expect(watch.samples.length, "el muestreo no miró nada").toBeGreaterThan(THROTTLED_FLOOR);
       const most = watch.events.length === 0 ? 1 : Math.max(...watch.events.map((e) => e.frames));
       expect(most, `llegó a haber ${most} marcos a la vez`).toBe(1);
       // Still never blank, through two swaps on top of each other.
