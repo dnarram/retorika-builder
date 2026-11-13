@@ -9014,3 +9014,29 @@ cero cambios), e2e filtrada a las caminatas que miden geometría y movimiento �
 móvil», la guarda del panel, las pestañas, axe del editor, los días 2 y 7 del 35 y todo el 36—: **44
 verdes**. La suite completa corre en la CI de la PR: la batería al 18 % no da para veinticinco minutos.
 
+**Lo que enseñó la primera pasada completa, en la CI: dos rojos, ninguno del día.** (1) **Una carrera
+del logo, del producto y anterior al 36.** Elegir un logo lee el documento, espera a que el fichero se
+convierta en PNG y escribía el logo sobre el documento leído al principio: un «Quitar» pulsado en esa
+espera se deshacía solo cuando el fichero llegaba —el logo volvía, con el tamaño que «Quitar» había
+quitado— y un sitio de la marca pulsado en esa espera también. La caminata del panel de la marca del 35
+lo provocaba sin saberlo: su paso 7 «esperaba» al fichero nuevo con dos cosas que el viejo ya cumplía,
+y el 8 pulsaba «Quitar» con el nuevo a medio preparar. En local pasó cuatro de cuatro; con 300 ms de
+espera añadida tras `prepareLogo` falló igual que en la CI, en la misma línea y con la misma sesión
+guardada. **Arreglo**: cada elección y cada «Quitar» toman turno, y un fichero que termina después de
+un turno posterior no aterriza; el logo que sí aterriza se escribe contra el documento de ese instante
+(`setHeader` acepta el parche como función, que el reductor lee contra el presente). El paso 7 espera
+ahora al fichero nuevo por su propio `src`, y una caminata nueva («sprint 36 día 6 — un logo que tarda
+no deshace lo que se pulsó») retrasa 1,5 s cada logo desde la página (`canvas.toBlob`, lo último que
+espera `prepareLogo`; el producto no sabe nada) y pulsa «Quitar» y después «En medio» mientras uno se
+prepara. Saboteos: sin el turno, el logo vuelve (roja); con el documento de la elección, el sitio se
+pierde (roja); el reductor leyendo el documento anterior, la prueba unitaria roja. (2) **Un suelo que
+medía la máquina.** «El muestreo no miró nada» pedía más de 30 lecturas en 4 s **bajo una CPU
+estrangulada 20×**, y la CI dio 29; un Mac da unas 210. Antes de culpar al día se midió main contra la
+rama: 210–212 contra 208–211, y dejar el `::before` de la onda solo para la pulsación no movió nada
+(208–211), así que se quedó como estaba. El muestreador mira ahora **hasta que el acto termina**, no un
+tiempo fijo —con una ventana de 200 ms, la regla vieja dejaba de mirar a mitad de las doce pulsaciones
+(8 lecturas, roja) y la nueva las ve todas—, y el suelo de las dos caminatas estranguladas es 15, la
+mitad del menor visto; la que corre sin estrangular sigue en 30. **Suites**: `typecheck`, `lint`,
+`test` (3925, una más), invariantes (27), golden (27, sin cambios) y **e2e completa en local: 328
+verdes y 1 omitida en 1508 s**.
+
