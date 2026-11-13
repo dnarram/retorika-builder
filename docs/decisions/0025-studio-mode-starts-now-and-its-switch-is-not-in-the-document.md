@@ -112,6 +112,12 @@ device toggle at 1280px wide, and the undo and redo buttons were compressed to t
 declared size. It was fixed by refusing to let that row shrink. A labelled switch adds roughly 110px
 to the one row in this interface that has already proved it has none to give.
 
+**Note (13 November 2026, sprint 37 día 2).** The rail now has two layouts, the owner's choice
+([ADR 0072](0072-the-rail-has-two-layouts-and-the-layout-is-the-owners-in-this-browser.md)), and the
+switch is at the foot of both: under the fixed rail's items, as here, and at the foot of the radial
+layout's strip. A second switch of the same kind sits under it — «Menú radial», a setting of the person
+looking, kept in this browser for the reasons §2 and §3 give.
+
 ### 5. Off on a small screen means the tools are not offered, not that they are suspended
 
 The dossier §4 safeguard reads «En el móvil van siempre apagadas. Diseñar con rejilla en seis

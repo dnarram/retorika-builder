@@ -1690,6 +1690,19 @@ open survives.
   Whose call: nobody's yet, and it is a design question rather than a bug — where the switch goes when
   the rail is seven items. `REVIEW.md` has flagged the rail's own length as an open question since
   `Compartir` made it six; this is the first time that length has cost something measurable.
+
+  **Sprint 37 día 2 (13 November 2026) made it 65 px longer, and gave the owner a way out of it.** The
+  rail is eight items since «Menú» (sprint 30), scrolls since PR #172, and now carries a second switch
+  at its foot, «Menú radial» (ADR 0072): 51 px of switch and the rail's 14 px gap. Measured at 1280 ×
+  720 with the design tools on, the rail's content went from 743 to 808 px in 662 of room — it scrolled
+  81 px to reach its last control and now scrolls 146. The radial layout is the relief: its strip holds
+  the hub in its middle and the two switches at its foot, and nothing else. Still nothing guards height.
+
+  **Owed with it: the layout follows the browser, not the person.** «Menú radial» is kept in
+  `retorika.rail.v1` and nowhere else (ADR 0072 §5), so on another computer the owner finds the fixed
+  rail. The design-tools switch has the account half this lacks (`accounts.design_tools`, migration
+  0001, `account/designTools.ts`); its twin would be a column, a sibling module and the same
+  «browser refused / account refused» notice. Not built, and the switch says so in its `title`.
 - **The editor's preview never shows the typeface the ZIP ships, found on the way to the row above
   (2 October 2026) and not fixed.** The renderer emits `@font-face` with `fonts/*.woff2` relative,
   which is right for the ZIP and for `file://`. Inside the editor's `srcDoc` preview those eight

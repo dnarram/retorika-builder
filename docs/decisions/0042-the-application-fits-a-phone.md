@@ -123,6 +123,11 @@ decide si sigue o se va a Canva». On a phone it showed a sixth of each proposal
    sprint fix are written `it.fails` with the day named, so a merged pull request is never red and
    each day turns exactly one into `it`.
 
+**Note (13 November 2026, sprint 37 día 2).** From 721 px up the rail can be a radial menu instead of
+the 80 px column, the owner's choice ([ADR 0072](0072-the-rail-has-two-layouts-and-the-layout-is-the-owners-in-this-browser.md)).
+The phone's row of §2 does not change: at 720 px and under the rail is the bottom bar whichever layout
+was chosen, and the switch that chooses it is not drawn.
+
 ## What this does not decide
 
 - Anything about the published site. Rule 7, ADR 0030 and the renderer's CSS are untouched; the
