@@ -5,7 +5,8 @@
 > one place to read them from: what each decides in a sentence, what was added to it after it was
 > written and when, what development decided under your delegation rather than you, and what
 > signing it changes. Prepared on sprint 34 día 7, 6 November 2026, and brought up to date closing
-> sprint 35, 11 November 2026, and again on sprint 36 día 1 the same day. **Development does not sign.**
+> sprint 35, 11 November 2026, and again on sprint 36 día 1 the same day; checked closing sprint 36,
+> 13 November 2026, with nothing to add. **Development does not sign.**
 
 The sprint 34 plan counted 24 (0042, 0043, 0045–0066). ADR 0067 and ADR 0068 were written during
 sprint 34, ADR 0069 and ADR 0070 during sprint 35 (its día 4), and ADR 0071 on sprint 36 día 1, so the

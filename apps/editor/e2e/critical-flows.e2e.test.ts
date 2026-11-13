@@ -3223,11 +3223,30 @@ describe("sprint 9 día 4 — la barra flotante", () => {
       await expect(bar.locator(".rb-toolbar-swatch")).toHaveCount(4);
       await expect(bar.locator('.rb-toolbar-swatch[data-ref="color.surface"]')).toHaveCount(0);
 
-      const beforeSwatch = await storedSession(studio);
       await bar.locator('.rb-toolbar-swatch[data-ref="color.muted"]').click();
-      // Por los bytes, no por el tick: ver `sessionHolds`.
+      // Por los bytes, no por el tick: ver `sessionHolds`. **Y por los bytes de esta edición, no por
+      // cualquier cambio** (cierre del sprint 36): «la sesión cambió tras elegir el color» lo cumplía
+      // también el guardado que abrir la propuesta deja pendiente medio segundo, que desde la escena
+      // del día 4 cae justo después de la pulsación — y llegaba sin el color.
       await expect(studio.getByText("Guardado en este navegador")).toBeVisible();
-      await sessionHolds(studio, (raw) => raw !== beforeSwatch, "cambió tras elegir el color");
+      await sessionHolds(
+        studio,
+        (raw) => {
+          const session = JSON.parse(raw || "{}") as {
+            openIndex?: number;
+            documents?: {
+              pages?: { sections?: { content?: { id: string; style?: unknown }[] }[] }[];
+            }[];
+          };
+          const headline = session.documents?.[
+            session.openIndex ?? -1
+          ]?.pages?.[0]?.sections?.[0]?.content?.find((c) => c.id === "el-headline");
+          return (
+            JSON.stringify(headline?.style) === JSON.stringify({ color: { ref: "color.muted" } })
+          );
+        },
+        "guardó el color elegido",
+      );
 
       // The words are untouched, in the document rather than on the screen.
       expect(await frame.locator('[data-id="el-headline"]').textContent()).toBe(wordsBefore);
@@ -29600,6 +29619,69 @@ describe("sprint 36 día 7 — el lienzo responde", () => {
       await motionSettled(page);
       expect(await subject.evaluate((el) => getComputedStyle(el).rotate)).toBe("none");
       expect(await subject.evaluate((el) => el.hasAttribute("data-tilt"))).toBe(false);
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+
+  /**
+   * **The phone's row leans too** (closing sprint 36: the third of the three ghosts, the one día 7
+   * left to the unit tests and the sheet). On a phone the same drag reorders (ADR 0049 §7) and the
+   * ghost is drawn over the row it would trade places with; carried up and to the right, it leans
+   * the way the hand goes and stands straight once the hand is still.
+   */
+  it("con movimiento: en la vista de móvil, la fila que se arrastra se inclina hacia donde va y se endereza al parar", async () => {
+    const page = await (
+      await browser.newContext({ viewport: { width: 1440, height: 900 } })
+    ).newPage();
+    try {
+      await intoTheCanvas(page);
+      await studioToolsOn(page);
+      const frame = page.frameLocator(PREVIEW).first();
+      await frame.locator('[data-section="sec-cover"]').click();
+      await escalated(frame, async () => {
+        await frame.locator('.rb-action[aria-label="Diseñar a mano"]').first().click();
+        await frame.locator(".rb-escalate-yes").click();
+      });
+      await waitForBankPhoto(frame);
+      await page.getByRole("button", { name: "Ver en móvil" }).click();
+      await deviceArrived(page, NARROWEST_WIDTH);
+      await waitForBankPhoto(frame);
+      const rows = await frame
+        .locator('[data-section="sec-cover"] > [data-id]')
+        .evaluateAll((nodes) =>
+          nodes
+            .map((node) => ({
+              id: (node as HTMLElement).dataset["id"] ?? "",
+              top: node.getBoundingClientRect().top,
+            }))
+            .sort((a, b) => a.top - b.top)
+            .map((row) => row.id),
+        );
+      expect(rows.length, "la portada no tiene dos filas").toBeGreaterThan(1);
+      const second = frame.locator(`[data-id="${rows[1]}"]`);
+      await second.scrollIntoViewIfNeeded();
+      if ((await second.getAttribute("data-rb-text")) === "1") await second.click();
+      else await second.focus();
+      await motionSettled(page);
+      const box = await second.boundingBox();
+      if (!box) throw new Error("the row is not drawn");
+      const centre = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+      const { moving, still } = await leaning(page, ".rb-ghost", async () => {
+        await page.mouse.move(centre.x, centre.y);
+        await page.mouse.down();
+        await page.mouse.move(centre.x + 60, centre.y - box.height - 40, { steps: 12 });
+      });
+      expect(
+        moving.some((rotate) => rotate === "2deg"),
+        `the row did not lean the way the hand went: ${[...new Set(moving)].join(" ")}`,
+      ).toBe(true);
+      expect(
+        moving.some((rotate) => rotate === "-2deg"),
+        "it leaned against the hand",
+      ).toBe(false);
+      expect(still, "the row kept leaning with the hand still").toBe("none");
+      await page.mouse.up();
     } finally {
       await page.context().close();
     }

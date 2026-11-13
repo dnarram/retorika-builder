@@ -9135,3 +9135,149 @@ se invirtió exactamente ese diff y el saboteo del brillo se repitió solo: rojo
 18 más), invariantes (27), golden (27, cero cambios: nada viaja), **e2e completa en local dos veces**:
 la primera, 330 verdes y los dos rojos de arriba, en 1544 s; la segunda, con los dos arreglos, **332
 verdes y 1 omitida en 1532 s**.
+
+### Día 8 — colchón y cierre (PR de `test/el-cierre-del-sprint-36`)
+
+**Lo que quedó corto, primero.** El día 7 dejó la tercera de las tres cosas que se inclinan —la fila del
+teléfono— a la unidad y a la hoja, sin caminata. Hoy la tiene: en la vista de móvil, la segunda fila de
+una portada diseñada a mano, llevada arriba y a la derecha, se inclina +2° y nunca −2°, y está derecha
+cuando la mano se para; sin la inclinación en esa rama, la caminata se pone roja. Nada más de los días 1
+a 7 quedó corto: lo que un día dejó a otro lo cerró el siguiente, y lo que el plan nombraba y el producto
+no tiene se dijo el día que se vio (el peso del ZIP, día 5; los enlaces de la cabecera, día 6).
+
+**Un rojo en la primera pasada completa del cierre, del arnés y no del producto.** La caminata de la
+barra de texto del sprint 9 elige un color y espera a que «la sesión guardada haya cambiado» antes de
+leer el estilo guardado: lo leyó vacío. Esa espera la cumple cualquier guardado, y abrir la propuesta
+deja uno pendiente medio segundo, que desde la escena del día 4 cae justo después de la pulsación del
+color —y llega sin él—. El mecanismo es deducido, no reproducido: la caminata pasó en las dos pasadas
+completas del día 7 y en la CI, y pasa tres veces seguidas sola. Ahora espera **los bytes de esta
+edición** —el estilo del titular en la sesión guardada— y no cualquier cambio. El producto, sin tocar.
+
+**El sprint, en una frase por día.** Toda instrucción vive en una línea de ayuda de 32 px fuera de la
+página, con una voz viva y otra silenciosa (día 1, ADR 0071); el vocabulario de vanguardia y el
+presupuesto con dos registros (día 2); el cuestionario desliza de pregunta en pregunta y la portada se
+despide (día 3); la propuesta elegida crece hasta ser el lienzo y la construcción dice cada etapa real
+(día 4); lo que llega a la línea se revela por palabras y lo que cambia se funde, con esqueletos y filas
+escalonadas (día 5); cada botón responde donde se pulsa, «Descargar» se inclina hacia el puntero y lo
+que aterriza lo hace con muelle (día 6); y el lienzo responde: otra página se cruza con la barra quieta,
+los menús llegan del desenfoque, lo que la mano lleva se inclina y la zona bajo la mano brilla (día 7).
+
+**El presupuesto, con dos registros.** Nada del cromo pasa de 200 ms salvo el cambio de dispositivo
+(`ui-reflow`, 260 ms) y las dos escenas con nombre (`--ui-scene`, 400 ms: la propuesta que se convierte
+en el lienzo y la salida de la construcción), que bajo movimiento reducido son un fundido de 120 ms y
+nunca un corte. Ningún bucle en el editor. Nada anima la maquetación. Un pseudoelemento no se comparte
+(la onda en `::before`, todo lo demás en `::after`). Un solo imán. El único `filter` que se anima es el
+desenfoque de llegada. El bloque de reducido del lienzo aplana cada selector nuevo después de
+declararlo. **Las medidas antes de aceptar**: la escena con un iframe vivo, 27 fotogramas y el más largo
+de 18,4 ms (tope 32, día 4); el desenfoque en un teléfono emulado con la CPU cuatro veces más lenta,
+todos los fotogramas de 16,6 a 16,8 ms con desenfoque y sin él (tope 16,7, día 7).
+
+**La web publicada no cambia un byte.** El corpus construido con el publicador de cada árbol
+(`build-corpus.mts`) contra el inicio del sprint (`0acd54c`): **132 ficheros en 23 webs, cero
+diferencias**; el script de la cabecera, el mismo hash (`7fd756d0ec6a914c`) en las 13 páginas que lo
+llevan, 0,8 KB gzip. `git diff 0acd54c..HEAD -- packages/ fixtures/` está vacío: ningún paquete que
+viaje a una web se tocó. **Por eso la auditoría de menús no corre**: varía lo que el renderer dibuja, y
+el renderer no ha cambiado. `document-rules.md` no cambia: ninguna regla del documento se toca.
+
+**Lighthouse**, los sujetos en el perfil móvil, contra el cierre del 35:
+
+| Sujeto | Rendimiento | Accesibilidad | Buenas prácticas | SEO | LCP | CLS |
+|---|---|---|---|---|---|---|
+| v1 image-right | 99 | 100 | 100 | 100 | 1,80 s (1,80) | 0,003 (0,003) |
+| v2 image-background | 98 | 100 | 100 | 100 | 2,40 s (2,40) | 0,003 (0,000) |
+| v3 image-left | 98 | 100 | 100 | 100 | 2,33 s (2,33) | 0,000 (0,003) |
+| letra propia `.ttf` | 99 | 100 | 100 | 100 | 1,80 s (1,80) | 0,000 (0,000) |
+| cabecera fija con logo, con la línea | 100 | 100 | 100 | 100 | 1,35 s (1,35) | 0,002 (0,002) |
+| marca grande | 100 | 100 | 100 | 100 | 1,35 s (1,35) | 0,001 (0,001) |
+| cabecera en columnas | 100 | 100 | 100 | 100 | 1,35 s (1,35) | 0,004 (0,004) |
+| página por ficha | 100 | 100 | 100 | 100 | 0,90 s (0,90) | 0,000 (0,000) |
+
+Las mismas puntuaciones y los mismos LCP que al cierre del 35. El CLS de v2 y v3 se intercambia 0,000 y
+0,003 sobre bytes idénticos: es el ruido de la pasada, no la página.
+
+**Suites del cierre**, una tras otra y nada en paralelo, con la batería por encima del 80 %:
+
+| Suite | Resultado |
+|---|---|
+| `pnpm test` | 3943 en verde, 187 ficheros (3847 al cierre del 35) |
+| `typecheck`, `lint` | en verde; 81 avisos (75 al cierre del 35), ningún error |
+| invariantes, golden, `renderer:deps` | en verde; golden 27, cero cambios; 2 dependencias permitidas |
+| `schema:guard 0acd54c..HEAD` | «la forma del documento no cambia; no hace falta migración» |
+| `secrets:scope` | 138 módulos, 33 de cliente, 2 solo de servidor, ninguno cruza (130 y 30 al cierre del 35) |
+| `size` | las 28 dentro; el script en 0,8 KB de 2 |
+| `test:a11y` local | 1750 en verde, 125 s, como al cierre del 35: el renderer no cambió |
+| `pnpm lighthouse` | 27 de 27, los números de arriba |
+| `pnpm audit:menus` | **no corre**: el renderer no cambia un byte (arriba) |
+| e2e completa | dos pasadas: la primera, 332 verdes, 1 omitida y la de la barra del sprint 9 en rojo (arriba), en 1541 s; la segunda, con su espera arreglada, **333 verdes y 1 omitida en 1543 s** (306 al cierre del 35: las caminatas del sprint, sus gemelos reducidos y la fila del teléfono de hoy) |
+
+**El e2e en la CI, contra su límite.** El paso de las caminatas ha ido creciendo con cada día que añade
+escenas que esperar, y el sprint 36 día 4 subió su tope de 30 a 35 minutos (el del trabajo, de 40 a 45):
+
+| PR | Rama | Minutos del paso |
+|---|---|---|
+| cierre del 35 | `test/el-cierre-del-sprint-35` | 28,6 |
+| auditoría del 35 | `test/la-auditoria-del-sprint-35` | 25,4 |
+| día 1 | `feat/la-linea-de-ayuda-sale-de-la-pagina` | 25,9 |
+| día 2 | `feat/el-vocabulario-del-36` | 29,7 |
+| día 3 | `feat/las-pantallas-se-encadenan` | 28,1 |
+| día 4 | `feat/la-propuesta-se-convierte-en-el-lienzo` | 30,8 |
+| día 5 | `feat/la-linea-habla` | 31,7 |
+| día 6 | `feat/los-controles-con-mano` | 32,0 |
+| día 7 | `feat/el-lienzo-responde` | 31,1 |
+
+A tres minutos del tope. Dos salidas, y la elección es tuya porque son minutos de Actions (protocolo,
+parte 9.2): **partir las caminatas en dos trabajos** (`--shard 1/2` y `2/2`, cada uno con su servidor;
+los mismos minutos facturados más un arranque, la mitad del reloj), o **subir el tope** otra vez.
+
+**Lo que el sprint encontró sin buscarlo**, por día:
+
+1. **El dedo de las caminatas no estaba donde se creía** (día 1): el contexto `FINGER` pasaba `width` y
+   `height`, que no son opciones de contexto, y su ventana real era 1280 × 720.
+2. **Una comprobación de movimiento reducido por nombre no ve una parte sin regla** (día 3): se comprueba
+   por parte.
+3. **Mientras el documento está congelado para la captura de una transición no hay `requestAnimationFrame`
+   ni `ResizeObserver`, la capa de la transición recibe pulsaciones, y un elemento con nombre está fuera
+   de la prueba de impacto** (día 4): ochenta caminatas rojas por una sola causa.
+4. **«Nada se mueve» puede significar «la pantalla nueva aún no existe»** (CI del día 5): toda espera
+   espera también la marca de la transición, y desde el día 7 la hoja de nombres del lienzo.
+5. **La comprobación del día 2 «como mucho un imán» pasaba sobre ninguno** (día 6): el lector de clases
+   no veía las que se escriben por expresión.
+6. **Una carrera del logo anterior al sprint** (CI del día 6): un fichero que tardaba deshacía el «Quitar»
+   pulsado mientras se preparaba.
+7. **Un suelo de muestras bajo una CPU estrangulada medía la máquina, no el producto** (CI del día 6).
+8. **`rotate` se aplica después del `transform` en línea** (día 7): lo que se lleva giraba alrededor del
+   sitio donde se cogió.
+9. **Un saboteo que borra una línea no se deshace buscando una cadena vacía** (día 7): tres se quedaron
+   puestos y uno enmascaró a otro; se vio en el `git diff` contra el commit previo.
+10. **Una espera que acepta cualquier guardado deja pasar el de otra cosa** (cierre): la caminata del
+    sprint 9 espera ya los bytes de su propia edición.
+
+### Lo que el sprint 36 deja abierto
+
+1. **Veintinueve firmas**: 0042, 0043 y de la 0045 a la 0071, todas `proposed`, con su paquete al día:
+   [`docs/decisions/signing-2026-11.md`](../decisions/signing-2026-11.md). La 0071 es de este sprint y
+   está en el lote A; enmienda la 0042 y la 0052, también del lote A.
+2. **Las nueve fotografías a 1600 × 1072**: la exención **falla desde el 1 de diciembre de 2026, dentro de
+   18 días**. Su hoja, [`docs/tasks/las-nueve-fotos.md`](../tasks/las-nueve-fotos.md), y
+   `pnpm photos:replace`; las dos preguntas de la hoja siguen siendo tuyas.
+3. **El e2e de la CI a tres minutos de su tope** (arriba): partirlo en dos o subir el tope.
+4. **Límites con nombre de este sprint**, para decidir si se arreglan:
+   - Mientras una escena o un cruce de página corre, lo que lleva nombre no recibe pulsaciones: el lienzo
+     durante los 400 ms de la escena (día 4) y la barra durante los 120 ms del cruce (día 7).
+   - `.rb-announce` («X: elegida») sigue dentro del marco (día 1), y el glifo «≡» de la barra de texto es
+     el único que puedes vetar al verlo (día 1).
+   - El peso del ZIP no se muestra en la revisión de descarga: no se sabe antes de que el servidor lo
+     construya (día 5).
+   - Visto y sin investigar: **volver a la primera página de la web deja el lienzo desplazado** (207 px en
+     la caminata del día 7), con el cruce y sin él, así que ya ocurría antes de este sprint.
+5. **Lo que el plan dejó fuera, con nombre**: un cursor propio; un «spotlight» o una inclinación 3D sobre
+   las propuestas o la página; el relleno líquido; una transición entre documentos de la portada a
+   `/empezar`; nada en bucle; nada en la web publicada.
+6. **Del sprint 35, sin tocar**: sus tres límites (el doble clic con el panel cerrado, «en medio» sin
+   previsualización en una barra de una línea, el hueco de una portada transparente durante una
+   previsualización) y lo que la ADR 0069 y la 0070 no deciden. **Del 34**: las entradas neutras del
+   catálogo en origen; el botón dentro de «Menú» en el móvil; la zona «bajo la portada»; la lista del
+   iPhone; el `rootMargin` del observador y el precipicio de la medida de la ADR 0067. **Y el editor
+   sigue sin verse fuera de Chromium**: las transiciones de pantalla, la escena, el cruce de página y la
+   onda de este sprint tampoco se han visto en WebKit ni en Firefox.
+7. **El sprint 37, sin planificar.**

@@ -12,7 +12,50 @@ drift, and the facilitator's script already says findings go to the decision the
 a separate document nobody reads again». So an item with an ADR points at the ADR; an item with
 an issue points at the issue; and only the things with no other home are described here at all.
 
-Last reviewed: 11 November 2026, **closing sprint 35 — «el editor se mueve, y la marca tiene tamaño y
+Last reviewed: 13 November 2026, **closing sprint 36 — «el editor se encadena, y la ayuda tiene su
+línea».** David asked for an editor whose animations and transitions look of their time, taking
+`aymanelimam.com/frontend/` as the reference and «que no te dé miedo innovar», and for one rule: no
+instruction text may cover the page being edited, on a desktop or on a phone. His four answers before
+planning: a second named register of 400 ms for two scenes, which never start before their destination
+is painted and only fade under reduced motion; the help line at the foot of the canvas area, 32 px and
+one line; the popups' notes to the line with a two-character badge in the text bar; and a ripple on
+every chrome button with the magnet on «Descargar» alone. His four adjustments approving: a live child
+and a quiet one in the line; rhythm for what arrives, not for what changes; a scene's wait capped at
+500 ms; and a pseudo-element never shared. Eight days in eight PRs (#367–#373 and the close). What
+changed for somebody visiting a site: **nothing** — the corpus's 132 files are byte-identical to the
+sprint's start and no package that travels was touched, which is why the menu audit did not run. For
+the owner: every instruction lives in the help line ([ADR 0071](../decisions/0071-an-instruction-lives-in-the-help-line-and-never-over-the-page.md),
+día 1); the questionnaire slides from question to question (día 3); the chosen proposal grows into the
+canvas and the building screen says each real stage (día 4); the line speaks with rhythm (día 5); the
+controls answer the hand (día 6); and the canvas responds — a page crosses over with the bar still,
+popups arrive from a blur, what the hand carries leans (día 7). The record is `docs/design/REVIEW.md`,
+sprint 36.
+
+**What sprint 36 leaves open** — the full text is the last section of REVIEW's sprint 36:
+
+1. **Twenty-nine signatures**: 0042, 0043, 0045–0071, all `proposed`, with their pack up to date,
+   [`docs/decisions/signing-2026-11.md`](../decisions/signing-2026-11.md). 0071 is in batch A, with the
+   two it amends (0042 and 0052).
+2. **The nine photographs**: the exemption fails on **1 December 2026**. Their sheet,
+   [`docs/tasks/las-nueve-fotos.md`](las-nueve-fotos.md), and `pnpm photos:replace`.
+3. **David's decision, measured: the CI e2e step at 31–32 of its 35 minutes** (REVIEW's close has the
+   table, PR by PR, from 25.4 at sprint 35's audit): split the walks into two jobs (`--shard`, the same
+   billed minutes plus one start-up, half the wall-clock) or raise the limit again. Actions minutes are
+   his (protocol, part 9.2).
+4. **Limits of this sprint, named**: what carries a transition name takes no press while it runs (the
+   canvas for the scene's 400 ms, the bar for a page crossing's 120 ms); `.rb-announce` stays in the
+   frame and the «≡» glyph is David's to veto; the ZIP's weight is not shown before the server builds
+   it; and, seen and not investigated, going back to a site's first page leaves the canvas scrolled
+   (207 px in the día 7 walk, with the crossing and without it — older than the sprint).
+5. **What the plan left out by name**: a custom cursor; a spotlight or 3D tilt over the proposals or
+   the page; a liquid fill; a cross-document transition from the landing to `/empezar`; any loop;
+   anything in the published site.
+6. **From sprints 35 and 34, untouched** — the items below, under their own reviews. The editor has
+   still not been seen outside Chromium, and this sprint's screen transitions, scene, page crossing and
+   ripple have not been seen in WebKit or Firefox either.
+7. **Sprint 37 unplanned.**
+
+The review before that: 11 November 2026, **closing sprint 35 — «el editor se mueve, y la marca tiene tamaño y
 sitio».** David asked for two things: an editor that moves and answers the hand in the tools it already
 has, and a logo and business name whose size and place the owner chooses in «Menú». His three answers
 before planning: three named sizes (28, 40 and 56 px for the logo, the scale's tokens for the name),
@@ -49,7 +92,7 @@ sprint 35.
    Firefox and WebKit — the sections' slide has not been seen outside Chromium; the iPhone list of PR
    #250, which gains the large logo on a phone.
 6. **Noted, still not fixed**: the observer's `rootMargin` and the measure's cliff of ADR 0067.
-7. **Sprint 36 unplanned.**
+7. ~~**Sprint 36 unplanned.**~~ Planned on 11 November 2026 and closed on 13 November (above).
 
 The review before that: 8 November 2026, **closing sprint 34 — «la barra nunca se parte».** David decided what
 sprint 33 had measured: a bar whose words do not fit one line **folds into the phone's header** under a
