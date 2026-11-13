@@ -526,7 +526,6 @@ describe("the budget inside the canvas", () => {
 describe("the vocabulary of sprint 36 and the second register", () => {
   const PIECES = [
     "ui-words",
-    "ui-ripple",
     "ui-magnet",
     "ui-underline",
     "ui-blur-in",
@@ -608,45 +607,47 @@ describe("the vocabulary of sprint 36 and the second register", () => {
     expect(blur).not.toMatch(/transform/);
   });
 
-  it("rings on ::before, and no two pieces that can meet on one control share a pseudo-element", () => {
+  /**
+   * **The `::before` of every chrome button is the ripple's** (David's adjustment 4 of the plan,
+   * made a rule on día 6, when the ring reached every button): `ui-ring-once` was on `::after` and
+   * the ring would have overwritten it with nothing going red. So the ripple draws on `::before`,
+   * from the base layer on every `button.ui-interactive`, and **no utility may draw on `::before`** —
+   * any utility can end up on a button. Among the utilities that draw on `::after`, none may meet
+   * another on one element (found by their class lists).
+   */
+  it("rings on every chrome button's ::before, which no utility draws on, and no two ::after meet", () => {
+    const ring = cssRules(CSS).filter((rule) =>
+      rule.prelude.includes(":where(button.ui-interactive, .ui-ripple)"),
+    );
+    expect(ring.map((rule) => rule.prelude)).toEqual([
+      ":where(button.ui-interactive, .ui-ripple)",
+      ":where(button.ui-interactive, .ui-ripple)::before",
+      ":where(button.ui-interactive, .ui-ripple)[data-ui-press]::before",
+    ]);
+    for (const rule of ring) {
+      expect(rule.at, "the ripple must be in the base layer, under every utility").toContain(
+        "@layer base",
+      );
+    }
     const pseudosOf = (name: string): string[] => {
       const body = UTILITIES.get(name) ?? "";
       return [...body.matchAll(/::(before|after)/g)].map((m) => m[1] as string);
     };
-    expect(pseudosOf("ui-ripple")).toEqual(["before", "before"]);
-    expect(pseudosOf("ui-ring-once")).toEqual(["after"]);
-    // The pairs the application combines on one element, or will: the landing's call to action
-    // wears the ring and will ripple; a page tab underlines and will ripple; a counted number
-    // may ripple when it is a button. A new pair goes here the day it is written.
-    const MAY_MEET: [string, string][] = [
-      ["ui-ripple", "ui-ring-once"],
-      ["ui-ripple", "ui-underline"],
-      ["ui-ripple", "ui-count"],
-    ];
-    // Not in the list, by design: `ui-count` and `ui-underline` both draw on `::after`, and a
-    // counted number is never a tab. The scan of the source below is what would say otherwise.
-    for (const [a, b] of MAY_MEET) {
-      const shared = pseudosOf(a).filter((pseudo) => pseudosOf(b).includes(pseudo));
-      expect(shared, `${a} and ${b} both draw on ::${shared[0]}: one overwrites the other`).toEqual(
-        [],
+    for (const name of UTILITIES.keys()) {
+      expect(pseudosOf(name), `${name} draws on ::before, which is the ripple's`).not.toContain(
+        "before",
       );
     }
-    // And the pairs that actually meet in the source, found by their class lists.
-    const withPseudo = [...UTILITIES.keys()].filter((name) => pseudosOf(name).length > 0);
+    expect(pseudosOf("ui-ring-once")).toEqual(["after"]);
+    const onAfter = [...UTILITIES.keys()].filter((name) => pseudosOf(name).includes("after"));
+    expect(onAfter).toEqual(expect.arrayContaining(["ui-ring-once", "ui-underline", "ui-count"]));
     for (const file of allSourceFiles()) {
       for (const list of classListsOf(file)) {
-        const pieces = withPseudo.filter((name) => list.includes(name));
-        for (let i = 0; i < pieces.length; i += 1) {
-          for (let j = i + 1; j < pieces.length; j += 1) {
-            const a = pieces[i] as string;
-            const b = pieces[j] as string;
-            const shared = pseudosOf(a).filter((pseudo) => pseudosOf(b).includes(pseudo));
-            expect(
-              shared,
-              `${file}: ${a} and ${b} meet on one element and share ::${shared[0]}`,
-            ).toEqual([]);
-          }
-        }
+        const pieces = onAfter.filter((name) => list.includes(name));
+        expect(
+          pieces.length,
+          `${file}: ${pieces.join(" and ")} meet on one element on ::after`,
+        ).toBeLessThanOrEqual(1);
       }
     }
   });
@@ -853,6 +854,66 @@ describe("the line's voice, a panel's rows and a count", () => {
   });
 });
 
+/**
+ * **The controls answer the hand** (sprint 36 día 6): the ring on every button (above), the magnet
+ * on one, the spring on what lands and never on what leaves, the undo and redo arrows turning.
+ */
+describe("the controls answer the hand", () => {
+  const RULES_ALL = cssRules(CSS);
+
+  it("springs what lands — every slide and a drop — and never what leaves", () => {
+    expect(UTILITIES.get("ui-slide")).toMatch(/transition-timing-function:\s*var\(--ui-spring\)/);
+    const editor = readStripped(EDITOR_SRC, "questionnaire", "Editor.tsx");
+    const settle = editor.slice(
+      editor.indexOf("function settleDrop"),
+      editor.indexOf("function settleDrop") + 2400,
+    );
+    expect(settle, "a drop does not land on the spring").toMatch(/easing:\s*CHROME_SCALE\.spring/);
+    for (const rule of RULES_ALL.filter((r) => r.prelude.includes("data-leaving"))) {
+      expect(rule.body, `«${rule.prelude}» leaves on the spring`).not.toMatch(/--ui-spring/);
+    }
+  });
+
+  it("leans «Descargar» with one transition list that keeps its press, its colour and its shadow", () => {
+    const magnet = UTILITIES.get("ui-magnet") ?? "";
+    const merged = /&\.ui-interactive\s*\{([^}]*)\}/.exec(magnet)?.[1] ?? "";
+    const pressed =
+      /transition-property:\s*([^;]+);/.exec(UTILITIES.get("ui-interactive") ?? "")?.[1] ?? "";
+    for (const property of pressed.split(",").map((p) => p.trim())) {
+      expect(merged, `the magnet drops «${property}» from the press's transition`).toContain(
+        property,
+      );
+    }
+    expect(merged).toContain("translate");
+    const magnets = allSourceFiles().flatMap((file) =>
+      classListsOf(file).filter((list) => list.includes("ui-magnet")),
+    );
+    expect(magnets, "the magnet is on no control").toHaveLength(1);
+    expect(magnets[0]).toContain("ui-interactive");
+  });
+
+  it("raises a stepper's new number in its live region, which stays the same node", () => {
+    const design = readStripped(EDITOR_SRC, "questionnaire", "DesignPanel.tsx");
+    // Keyed by the value inside the `<output>`, never the output itself: a live region that is a
+    // new node every press is one a screen reader never announces.
+    expect(design).toMatch(
+      /<output[\s\S]{0,200}<span key=\{placement\[field\]\} className="ui-rise-in/,
+    );
+    expect(design).not.toMatch(/<output[^>]*key=/);
+  });
+
+  it("turns the undo and redo arrows on the press alone, by rotation alone, on the spring", () => {
+    for (const name of ["ui-turn-back", "ui-turn-on"]) {
+      const frames = KEYFRAMES.get(name) ?? "";
+      expect(frames, `${name} is missing`).toMatch(/rotate:\s*-?20deg/);
+      expect(frames).not.toMatch(/transform|translate|scale/);
+      const users = RULES_ALL.filter((rule) => rule.body.includes(name));
+      expect(users.map((rule) => rule.prelude)).toEqual([`.${name}[data-ui-press] > svg`]);
+      expect(users[0]?.body).toMatch(/var\(--ui-base\) var\(--ui-spring\)/);
+    }
+  });
+});
+
 /** Every `.ts`/`.tsx` under `src`, by path. */
 function allSourceFiles(): string[] {
   const out: string[] = [];
@@ -867,12 +928,29 @@ function allSourceFiles(): string[] {
   return out;
 }
 
-/** Every class list a file writes, each as its words. */
+/**
+ * Every class list a file writes, each as its words. **Including the ones built by expression**
+ * (sprint 36 día 6): `className={"ui-magnet ui-interactive …" + (building ? … : …)}` is how
+ * «Descargar» writes its classes, and the first version read only a quoted attribute or a bare
+ * template — so «at most one magnet» passed on none. An expression's string literals are its class
+ * list, every branch at once: what the element *can* wear is what has to be held.
+ */
 function classListsOf(file: string): string[][] {
   const source = readStripped(file);
-  return [...source.matchAll(/className=(?:"([^"]*)"|\{`([^`]*)`\})|class="([^"]*)"/g)].map((m) =>
-    (m[1] ?? m[2] ?? m[3] ?? "").split(/\s+/).filter(Boolean),
-  );
+  const lists: string[][] = [];
+  const words = (text: string) => text.split(/\s+/).filter(Boolean);
+  for (const m of source.matchAll(/className="([^"]*)"|class="([^"]*)"/g)) {
+    lists.push(words(m[1] ?? m[2] ?? ""));
+  }
+  for (const m of source.matchAll(/className=\{/g)) {
+    const open = (m.index ?? 0) + m[0].length - 1;
+    const expression = bodyAt(source, open);
+    const literals = [...expression.matchAll(/"([^"]*)"|`([^`]*)`|'([^']*)'/g)].map((l) =>
+      (l[1] ?? l[2] ?? l[3] ?? "").replace(/\$\{[^}]*\}/g, " "),
+    );
+    lists.push(words(literals.join(" ")));
+  }
+  return lists;
 }
 
 // ——— Readers ——————————————————————————————————————————————————————————————————————————————
@@ -892,7 +970,46 @@ function utilitiesIn(source: string): string[] {
 function restOf(name: string): number {
   const body = UTILITIES.get(name);
   if (body === undefined) throw new Error(`globals.css declares no ${name}`);
-  return timesIn(body).reduce((total, { ms: time }) => total + time, 0);
+  /*
+   * **The longest thing it runs, plus the longest wait before it** (sprint 36 día 6). Summing every
+   * time a utility declares was right while each declared one animation; a transition *list* runs
+   * its items side by side, and `ui-magnet`'s seven durations read as 780 ms. Within one item of a
+   * list, a shorthand's duration and delay still add (`ui-ring-once`: 700 after 500); across items
+   * and across declarations that restate the same thing, the longest counts.
+   */
+  let running = 0;
+  let waiting = 0;
+  for (const { declaration, ms: _ } of timesIn(body)) {
+    const value = declaration.slice(declaration.indexOf(":") + 1);
+    const items = splitTopLevel(value).map((item) =>
+      [...item.matchAll(/(\d*\.?\d+)(ms|s)\b/g)].reduce(
+        (total, m) => total + Number(m[1]) * (m[2] === "s" ? 1000 : 1),
+        0,
+      ),
+    );
+    const longest = Math.max(0, ...items);
+    if (/delay/i.test(declaration.slice(0, declaration.indexOf(":"))))
+      waiting = Math.max(waiting, longest);
+    else running = Math.max(running, longest);
+  }
+  return running + waiting;
+}
+
+/** A CSS value's comma-separated items, ignoring the commas inside parentheses. */
+function splitTopLevel(value: string): string[] {
+  const out: string[] = [];
+  let depth = 0;
+  let from = 0;
+  for (let i = 0; i < value.length; i += 1) {
+    if (value[i] === "(") depth += 1;
+    if (value[i] === ")") depth -= 1;
+    if (value[i] === "," && depth === 0) {
+      out.push(value.slice(from, i));
+      from = i + 1;
+    }
+  }
+  out.push(value.slice(from));
+  return out;
 }
 
 /** Every time inside a `transition` or `animation` declaration, in milliseconds, with the chrome
@@ -968,7 +1085,12 @@ function cssRules(css: string, at: string[] = []): CssRule[] {
     if (open < 0) break;
     const prelude = css.slice(from, open).trim();
     const body = bodyAt(css, open);
-    if (prelude.startsWith("@media") || prelude.startsWith("@supports")) {
+    // `@layer` since sprint 36 día 6: the ripple lives in the base layer, under every utility.
+    if (
+      prelude.startsWith("@media") ||
+      prelude.startsWith("@supports") ||
+      prelude.startsWith("@layer")
+    ) {
       out.push(...cssRules(body, [...at, prelude]));
     } else {
       out.push({ prelude, body, at });

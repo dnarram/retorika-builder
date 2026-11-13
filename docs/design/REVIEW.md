@@ -8943,3 +8943,100 @@ todas las del sprint 36: 29 verdes.
 **Suites.** `typecheck`, `lint`, `test` (3919 en 186 ficheros, 11 más), invariantes (27), golden (27,
 cero cambios), e2e completa como arriba; la suite completa vuelve a correr en la CI de la PR.
 
+### Día 6 — los controles con mano (PR de `feat/los-controles-con-mano`)
+
+**La onda sale de donde se pulsa, en todo botón del cromo** (decisión 4 de David). Unos cincuenta
+botones en doce ficheros llevan `ui-interactive`, y la onda del día 2 necesitaba `overflow: hidden` en
+el botón: en todos ellos habría recortado lo que un botón deja salir de su caja —una insignia, un
+anillo, una sombra—. **La onda es ahora un degradado radial en un `::before` que llena el botón**, con
+el radio registrado (`@property --ui-ripple-r`) creciendo de 0 a 240 px y la opacidad de 0,24 a 0 en
+`--ui-base`, pintado dentro de su propia caja redondeada (`border-radius: inherit`): nada se recorta y
+la caja del botón solo gana `position: relative` e `isolation`, con la onda a `z-index: -1` sobre su
+fondo y bajo sus palabras. **En la capa base, por `:where(button.ui-interactive, .ui-ripple)`**:
+especificidad cero y por debajo de toda utilidad, así que un botón `fixed`, `absolute` o `sticky` sigue
+donde estaba (y ya es bloque contenedor). En táctil también. **El `::before` de un botón del cromo es de
+la onda**, y el presupuesto lo hace regla: ninguna utilidad dibuja en `::before`, y entre las que
+dibujan en `::after` (`ui-ring-once`, `ui-underline`, `ui-count`) ninguna coincide con otra en un
+elemento. **El raíl** no llevaba `ui-interactive` en el botón sino en su cuadro; el cuadro lleva
+`ui-ripple`, y el oyente aprende una regla general: un botón que no es control de onda suena por su
+primera parte `.ui-ripple`, así que pulsar la palabra «Estilo» hace sonar el cuadro. La onda se suelta
+solo en el `animationend` de su propio `::before`: el giro de deshacer, en la misma pulsación, la
+cortaba si acababa antes.
+
+**«Descargar» se inclina hacia el puntero**, y nada más (`editor/magnet.ts`, cableado hoy): hasta 4 px
+hacia donde está el puntero sobre el botón, de vuelta con el muelle al salir; solo con un puntero que
+pasa, y nada para quien pidió menos movimiento. Su `transition` se escribe **en una sola lista con la
+de `ui-interactive`** (`.ui-magnet.ui-interactive`): una segunda `transition` habría sustituido la
+primera y «Descargar» habría perdido el fundido de su color y su sombra.
+
+**El muelle para lo que aterriza**: `ui-slide` —la marca del raíl, la barra de las pestañas, la marca de
+los segmentos, los puntos de progreso, la flecha de las propuestas— transiciona con `--ui-spring`, y
+`settleDrop` aterriza con `CHROME_SCALE.spring`; ninguna salida (`[data-leaving]`) lo lleva.
+**Deshacer gira hacia atrás y rehacer hacia delante** 20° y vuelven con el muelle, en la pulsación que
+suena la onda (`data-ui-press`), y solo si podían actuar. **Primera pasada roja**: deshacer el último
+cambio vuelve a dibujar «Deshacer» sin nada que deshacer, y la clase atada a `canUndo` desaparecía a
+mitad del giro, que se cancelaba; la pulsación que podía actuar sostiene ahora el giro mientras dura.
+**El número nuevo de un paso de «Diseño» sube a su sitio**, con la clave en el número dentro del
+`<output>` y nunca en el `<output>`, que es la región viva y ha de ser el mismo nodo para que un lector
+oiga el cambio. **El subrayado** se dibuja bajo el título de las pestañas de página que no son la actual
+(la actual tiene su barra), al pasar o enfocar el botón entero — `ui-underline` gana «lo dibuja también
+su padre». **«Los enlaces de la cabecera» no existen**: la cabecera del editor no tiene ninguno; se dice.
+
+**Tres agujeros del arnés, encontrados al escribir las pruebas del día.** (1) **`classListsOf` no veía
+las clases escritas por expresión** (`className={"ui-magnet …" + (…)}`, que es como las escribe
+«Descargar»): la aserción del día 2 «como mucho un imán» pasaba sobre ninguno. Lee ahora los literales
+de toda expresión `className={…}`, todas sus ramas a la vez. (2) **`restOf` sumaba cada tiempo de una
+utilidad**, y la lista de transiciones del imán, siete en paralelo, leía 780 ms: ahora es la más larga
+de cada lista más la espera más larga, y la suma solo dentro de un mismo elemento de lista (el anillo:
+700 tras 500). (3) **El lector de CSS no abría `@layer`**, y no habría visto la onda.
+
+**Pruebas.** `ripple.test.ts` (8: el selector llega a todo botón del cromo, un botón sin la clase y uno
+deshabilitado no; suelta solo en el fin de su `::before`, no en el de un hijo ni en `::after`; una
+pulsación sobre la palabra del raíl suena el cuadro). `motionBudget.test.ts`: la onda en la capa base
+y el `::before` de nadie más; el muelle en lo que aterriza y en ninguna salida; la lista del imán con
+todo lo de `ui-interactive` y un solo imán, ya de verdad; el giro solo por rotación, solo en la
+pulsación, con el muelle; el número del paso con la clave dentro del `<output>`. `chromeScale.test.ts`
+nombra `ripple-r`. **Tres caminatas** («sprint 36 día 6»): la onda del cuadro de «Estilo» desde el 25 %
+/ 50 % pulsado, en `::before`, una iteración, ≤ 200 ms, y la caja del control intacta; «Descargar» a
+3 px de su borde, inclinado más de 2 px y como mucho 4 por eje, y de vuelta a su caja exacta; deshacer
+gira una vez y su flecha queda recta; la marca del raíl y la barra de las pestañas con `linear(` como
+curva; con el dedo, la onda de «Siguiente» desde el 80 % / 30 % tocado (leído en `window` en fase de
+burbuja: una micro-tarea encolada desde un oyente de captura corre entre oyentes, antes del del armazón);
+y el gemelo con menos movimiento (la onda en 0,01 ms y «Descargar» sin moverse).
+
+**Saboteos**, deshechos por sustitución inversa: el muelle fuera de `ui-slide` → presupuesto rojo; un
+segundo imán (en «Guardar en mi cuenta») → dos aserciones rojas; la onda siempre desde el centro →
+caminata roja (25 donde debía ser ≤ 1); el giro atado solo a `canUndo` → caminata roja (la primera
+pasada, arriba); el cuadro del raíl sin `ui-ripple` → caminata roja (la segunda, con el punto vacío).
+
+**Suites.** `typecheck`, `lint`, `test` (3924 en 186 ficheros, 5 más), invariantes (27), golden (27,
+cero cambios), e2e filtrada a las caminatas que miden geometría y movimiento —«nada sobresale en un
+móvil», la guarda del panel, las pestañas, axe del editor, los días 2 y 7 del 35 y todo el 36—: **44
+verdes**. La suite completa corre en la CI de la PR: la batería al 18 % no da para veinticinco minutos.
+
+**Lo que enseñó la primera pasada completa, en la CI: dos rojos, ninguno del día.** (1) **Una carrera
+del logo, del producto y anterior al 36.** Elegir un logo lee el documento, espera a que el fichero se
+convierta en PNG y escribía el logo sobre el documento leído al principio: un «Quitar» pulsado en esa
+espera se deshacía solo cuando el fichero llegaba —el logo volvía, con el tamaño que «Quitar» había
+quitado— y un sitio de la marca pulsado en esa espera también. La caminata del panel de la marca del 35
+lo provocaba sin saberlo: su paso 7 «esperaba» al fichero nuevo con dos cosas que el viejo ya cumplía,
+y el 8 pulsaba «Quitar» con el nuevo a medio preparar. En local pasó cuatro de cuatro; con 300 ms de
+espera añadida tras `prepareLogo` falló igual que en la CI, en la misma línea y con la misma sesión
+guardada. **Arreglo**: cada elección y cada «Quitar» toman turno, y un fichero que termina después de
+un turno posterior no aterriza; el logo que sí aterriza se escribe contra el documento de ese instante
+(`setHeader` acepta el parche como función, que el reductor lee contra el presente). El paso 7 espera
+ahora al fichero nuevo por su propio `src`, y una caminata nueva («sprint 36 día 6 — un logo que tarda
+no deshace lo que se pulsó») retrasa 1,5 s cada logo desde la página (`canvas.toBlob`, lo último que
+espera `prepareLogo`; el producto no sabe nada) y pulsa «Quitar» y después «En medio» mientras uno se
+prepara. Saboteos: sin el turno, el logo vuelve (roja); con el documento de la elección, el sitio se
+pierde (roja); el reductor leyendo el documento anterior, la prueba unitaria roja. (2) **Un suelo que
+medía la máquina.** «El muestreo no miró nada» pedía más de 30 lecturas en 4 s **bajo una CPU
+estrangulada 20×**, y la CI dio 29; un Mac da unas 210. Antes de culpar al día se midió main contra la
+rama: 210–212 contra 208–211, y dejar el `::before` de la onda solo para la pulsación no movió nada
+(208–211), así que se quedó como estaba. El muestreador mira ahora **hasta que el acto termina**, no un
+tiempo fijo —con una ventana de 200 ms, la regla vieja dejaba de mirar a mitad de las doce pulsaciones
+(8 lecturas, roja) y la nueva las ve todas—, y el suelo de las dos caminatas estranguladas es 15, la
+mitad del menor visto; la que corre sin estrangular sigue en 30. **Suites**: `typecheck`, `lint`,
+`test` (3925, una más), invariantes (27), golden (27, sin cambios) y **e2e completa en local: 328
+verdes y 1 omitida en 1508 s**.
+

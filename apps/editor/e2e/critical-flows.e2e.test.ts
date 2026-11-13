@@ -11057,19 +11057,27 @@ describe("el panel y las herramientas llegan, no aparecen", () => {
    * Both report how much they saw, and every caller asserts on that first: an instrument that
    * observed nothing passes every assertion about what it observed, which is how this repository's
    * in-canvas overflow walk once ran green over zero elements.
+   *
+   * **The sampler looks for at least `ms` and until `act` has finished**, whichever is later (sprint
+   * 36 día 6). It used to stop at `ms` from its start, so on a runner slow enough for the act to
+   * outlast it — twelve presses under a twentyfold throttle — the last presses would have been
+   * watched by nobody, and the walk would have passed on what it never saw.
    */
   type Watch = {
     samples: { opacity: string; sections: number }[];
     events: { frames: number }[];
   };
+  /** How many readings say «the sampler looked» under a twentyfold CPU throttle: half the fewest a
+   * runner has given (29 on CI, 4 s, sprint 36 día 6). Without the throttle it stays at thirty. */
+  const THROTTLED_FLOOR = 15;
   async function watchPreviewWhile(
     page: Page,
     act: () => Promise<void>,
     ms = 3_000,
   ): Promise<Watch> {
     await page.evaluate((limit: number) => {
-      const bag = window as unknown as { __w: Watch };
-      bag.__w = { samples: [], events: [] };
+      const bag = window as unknown as { __w: Watch & { acted: boolean; done: boolean } };
+      bag.__w = { samples: [], events: [], acted: false, done: false };
       const started = performance.now();
 
       const record = () => {
@@ -11088,13 +11096,26 @@ describe("el panel y las herramientas llegan, no aparecen", () => {
           opacity: live ? Number(getComputedStyle(live).opacity).toFixed(2) : "gone",
           sections: doc ? doc.querySelectorAll("[data-section]").length : -1,
         });
-        if (performance.now() - started < limit) requestAnimationFrame(tick);
+        if (performance.now() - started < limit || !bag.__w.acted) requestAnimationFrame(tick);
+        else bag.__w.done = true;
       };
       requestAnimationFrame(tick);
     }, ms);
     await act();
-    await page.waitForTimeout(ms + 200);
-    return page.evaluate(() => (window as unknown as { __w: Watch }).__w);
+    await page.evaluate(() => {
+      (window as unknown as { __w: { acted: boolean } }).__w.acted = true;
+    });
+    await page.waitForFunction(
+      () => (window as unknown as { __w: { done: boolean } }).__w.done,
+      null,
+      {
+        timeout: ms + 30_000,
+      },
+    );
+    return page.evaluate(() => {
+      const { samples, events } = (window as unknown as { __w: Watch }).__w;
+      return { samples, events };
+    });
   }
 
   /** The gesture that turns the tools on, confirmation card and all. */
@@ -11195,8 +11216,11 @@ describe("el panel y las herramientas llegan, no aparecen", () => {
 
       // The twelve clicks land on the one frame there is, throttled or not. The sampler has to
       // have looked — an instrument that saw nothing passes everything — and no frame was ever
-      // added or taken away while it looked.
-      expect(watch.samples.length, "el muestreo no miró nada").toBeGreaterThan(30);
+      // added or taken away while it looked. **Fifteen, not thirty, under the throttle** (sprint
+      // 36 día 6): what a twentyfold throttle leaves is the runner's speed, not the product's —
+      // about 210 readings in these 4 s on a Mac, 29 on the CI runner the day thirty failed — and
+      // that it looked through the whole act is the sampler's own guarantee now, not the count's.
+      expect(watch.samples.length, "el muestreo no miró nada").toBeGreaterThan(THROTTLED_FLOOR);
       expect(
         watch.events.filter((event) => event.frames !== 1).length,
         "apareció o desapareció un marco durante los clics",
@@ -11241,8 +11265,9 @@ describe("el panel y las herramientas llegan, no aparecen", () => {
 
       // On and off are two redraws of the same document (sprint 26 día 4), so there is never a
       // second frame — not two at a time, as the buffered swap allowed, and not one at a time
-      // either. The sampler has to have looked for that to mean anything.
-      expect(watch.samples.length, "el muestreo no miró nada").toBeGreaterThan(30);
+      // either. The sampler has to have looked for that to mean anything — under the same
+      // throttle, so to the same floor as the twelve presses.
+      expect(watch.samples.length, "el muestreo no miró nada").toBeGreaterThan(THROTTLED_FLOOR);
       const most = watch.events.length === 0 ? 1 : Math.max(...watch.events.map((e) => e.frames));
       expect(most, `llegó a haber ${most} marcos a la vez`).toBe(1);
       // Still never blank, through two swaps on top of each other.
@@ -27269,12 +27294,17 @@ describe("sprint 35 día 5 — el panel de la marca", () => {
       expect(index).toMatch(/<header class="rb-header"[^>]* data-brand-place="center"/);
       expect(index).toMatch(/<header class="rb-header"[^>]* data-logo-size="lg"/);
 
-      // 7. A new file keeps the size the owner chose.
+      // 7. A new file keeps the size the owner chose. **Waited for by its own `src`**: the old logo
+      //    is loaded and already «Grande», so without it the three lines below were true of the old
+      //    file, and step 8 pressed «Quitar» while the new one was still being prepared (the CI run
+      //    of sprint 36 día 6, and the walk after this one).
+      const oldSrc = (await logo.getAttribute("src")) ?? "";
       const [change] = await Promise.all([
         studio.waitForEvent("filechooser"),
         panel.getByRole("button", { name: "Cambiar" }).click(),
       ]);
       await change.setFiles(join(import.meta.dirname, "fixtures/logo.png"));
+      await expect(logo).not.toHaveAttribute("src", oldSrc);
       await imageLoaded(logo);
       await expect(logoSizes.getByRole("radio", { name: "Grande" })).toBeChecked();
       await expect(bar).toHaveAttribute("data-logo-size", "lg");
@@ -27293,6 +27323,112 @@ describe("sprint 35 día 5 — el panel de la marca", () => {
       await context.close();
     }
   }, 240_000);
+});
+
+/**
+ * **What is pressed while a logo is being prepared is not undone when it lands** (found by the CI
+ * run of sprint 36 día 6). A file takes a moment to become a PNG, and the logo used to be written
+ * from the document of the moment it was chosen: «Quitar» pressed in that moment was overwritten —
+ * the logo came back on its own, with the size «Quitar» had taken — and so was a place pressed for
+ * the brand. Here every logo is handed back `LATE_MS` late, by holding `canvas.toBlob`, which is
+ * what `prepareLogo` waits on last; nothing in the product knows.
+ */
+describe("sprint 36 día 6 — un logo que tarda no deshace lo que se pulsó", () => {
+  /** Long enough for the press after the choice to land first, panel motion and all. */
+  const LATE_MS = 1_500;
+  /** The autosave's 500 ms and the late file's last `await`, with room: what is asserted after it
+   * is that nothing happened, and only a window can say that. */
+  const SETTLE_MS = 1_000;
+
+  it("«Quitar» y el sitio de la marca, pulsados mientras se prepara un logo, se quedan", async () => {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 950 } });
+    const studio = await context.newPage();
+    try {
+      await intoTheCanvas(studio);
+      const frame = studio.frameLocator(PREVIEW).first();
+      const bar = frame.locator("header.rb-header");
+      const logo = bar.locator("img.rb-logo");
+      await studio.getByRole("button", { name: "Menú", exact: true }).click();
+      const panel = studio.getByRole("complementary", { name: "La cabecera de tu web" });
+      await expect(panel).toBeVisible();
+      const choose = async (name: "Subir tu logo" | "Cambiar") => {
+        const [chooser] = await Promise.all([
+          studio.waitForEvent("filechooser"),
+          panel.getByRole("button", { name }).click(),
+        ]);
+        await chooser.setFiles(join(import.meta.dirname, "fixtures/logo.png"));
+      };
+      const pressAt = async (target: Locator) => {
+        await target.scrollIntoViewIfNeeded();
+        const at = await pointIn(target);
+        await studio.mouse.click(at.x, at.y);
+      };
+
+      // A logo at «Grande», at the usual speed, so the size is there for a late file to bring back.
+      await choose("Subir tu logo");
+      await expect(logo).toHaveCount(1);
+      await imageLoaded(logo);
+      const sizes = panel.getByRole("radiogroup", { name: "Tamaño del logo" });
+      await pressAt(sizes.getByText("Grande", { exact: true }));
+      await expect(bar).toHaveAttribute("data-logo-size", "lg");
+      await expect.poll(() => storedSession(studio)).toContain('"logoSize":"lg"');
+
+      // From here on every logo is handed back late.
+      await studio.evaluate((late) => {
+        const w = window as unknown as { __lateLogos: number };
+        w.__lateLogos = 0;
+        const toBlob = HTMLCanvasElement.prototype.toBlob;
+        HTMLCanvasElement.prototype.toBlob = function (callback, ...rest) {
+          toBlob.call(
+            this,
+            (blob) =>
+              setTimeout(() => {
+                callback(blob);
+                w.__lateLogos += 1;
+              }, late),
+            ...rest,
+          );
+        };
+      }, LATE_MS);
+      const delivered = () =>
+        studio.evaluate(() => (window as unknown as { __lateLogos: number }).__lateLogos);
+      /** The brand of the open variant as this browser saved it. */
+      const storedBrand = async () => {
+        const session = JSON.parse((await storedSession(studio)) || "{}");
+        return session.documents?.[session.openIndex]?.header?.brand;
+      };
+
+      // 1. Another file, and «Quitar» before it is ready: the logo goes and stays gone.
+      await choose("Cambiar");
+      await panel.getByRole("button", { name: "Quitar" }).click();
+      await expect(logo).toHaveCount(0);
+      expect(await delivered(), "the file was ready before «Quitar»: nothing raced").toBe(0);
+      const serial = await editSerialOf(studio);
+      await expect.poll(delivered).toBe(1);
+      await studio.waitForTimeout(SETTLE_MS);
+      await expect(logo).toHaveCount(0);
+      await expect(sizes).toHaveCount(0);
+      expect(await editSerialOf(studio), "the late file wrote a step").toBe(serial);
+      expect(await storedBrand()).toEqual({ name: true });
+
+      // 2. A file, and the brand's place pressed before it is ready: the logo lands, and the place
+      //    pressed meanwhile stays.
+      await choose("Subir tu logo");
+      const places = panel.getByRole("radiogroup", { name: "Dónde va la marca" });
+      await pressAt(places.getByText("En medio", { exact: true }));
+      await expect(bar).toHaveAttribute("data-brand-place", "center");
+      expect(await delivered(), "the file was ready before the place: nothing raced").toBe(1);
+      await expect.poll(delivered).toBe(2);
+      await expect(logo).toHaveCount(1);
+      await imageLoaded(logo);
+      await expect(bar).toHaveAttribute("data-brand-place", "center");
+      await expect
+        .poll(storedBrand)
+        .toEqual({ name: true, place: "center", logo: expect.objectContaining({ width: 200 }) });
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
 });
 
 /**
@@ -28903,6 +29039,204 @@ describe("sprint 36 día 5 — la línea habla", () => {
         expect(s.delay, `${s.name} waited its turn`).toBe(0);
         expect(s.duration, `${s.name} travelled`).toBeLessThan(1);
       }
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
+});
+
+describe("sprint 36 día 6 — cada control responde donde se pulsa", () => {
+  /** Every animation that starts, on an element or its `::before`, with its timing read from the
+   * computed style of the very pseudo-element it runs on. Recorded from the page's first script. */
+  type Started = {
+    name: string;
+    pseudo: string;
+    where: string;
+    duration: number;
+    iterations: string;
+  };
+  async function recorded(context: BrowserContext): Promise<void> {
+    await context.addInitScript(() => {
+      const w = window as unknown as { __started: Started[] };
+      w.__started = [];
+      document.addEventListener(
+        "animationstart",
+        (event) => {
+          const target = event.target as HTMLElement;
+          const pseudo = event.pseudoElement || "";
+          const style = getComputedStyle(target, pseudo || null);
+          const value = style.animationDuration.split(", ")[0] ?? "0s";
+          w.__started.push({
+            name: event.animationName,
+            pseudo,
+            where:
+              target.getAttribute("aria-label") ??
+              target.closest<HTMLElement>("[aria-label]")?.getAttribute("aria-label") ??
+              target.tagName.toLowerCase(),
+            duration: value.endsWith("ms")
+              ? Number.parseFloat(value)
+              : Number.parseFloat(value) * 1000,
+            iterations: style.animationIterationCount,
+          });
+        },
+        true,
+      );
+    });
+  }
+  const started = (page: Page) =>
+    page.evaluate(() => (window as unknown as { __started: Started[] }).__started);
+  const percent = (value: string) => Number.parseFloat(value);
+
+  it("la onda sale de donde se pulsa, «Descargar» se inclina hacia el puntero, deshacer gira, y lo que llega llega con muelle", async () => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    await recorded(context);
+    const page = await context.newPage();
+    try {
+      await intoTheCanvas(page);
+      await motionSettled(page);
+
+      // 1. A ring from the point pressed: a quarter of the way along «Estilo»'s tile, halfway down.
+      const style = page
+        .getByRole("button", { name: "Estilo", exact: true })
+        .locator("[data-rail-tile]");
+      const box = await style.boundingBox();
+      if (!box) throw new Error("«Estilo» has no tile");
+      await page.mouse.click(box.x + box.width * 0.25, box.y + box.height * 0.5);
+      const at = await style.evaluate((el) => ({
+        x: (el as HTMLElement).style.getPropertyValue("--ui-x"),
+        y: (el as HTMLElement).style.getPropertyValue("--ui-y"),
+      }));
+      expect(Math.abs(percent(at.x) - 25), JSON.stringify(at)).toBeLessThanOrEqual(1);
+      expect(Math.abs(percent(at.y) - 50), JSON.stringify(at)).toBeLessThanOrEqual(1);
+      await motionSettled(page);
+      const ring = (await started(page)).filter((s) => s.name === "ui-ripple");
+      expect(ring.length, "no ring was drawn").toBeGreaterThan(0);
+      for (const r of ring) {
+        expect(r.pseudo).toBe("::before");
+        expect(r.iterations).toBe("1");
+        expect(r.duration).toBeLessThanOrEqual(200);
+      }
+      // And let go: the press is over, and nothing about the button's box changed.
+      await expect(style).not.toHaveAttribute("data-ui-press", "");
+      expect(await style.boundingBox()).toEqual(box);
+
+      // 2. «Descargar» leans toward a pointer three pixels from its right edge, four at most, and
+      //    comes back to where it was when the pointer goes.
+      await page.getByRole("button", { name: "Cerrar el estilo" }).click();
+      await motionSettled(page);
+      const download = page.getByRole("button", { name: "Descargar", exact: true });
+      const rest = await download.boundingBox();
+      if (!rest) throw new Error("«Descargar» has no box");
+      await page.mouse.move(rest.x + rest.width - 3, rest.y + rest.height / 2, { steps: 4 });
+      await page.waitForTimeout(260);
+      const leaning = await download.evaluate((el) => getComputedStyle(el).translate);
+      const [dx = 0, dy = 0] = leaning.split(" ").map((v) => Number.parseFloat(v) || 0);
+      expect(dx, `«Descargar» at ${leaning}`).toBeGreaterThan(2);
+      expect(Math.hypot(dx, dy), `«Descargar» at ${leaning}`).toBeLessThanOrEqual(4 * Math.SQRT2);
+      expect(Math.abs(dx)).toBeLessThanOrEqual(4);
+      expect(Math.abs(dy)).toBeLessThanOrEqual(4);
+      await page.mouse.move(rest.x - 300, rest.y + 200, { steps: 4 });
+      await motionSettled(page);
+      expect(await download.boundingBox()).toEqual(rest);
+
+      // 3. Undo turns back on its press, and its arrow is level again at rest.
+      const headline = page
+        .frameLocator(PREVIEW)
+        .first()
+        .locator('[data-section="sec-cover"] [data-id="el-headline"]');
+      await intoWriting(headline);
+      await page.keyboard.type(" y más");
+      await editHint(page).click();
+      await expect(page.getByText("Guardado en este navegador")).toBeVisible();
+      await motionSettled(page);
+      const undo = page.getByRole("button", { name: "Deshacer", exact: true });
+      await undo.click();
+      await motionSettled(page);
+      const turned = (await started(page)).filter((s) => s.name === "ui-turn-back");
+      expect(turned.length, "undo did not turn").toBe(1);
+      expect(turned[0]?.duration).toBeLessThanOrEqual(200);
+      expect(await undo.locator("svg").evaluate((el) => getComputedStyle(el).rotate)).toBe("none");
+
+      // 4. What lands lands on the spring: the rail's mark and the tabs' bar.
+      const timings = await page.evaluate(() =>
+        [
+          document.querySelector('[data-testid="rail-mark"]'),
+          document.querySelector('[data-testid="page-tabs"] .ui-slide'),
+        ].map((el) => (el ? getComputedStyle(el).transitionTimingFunction : "missing")),
+      );
+      for (const timing of timings) expect(timing, JSON.stringify(timings)).toMatch(/^linear\(/);
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
+
+  it("con el dedo la onda sale de donde se toca", async () => {
+    const context = await browser.newContext({
+      viewport: { width: 390, height: 844 },
+      hasTouch: true,
+    });
+    await recorded(context);
+    const page = await context.newPage();
+    try {
+      await page.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
+      await page.fill("#nombre", "Taberna del Puerto");
+      await motionSettled(page);
+      const next = page.getByRole("button", { name: "Siguiente" });
+      const box = await next.boundingBox();
+      if (!box) throw new Error("«Siguiente» has no box");
+      // Read the point before the screen hands over and the button is gone — on `window`, in the
+      // bubbling phase, which is after the shell's own listener has written it (a microtask queued
+      // from a capturing listener runs between listeners, before the shell's).
+      await page.evaluate(() => {
+        const w = window as unknown as { __pressed: { x: string; y: string } | null };
+        w.__pressed = null;
+        window.addEventListener("pointerdown", (event) => {
+          const button = (event.target as Element).closest<HTMLElement>("button");
+          if (button) {
+            w.__pressed = {
+              x: button.style.getPropertyValue("--ui-x"),
+              y: button.style.getPropertyValue("--ui-y"),
+            };
+          }
+        });
+      });
+      await page.touchscreen.tap(box.x + box.width * 0.8, box.y + box.height * 0.3);
+      const pressed = await page.evaluate(
+        () => (window as unknown as { __pressed: { x: string; y: string } | null }).__pressed,
+      );
+      expect(pressed, "the finger's press wrote no point").not.toBeNull();
+      expect(Math.abs(percent(pressed?.x ?? "") - 80)).toBeLessThanOrEqual(1);
+      expect(Math.abs(percent(pressed?.y ?? "") - 30)).toBeLessThanOrEqual(1);
+      await expect(page.getByText("Paso 2 de 5")).toBeVisible();
+    } finally {
+      await context.close();
+    }
+  }, 120_000);
+
+  it("con menos movimiento: la onda y el giro son nada, y «Descargar» no se inclina", async () => {
+    const context = await browser.newContext({
+      viewport: { width: 1280, height: 900 },
+      reducedMotion: "reduce",
+    });
+    await recorded(context);
+    const page = await context.newPage();
+    try {
+      await intoTheCanvas(page);
+      await motionSettled(page);
+      const download = page.getByRole("button", { name: "Descargar", exact: true });
+      const rest = await download.boundingBox();
+      if (!rest) throw new Error("«Descargar» has no box");
+      await page.mouse.move(rest.x + rest.width - 3, rest.y + rest.height / 2, { steps: 4 });
+      await page.waitForTimeout(260);
+      expect(
+        await download.boundingBox(),
+        "«Descargar» leaned for somebody who asked for less",
+      ).toEqual(rest);
+      await page.getByRole("button", { name: "Estilo", exact: true }).click();
+      await motionSettled(page);
+      const ring = (await started(page)).filter((s) => s.name === "ui-ripple");
+      expect(ring.length).toBeGreaterThan(0);
+      for (const r of ring) expect(r.duration).toBeLessThan(1);
     } finally {
       await context.close();
     }

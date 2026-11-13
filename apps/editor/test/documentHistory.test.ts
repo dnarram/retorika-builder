@@ -26,6 +26,7 @@ import {
   wasPlacementEverMoved,
   wasSectionEverEdited,
 } from "../src/editor/documentHistory.ts";
+import { brandPlacePatch, logoPatch } from "../src/editor/headerState.ts";
 
 const ANSWERS = {
   ...EMPTY_ANSWERS,
@@ -2153,6 +2154,38 @@ describe("the header's verbs (sprint 30 día 4)", () => {
     const none = run(button, { type: "setHeaderAction", variant: 0, action: null });
     expect(none[0]?.present.document.header).toEqual({ brand: { name: true } });
     expect(none[0]?.past).toHaveLength(2);
+  });
+
+  it("a patch given as a function is read against the document it lands on", () => {
+    // A logo chosen, the brand's place pressed while the file was being prepared, and then the logo
+    // landing: built from the document of the moment it was chosen, it would put the place back.
+    const chosenOn = start();
+    const placed = run(chosenOn, {
+      type: "setHeader",
+      variant: 0,
+      patch: brandPlacePatch(chosenOn[0]?.present.document as RetorikaDocument, "center"),
+    });
+    const logo = { src: "logo-0a1b2c3d.png", width: 200, height: 200 };
+    const landed = run(placed, {
+      type: "setHeader",
+      variant: 0,
+      patch: (document) => logoPatch(document, logo),
+    });
+    expect(landed[0]?.present.document.header?.brand).toEqual({
+      name: true,
+      place: "center",
+      logo,
+    });
+    expect(landed[0]?.past).toHaveLength(2);
+    expect(landed[0]?.present.cause).toEqual({ type: "setHeader" });
+    // And what changes nothing opens no step, a function or not.
+    expect(
+      run(landed, {
+        type: "setHeader",
+        variant: 0,
+        patch: (document) => ({ brand: document.header?.brand ?? {} }),
+      }),
+    ).toBe(landed);
   });
 
   it("none of them makes a section count as written into", () => {

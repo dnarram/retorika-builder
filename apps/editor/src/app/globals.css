@@ -274,7 +274,9 @@
 @utility ui-slide {
   transition-property: transform, width, opacity;
   transition-duration: var(--ui-base);
-  transition-timing-function: var(--ui-ease);
+  /* The spring since sprint 36 día 6: what slides here lands — the rail's mark, the tabs' bar, a
+     segment's mark, the progress dots — and lands a little past and back. Never an exit. */
+  transition-timing-function: var(--ui-spring);
 }
 
 /**
@@ -928,48 +930,66 @@
 }
 
 /**
- * **A ring from where the finger or the pointer pressed.** The press writes `--ui-x` and `--ui-y`
- * (`editor/ripple.ts`, one delegated listener per shell) and restarts the animation by the
- * `data-ui-press` attribute; the circle grows from that point to past the control's corners and
- * fades, in `--ui-base`. `overflow: hidden` and `isolation: isolate` so it stays inside the
- * control's rounded box and composites on its own.
+ * **A ring from where the finger or the pointer pressed — on every button of the chrome** (sprint 36
+ * día 2, applied on día 6 by David's decision 4: «onda al pulsar en todo botón del cromo»). The
+ * press writes `--ui-x` and `--ui-y` (`editor/ripple.ts`, one delegated listener per shell) and
+ * restarts the animation by the `data-ui-press` attribute; a circle of the control's own colour grows
+ * from that point and fades, in `--ui-base`. Touch as much as mouse: under a finger, the finger
+ * covers the control, and the ring around it is the answer.
  *
- * **On `::before`, deliberately** (David's adjustment 4): `ui-ring-once` draws on `::after`, and
- * the landing's «Crear mi web» wears both — a shared pseudo-element lets one overwrite the other
- * with nothing going red. The budget test holds the two apart.
+ * **A gradient on a `::before` that fills the control, not a scaled circle clipped by the control.**
+ * The day-2 version needed `overflow: hidden` on the button, which on every button of the chrome
+ * would cut whatever a button lets out of its box — a badge, a ring, a focus shadow. This one is
+ * painted inside the `::before`'s own rounded box (`border-radius: inherit`), so nothing is clipped
+ * and nothing about the button's box changes but `position: relative` and `isolation`: the circle is
+ * at `z-index: -1` inside the button's own stacking context, over its background and under its words.
+ *
+ * **In the base layer, by `:where()`**: zero specificity and below every utility, so a button that
+ * is `fixed`, `absolute` or `sticky` keeps its own position (and is a containing block already).
+ * Opt in elsewhere with `.ui-ripple`. **The `::before` of a chrome button is the ripple's** — no
+ * utility draws on it (`motionBudget.test.ts`), which is David's adjustment 4 made a rule: `ui-ring-once`,
+ * `ui-underline` and `ui-count` draw on `::after`.
  */
+@property --ui-ripple-r {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
 @keyframes ui-ripple {
   from {
-    opacity: 0.35;
-    transform: translate(-50%, -50%) scale(0);
+    --ui-ripple-r: 0px;
+    opacity: 0.24;
   }
 
   to {
+    --ui-ripple-r: 240px;
     opacity: 0;
-    transform: translate(-50%, -50%) scale(1);
   }
 }
 
-@utility ui-ripple {
-  position: relative;
-  overflow: hidden;
-  isolation: isolate;
-
-  &::before {
-    content: "";
-    position: absolute;
-    left: var(--ui-x, 50%);
-    top: var(--ui-y, 50%);
-    width: 250%;
-    aspect-ratio: 1;
-    border-radius: 50%;
-    background: currentColor;
-    opacity: 0;
-    pointer-events: none;
-    transform: translate(-50%, -50%) scale(0);
+@layer base {
+  :where(button.ui-interactive, .ui-ripple) {
+    position: relative;
+    isolation: isolate;
   }
 
-  &[data-ui-press]::before {
+  :where(button.ui-interactive, .ui-ripple)::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    pointer-events: none;
+    opacity: 0;
+    background: radial-gradient(
+      circle at var(--ui-x, 50%) var(--ui-y, 50%),
+      currentColor var(--ui-ripple-r),
+      transparent calc(var(--ui-ripple-r) + 1px)
+    );
+  }
+
+  :where(button.ui-interactive, .ui-ripple)[data-ui-press]::before {
     animation: ui-ripple var(--ui-base) var(--ui-ease) 1 forwards;
   }
 }
@@ -985,11 +1005,49 @@
   @media (hover: hover) {
     translate: var(--ui-mx, 0px) var(--ui-my, 0px);
     transition: translate var(--ui-base) var(--ui-spring);
+
+    /* On a control that also answers the press (`ui-interactive`), one list for both: a second
+       `transition` would replace the first's, and «Descargar» would lose its colour and shadow. */
+    &.ui-interactive {
+      transition-property:
+        color, background-color, border-color, box-shadow, transform, opacity, translate;
+      transition-duration:
+        var(--ui-fast), var(--ui-fast), var(--ui-fast), var(--ui-fast), var(--ui-fast),
+        var(--ui-fast), var(--ui-base);
+      transition-timing-function:
+        var(--ui-ease), var(--ui-ease), var(--ui-ease), var(--ui-ease), var(--ui-ease),
+        var(--ui-ease), var(--ui-spring);
+    }
   }
 
   @media (prefers-reduced-motion: reduce) {
     translate: none;
   }
+}
+
+/**
+ * **Undo turns back, redo turns on** (sprint 36 día 6): the arrow of each turns twenty degrees the
+ * way it points and returns with the spring, on the press the ripple answers (`data-ui-press`). Only
+ * on a control that can act — an undo with nothing to undo does not pretend to.
+ */
+@keyframes ui-turn-back {
+  50% {
+    rotate: -20deg;
+  }
+}
+
+@keyframes ui-turn-on {
+  50% {
+    rotate: 20deg;
+  }
+}
+
+.ui-turn-back[data-ui-press] > svg {
+  animation: ui-turn-back var(--ui-base) var(--ui-spring);
+}
+
+.ui-turn-on[data-ui-press] > svg {
+  animation: ui-turn-on var(--ui-base) var(--ui-spring);
 }
 
 /**
@@ -1016,7 +1074,9 @@
 
   &:hover::after,
   &:focus-visible::after,
-  &[aria-current]::after {
+  &[aria-current]::after,
+  :hover > &::after,
+  :focus-visible > &::after {
     transform: scaleX(1);
   }
 }

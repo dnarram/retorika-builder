@@ -354,8 +354,20 @@ export type HistoryAction =
   | { type: "movePage"; variant: number; pageId: string; toIndex: number }
   | { type: "setPageInMenu"; variant: number; pageId: string; inMenu: boolean }
   | { type: "deletePage"; variant: number; pageId: string }
-  /** `patch` replaces whole top-level keys of the header, as the schema's `setHeader` does. */
-  | { type: "setHeader"; variant: number; patch: Partial<Header> }
+  /**
+   * `patch` replaces whole top-level keys of the header, as the schema's `setHeader` does.
+   *
+   * **A function is read against the document the step lands on**, not the one it was decided
+   * on. That is for a change decided before an `await` and written after it: a logo being prepared
+   * takes long enough for the owner to press something else in the header meanwhile, and a patch
+   * built from the document of the moment the file was chosen would put back what that press
+   * changed — the brand's place, or a logo «Quitar» had just taken away with its size.
+   */
+  | {
+      type: "setHeader";
+      variant: number;
+      patch: Partial<Header> | ((document: RetorikaDocument) => Partial<Header>);
+    }
   | { type: "setHeaderAction"; variant: number; action: HeaderAction | null }
   /** `null` or an empty string goes back to the derived label. Dispatched on every keystroke that
    * leaves a valid label (or none), and amended while the owner keeps typing into the same field. */
@@ -1176,9 +1188,13 @@ function setPageInMenu(history: History, pageId: string, inMenu: boolean): Histo
  * every verb here: the schema's verbs hand back the same document when nothing would change, so a
  * radio pressed on the value it already holds opens no step.
  */
-function setHeader(history: History, patch: Partial<Header>): History {
-  const document = setHeaderInDoc(history.present.document, patch);
-  if (document === history.present.document) return history;
+function setHeader(
+  history: History,
+  patch: Partial<Header> | ((document: RetorikaDocument) => Partial<Header>),
+): History {
+  const present = history.present.document;
+  const document = setHeaderInDoc(present, typeof patch === "function" ? patch(present) : patch);
+  if (document === present) return history;
   return step(history, document, { type: "setHeader" });
 }
 

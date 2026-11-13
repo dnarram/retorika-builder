@@ -2114,7 +2114,8 @@ export function Editor({
     if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) return;
     el.animate([{ translate: `${dx}px ${dy}px` }, { translate: "0px 0px" }], {
       duration: Number.parseFloat(CHROME_SCALE.fast),
-      easing: CHROME_SCALE.ease,
+      // A drop lands like everything that lands (sprint 36 día 6): a little past its cell and back.
+      easing: CHROME_SCALE.spring,
     });
   }
   /**

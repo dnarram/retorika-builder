@@ -1278,6 +1278,15 @@ export function Variants({
   }
 
   /**
+   * **The last thing pressed about the logo is the one that counts** (found closing sprint 36 día 6,
+   * when a CI run caught it). A file takes a moment to be prepared, and «Quitar» or another file
+   * pressed in that moment came first and was then overwritten by it: the logo was taken away and
+   * came back on its own, with the size «Quitar» had removed. Each pick and each «Quitar» takes a
+   * turn; a file that finishes preparing after a later turn is dropped.
+   */
+  const logoTurn = useRef(0);
+
+  /**
    * The logo, from «Menú» or from the «Fotos» panel (ADR 0059): prepared as a PNG, named by a fresh
    * id, shown at once through the same object-URL map the photographs use, written into the
    * header as one history step, and kept in this browser's store under this card's scope — the
@@ -1285,8 +1294,13 @@ export function Variants({
    * than per slot, so no cache can show the old mark under the new document (`logoSrcFor`).
    */
   async function handlePickLogo(variant: number, file: File) {
+    logoTurn.current += 1;
+    const turn = logoTurn.current;
     setPhotoError(null);
     const result = await prepareLogo(file);
+    // «Quitar», or another file, while this one was being prepared: the later press is what the
+    // owner meant, and this file lands nowhere — not even as an error about a file they replaced.
+    if (turn !== logoTurn.current) return;
     if (!result.ok) {
       setPhotoError(es[`editor.logo.${result.error.reason}` as keyof typeof es]);
       return;
@@ -1300,11 +1314,16 @@ export function Variants({
       next.set(variant, forVariant);
       return next;
     });
-    const current = histories[variant]?.present.document;
-    if (!current) return;
     const { width, height } = result.logo;
     // The brand keeps everything else, its size among it (ADR 0069): a new file is not a new size.
-    dispatch({ type: "setHeader", variant, patch: logoPatch(current, { src, width, height }) });
+    // Read against the document this step lands on, not the one of the moment the file was chosen:
+    // `histories` here is that moment's, and anything pressed in the header meanwhile — the brand's
+    // place — would be put back by a brand copied from it.
+    dispatch({
+      type: "setHeader",
+      variant,
+      patch: (current) => logoPatch(current, { src, width, height }),
+    });
     if (!(await savePhoto(photoScope(variant), src, result.logo.bytes))) {
       setSaveStatus("unsaved");
     }
@@ -1314,6 +1333,7 @@ export function Variants({
    * unreferenced; the account's reconciliation removes its object on the next accepted save, since
    * the document no longer names it. A brand with nothing left in it drops its key. */
   function handleRemoveLogo(variant: number) {
+    logoTurn.current += 1;
     const current = histories[variant]?.present.document;
     if (!current?.header?.brand?.logo) return;
     // The logo's size goes with it (ADR 0069 §2): the schema refuses a size for no logo.
