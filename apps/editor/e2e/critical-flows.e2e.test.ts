@@ -27269,12 +27269,17 @@ describe("sprint 35 día 5 — el panel de la marca", () => {
       expect(index).toMatch(/<header class="rb-header"[^>]* data-brand-place="center"/);
       expect(index).toMatch(/<header class="rb-header"[^>]* data-logo-size="lg"/);
 
-      // 7. A new file keeps the size the owner chose.
+      // 7. A new file keeps the size the owner chose. **Waited for by its own `src`**: the old logo
+      //    is loaded and already «Grande», so without it the three lines below were true of the old
+      //    file, and step 8 pressed «Quitar» while the new one was still being prepared (the CI run
+      //    of sprint 36 día 6, and the walk after this one).
+      const oldSrc = (await logo.getAttribute("src")) ?? "";
       const [change] = await Promise.all([
         studio.waitForEvent("filechooser"),
         panel.getByRole("button", { name: "Cambiar" }).click(),
       ]);
       await change.setFiles(join(import.meta.dirname, "fixtures/logo.png"));
+      await expect(logo).not.toHaveAttribute("src", oldSrc);
       await imageLoaded(logo);
       await expect(logoSizes.getByRole("radio", { name: "Grande" })).toBeChecked();
       await expect(bar).toHaveAttribute("data-logo-size", "lg");
@@ -27293,6 +27298,112 @@ describe("sprint 35 día 5 — el panel de la marca", () => {
       await context.close();
     }
   }, 240_000);
+});
+
+/**
+ * **What is pressed while a logo is being prepared is not undone when it lands** (found by the CI
+ * run of sprint 36 día 6). A file takes a moment to become a PNG, and the logo used to be written
+ * from the document of the moment it was chosen: «Quitar» pressed in that moment was overwritten —
+ * the logo came back on its own, with the size «Quitar» had taken — and so was a place pressed for
+ * the brand. Here every logo is handed back `LATE_MS` late, by holding `canvas.toBlob`, which is
+ * what `prepareLogo` waits on last; nothing in the product knows.
+ */
+describe("sprint 36 día 6 — un logo que tarda no deshace lo que se pulsó", () => {
+  /** Long enough for the press after the choice to land first, panel motion and all. */
+  const LATE_MS = 1_500;
+  /** The autosave's 500 ms and the late file's last `await`, with room: what is asserted after it
+   * is that nothing happened, and only a window can say that. */
+  const SETTLE_MS = 1_000;
+
+  it("«Quitar» y el sitio de la marca, pulsados mientras se prepara un logo, se quedan", async () => {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 950 } });
+    const studio = await context.newPage();
+    try {
+      await intoTheCanvas(studio);
+      const frame = studio.frameLocator(PREVIEW).first();
+      const bar = frame.locator("header.rb-header");
+      const logo = bar.locator("img.rb-logo");
+      await studio.getByRole("button", { name: "Menú", exact: true }).click();
+      const panel = studio.getByRole("complementary", { name: "La cabecera de tu web" });
+      await expect(panel).toBeVisible();
+      const choose = async (name: "Subir tu logo" | "Cambiar") => {
+        const [chooser] = await Promise.all([
+          studio.waitForEvent("filechooser"),
+          panel.getByRole("button", { name }).click(),
+        ]);
+        await chooser.setFiles(join(import.meta.dirname, "fixtures/logo.png"));
+      };
+      const pressAt = async (target: Locator) => {
+        await target.scrollIntoViewIfNeeded();
+        const at = await pointIn(target);
+        await studio.mouse.click(at.x, at.y);
+      };
+
+      // A logo at «Grande», at the usual speed, so the size is there for a late file to bring back.
+      await choose("Subir tu logo");
+      await expect(logo).toHaveCount(1);
+      await imageLoaded(logo);
+      const sizes = panel.getByRole("radiogroup", { name: "Tamaño del logo" });
+      await pressAt(sizes.getByText("Grande", { exact: true }));
+      await expect(bar).toHaveAttribute("data-logo-size", "lg");
+      await expect.poll(() => storedSession(studio)).toContain('"logoSize":"lg"');
+
+      // From here on every logo is handed back late.
+      await studio.evaluate((late) => {
+        const w = window as unknown as { __lateLogos: number };
+        w.__lateLogos = 0;
+        const toBlob = HTMLCanvasElement.prototype.toBlob;
+        HTMLCanvasElement.prototype.toBlob = function (callback, ...rest) {
+          toBlob.call(
+            this,
+            (blob) =>
+              setTimeout(() => {
+                callback(blob);
+                w.__lateLogos += 1;
+              }, late),
+            ...rest,
+          );
+        };
+      }, LATE_MS);
+      const delivered = () =>
+        studio.evaluate(() => (window as unknown as { __lateLogos: number }).__lateLogos);
+      /** The brand of the open variant as this browser saved it. */
+      const storedBrand = async () => {
+        const session = JSON.parse((await storedSession(studio)) || "{}");
+        return session.documents?.[session.openIndex]?.header?.brand;
+      };
+
+      // 1. Another file, and «Quitar» before it is ready: the logo goes and stays gone.
+      await choose("Cambiar");
+      await panel.getByRole("button", { name: "Quitar" }).click();
+      await expect(logo).toHaveCount(0);
+      expect(await delivered(), "the file was ready before «Quitar»: nothing raced").toBe(0);
+      const serial = await editSerialOf(studio);
+      await expect.poll(delivered).toBe(1);
+      await studio.waitForTimeout(SETTLE_MS);
+      await expect(logo).toHaveCount(0);
+      await expect(sizes).toHaveCount(0);
+      expect(await editSerialOf(studio), "the late file wrote a step").toBe(serial);
+      expect(await storedBrand()).toEqual({ name: true });
+
+      // 2. A file, and the brand's place pressed before it is ready: the logo lands, and the place
+      //    pressed meanwhile stays.
+      await choose("Subir tu logo");
+      const places = panel.getByRole("radiogroup", { name: "Dónde va la marca" });
+      await pressAt(places.getByText("En medio", { exact: true }));
+      await expect(bar).toHaveAttribute("data-brand-place", "center");
+      expect(await delivered(), "the file was ready before the place: nothing raced").toBe(1);
+      await expect.poll(delivered).toBe(2);
+      await expect(logo).toHaveCount(1);
+      await imageLoaded(logo);
+      await expect(bar).toHaveAttribute("data-brand-place", "center");
+      await expect
+        .poll(storedBrand)
+        .toEqual({ name: true, place: "center", logo: expect.objectContaining({ width: 200 }) });
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
 });
 
 /**
