@@ -1227,6 +1227,15 @@ export function Editor({
   /** The room the shell last asked for at the end of the page (sprint 28 día 1, `overscrollFor`),
    * in the frame's pixels, so a document wired after the notice gets it too (`writeZoom`). */
   const overscrollNow = useRef(0);
+  /**
+   * **The zoom the shell computed, once it has said one** (sprint 37 día 1, ADR 0053 §5's note).
+   * `null` until the first notice, and then the number `zoomOf` answers with instead of measuring:
+   * the device toggle animates the card's `transform` over 260 ms and tells the canvas in the same
+   * layout effect that starts the transition, so the frame's box at that moment is the zoom the
+   * card is leaving. Measured on a 390 phone: back in «Ver en móvil» the chrome stayed divided by
+   * 0.519 at zoom 1, and a 32 px verb was 61.7 on screen until the next edit.
+   */
+  const zoomNow = useRef<number | null>(null);
   /** Where the next patch comes from (adjustment 2; día 4): `history` for undo and redo, `mark`
    * for a mark set from the text's own toolbar — both applied to the focused text as well, the
    * selection kept. Set by the call that changes the document, read and cleared by the patch that
@@ -6493,11 +6502,17 @@ export function Editor({
    * armed at three frame pixels would arm sooner than a hand means it. Dividing the threshold by
    * this is what keeps «three pixels» the same three pixels at every window width.
    *
-   * Read rather than passed, and from two numbers the frame itself has: its own box, which is
-   * scaled, against its viewport's width, which is not. A `1` for a frame with no view yet is the
-   * honest fallback — no zoom is the state the shell starts in.
+   * **The shell's number once it has said one, and a measurement only before** (sprint 37 día 1).
+   * At rest the two are the same quantity — the frame's box is the layout width times the zoom — but
+   * while the device toggle's `ui-reflow` runs, the box is still the zoom the card is leaving: the
+   * notice arrives in the layout effect that starts the transition, and every reader here draws
+   * the end state. Before the first notice (a document wired before the shell's first layout
+   * effect) it is read from two numbers the frame itself has: its own box, which is scaled, against
+   * its viewport's width, which is not. A `1` for a frame with no view yet is the honest fallback —
+   * no zoom is the state the shell starts in.
    */
   function zoomOf(iframeDoc: Document): number {
+    if (zoomNow.current !== null) return zoomNow.current;
     const view = iframeDoc.defaultView;
     const frame = view?.frameElement as HTMLElement | null | undefined;
     const inner = view?.innerWidth ?? 0;
@@ -9205,7 +9220,13 @@ export function Editor({
         // would clamp the scroll if the page had not already been given the room. A write costs no
         // layout, so it goes first, wired or not; `writeZoom` repeats it at wiring from the ref.
         overscrollNow.current = overscroll;
+        // **The zoom too, from the shell's number and not from the frame's box** (sprint 37 día 1):
+        // this runs in the layout effect that starts the device toggle's transition, when the box
+        // is still the zoom the card is leaving. Written here as well as by `writeZoom`, so a
+        // document caught between mounting and wiring gets the right number.
+        zoomNow.current = zoom;
         live?.documentElement?.style.setProperty("--rb-overscroll", `${overscroll}px`);
+        live?.documentElement?.style.setProperty("--rb-zoom", String(zoom));
         if (!live || live.documentElement?.dataset["rbWired"] !== "1") return;
         const redrawMs = redrawChrome(live);
         record("redraw", { cause: "zoom", zoom, overscroll, redrawMs });
