@@ -9281,3 +9281,64 @@ los mismos minutos facturados más un arranque, la mitad del reloj), o **subir e
    sigue sin verse fuera de Chromium**: las transiciones de pantalla, la escena, el cruce de página y la
    onda de este sprint tampoco se han visto en WebKit ni en Firefox.
 7. **El sprint 37, sin planificar.**
+
+## Sprint 37 — «El raíl se vuelve radial, y el móvil vuelve a su tamaño» (desde el 13 de noviembre de 2026)
+
+David, con la #374 fusionada y redesplegada, pide dos cosas. **Un defecto, el primer día, solo y antes**:
+en una pantalla pequeña el editor abre en «Ver en móvil», «Ver en ordenador» se ve bien, y al volver a
+«Ver en móvil» los botones y las secciones salen «desproporcionados y descuadrados, sobrepasando
+márgenes». Y **que el dueño elija cómo se ve el raíl**: fijo a la izquierda, como hoy y por defecto, o un
+menú radial con «Secciones» en el centro, que nunca desaparece y que no tapa la página. Preguntado qué
+barra es (sus primeras respuestas hablaban de ocho secciones por arco y de una web de doce, que solo
+encaja con el navegador de secciones de la web publicada), **cambió la decisión: todo el raíl del editor
+se vuelve radial, con un modelo que no esconde nada**. El eje es la herramienta activa, en una franja de
+56 px, con un anillo estático de puntos; abrirlo despliega las herramientas; con «Secciones» como eje
+despliega las secciones de la página (ocho por arco, dos arcos hasta dieciséis), y el último radio,
+«Herramientas», vuelve al primer anillo. Los dos anillos nunca conviven: cambiar de uno a otro es una
+tercera escena con nombre. Intención de 100 ms y gracia de 150 ms, con nombre en el presupuesto. Un
+ajuste al aprobar: **la caja que se pulsa no viaja; viaja lo que se ve** (cada radio es un botón quieto
+en su sitio final y lo que brota es un `span` dentro). El plan está en la memoria del proyecto
+(`project-sprint-37-plan`).
+
+### Día 1, primero y solo — el lienzo vuelve a su zoom (PR de `fix/el-lienzo-vuelve-a-su-zoom`)
+
+**Medido antes de arreglar.** El cromo del marco se dibuja en píxeles de la pantalla dividiendo cada
+longitud por `--rb-zoom` (ADR 0053), que el editor escribe cuando la cáscara avisa de que el zoom ha
+cambiado. El conmutador de dispositivo es el único cambio de zoom animado (`ui-reflow`, 260 ms sobre
+`width` y `transform`), y la cáscara avisa en el mismo efecto de maquetación que arranca la transición:
+`zoomOf` medía entonces la caja del marco, que todavía es el zoom que la tarjeta deja, y nadie volvía a
+medir hasta la siguiente edición. La caminata nueva, «sprint 37 día 1 — el lienzo vuelve a su zoom»,
+abre el editor en un teléfono con una sección elegida y va de móvil a escritorio y de vuelta, comparando
+`--rb-zoom` con el zoom medido desde fuera y un verbo en pantalla con sus 32 px. En rojo, antes del
+arreglo:
+
+| Teléfono | Tras «Ver en ordenador» | De vuelta en «Ver en móvil» |
+|---|---|---|
+| 390 × 844 | escrito 1, dibujado a 0,519: un verbo de **16,6** px | escrito 0,519, dibujado a 1: **61,7** px |
+| 320 × 568 | escrito 0,95, dibujado a 0,422: **14,2** px | escrito 0,422, dibujado a 0,95: **72,1** px |
+| 390 × 844, con menos movimiento | bien | escrito 0,519, dibujado a 1: **61,7** px |
+
+Las dos direcciones estaban mal y solo una se veía: en la vista de ordenador el cromo salía a la mitad,
+y eso se lee como «proporcionado» porque encoge con la página.
+
+**El arreglo es un número, no una segunda medida.** La cáscara ya calcula el zoom y lo manda en el aviso:
+el editor lo guarda (`zoomNow`) y lo escribe como `--rb-zoom`, y `zoomOf` lo devuelve en cuanto la
+cáscara ha hablado; la caja del marco solo se lee antes del primer aviso. Todos los que leen `zoomOf`
+—las longitudes del cromo, la colocación de la barra de texto y de las asas, los umbrales de los gestos—
+dibujan el estado final; durante los 260 ms el cromo viaja con la tarjeta y aterriza exacto. Descartado
+en una línea: un segundo redibujo en `transitionend`, que repara después un número que la fuente ya
+tiene bien y deja un registro `redraw` más por conmutación. Tras el arreglo, las nueve medidas tienen
+`--rb-zoom` igual al zoom medido y el verbo a 32 × 32.
+
+**Saboteos.** `zoomOf` midiendo otra vez la caja: rojo en los tres casos y en las dos direcciones. Quitar
+la escritura temprana de `--rb-zoom` en el aviso: **sigue verde**, y se dice así: esa línea es defensiva
+(un documento entre montaje y cableado) y la caminata no la guarda. No hay prueba unitaria de `zoomOf`:
+vive dentro del componente, y la caminata es la guarda.
+
+**La ADR 0053** gana una nota en §3 («el número de la cáscara, medido solo hasta que lo haya»), otra en
+§5 (el supuesto «después de que la tarjeta tiene su `transform` nuevo» vale para un panel y no para el
+conmutador) y una enmienda con la tabla de arriba.
+
+**El e2e de la CI sube a 40 minutos el paso y a 50 el trabajo**, para que lo aceptes con esta PR: el paso
+fue 31–32 de sus 35 durante todo el sprint 36 (32 min 26 s en la ejecución del cierre, leído de la propia
+ejecución) y este sprint añade unas diez caminatas. Partirlo en dos trabajos sigue siendo tu decisión.

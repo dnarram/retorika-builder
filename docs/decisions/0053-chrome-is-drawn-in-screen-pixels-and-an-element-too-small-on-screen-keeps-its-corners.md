@@ -94,6 +94,11 @@ custom property of the chrome besides `--rb-enter-offset`, and for the same reas
 measures can write it. `chromeScale.ts`'s note that «a string cannot read a CSS variable from another
 document» stays true of the tokens; the zoom is not a token.
 
+**Note (13 November 2026, sprint 37 día 1).** It is now **the shell's number, measured only until there
+is one**: `onZoomChange` stores the zoom the shell computed and writes it as `--rb-zoom`, and `zoomOf`
+returns it from then on; the frame's box is read only before the first notice. See the amendment of
+that date at the end.
+
 ### 4. The handles: forty-four on screen, and their thresholds on screen (condition 2, adjustment 1)
 
 The painter passes `target: HANDLE_TOUCH / zoom` to `handlesFor`, the argument nobody passed, and the
@@ -128,6 +133,12 @@ move**: nothing was edited, and a walk waiting for an edit must not be woken by 
 `ResizeObserver` on the `<iframe>`: its `contentRect` ignores the `transform`, and the frame's own box
 does not change when the card is scaled. The shell's own observer, which recalculates the room, is what
 changes the zoom, so it is what triggers the redraw — condition 3 as written.
+
+**Note (13 November 2026, sprint 37 día 1).** «After the card has its new `transform`, which is what
+`zoomOf` measures» holds for a panel, whose card does not transition, and not for the device toggle:
+`ui-reflow` animates `transform` over 260 ms and the notice arrives in the layout effect that starts
+it, when the box is still the zoom the card is leaving. The notice now carries the number; see the
+amendment of that date at the end.
 
 ## What this does not decide
 
@@ -282,3 +293,46 @@ anything the eye reads. The pill, whose height is its padding, comes out exact.
 Nothing in `apps/editor` changes for this amendment; the walk that measured it stays, asserting the
 rule of §1 on the flow chrome — the same size on screen at either zoom, within the two pixels the font
 costs — and that what is below starts after the box and its margin.
+
+## Amendment — the device toggle's zoom is the shell's number (13 November 2026, sprint 37 día 1)
+
+**What was wrong.** David reported it on a phone: the editor opens in «Ver en móvil», «Ver en
+ordenador» looks right, and back in «Ver en móvil» the chrome is «desproporcionado y descuadrado,
+sobrepasando márgenes». The device toggle is the one change of zoom that is animated (`ui-reflow`, 260
+ms on `width` and `transform`), and the shell's notice (§5) runs in the same layout effect that starts
+that transition. `zoomOf` read the frame's box at that moment, which is the transition's first value,
+the zoom the card is leaving; nothing measured it again, so `--rb-zoom` stayed wrong until the next
+edit.
+
+**Measured** before the fix, Chromium, `isMobile` with touch, the cover chosen, by the walk «sprint 37
+día 1 — el lienzo vuelve a su zoom» in `critical-flows.e2e.test.ts` (`--rb-zoom` written on the frame's
+root against the zoom measured from outside; a verb's box on screen against `VERB_SCALE.size`, 32):
+
+| Phone | After «Ver en ordenador» | Back in «Ver en móvil» |
+|---|---|---|
+| 390 × 844 | written 1, drawn at 0.5187: a verb **16.6** px | written 0.5187, drawn at 1: a verb **61.7** px |
+| 320 × 568 | written 0.95, drawn at 0.4216: a verb **14.2** px | written 0.4216, drawn at 0.95: a verb **72.1** px |
+| 390 × 844, reduced motion | right (0.5187 both) | written 0.5187, drawn at 1: a verb **61.7** px |
+
+Both directions were wrong, and only one was visible: in the desktop view the chrome came out at half
+its size, which reads as proportionate because it shrinks with the page.
+
+**Decision: the notice carries the number, and the canvas uses it.** `onZoomChange` stores the zoom the
+shell computed (`zoomNow`) and writes it as `--rb-zoom` beside `--rb-overscroll`; `zoomOf` returns it
+once the shell has said one and reads the frame's box only before (a document wired before the shell's
+first layout effect). At rest the two are the same quantity — the frame's box is the layout width times
+the zoom — and while the card travels only the computed one is where it is going, which is what every
+reader of `zoomOf` draws: the chrome's lengths, the text bar and grip placements, the gestures'
+thresholds (§2, §4). During the 260 ms the chrome rides with the card and lands exact.
+
+**Not a second redraw on `transitionend`.** It would mend the number after the fact, at the cost of a
+second `redraw` record per toggle, which the probe and the walks count; the source already has the
+right number.
+
+**What the walk does and does not guard.** Sabotaged, `zoomOf` measuring again turns all three cases
+red in both directions. The early write of `--rb-zoom` in `onZoomChange` is defensive — for a document
+caught between mounting and wiring — and the walk stays green without it: it is kept and not counted as
+guarded. After the fix every one of the nine measures has `--rb-zoom` equal to the measured zoom and a
+verb at 32 × 32 on screen.
+
+Nothing in `packages/` changes; the published page does not move by a byte.
