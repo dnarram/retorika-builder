@@ -30232,6 +30232,8 @@ describe("sprint 37 día 2 — el raíl tiene dos formas", () => {
       await expect(page.locator(FAN)).toHaveCount(1);
       await page.mouse.click(at.x, at.y);
       await expect(page.locator(FAN)).toHaveCount(0);
+      // A resting hand is never quite still: a pixel of it, which would arm the intent again.
+      await page.mouse.move(at.x + 1, at.y);
       await page.waitForTimeout(HUB_INTENT_MS * 3);
       expect(await page.locator(FAN).count(), "resting after the press reopened it").toBe(0);
     } finally {
