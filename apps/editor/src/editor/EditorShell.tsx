@@ -819,7 +819,9 @@ export function EditorShell({
    * touching the document, and the canvas's chrome is redrawn after edits only. This is the
    * notice. Not a `ResizeObserver` on the `<iframe>` from inside: its `contentRect` ignores the
    * `transform` this shell scales the card with, so the frame's box does not change when the card
-   * is scaled. The canvas measures the zoom for itself (`zoomOf`); this only says when to.
+   * is scaled. **The notice carries the number, and the canvas uses it** (sprint 37 día 1): it
+   * used to measure the zoom for itself (`zoomOf`) when told, and the device toggle tells it in the
+   * layout effect that starts `ui-reflow`, when the card's box is still the zoom it is leaving.
    *
    * **And the room the page needs at its end so that the new zoom clamps nothing** (sprint 28
    * día 1, `overscrollFor`): the card is `100 / zoom %` tall, so a smaller zoom is a taller frame

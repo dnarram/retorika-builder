@@ -50,6 +50,7 @@ import { HANDLE_TOUCH } from "../src/editor/handles.ts";
 import {
   CANVAS_ZOOM_FLOOR,
   DESKTOP_LAYOUT_WIDTH,
+  desktopLayoutWidth,
   NARROWEST_WIDTH,
   PHONE_BREAKPOINT,
 } from "../src/editor/overflowCheck.ts";
@@ -29746,6 +29747,150 @@ describe("sprint 36 día 7 — el lienzo responde", () => {
       await page.mouse.up();
     } finally {
       await page.context().close();
+    }
+  }, 180_000);
+});
+
+/**
+ * **Sprint 37 día 1 — el lienzo vuelve a su zoom** (ADR 0053 §5, its sprint 37 note). David found it
+ * on a phone: the editor opens in «Ver en móvil», «Ver en ordenador» looks right, and back in «Ver en
+ * móvil» the verbs, the text bar and every handle come out «desproporcionados y descuadrados,
+ * sobrepasando márgenes».
+ *
+ * The chrome inside the frame is drawn in screen pixels by dividing every length by `--rb-zoom`
+ * (`screenPx`), which the editor writes on the frame's root whenever the shell says the zoom changed.
+ * The device toggle is the one change of zoom that is animated (`ui-reflow`, 260 ms on `width` and
+ * `transform`), and the shell says so in the same layout effect that starts the transition — so a
+ * zoom read from the frame's box then is the zoom the card is leaving, not the one it is going to.
+ * Nothing measured it again: the number stayed until the next edit.
+ *
+ * So the walk compares the two numbers that must agree, read in one task: the zoom the chrome is
+ * divided by (`--rb-zoom` on the frame's root) and the zoom the card is drawn at, measured from
+ * outside the way `canvasZoom` does — and, as the consequence the owner sees, a verb's box on screen
+ * against `VERB_SCALE.size`. Three times per phone: as the editor opens, after «Ver en ordenador», and
+ * after «Ver en móvil» again; each after the card has arrived and nothing is moving. Both directions
+ * are wrong the same way and only one was visible: going to the desktop view the chrome kept the
+ * zoom-1 number and came out at half its size, which reads as «proportionate» because it shrinks with
+ * the page.
+ */
+describe("sprint 37 día 1 — el lienzo vuelve a su zoom", () => {
+  type Seen = {
+    where: string;
+    written: number;
+    measured: number;
+    inner: number;
+    verb: { w: number; h: number } | null;
+  };
+
+  async function chromeAgainstCard(page: Page, where: string): Promise<Seen> {
+    await motionSettled(page);
+    return page.evaluate((where) => {
+      const frame = document.querySelector<HTMLIFrameElement>(
+        '[data-testid="canvas-card"] iframe:not([aria-hidden="true"])',
+      );
+      const doc = frame?.contentDocument;
+      const view = doc?.defaultView;
+      if (!frame || !doc || !view) throw new Error("no canvas to measure");
+      const measured = frame.getBoundingClientRect().width / view.innerWidth;
+      const written = Number.parseFloat(doc.documentElement.style.getPropertyValue("--rb-zoom"));
+      const verb = doc.querySelector(".rb-actions .rb-action")?.getBoundingClientRect();
+      const round = (n: number) => Math.round(n * 10) / 10;
+      return {
+        where,
+        written: Math.round(written * 10000) / 10000,
+        measured: Math.round(measured * 10000) / 10000,
+        inner: view.innerWidth,
+        verb: verb ? { w: round(verb.width * measured), h: round(verb.height * measured) } : null,
+      };
+    }, where);
+  }
+
+  /** Everything that disagrees, as lines; empty is the only passing answer. */
+  function wrong(seen: Seen): string[] {
+    const out: string[] = [];
+    if (!(Math.abs(seen.written - seen.measured) <= 0.001)) {
+      out.push(
+        `${seen.where}: the chrome is divided by ${seen.written} and the card is drawn at ${seen.measured}`,
+      );
+    }
+    if (!seen.verb) out.push(`${seen.where}: no verb drawn to measure`);
+    else if (
+      Math.abs(seen.verb.w - VERB_SCALE.size) > 1 ||
+      Math.abs(seen.verb.h - VERB_SCALE.size) > 1
+    ) {
+      out.push(
+        `${seen.where}: a verb is ${seen.verb.w}×${seen.verb.h} on screen, ${VERB_SCALE.size} wanted`,
+      );
+    }
+    return out;
+  }
+
+  async function roundTrip(page: Page, label: string): Promise<Seen[]> {
+    await intoTheCanvas(page);
+    const frame = page.frameLocator(PREVIEW).first();
+    // The premise: a phone opens in the mobile view (ADR 0042), or the round trip starts elsewhere.
+    await deviceArrived(page, NARROWEST_WIDTH);
+    // A section chosen, so its verbs are drawn: the consequence the owner sees is measured on them.
+    await frame.locator('[data-section="sec-cover"]').click({ position: { x: 12, y: 12 } });
+    await expect(frame.locator(".rb-actions")).toHaveCount(1);
+    const seen = [await chromeAgainstCard(page, `${label}, opened in «Ver en móvil»`)];
+
+    const room = await page.evaluate(
+      () =>
+        document.querySelector('[data-testid="canvas-area"]')?.getBoundingClientRect().width ?? 0,
+    );
+    await page.getByRole("button", { name: "Ver en ordenador" }).click();
+    await deviceArrived(page, desktopLayoutWidth(room));
+    await expect(frame.locator(".rb-actions")).toHaveCount(1);
+    seen.push(await chromeAgainstCard(page, `${label}, after «Ver en ordenador»`));
+
+    await page.getByRole("button", { name: "Ver en móvil" }).click();
+    await deviceArrived(page, NARROWEST_WIDTH);
+    await expect(frame.locator(".rb-actions")).toHaveCount(1);
+    seen.push(await chromeAgainstCard(page, `${label}, back in «Ver en móvil»`));
+    console.log(`[sprint 37 día 1] ${JSON.stringify(seen)}`);
+    return seen;
+  }
+
+  const PHONES = [
+    { width: 390, height: 844 },
+    { width: 320, height: 568 },
+  ] as const;
+
+  for (const phone of PHONES) {
+    it(`a ${phone.width}×${phone.height}, móvil → ordenador → móvil deja el cromo de su tamaño`, async () => {
+      const context = await browser.newContext({
+        viewport: phone,
+        isMobile: true,
+        hasTouch: true,
+        deviceScaleFactor: 2,
+      });
+      const page = await context.newPage();
+      try {
+        const seen = await roundTrip(page, `${phone.width}`);
+        const found = seen.flatMap(wrong);
+        expect(found, found.join("\n")).toEqual([]);
+      } finally {
+        await context.close();
+      }
+    }, 180_000);
+  }
+
+  it("y con menos movimiento, donde la transición dura 0,01 ms y aun así empieza en el zoom viejo", async () => {
+    const context = await browser.newContext({
+      viewport: { width: 390, height: 844 },
+      isMobile: true,
+      hasTouch: true,
+      deviceScaleFactor: 2,
+      reducedMotion: "reduce",
+    });
+    const page = await context.newPage();
+    try {
+      const seen = await roundTrip(page, "390 reduce");
+      const found = seen.flatMap(wrong);
+      expect(found, found.join("\n")).toEqual([]);
+    } finally {
+      await context.close();
     }
   }, 180_000);
 });
