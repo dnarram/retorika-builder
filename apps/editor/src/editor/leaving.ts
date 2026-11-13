@@ -39,9 +39,18 @@
  * What is leaving. The first three are the editor's (`globals.css` styles their exits); `popup`
  * and `zone` are the canvas chrome's (sprint 35 día 3), styled by the sheet the editor injects into
  * the frame, which `globals.css` cannot reach: a menu, a bar or a ghost shrinking away, and the zone
- * that received a menu acknowledging it once.
+ * that received a menu acknowledging it once. `rail` is the editor's again (sprint 37 día 2): the
+ * rail in the layout the owner just switched away from, fading where it stood while the other one
+ * rises in its place (ADR 0072).
  */
-export type LeavingKind = "panel" | "dialog" | "toast" | "popup" | "zone";
+export type LeavingKind = "panel" | "dialog" | "toast" | "popup" | "zone" | "rail";
+
+/**
+ * **What leaves from the body, `fixed` over the box it had**: a panel, and the rail. Both are items
+ * of a flex row, and a copy put back in the row would hold room the canvas is taking back — or, for
+ * the rail, push the new rail aside for the length of the exit.
+ */
+const OVER_THE_ROW: ReadonlySet<LeavingKind> = new Set(["panel", "rail"]);
 
 /** Longer than the longest exit (`--ui-fast`, 120 ms) with room for a slow frame, and short enough
  * that a copy left by an animation that never ran is gone before anybody could act on it. */
@@ -267,7 +276,7 @@ export function leave(
     let shown: HTMLElement = ghost;
     if (element.isConnected) return; // a rehearsal, or a node that moved rather than left
     if (within && !within.isConnected) return; // the whole screen went, not this node
-    if (kind === "panel") {
+    if (OVER_THE_ROW.has(kind)) {
       Object.assign(ghost.style, {
         position: "fixed",
         left: `${box.left}px`,

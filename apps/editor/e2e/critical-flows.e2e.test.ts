@@ -54,6 +54,7 @@ import {
   NARROWEST_WIDTH,
   PHONE_BREAKPOINT,
 } from "../src/editor/overflowCheck.ts";
+import { FAN_GRACE_MS, HUB_DISC, HUB_INTENT_MS, toolsRing } from "../src/editor/radialMenu.ts";
 import { BASE_URL, QUESTIONNAIRE_URL, startEditorServer, stopEditorServer } from "./server.ts"; /**
  * The preview frame. One per editor, three on the landing page's cards.
  *
@@ -10788,7 +10789,10 @@ describe("el interruptor de diseño llega a la cuenta", () => {
         .toBeGreaterThan(0);
 
       // And the brand-new account's `default false` must not switch off the tools just turned on.
-      await expect(page.getByRole("switch")).toHaveAttribute("aria-checked", "true");
+      await expect(page.getByRole("switch", { name: "Herramientas de diseño" })).toHaveAttribute(
+        "aria-checked",
+        "true",
+      );
     } finally {
       await context.close();
     }
@@ -29889,6 +29893,413 @@ describe("sprint 37 día 1 — el lienzo vuelve a su zoom", () => {
       const seen = await roundTrip(page, "390 reduce");
       const found = seen.flatMap(wrong);
       expect(found, found.join("\n")).toEqual([]);
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
+});
+
+/**
+ * **Sprint 37 día 2 — el raíl tiene dos formas** (ADR 0072). The rail fixed on the left, as it always
+ * was and still is by default, or a radial menu chosen by the owner in this browser: a strip 56 px
+ * wide whose hub is the tool that is open, ringed by one dot per tool, and that fans the rail's tools
+ * out to its right when the pointer rests on it. David's rules, each walked here: the hub never
+ * disappears; closed, the fan leaves not one pixel over the canvas; the fan opens on intent (100 ms of
+ * a pointer at rest), not on a pointer crossing the edge; it gives 150 ms of grace to cross from the
+ * hub to a pill; and every panel is still reachable, beside the canvas, as the fixed rail opens it.
+ * Nothing moves yet (día 5): the fan appears and goes.
+ */
+describe("sprint 37 día 2 — el raíl tiene dos formas", () => {
+  const HUB = '[data-testid="rail-hub"]';
+  const FAN = '[data-testid="rail-fan"]';
+  const SIX = ["sections", "style", "pages", "menu", "share", "photos"];
+
+  /** Into the editor with the radial menu already chosen in this browser. */
+  async function intoTheRadialEditor(page: Page): Promise<void> {
+    await page.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
+    await page.evaluate(() => localStorage.setItem("retorika.rail.v1", "radial"));
+    await intoTheCanvas(page);
+    await expect(page.locator('nav[data-rail-layout="radial"]')).toHaveCount(1);
+  }
+
+  /** The hub's disc centre, on screen: where a hand rests to open the fan. */
+  async function hubCentre(page: Page): Promise<{ x: number; y: number }> {
+    const box = await page.locator(HUB).boundingBox();
+    if (!box) throw new Error("the hub is not drawn");
+    return { x: box.x + box.width / 2, y: box.y + HUB_DISC / 2 };
+  }
+
+  /**
+   * **The window has finished changing under the walk**: the card fits its area and the hub is where
+   * it will stay, read in two consecutive frames. A new window size reaches the card through the
+   * shell's `ResizeObserver` a frame later, which no animation reports — measured at 768, the frame
+   * was read at −104 px, laid out for the room the window had a moment before.
+   */
+  async function screenStill(page: Page): Promise<void> {
+    await motionSettled(page);
+    await expect
+      .poll(
+        () =>
+          page.evaluate(
+            () =>
+              new Promise<boolean>((resolve) => {
+                const read = () => {
+                  const card = document
+                    .querySelector('[data-testid="canvas-card"]')
+                    ?.getBoundingClientRect();
+                  const area = document
+                    .querySelector('[data-testid="canvas-area"]')
+                    ?.getBoundingClientRect();
+                  const hub = document
+                    .querySelector('[data-testid="rail-hub"]')
+                    ?.getBoundingClientRect();
+                  const fits =
+                    !!card &&
+                    !!area &&
+                    card.left >= area.left - 0.5 &&
+                    card.right <= area.right + 0.5 &&
+                    card.top >= area.top - 0.5;
+                  return `${fits} ${card?.left} ${card?.width} ${hub?.top}`;
+                };
+                const first = read();
+                requestAnimationFrame(() =>
+                  requestAnimationFrame(() =>
+                    resolve(first.startsWith("true") && first === read()),
+                  ),
+                );
+              }),
+          ),
+        { message: "the card never settled into its area" },
+      )
+      .toBe(true);
+  }
+
+  /** Rest the pointer on the hub until the fan is open. */
+  async function openByResting(page: Page): Promise<void> {
+    await screenStill(page);
+    const at = await hubCentre(page);
+    await page.mouse.move(at.x, at.y);
+    await expect(page.locator(FAN)).toHaveCount(1);
+  }
+
+  /** Press a pill where it is drawn (`page.mouse`, never `locator.click()`, which scrolls). */
+  async function pressSpoke(page: Page, id: string): Promise<void> {
+    const box = await page.locator(`${FAN} [data-spoke="${id}"]`).boundingBox();
+    if (!box) throw new Error(`the pill «${id}» is not drawn`);
+    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  }
+
+  /** What covers the canvas, with the fan closed: the hub against the frame's left edge, the point
+   * just inside the frame's left edge, and the room the canvas has. */
+  async function atRest(page: Page) {
+    await screenStill(page);
+    return page.evaluate(() => {
+      const hub = document.querySelector('[data-testid="rail-hub"]')?.getBoundingClientRect();
+      const frame = document
+        .querySelector('[data-testid="canvas-card"] iframe:not([aria-hidden="true"])')
+        ?.getBoundingClientRect();
+      const area = document.querySelector('[data-testid="canvas-area"]')?.getBoundingClientRect();
+      const row = document.querySelector('[data-testid="canvas-and-panel"]');
+      const at = frame
+        ? document.elementFromPoint(frame.left + 1, frame.top + frame.height / 2)
+        : null;
+      return {
+        hubRight: hub ? Math.round(hub.right) : null,
+        frameLeft: frame ? Math.round(frame.left) : null,
+        edgeIsFrame: at?.tagName === "IFRAME",
+        fans: document.querySelectorAll('[data-testid="rail-fan"]').length,
+        dots: document.querySelectorAll('[data-testid="rail-dots"] circle').length,
+        word: document.querySelector('[data-testid="rail-hub"]')?.textContent?.trim() ?? "",
+        area: area ? Math.round(area.width) : 0,
+        panel: row ? row.children.length > 1 : false,
+      };
+    });
+  }
+
+  it("el eje es la herramienta activa, y en reposo no tapa nada a 768, 1024, 1280 y 1600", async () => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+    const page = await context.newPage();
+    try {
+      await intoTheCanvas(page);
+      // The fixed rail first, for the room it leaves the canvas: the strip must leave more.
+      await expect(page.locator('nav[data-testid="rail"]:not([data-rail-layout])')).toHaveCount(1);
+      const fixedRoom = (await atRest(page)).area;
+      await page.getByRole("switch", { name: "Menú radial" }).click();
+      await expect(page.locator('nav[data-rail-layout="radial"]')).toHaveCount(1);
+      const radial = await atRest(page);
+      expect(radial.area - fixedRoom, "the strip gives the canvas the rail's 24 px").toBe(24);
+
+      const found: string[] = [];
+      for (const [width, height] of [
+        [768, 1024],
+        [1024, 800],
+        [1280, 800],
+        [1600, 900],
+      ] as const) {
+        await page.setViewportSize({ width, height });
+        for (const withPanel of [false, true]) {
+          if (withPanel) {
+            await openByResting(page);
+            await pressSpoke(page, "style");
+            await expect(page.locator(HUB)).toHaveAttribute("data-tool", "style");
+          }
+          const seen = await atRest(page);
+          const at = `${width}${withPanel ? " con «Estilo»" : ""}`;
+          if (seen.fans !== 0) found.push(`${at}: the fan is on the page at rest`);
+          if (seen.dots !== SIX.length)
+            found.push(`${at}: ${seen.dots} dots for ${SIX.length} tools`);
+          if (seen.word !== (withPanel ? "Estilo" : "Secciones"))
+            found.push(`${at}: the hub says «${seen.word}»`);
+          if (seen.hubRight === null || seen.frameLeft === null || seen.hubRight > seen.frameLeft)
+            found.push(
+              `${at}: the hub reaches ${seen.hubRight}, the page starts at ${seen.frameLeft}`,
+            );
+          if (!seen.edgeIsFrame) found.push(`${at}: the page's left edge is under something`);
+          if (seen.panel !== withPanel)
+            found.push(`${at}: the panel is ${seen.panel ? "" : "not "}open`);
+          if (withPanel) {
+            await openByResting(page);
+            await pressSpoke(page, "sections");
+            await expect(page.locator(HUB)).toHaveAttribute("data-tool", "sections");
+            // Away from the strip, so the next width starts with the hand on the page.
+            await page.mouse.move(width - 40, height / 2);
+          }
+        }
+      }
+      expect(found, found.join("\n")).toEqual([]);
+
+      // The editor's one navigation landmark, with the fan open and closed, and axe on the open fan.
+      await page.setViewportSize({ width: 1280, height: 800 });
+      const navs = () =>
+        page.evaluate(() =>
+          [...document.querySelectorAll("nav")].map((nav) => nav.getAttribute("aria-label")),
+        );
+      expect(await navs()).toEqual(["Paneles del editor"]);
+      await openByResting(page);
+      expect(await navs()).toEqual(["Paneles del editor"]);
+      await expect(page.locator(HUB)).toHaveAttribute("aria-expanded", "true");
+      await axeSerious(page, "el menú radial abierto a 1280");
+    } finally {
+      await context.close();
+    }
+  }, 240_000);
+
+  it("se abre con intención, no al cruzar, y da gracia para llegar a un radio", async () => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+    const page = await context.newPage();
+    try {
+      await intoTheRadialEditor(page);
+      // In the page, so the times are the browser's: the last move over the hub and the fan's arrival.
+      await page.evaluate(() => {
+        const w = window as unknown as { __lastMove: number; __fanAt: number | null };
+        w.__lastMove = 0;
+        w.__fanAt = null;
+        document.querySelector('[data-testid="rail-hub"]')?.addEventListener("pointermove", () => {
+          w.__lastMove = performance.now();
+        });
+        new MutationObserver(() => {
+          if (w.__fanAt === null && document.querySelector('[data-testid="rail-fan"]'))
+            w.__fanAt = performance.now();
+        }).observe(document.body, { childList: true, subtree: true });
+      });
+
+      // A hand crossing: on the hub for 300 ms, never still. Nothing opens.
+      const at = await hubCentre(page);
+      for (let i = 0; i < 7; i += 1) {
+        await page.mouse.move(at.x + (i % 2 === 0 ? -5 : 5), at.y);
+        await page.waitForTimeout(50);
+      }
+      expect(await page.locator(FAN).count(), "a hand that never rested opened the fan").toBe(0);
+      // A hand at rest: it opens, and no sooner than the intent.
+      await expect(page.locator(FAN)).toHaveCount(1);
+      const waited = await page.evaluate(() => {
+        const w = window as unknown as { __lastMove: number; __fanAt: number | null };
+        return (w.__fanAt ?? 0) - w.__lastMove;
+      });
+      expect(
+        waited,
+        `opened ${Math.round(waited)} ms after the hand stopped`,
+      ).toBeGreaterThanOrEqual(HUB_INTENT_MS - 5);
+      expect(waited).toBeLessThan(HUB_INTENT_MS + 250);
+
+      // The pills are where the module says, each the thing under its own middle.
+      const drawn = await page.evaluate(() => {
+        const fan = document.querySelector('[data-testid="rail-fan"]') as HTMLElement;
+        const box = fan.getBoundingClientRect();
+        const spokes = [...fan.querySelectorAll<HTMLElement>("[data-spoke]")].map((spoke) => {
+          const r = spoke.getBoundingClientRect();
+          const under = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+          return {
+            id: spoke.dataset["spoke"],
+            left: Math.round(r.left - box.left),
+            top: Math.round(r.top - box.top),
+            width: Math.round(r.width),
+            height: Math.round(r.height),
+            hit: under?.closest("[data-spoke]") === spoke,
+          };
+        });
+        // A point inside the fan's box and outside its hull: the box's top-right corner.
+        const corner = document.elementFromPoint(box.right - 3, box.top + 3);
+        return {
+          spokes,
+          width: Math.round(box.width),
+          height: Math.round(box.height),
+          cornerInFan: corner?.closest('[data-testid="rail-fan"]') !== null && corner !== null,
+        };
+      });
+      const want = toolsRing(SIX);
+      expect([drawn.width, drawn.height]).toEqual([want.width, want.height]);
+      for (const [i, spoke] of drawn.spokes.entries()) {
+        const box = want.spokes[i];
+        expect(spoke.id).toBe(box?.id);
+        for (const key of ["left", "top", "width", "height"] as const) {
+          expect(
+            Math.abs(spoke[key] - (box?.[key] ?? Number.NaN)),
+            `${spoke.id} ${key}`,
+          ).toBeLessThanOrEqual(1);
+        }
+        expect(spoke.hit, `${spoke.id} is not the thing under its own middle`).toBe(true);
+      }
+      expect(drawn.cornerInFan, "the fan takes the pointer beyond its arc").toBe(false);
+
+      // Grace: from the last pill, out past the hull onto the page and back before it runs out.
+      // **Past the hull, not merely past the pill**: the hull is the fan's hit-test shape, and a
+      // point 60 px right of «Fotos» is still inside it — the first version of this walk went there,
+      // never left the fan, and passed the grace it never tested. So the premise is asserted too:
+      // the strip heard the hand leave.
+      const photos = await page.locator(`${FAN} [data-spoke="photos"]`).boundingBox();
+      if (!photos) throw new Error("no «Fotos» pill");
+      const inPill = { x: photos.x + photos.width / 2, y: photos.y + photos.height / 2 };
+      const outside = { x: at.x + want.hull + 30, y: inPill.y };
+      await page.mouse.move(inPill.x, inPill.y);
+      await page.evaluate(() => {
+        const w = window as unknown as { __left: number };
+        w.__left = 0;
+        document.querySelector('nav[data-testid="rail"]')?.addEventListener("pointerleave", () => {
+          w.__left += 1;
+        });
+      });
+      const started = Date.now();
+      await page.mouse.move(outside.x, outside.y);
+      await page.mouse.move(inPill.x, inPill.y);
+      const away = Date.now() - started;
+      expect(
+        await page.evaluate(() => (window as unknown as { __left: number }).__left),
+        "the hand never left the fan: the grace was not tested",
+      ).toBeGreaterThan(0);
+      expect(
+        away,
+        "the hand was away longer than the grace: the walk measures nothing",
+      ).toBeLessThan(FAN_GRACE_MS);
+      await page.waitForTimeout(FAN_GRACE_MS * 2);
+      expect(await page.locator(FAN).count(), "the fan folded inside its grace").toBe(1);
+
+      // And out for good: it folds.
+      await page.mouse.move(outside.x, outside.y);
+      await page.waitForTimeout(FAN_GRACE_MS * 2);
+      expect(await page.locator(FAN).count(), "the fan stayed after the hand left").toBe(0);
+      await expect(page.locator(HUB)).toHaveAttribute("aria-expanded", "false");
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
+
+  it("cada panel se abre desde el abanico, y el teclado se queda en el eje", async () => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+    const page = await context.newPage();
+    try {
+      await intoTheRadialEditor(page);
+      const panelOpen = () =>
+        page.evaluate(() => {
+          const row = document.querySelector('[data-testid="canvas-and-panel"]');
+          return row ? row.children.length > 1 : false;
+        });
+      for (const id of ["style", "pages", "menu", "share", "photos", "sections"]) {
+        await openByResting(page);
+        await pressSpoke(page, id);
+        await expect(page.locator(HUB)).toHaveAttribute("data-tool", id);
+        await expect(page.locator(FAN)).toHaveCount(0);
+        expect(await panelOpen(), `«${id}»`).toBe(id !== "sections");
+        expect(
+          await page.evaluate(() => document.activeElement?.getAttribute("data-testid") ?? null),
+          `after «${id}» the keyboard is not on the hub`,
+        ).toBe("rail-hub");
+      }
+      // The hub is a press too: pressed, it opens; pressed again, it folds, and resting on it after
+      // that press does not open it again until the hand has left.
+      const at = await hubCentre(page);
+      await page.mouse.move(at.x, at.y);
+      await expect(page.locator(FAN)).toHaveCount(1);
+      await page.mouse.click(at.x, at.y);
+      await expect(page.locator(FAN)).toHaveCount(0);
+      await page.waitForTimeout(HUB_INTENT_MS * 3);
+      expect(await page.locator(FAN).count(), "resting after the press reopened it").toBe(0);
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
+
+  it("el cambio de forma: el raíl se va, el otro llega, el lienzo cambia una vez y se recuerda", async () => {
+    const context = await browser.newContext({ viewport: { width: 1024, height: 800 } });
+    const page = await context.newPage();
+    try {
+      await intoTheCanvas(page);
+      await motionSettled(page);
+      // Both switches at the rail's foot at 1024, where the design tools are offered.
+      await expect(page.getByRole("switch", { name: "Herramientas de diseño" })).toHaveCount(1);
+      await expect(page.getByRole("switch", { name: "Menú radial" })).toHaveAttribute(
+        "aria-checked",
+        "false",
+      );
+      await page.evaluate(() => {
+        const w = window as unknown as { __widths: string[]; __rail: boolean };
+        w.__widths = [];
+        w.__rail = false;
+        const card = document.querySelector('[data-testid="canvas-card"]') as HTMLElement;
+        const started = performance.now();
+        const tick = () => {
+          w.__widths.push(getComputedStyle(card).width);
+          if (document.querySelector('[data-leaving="rail"]')) w.__rail = true;
+          if (performance.now() - started < 800) requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      });
+      await page.getByRole("switch", { name: "Menú radial" }).click();
+      await page.waitForTimeout(900); // the sampler's window, not a wait for an effect
+      const seen = await page.evaluate(() => {
+        const w = window as unknown as { __widths: string[]; __rail: boolean };
+        return { widths: [...new Set(w.__widths)], rail: w.__rail };
+      });
+      expect(seen.widths.length, `the card took ${seen.widths.join(" → ")}`).toBeLessThanOrEqual(2);
+      expect(seen.rail, "the fixed rail did not leave by its copy").toBe(true);
+      await expect(page.locator('nav[data-rail-layout="radial"]')).toHaveCount(1);
+      await expect(page.locator('[data-leaving="rail"]')).toHaveCount(0);
+      await expect(page.getByRole("switch", { name: "Menú radial" })).toHaveAttribute(
+        "aria-checked",
+        "true",
+      );
+      expect(await page.evaluate(() => localStorage.getItem("retorika.rail.v1"))).toBe("radial");
+
+      // Remembered: the editor this browser restores opens in the radial layout.
+      await page.reload({ waitUntil: "networkidle" });
+      await expect(page.locator('nav[data-rail-layout="radial"]')).toHaveCount(1);
+
+      // At 768 there are no design tools to switch, and the layout switch is still offered.
+      await page.setViewportSize({ width: 768, height: 1024 });
+      await expect(page.getByRole("switch", { name: "Herramientas de diseño" })).toHaveCount(0);
+      await expect(page.getByRole("switch", { name: "Menú radial" })).toHaveCount(1);
+      // And on a phone neither: the rail is the bar along the bottom (ADR 0042).
+      await page.setViewportSize({ width: 390, height: 844 });
+      await expect(page.getByRole("switch", { name: "Menú radial" })).toHaveCount(0);
+      await expect(page.locator('nav[data-rail-layout="radial"]')).toHaveCount(0);
+      // Back on a wide window, the choice is still the owner's.
+      await page.setViewportSize({ width: 1024, height: 800 });
+      await expect(page.locator('nav[data-rail-layout="radial"]')).toHaveCount(1);
+
+      // And back to the fixed rail, which leaves nothing stored.
+      await page.getByRole("switch", { name: "Menú radial" }).click();
+      await expect(page.locator('nav[data-testid="rail"]:not([data-rail-layout])')).toHaveCount(1);
+      expect(await page.evaluate(() => localStorage.getItem("retorika.rail.v1"))).toBeNull();
     } finally {
       await context.close();
     }

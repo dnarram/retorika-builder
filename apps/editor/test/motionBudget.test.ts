@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { CHROME_SCALE } from "../src/editor/chromeScale.ts";
+import { FAN_GRACE_MS, HUB_INTENT_MS } from "../src/editor/radialMenu.ts";
 import { PAGING_CLASS, SLIDING_CLASS } from "../src/editor/sectionSlide.ts";
 import { REVEAL_STAGGER_CAP } from "../src/questionnaire/ui.tsx";
 
@@ -1258,3 +1259,41 @@ function canvasSheet(): string {
       .replace(/\$\{[^}]*\}/g, "0")
   );
 }
+
+/**
+ * **The radial rail waits by name, and its ring of dots never moves** (sprint 37 día 2, ADR 0072).
+ *
+ * David's two times — the intent before the fan opens and the grace before it folds — were asked for
+ * as named constants in this budget, not as numbers in a timer: a timer's number is where a «just
+ * make it 300» lands without anybody reading this file. And the hub's dots say «there is more here»
+ * by being there, not by moving: a ring that pulses at the edge of the screen for as long as the
+ * editor is open is the loop this budget exists to refuse.
+ */
+describe("the radial rail", () => {
+  const shell = readStripped(EDITOR_SRC, "editor", "EditorShell.tsx");
+
+  it("waits for intent and grants grace inside the interaction cap", () => {
+    expect(HUB_INTENT_MS).toBeLessThanOrEqual(INTERACTION_CAP_MS);
+    expect(FAN_GRACE_MS).toBeLessThanOrEqual(INTERACTION_CAP_MS);
+  });
+
+  it("times both by their names, and writes neither as a number", () => {
+    expect(shell, "the intent is not timed by its name").toMatch(
+      /setTimeout\([\s\S]{0,200}?,\s*HUB_INTENT_MS\s*\)/,
+    );
+    expect(shell, "the grace is not timed by its name").toMatch(
+      /setTimeout\([\s\S]{0,200}?,\s*FAN_GRACE_MS\s*\)/,
+    );
+    expect(
+      shell.match(/,\s*(100|150)\s*\)/g) ?? [],
+      "a timer of the shell written as 100 or 150",
+    ).toEqual([]);
+  });
+
+  it("draws the hub's dots still", () => {
+    const at = shell.indexOf('data-testid="rail-dots"');
+    expect(at, "the hub's ring of dots is gone").toBeGreaterThan(0);
+    const ring = shell.slice(shell.lastIndexOf("<svg", at), shell.indexOf("</svg>", at));
+    expect(ring).not.toMatch(/(?<![\w-])(ui-[\w-]+|animate-[\w-]+|transition[\w-]*|animation)/);
+  });
+});
