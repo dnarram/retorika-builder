@@ -3223,11 +3223,30 @@ describe("sprint 9 día 4 — la barra flotante", () => {
       await expect(bar.locator(".rb-toolbar-swatch")).toHaveCount(4);
       await expect(bar.locator('.rb-toolbar-swatch[data-ref="color.surface"]')).toHaveCount(0);
 
-      const beforeSwatch = await storedSession(studio);
       await bar.locator('.rb-toolbar-swatch[data-ref="color.muted"]').click();
-      // Por los bytes, no por el tick: ver `sessionHolds`.
+      // Por los bytes, no por el tick: ver `sessionHolds`. **Y por los bytes de esta edición, no por
+      // cualquier cambio** (cierre del sprint 36): «la sesión cambió tras elegir el color» lo cumplía
+      // también el guardado que abrir la propuesta deja pendiente medio segundo, que desde la escena
+      // del día 4 cae justo después de la pulsación — y llegaba sin el color.
       await expect(studio.getByText("Guardado en este navegador")).toBeVisible();
-      await sessionHolds(studio, (raw) => raw !== beforeSwatch, "cambió tras elegir el color");
+      await sessionHolds(
+        studio,
+        (raw) => {
+          const session = JSON.parse(raw || "{}") as {
+            openIndex?: number;
+            documents?: {
+              pages?: { sections?: { content?: { id: string; style?: unknown }[] }[] }[];
+            }[];
+          };
+          const headline = session.documents?.[
+            session.openIndex ?? -1
+          ]?.pages?.[0]?.sections?.[0]?.content?.find((c) => c.id === "el-headline");
+          return (
+            JSON.stringify(headline?.style) === JSON.stringify({ color: { ref: "color.muted" } })
+          );
+        },
+        "guardó el color elegido",
+      );
 
       // The words are untouched, in the document rather than on the screen.
       expect(await frame.locator('[data-id="el-headline"]').textContent()).toBe(wordsBefore);
