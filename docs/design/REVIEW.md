@@ -9040,3 +9040,98 @@ mitad del menor visto; la que corre sin estrangular sigue en 30. **Suites**: `ty
 `test` (3925, una más), invariantes (27), golden (27, sin cambios) y **e2e completa en local: 328
 verdes y 1 omitida en 1508 s**.
 
+### Día 7 — el lienzo responde (PR de `feat/el-lienzo-responde`)
+
+**Medido antes de aplicarlo: el desenfoque cabe en un teléfono** (decisión 10 del plan). Un teléfono
+emulado —390 × 844, táctil, tres píxeles de dispositivo por píxel CSS, la CPU cuatro veces más lenta—,
+el menú de insertar (240 × 711) y la palabra de un verbo (47 × 20), tres aperturas de cada uno con y
+sin `blur(4px)`, cada fotograma de la llegada leído por su intervalo: **16,6 a 16,8 ms en todos, con
+desenfoque y sin él; ninguno tarde**. Así que `rb-arrive` lleva el desenfoque —el menú de insertar, el
+de composiciones, la oferta de «Diseñar a mano», la barra de texto y cada verbo— y la palabra de un
+verbo lo lleva en su transición: llega enfocándose y se va desenfocándose. Un `filter` no cambia ninguna
+caja: lo que llega sigue sin moverse bajo la mano, y la caminata lo asevera con la caja del menú en su
+primer fotograma y en reposo. `CHROME_SCALE` copia ya `--ui-blur` y `--ui-stagger`, y
+`chromeScale.test.ts` deja de excusarlos.
+
+**Otra página se cruza, y la barra se queda** (ADR 0062 §3 espejada por el cromo, sin un byte en la web
+publicada). Cuando el lienzo recibe otra página, el parche va dentro de la transición del propio
+documento del lienzo —la de las secciones del 35—, con la raíz marcada `rb-paging`: la página vieja se
+funde y la nueva aparece en `--ui-fast`, sobre el DOM ya final desde el primer fotograma; la barra se
+nombra `rb-header` solo para esa transición, desde la hoja de nombres del editor, y no se funde ni viaja
+—se dibuja al instante como la de la página nueva, también cuando la vieja estaba desplazada—. Una
+decisión pura, `canvasMotion`, dice cuál de las tres cosas le pasa a un parche: otra página se cruza,
+un orden cambiado se desliza, una marca movida se asienta, una letra no anima nada. **Una transición
+nueva se queda la raíz entera**: limpia las dos clases antes de la suya, y la que salta solo quita lo
+que sigue siendo suyo —una página que saltaba un deslizamiento habría dejado `rb-sliding` puesto, y esa
+clase esconde todos los huecos—. Con menos movimiento no hay transición: la página es la otra, como
+siempre.
+
+**Lo que la mano lleva se inclina hacia donde va** (`editor/ghostTilt.ts`): el rótulo de un menú que se
+arrastra, la fila del teléfono y el elemento cogido giran 2° según el signo de su recorrido horizontal
+entre dos movimientos, y se enderezan cuando la mano lleva `--ui-fast` sin ir de lado o suelta; un
+temblor de menos de un píxel conserva la inclinación en vez de parpadearla. Es un `data-tilt` que la
+hoja dibuja con `rotate`. **Primera pasada completa, roja: la guía de centro del 25 leyó el elemento a
+1,03 px de la guía donde admite 1.** `rotate` se aplica después del `transform` con el que el arrastre
+desplaza el elemento, así que giraba alrededor del sitio donde se cogió y no del sitio donde está: un
+píxel fuera de la mano por cada treinta de recorrido —6,3 px en la caminata del día con el arreglo
+quitado—. El arrastre escribe ahora también su desplazamiento como `--rb-dx`/`--rb-dy`, y `.rb-moving`
+gira con el `transform-origin` en su centro de ahora; el rótulo, que se apartaba de la mano 12 px por
+`transform`, se aparta por `translate`, que va después del giro.
+
+**La zona bajo la mano brilla**: una línea de 2 px por dentro y una luz de 12 px por fuera al 24 %, en
+`--ui-fast`. Es un estado que sigue a la mano, no un pulso: el único pulso del lienzo sigue siendo el de
+la zona que recibe el menú.
+
+**Los verbos llegan uno tras otro**: cada verbo lleva su llegada y el grupo solo marca el paso, 40 ms
+entre uno y el siguiente en el orden en que se leen, el sexto y los que siguen juntos —el grupo está
+entero 320 ms después de la pulsación—. Con menos movimiento, todos a la vez. Opacidad y desenfoque,
+como toda llegada del lienzo: son botones a punto de pulsarse.
+
+**El arnés.** (1) **`everythingWithAnEnd` espera ahora a que la transición del lienzo termine** antes de
+recoger lo que se mueve: un deslizamiento o un cruce llama a su actualización un fotograma después de
+empezar, y una espera justo entonces no encontraba nada que esperar —el gemelo de `data-rb-screen` del
+día 5—. Su hoja de nombres está en la cabeza del documento de principio a fin; se espera por
+temporizadores, que corren mientras el documento está congelado para la captura. (2) **Segundo rojo de
+la primera pasada: la caminata del 33 que pulsa el hueco de la barra justo después de navegar por una
+entrada.** Durante los 120 ms del cruce la barra nombrada se pinta por su imagen y está fuera de la
+prueba de impacto, como el lienzo en la escena del día 4: la pulsación esperaba a que acabara lo que
+llega, como las demás desde el 35. (3) **El lector de la hoja** de `motionBudget.test.ts` multiplica un
+`calc(40ms * k)` en vez de leer su primer número, y lee las dos clases de la raíz por su nombre.
+
+**Lo que no está, con nombre.** La fila del teléfono se inclina por el mismo `ghostTilt` y la misma
+regla de la hoja, pero ninguna caminata la arrastra con el dedo: lo prueban la unidad y el presupuesto.
+El plan ponía la cobertura de `reduce` en `chromeContrast.test.ts`; vive en `motionBudget.test.ts` desde
+el día 1 del 35, y allí fueron las aserciones nuevas. Y algo visto y no investigado: **volver a la
+primera página de la web deja el lienzo desplazado** (207 px en la caminata, con el cruce y sin él), lo
+que ya ocurría antes de hoy.
+
+**Pruebas.** `ghostTilt.test.ts` (6: hacia dónde, desde el segundo movimiento, se endereza al parar y
+no con un temblor, al soltar empieza de cero, endereza un fantasma antes de inclinar otro, nada con
+menos movimiento); `sectionSlide.test.ts` +5 (las tres decisiones; el cruce marca la raíz y nombra la
+barra solo para esa transición; una transición saltada no deja su clase); `motionBudget.test.ts` +5 (el
+`filter` solo en la llegada y en la palabra; los verbos 40/80/120/160/200 y su aplanado posterior; el
+cruce en 120 ms con la barra sin animar y sin nombre en reposo; la inclinación solo por `rotate` y 2°;
+el brillo sin pulso); `chromeScale.test.ts` +2. **Cuatro caminatas** («sprint 36 día 7»): con
+movimiento, cada fotograma del cruce a la segunda página —la raíz fundiéndose en 120 ms, la barra
+nombrada y sin animación propia, las secciones ya las nuevas, la caja de la barra la misma en las dos
+páginas—, el menú borroso en su primer fotograma y nítido en reposo con la misma caja, la palabra de un
+verbo nítida bajo el puntero y los verbos de la portada a 0/40/80/120/160/200/200…; el rótulo que se
+arrastra a la izquierda inclinado −2° y nunca +2°, derecho tras parar, con la zona caliente brillando y
+las demás no; el elemento cogido inclinado +2° con su centro a menos de medio píxel de donde lo pone el
+arrastre en cada fotograma, y derecho al soltar; y el gemelo con menos movimiento (sin cruce, ningún
+menú visible a través de un desenfoque, los verbos a la vez, nada inclinado, el brillo presente).
+
+**Saboteos**, deshechos por sustitución inversa: otra página sin cruce → unidad y caminata rojas; la
+clase de una transición saltada sin guarda → unidad roja; el signo de la inclinación al revés → cinco
+rojas de unidad; la barra sin nombre → caminata roja; el menú sin desenfoque → caminata y presupuesto
+rojos; los verbos sin su llegada → caminata roja; el rótulo y el elemento sin inclinación → sus
+caminatas rojas; la zona sin brillo → caminata y presupuesto rojos; el giro sin su centro de ahora →
+caminata roja (6,3 px). **Un error mío en la tanda**: los tres saboteos que borraban una línea se
+deshacían buscando una cadena vacía, no la encontraron y se quedaron puestos; el del brillo corrió encima
+del de la inclinación del rótulo y su rojo fue de ese. Lo enseñó el `git diff` contra el commit previo,
+se invirtió exactamente ese diff y el saboteo del brillo se repitió solo: rojo por lo suyo.
+
+**Suites.** `typecheck`, `lint` (81 avisos, los de `main`; ningún error), `test` (3943 en 187 ficheros,
+18 más), invariantes (27), golden (27, cero cambios: nada viaja), **e2e completa en local dos veces**:
+la primera, 330 verdes y los dos rojos de arriba, en 1544 s; la segunda, con los dos arreglos, **332
+verdes y 1 omitida en 1532 s**.

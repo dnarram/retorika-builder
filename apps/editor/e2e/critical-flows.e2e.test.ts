@@ -731,7 +731,25 @@ async function settledIn(frame: Frame): Promise<void> {
  * rest whenever it does not; its `finished` promise never resolves while nobody scrolls, so waiting
  * on it would hang the walk until its timeout.
  */
-function everythingWithAnEnd(): Promise<unknown> {
+async function everythingWithAnEnd(): Promise<unknown> {
+  /*
+   * **A transition of the canvas is moving before anything in it is** (sprint 36 día 7). A section
+   * that slides and a page that crosses over are drawn by the canvas's view transition, which
+   * calls its update a frame after it starts — its animations do not exist yet when it has begun,
+   * and a wait right then found nothing and returned (the twin of `data-rb-screen` above). Its
+   * names sheet (`rb-slide-names`) is in the head from the start to the end, so this waits for it
+   * to go — by timers, which run while the document is frozen for the capture and `requestAnimation
+   * Frame` does not — bounded at a second, before it collects what is still running.
+   */
+  await new Promise<void>((resolve) => {
+    const started = performance.now();
+    const look = () => {
+      if (!document.getElementById("rb-slide-names") || performance.now() - started > 1_000) {
+        resolve();
+      } else setTimeout(look, 16);
+    };
+    look();
+  });
   // **And every exit copy gone** (sprint 35 día 3). The canvas draws a closing menu's copy inside a
   // closed shadow root (`editor/leaving.ts`), so no query can find it — and its animation is in no
   // `getAnimations()` either. Its host is on the page, marked, until the exit ends (at most the
@@ -25341,6 +25359,10 @@ describe("sprint 33 día 4 — un menú se arrastra a su zona", () => {
         frame.locator('.rb-nav-wide nav[data-part="pagesLinks"] a[aria-current="page"]'),
       ).toHaveText(secondTitle);
       await expect(zones).toHaveCount(0);
+      // The entry crossed over to its page (sprint 36 día 7), and for those 120 ms the bar is named
+      // for the crossing: painted through its picture and out of hit-testing, as the canvas was in
+      // día 4's scene. The press waits for the crossing, as walks wait for everything that arrives.
+      await motionSettled(page);
       at = await gap();
       await page.mouse.click(at.x, at.y);
       await expect(header).toHaveClass(/rb-selected/);
@@ -29239,6 +29261,409 @@ describe("sprint 36 día 6 — cada control responde donde se pulsa", () => {
       for (const r of ring) expect(r.duration).toBeLessThan(1);
     } finally {
       await context.close();
+    }
+  }, 180_000);
+});
+
+/**
+ * **Sprint 36 día 7 — el lienzo responde.** The canvas's own chrome answers the hand: another page
+ * crosses over in `--ui-fast` with the bar out of the crossing (ADR 0062 §3, mirrored by the chrome);
+ * a popup and a verb's word come in from a 4 px blur, with the same box at the first frame and at
+ * rest (sprint 35's rule: what arrives does not move under the hand); the section's verbs arrive a
+ * stagger apart; what the hand carries leans 2° the way it goes and stands straight when it stops;
+ * the zone under the hand glows. And with less movement, all of it is simply there.
+ */
+describe("sprint 36 día 7 — el lienzo responde", () => {
+  type Crossing = {
+    paging: boolean;
+    rootFades: number[];
+    barMoves: number;
+    named: string;
+    sections: string;
+  };
+
+  /** Every frame of the canvas while `act` changes the page, until the crossing is over. */
+  async function crossing(page: Page, act: () => Promise<void>): Promise<Crossing[]> {
+    const frame = page.frameLocator(PREVIEW).first();
+    await frame.locator(":root").evaluate(() => {
+      const w = window as unknown as { __pc: Crossing[]; __pcOn: boolean };
+      w.__pc = [];
+      w.__pcOn = true;
+      const tick = () => {
+        const running = document.getAnimations().filter((a) => a.playState === "running");
+        const pseudo = (a: Animation) => (a.effect as KeyframeEffect | null)?.pseudoElement ?? "";
+        const bar = document.querySelector("header.rb-header");
+        w.__pc.push({
+          paging: document.documentElement.classList.contains("rb-paging"),
+          rootFades: running
+            .filter((a) => /::view-transition-(old|new)\(root\)/.test(pseudo(a)))
+            .map((a) => Number(a.effect?.getTiming().duration)),
+          barMoves: running.filter((a) => pseudo(a).includes("(rb-header)")).length,
+          named: bar ? getComputedStyle(bar).viewTransitionName : "no bar",
+          sections: [...document.querySelectorAll<HTMLElement>("[data-section]")]
+            .map((section) => section.dataset["section"])
+            .join(","),
+        });
+        if (w.__pcOn) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    });
+    await act();
+    await motionSettled(page);
+    await frame
+      .locator(":root")
+      .evaluate(
+        () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))),
+      );
+    return frame.locator(":root").evaluate(() => {
+      const w = window as unknown as { __pc: Crossing[]; __pcOn: boolean };
+      w.__pcOn = false;
+      return w.__pc;
+    });
+  }
+
+  /** Every frame of the canvas's insert menu from the press until it is at rest: its filter and box. */
+  async function menuArrival(page: Page) {
+    const frame = page.frameLocator(PREVIEW).first();
+    await frame.locator(":root").evaluate(() => {
+      const w = window as unknown as {
+        __mb: { filter: string; opacity: number; box: string }[];
+        __mbOn: boolean;
+      };
+      w.__mb = [];
+      w.__mbOn = true;
+      const tick = () => {
+        const menu = document.querySelector<HTMLElement>(".rb-menu");
+        if (menu) {
+          const box = menu.getBoundingClientRect();
+          w.__mb.push({
+            filter: getComputedStyle(menu).filter,
+            opacity: Number(getComputedStyle(menu).opacity),
+            box: [box.x, box.y, box.width, box.height].map((n) => Math.round(n)).join(","),
+          });
+        }
+        if (w.__mbOn) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    });
+    const pill = await pointIn(frame.locator(".rb-pill").first());
+    await page.mouse.click(pill.x, pill.y);
+    await expect(frame.locator(".rb-menu")).toHaveCount(1);
+    await motionSettled(page);
+    return frame.locator(":root").evaluate(() => {
+      const w = window as unknown as {
+        __mb: { filter: string; opacity: number; box: string }[];
+        __mbOn: boolean;
+      };
+      w.__mbOn = false;
+      return w.__mb;
+    });
+  }
+
+  /** Each verb of a section's cluster: whether it arrives, and when, read off its computed style. */
+  const verbsOf = (frame: FrameLocator, id: string) =>
+    frame.locator(`[data-section="${id}"] .rb-actions > *`).evaluateAll((verbs) =>
+      verbs.map((verb) => ({
+        arrives: verb.classList.contains("rb-arrives"),
+        name: getComputedStyle(verb).animationName,
+        delay: Math.round(Number.parseFloat(getComputedStyle(verb).animationDelay) * 1000),
+      })),
+    );
+
+  /** The leaning of `selector` in every frame while `act` runs, then once the hand has stopped. */
+  async function leaning(page: Page, selector: string, act: () => Promise<void>) {
+    const frame = page.frameLocator(PREVIEW).first();
+    await frame.locator(":root").evaluate((_, sel: string) => {
+      const w = window as unknown as { __tl: string[]; __tlOn: boolean };
+      w.__tl = [];
+      w.__tlOn = true;
+      const tick = () => {
+        const el = document.querySelector<HTMLElement>(sel);
+        if (el) w.__tl.push(getComputedStyle(el).rotate);
+        if (w.__tlOn) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    }, selector);
+    await act();
+    const moving = await frame.locator(":root").evaluate(() => {
+      const w = window as unknown as { __tl: string[]; __tlOn: boolean };
+      w.__tlOn = false;
+      return w.__tl;
+    });
+    // The hand held still: past the still time and the 120 ms the lean takes to go.
+    await page.waitForTimeout(400);
+    const still = await frame.locator(selector).evaluate((el) => getComputedStyle(el).rotate);
+    return { moving, still };
+  }
+
+  it("con movimiento: otra página se funde con la barra quieta; el menú y la palabra llegan del desenfoque; los verbos, uno tras otro", async () => {
+    const page = await (
+      await browser.newContext({ viewport: { width: 1440, height: 950 } })
+    ).newPage();
+    try {
+      await intoTheCanvas(page);
+      const frame = page.frameLocator(PREVIEW).first();
+      await frame.locator('[data-section="sec-services"]').click();
+      await frame
+        .locator(
+          '[data-section="sec-services"] .rb-action[aria-label="Convertir esta sección en página"]',
+        )
+        .click();
+      const tabs = page.locator('[data-testid="page-tabs"] button');
+      await expect(tabs).toHaveCount(2);
+      const first = await pointIn(tabs.first());
+      await page.mouse.click(first.x, first.y);
+      await expect(frame.locator('[data-section="sec-cover"]')).toBeVisible();
+      // Page 1 at its top, as page 2 will be: going back to a page has restored a reading position
+      // since before this day (207 px here, with the crossing and without it), and the bar of a
+      // scrolled page is somewhere else for that reason alone.
+      await frame.locator("body").evaluate(() => window.scrollTo(0, 0));
+      await motionSettled(page);
+      const bar = frame.locator("header.rb-header");
+      const barBefore = await bar.boundingBox();
+
+      // 1. The second page, from its tab: the page crosses over and the bar is not part of it.
+      const second = await pointIn(tabs.nth(1));
+      const frames = await crossing(page, () => page.mouse.click(second.x, second.y));
+      const crossed = frames.filter((f) => f.rootFades.length > 0);
+      expect(crossed.length, "the page appeared rather than crossing over").toBeGreaterThan(0);
+      expect([...new Set(crossed.flatMap((f) => f.rootFades))]).toEqual([120]);
+      const rest = frames.at(-1);
+      for (const f of crossed) {
+        expect(f.paging, "a crossing frame without the root marked").toBe(true);
+        expect(f.named, "the bar was not named for the crossing").toBe("rb-header");
+        // The real DOM is the new page from the first frame of the crossing.
+        expect(f.sections).toBe(rest?.sections);
+      }
+      expect(frames.filter((f) => f.barMoves > 0).length, "the bar faded or travelled").toBe(0);
+      expect(rest?.paging).toBe(false);
+      expect(rest?.named, "the bar kept its name after the crossing").toBe("none");
+      expect(rest?.sections).not.toContain("sec-cover");
+      await expect(frame.locator("#rb-slide-names")).toHaveCount(0);
+      expect(await bar.boundingBox(), "the bar moved between the two pages").toEqual(barBefore);
+
+      // Back to the first page for the rest.
+      await page.mouse.click(first.x, first.y);
+      await expect(frame.locator('[data-section="sec-cover"]')).toBeVisible();
+      await motionSettled(page);
+
+      // 2. The insert menu comes in from a blur, with the box it keeps at rest from its first frame.
+      const menu = await menuArrival(page);
+      expect(menu.length, "the menu was never sampled").toBeGreaterThan(1);
+      expect(menu[0]?.filter, "the menu's first frame was sharp").toMatch(/^blur\(/);
+      expect(menu.at(-1)?.filter).toBe("none");
+      expect([...new Set(menu.map((m) => m.box))], "the menu moved while it arrived").toEqual([
+        menu.at(-1)?.box,
+      ]);
+      await page.keyboard.press("Escape");
+      await expect(frame.locator(".rb-menu")).toHaveCount(0);
+      await motionSettled(page);
+
+      // 3. The cover's verbs arrive a stagger apart, the sixth and those after it together.
+      const cover = await pointIn(frame.locator('[data-section="sec-cover"]'), 0.1, 0.1);
+      await page.mouse.click(cover.x, cover.y);
+      await expect(frame.locator('[data-section="sec-cover"] .rb-actions')).toHaveCount(1);
+      const verbs = await verbsOf(frame, "sec-cover");
+      expect(verbs.length, "the case that can fail: past the sixth verb").toBeGreaterThan(6);
+      expect(verbs.every((v) => v.arrives && v.name === "rb-arrive")).toBe(true);
+      expect(verbs.map((v) => v.delay)).toEqual(verbs.map((_, i) => 40 * Math.min(i, 5)));
+
+      // 4. A verb's word comes into focus under the pointer.
+      await motionSettled(page);
+      const word = frame.locator('[data-section="sec-cover"] .rb-tip').nth(1);
+      expect(await word.evaluate((el) => getComputedStyle(el).filter)).toBe("blur(4px)");
+      const verb = await pointIn(
+        frame.locator('[data-section="sec-cover"] .rb-actions .rb-action').nth(1),
+      );
+      await page.mouse.move(verb.x, verb.y, { steps: 4 });
+      await motionSettled(page);
+      expect(await word.evaluate((el) => getComputedStyle(el).filter)).toBe("none");
+      expect(await word.evaluate((el) => getComputedStyle(el).opacity)).toBe("1");
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+
+  it("con movimiento: el rótulo que se arrastra se inclina hacia donde va y se endereza al parar; la zona bajo la mano brilla", async () => {
+    const page = await (
+      await browser.newContext({ viewport: { width: 1440, height: 950 } })
+    ).newPage();
+    try {
+      const frame = await placedSite(page, {
+        pages: { shown: true, position: "bar" },
+        sections: { shown: true, position: "row" },
+      });
+      await motionSettled(page);
+      const { at } = await frameOnScreen(page);
+      // Held by the row's ground and carried left and down to the left column, not let go.
+      const ground = await rowGround(frame);
+      const { moving, still } = await leaning(page, ".rb-menu-ghost", () =>
+        carry(page, ground, at(120, 500), false),
+      );
+      expect(
+        moving.some((rotate) => rotate === "-2deg"),
+        `the label did not lean the way it went: ${[...new Set(moving)].join(" ")}`,
+      ).toBe(true);
+      expect(
+        moving.some((rotate) => rotate === "2deg"),
+        "it leaned against the hand",
+      ).toBe(false);
+      expect(still, "the label kept leaning with the hand still").toBe("none");
+
+      // The zone under the hand glows; the others do not.
+      const hot = frame.locator('.rb-zone[data-zone="left"][data-hot]');
+      await expect(hot).toHaveCount(1);
+      const glow = await hot.evaluate((el) => getComputedStyle(el).boxShadow);
+      expect(glow, "the zone under the hand does not glow").toMatch(/inset/);
+      expect(glow).toMatch(/rgba\(21, 111, 231, 0\.24\)/);
+      const others = await frame
+        .locator(".rb-zone:not([data-hot])")
+        .evaluateAll((zones) => zones.map((el) => getComputedStyle(el).boxShadow));
+      expect(others.length).toBeGreaterThan(0);
+      expect([...new Set(others)]).toEqual(["none"]);
+      await page.mouse.up();
+      await expect.poll(() => positionOf(page, "sections")).toBe("left");
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+
+  it("con movimiento: el elemento que se lleva se inclina hacia donde va y se endereza al soltarlo", async () => {
+    const page = await (
+      await browser.newContext({ viewport: { width: 1440, height: 950 } })
+    ).newPage();
+    try {
+      await intoTheCanvas(page);
+      await studioToolsOn(page);
+      const frame = page.frameLocator(PREVIEW).first();
+      const corner = await pointIn(frame.locator('[data-section="sec-cover"]'), 0.02, 0.02);
+      await page.mouse.click(corner.x, corner.y);
+      await motionSettled(page);
+      await frame.locator('.rb-action[aria-label="Diseñar a mano"]').first().click();
+      await escalated(frame, () => frame.locator(".rb-escalate-yes").click());
+      await waitForBankPhoto(frame);
+      const placed = await placedIn(frame, "sec-cover");
+      const subject = frame.locator(`[data-section="sec-cover"] [data-id="${placed[0]?.id}"]`);
+      const grab = await pointIn(subject);
+      /*
+       * Every frame of the carry: how the element leans, and **how far its drawn centre is from
+       * where the drag has put it** — its centre when it was picked up plus the offset the drag
+       * writes. A lean about the place it was picked up from swings it off the hand by the travel
+       * times sin 2°; about where it is now, by nothing.
+       */
+      await subject.evaluate((el) => {
+        const box = el.getBoundingClientRect();
+        const w = window as unknown as {
+          __lean: { rotate: string; off: number }[];
+          __leanOn: boolean;
+        };
+        const centre = { x: box.left + box.width / 2, y: box.top + box.height / 2 };
+        w.__lean = [];
+        w.__leanOn = true;
+        const tick = () => {
+          const now = el.getBoundingClientRect();
+          const dx = Number.parseFloat(el.style.getPropertyValue("--rb-dx")) || 0;
+          const dy = Number.parseFloat(el.style.getPropertyValue("--rb-dy")) || 0;
+          w.__lean.push({
+            rotate: getComputedStyle(el).rotate,
+            off: Math.hypot(
+              now.left + now.width / 2 - (centre.x + dx),
+              now.top + now.height / 2 - (centre.y + dy),
+            ),
+          });
+          if (w.__leanOn) requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      });
+      await page.mouse.move(grab.x, grab.y);
+      await page.mouse.down();
+      await page.mouse.move(grab.x + 160, grab.y + 40, { steps: 12 });
+      await page.waitForTimeout(60);
+      const carried = await subject.evaluate(() => {
+        const w = window as unknown as {
+          __lean: { rotate: string; off: number }[];
+          __leanOn: boolean;
+        };
+        w.__leanOn = false;
+        return w.__lean;
+      });
+      const leant = carried.filter((f) => f.rotate !== "none");
+      expect(
+        leant.some((f) => f.rotate === "2deg"),
+        `the element did not lean the way it went: ${[...new Set(carried.map((f) => f.rotate))].join(" ")}`,
+      ).toBe(true);
+      expect(
+        Math.max(...leant.map((f) => f.off)),
+        "the lean swung the element off where the drag put it",
+      ).toBeLessThan(0.5);
+      await page.mouse.up();
+      await motionSettled(page);
+      expect(await subject.evaluate((el) => getComputedStyle(el).rotate)).toBe("none");
+      expect(await subject.evaluate((el) => el.hasAttribute("data-tilt"))).toBe(false);
+    } finally {
+      await page.context().close();
+    }
+  }, 180_000);
+
+  it("con movimiento reducido: la página cambia sin cruzarse, nada llega del desenfoque ni escalonado, nada se inclina", async () => {
+    const page = await (
+      await browser.newContext({ viewport: { width: 1440, height: 950 }, reducedMotion: "reduce" })
+    ).newPage();
+    try {
+      const frame = await placedSite(page, {
+        pages: { shown: true, position: "bar" },
+        sections: { shown: true, position: "row" },
+      });
+      await motionSettled(page);
+      const tabs = page.locator('[data-testid="page-tabs"] button');
+      const second = await pointIn(tabs.nth(1));
+      const frames = await crossing(page, () => page.mouse.click(second.x, second.y));
+      expect(frames.some((f) => f.rootFades.length > 0 || f.paging)).toBe(false);
+      expect(frames.at(-1)?.sections).not.toContain("sec-cover");
+      const first = await pointIn(tabs.first());
+      await page.mouse.click(first.x, first.y);
+      await expect(frame.locator('[data-section="sec-cover"]')).toBeVisible();
+      await motionSettled(page);
+
+      // Nothing seen through a blur: the arrival lasts 0.01 ms, so at most the frame it is created
+      // in shows its first keyframe — at opacity 0, which nobody sees.
+      const menu = await menuArrival(page);
+      expect(menu.length).toBeGreaterThan(1);
+      expect(
+        menu.filter((m) => m.filter !== "none" && m.opacity > 0),
+        "a menu seen through a blur with reduced motion",
+      ).toEqual([]);
+      expect(menu.filter((m) => m.filter !== "none").length).toBeLessThanOrEqual(1);
+      await page.keyboard.press("Escape");
+      await motionSettled(page);
+
+      const cover = await pointIn(frame.locator('[data-section="sec-cover"]'), 0.1, 0.1);
+      await page.mouse.click(cover.x, cover.y);
+      await expect(frame.locator('[data-section="sec-cover"] .rb-actions')).toHaveCount(1);
+      const verbs = await verbsOf(frame, "sec-cover");
+      expect(verbs.length).toBeGreaterThan(6);
+      expect([...new Set(verbs.map((v) => v.delay))]).toEqual([0]);
+      await frame.locator("body").evaluate(() => window.scrollTo(0, 0));
+      await motionSettled(page);
+
+      const { at } = await frameOnScreen(page);
+      const ground = await rowGround(frame);
+      const { moving, still } = await leaning(page, ".rb-menu-ghost", () =>
+        carry(page, ground, at(120, 500), false),
+      );
+      expect(moving.length, "the label was never sampled").toBeGreaterThan(0);
+      expect([...new Set(moving)]).toEqual(["none"]);
+      expect(still).toBe("none");
+      // The glow is a state, not a movement: it is there, at once.
+      await expect(frame.locator('.rb-zone[data-zone="left"][data-hot]')).toHaveCount(1);
+      expect(
+        await frame
+          .locator('.rb-zone[data-zone="left"][data-hot]')
+          .evaluate((el) => getComputedStyle(el).boxShadow),
+      ).toMatch(/inset/);
+      await page.mouse.up();
+    } finally {
+      await page.context().close();
     }
   }, 180_000);
 });
