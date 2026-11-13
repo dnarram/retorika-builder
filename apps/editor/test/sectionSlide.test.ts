@@ -4,7 +4,10 @@ import {
   BRAND_SLIDE_RULE,
   brandMoved,
   canSlide,
+  canvasMotion,
+  HEADER_PAGE_RULE,
   namesSheet,
+  PAGING_CLASS,
   SLIDE_NAMES_ID,
   SLIDING_CLASS,
   sectionOrder,
@@ -61,6 +64,35 @@ describe("which patches slide", () => {
   });
 });
 
+/**
+ * **Which movement a patch is drawn with** (sprint 36 día 7): another page crosses over, a change of
+ * order slides, a brand that moved settles, and a typed letter is patched at once. One call, one
+ * answer, so the caller has nothing to combine.
+ */
+describe("which movement a patch is drawn with", () => {
+  const before = ["sec-cover", "sec-services", "sec-contact"];
+
+  it("crosses over to another page, whatever its sections and its bar", () => {
+    expect(canvasMotion(before, ["sec-a", "sec-b"], false, false)).toEqual({ kind: "page" });
+    expect(canvasMotion(before, [...before], false, true)).toEqual({ kind: "page" });
+  });
+
+  it("slides the sections whose order changed, and settles a brand that moved, on the same page", () => {
+    expect(canvasMotion(before, ["sec-services", "sec-cover", "sec-contact"], true, false)).toEqual(
+      { kind: "slide", sections: true, brand: false },
+    );
+    expect(canvasMotion(before, [...before], true, true)).toEqual({
+      kind: "slide",
+      sections: false,
+      brand: true,
+    });
+  });
+
+  it("draws a typed letter at once", () => {
+    expect(canvasMotion(before, [...before], true, false)).toEqual({ kind: "none" });
+  });
+});
+
 describe("when a document can slide", () => {
   it("not without view transitions", () => {
     expect(canSlide(document)).toBe(false);
@@ -109,6 +141,80 @@ describe("the transition itself", () => {
     await Promise.resolve();
     expect(document.getElementById(SLIDE_NAMES_ID)).toBeNull();
     expect(document.documentElement.classList.contains(SLIDING_CLASS)).toBe(false);
+  });
+
+  /**
+   * **Another page crosses over with the bar still** (sprint 36 día 7): the same transition, the
+   * root marked as crossing rather than sliding while it runs, and the bar named for it alone.
+   */
+  it("marks the root as crossing over and names the bar, for that transition only", async () => {
+    let finish: () => void = () => {};
+    const seen: { paging: boolean; sliding: boolean; bar: boolean }[] = [];
+    (document as { startViewTransition?: unknown }).startViewTransition = (update: () => void) => {
+      update();
+      return {
+        finished: new Promise<void>((done) => {
+          finish = done;
+        }),
+        ready: Promise.resolve(),
+        updateCallbackDone: Promise.resolve(),
+      };
+    };
+    slide(
+      document,
+      [],
+      () => {
+        const root = document.documentElement.classList;
+        seen.push({
+          paging: root.contains(PAGING_CLASS),
+          sliding: root.contains(SLIDING_CLASS),
+          bar: (document.getElementById(SLIDE_NAMES_ID)?.textContent ?? "").includes("rb-header"),
+        });
+      },
+      HEADER_PAGE_RULE,
+      PAGING_CLASS,
+    );
+    expect(seen).toEqual([{ paging: true, sliding: false, bar: true }]);
+    finish();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(document.documentElement.classList.contains(PAGING_CLASS)).toBe(false);
+    expect(document.getElementById(SLIDE_NAMES_ID)).toBeNull();
+  });
+
+  /**
+   * **A newer transition takes the root whole.** A transition skipped by a newer one still has its
+   * update called — after the newer one cleared the root — and its end arrives late: neither may
+   * leave its class on the root, where a slide's would hide every gap for good.
+   */
+  it("leaves no class behind when a newer transition skips an older one", async () => {
+    const pending: { update: () => void; finish: () => void }[] = [];
+    (document as { startViewTransition?: unknown }).startViewTransition = (update: () => void) => {
+      let finish: () => void = () => {};
+      const finished = new Promise<void>((done) => {
+        finish = done;
+      });
+      pending.push({ update, finish });
+      return { finished, ready: Promise.resolve(), updateCallbackDone: Promise.resolve() };
+    };
+    const root = document.documentElement.classList;
+    slide(document, ["sec-services"], () => {});
+    slide(document, [], () => {}, HEADER_PAGE_RULE, PAGING_CLASS);
+    // The browser calls the skipped one's update first, then the newer one's, then ends both.
+    pending[0]?.update();
+    pending[1]?.update();
+    expect(root.contains(SLIDING_CLASS), "the skipped slide took the root back").toBe(false);
+    expect(root.contains(PAGING_CLASS)).toBe(true);
+    pending[0]?.finish();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(root.contains(PAGING_CLASS), "the skipped slide's end cleared the crossing").toBe(true);
+    pending[1]?.finish();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(root.contains(PAGING_CLASS)).toBe(false);
+    expect(root.contains(SLIDING_CLASS)).toBe(false);
+    expect(document.getElementById(SLIDE_NAMES_ID)).toBeNull();
   });
 
   /**

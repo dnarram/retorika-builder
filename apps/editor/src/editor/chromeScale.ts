@@ -55,6 +55,12 @@ export const CHROME_SCALE = {
   // that settles inside the frame (`settleDrop`, through the Web Animations API) lands the way a
   // mark in the rail does.
   spring: "linear(0, 0.42 22%, 0.86 44%, 1.06 62%, 0.99 80%, 1)",
+  // Carried since sprint 36 día 7, when the section's verbs started arriving one after another
+  // (the gap between two of them) and the canvas's popups started arriving from a blur — the one
+  // `filter` the editor animates, measured on an emulated phone first: no frame of the insert menu
+  // or of a verb's word missed its 16.7 ms at a fourfold throttle, with or without it.
+  stagger: "40ms",
+  blur: "4px",
 } as const;
 
 /**

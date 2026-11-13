@@ -149,6 +149,7 @@ import {
   type SavedWhere,
   type SaveStatus,
 } from "../editor/EditorShell.tsx";
+import { ghostTilt } from "../editor/ghostTilt.ts";
 import { GUIDE_ZONE, type Guide, guidesFor, type Rect } from "../editor/guides.ts";
 import { HANDLE_TOUCH, handlesFor } from "../editor/handles.ts";
 import { headerPreviewer } from "../editor/headerPreview.ts";
@@ -228,9 +229,11 @@ import {
   BRAND_SLIDE_RULE,
   brandMoved,
   canSlide,
+  canvasMotion,
+  HEADER_PAGE_RULE,
+  PAGING_CLASS,
   SLIDING_CLASS,
   sectionOrder,
-  shouldSlide,
   slide,
   slidingIds,
 } from "../editor/sectionSlide.ts";
@@ -1977,24 +1980,35 @@ export function Editor({
     const before = sectionOrder(iframeDoc.body);
     const after = sectionOrder(fresh);
     const samePage = patchedPageId.current === (inputs.pageId ?? null);
-    const sections = shouldSlide(before, after, samePage);
     // **And the brand settling into its place** (sprint 35 día 6): named alone when only it moved,
-    // so a page of twenty sections captures one box and not twenty.
-    const brand = samePage && brandMoved(iframeDoc.body, fresh);
-    if ((sections || brand) && canSlide(iframeDoc)) {
-      slide(
-        iframeDoc,
-        sections ? slidingIds(iframeDoc, before, after) : [],
-        () => {
-          const now = patchInputs();
-          if (samePatchInputs(now, inputs)) patchNow(iframeDoc, inputs, fresh, renderMs);
-          else {
-            const again = performance.now();
-            patchNow(iframeDoc, now, renderFor(now), performance.now() - again);
-          }
-        },
-        brand ? BRAND_SLIDE_RULE : "",
-      );
+    // so a page of twenty sections captures one box and not twenty. **And another page crossing
+    // over** (sprint 36 día 7): the page fades into the next in `--ui-fast` with the bar named, so
+    // the bar stays while the rest crosses — ADR 0062 §3 mirrored by the chrome, no byte of it in
+    // the published page. Nothing is named but the bar: a crossing captures the root and one box.
+    const motion = canvasMotion(
+      before,
+      after,
+      samePage,
+      samePage && brandMoved(iframeDoc.body, fresh),
+    );
+    if (motion.kind !== "none" && canSlide(iframeDoc)) {
+      const update = () => {
+        const now = patchInputs();
+        if (samePatchInputs(now, inputs)) patchNow(iframeDoc, inputs, fresh, renderMs);
+        else {
+          const again = performance.now();
+          patchNow(iframeDoc, now, renderFor(now), performance.now() - again);
+        }
+      };
+      if (motion.kind === "page") slide(iframeDoc, [], update, HEADER_PAGE_RULE, PAGING_CLASS);
+      else {
+        slide(
+          iframeDoc,
+          motion.sections ? slidingIds(iframeDoc, before, after) : [],
+          update,
+          motion.brand ? BRAND_SLIDE_RULE : "",
+        );
+      }
       return;
     }
     patchNow(iframeDoc, inputs, fresh, renderMs);
@@ -3375,7 +3389,9 @@ export function Editor({
       const index = sectionsNow().indexOf(target);
 
       const actions = chrome(iframeDoc, "div");
-      actions.className = arriving ? `rb-actions ${ARRIVES}` : "rb-actions";
+      // **The verbs arrive one after another** (sprint 36 día 7): the cluster only paces them
+      // (`rb-verbs-arrive`, the delays in the sheet) and each verb carries the arrival itself, below.
+      actions.className = arriving ? "rb-actions rb-verbs-arrive" : "rb-actions";
       /*
        * **`group` and not `toolbar`.** The WAI-ARIA toolbar pattern promises a keyboard a
        * particular contract: one Tab stop for the whole thing, and the arrows moving between the
@@ -3528,6 +3544,7 @@ export function Editor({
         ),
       );
       actions.appendChild(gripFor(actions, target, sectionId));
+      if (arriving) for (const verb of actions.children) verb.classList.add(ARRIVES);
       /*
        * **First in the DOM, not last**, which is a change sprint 17 day 3 made on purpose and whose
        * cost is worth stating. The cluster is `position: absolute`, so nothing moves on screen; what
@@ -6570,6 +6587,8 @@ export function Editor({
    * zones of that width, under it the click that opens the sheet.
    */
   function wireMenuDrag(iframeDoc: Document) {
+    // The label that follows the hand leans the way it goes (sprint 36 día 7, `ghostTilt.ts`).
+    const tilt = ghostTilt(iframeDoc.defaultView);
     // **And the brand, since sprint 35 día 6** (ADR 0070 §5): the bar's own, never a rail's copy.
     const BRAND_GRIP = ".rb-header > .rb-brand";
     const GRIPS = `nav.rb-nav[data-part], .rb-rail[data-side], .rb-nav-row, details.rb-nav-fold > summary, details.rb-nav-narrow > summary, ${BRAND_GRIP}`;
@@ -6646,6 +6665,7 @@ export function Editor({
 
     const clear = () => {
       if (!drag) return;
+      tilt.end();
       const { grip, pointerId, dragging } = drag;
       drag = null;
       if (dragging && grip.hasPointerCapture(pointerId)) grip.releasePointerCapture(pointerId);
@@ -6824,6 +6844,7 @@ export function Editor({
       if (ghost) {
         ghost.style.left = `${at.x}px`;
         ghost.style.top = `${at.y}px`;
+        tilt.follow(ghost, at.x);
       }
     };
 
@@ -6946,6 +6967,8 @@ export function Editor({
               ? dropOutcome(menu, hot, docNow.current)
               : null;
       if (outcome?.kind === "write") leave(iframeDoc.querySelector(".rb-zone[data-hot]"), "zone");
+      // Straight before its copy is taken: what is let go of stops leaning.
+      tilt.end();
       if (dragging) leave(iframeDoc.querySelector(".rb-menu-ghost"), "popup");
       clear();
       if (!dragging || outcome === null) return;
@@ -7331,6 +7354,8 @@ export function Editor({
    */
   function wireDragging(iframeDoc: Document) {
     delegate(iframeDoc, "dragstart", "img, a", (_, event) => event.preventDefault());
+    // The element picked up, or the phone's row, leans the way the hand goes (sprint 36 día 7).
+    const tilt = ghostTilt(iframeDoc.defaultView);
 
     const states = new WeakMap<HTMLElement, DragState>();
     const stateOf = (el: HTMLElement): DragState => {
@@ -7390,9 +7415,12 @@ export function Editor({
       state.mobileSwap = null;
       state.gesture = "none";
       state.asked = false;
+      tilt.end();
       el.classList.remove("rb-moving");
       // The displacement is chrome and lives on the element for exactly as long as the hand does.
       el.style.transform = "";
+      el.style.removeProperty("--rb-dx");
+      el.style.removeProperty("--rb-dy");
       state.took = null;
       for (const guide of section.querySelectorAll(".rb-guide")) guide.remove();
       iframeDoc.documentElement.classList.remove("rb-dragging");
@@ -7484,8 +7512,10 @@ export function Editor({
         // A refused drop is red and says nothing here: «Arrastra arriba o abajo…» is the help
         // line's, read off this class by `watchCanvasHelp` (ADR 0071).
         ghost.classList.toggle("rb-ghost-no", state.mobileSwap === null);
+        tilt.follow(ghost, now.x);
         return;
       }
+      tilt.follow(el, now.x);
       const metrics = gridMetricsOf(section);
       const raw = { x: now.x - state.from.x, y: now.y - state.from.y };
       const took = state.took;
@@ -7499,6 +7529,11 @@ export function Editor({
           })
         : { dx: 0, dy: 0, lines: [] };
       el.style.transform = `translate(${raw.x + guided.dx}px, ${raw.y + guided.dy}px)`;
+      // Where it is now, for the lean to turn it around (sprint 36 día 7): `rotate` is applied after
+      // the displacement, so about the place it was picked up from it would swing the element off
+      // the hand — 1 px for every 30 of travel — and off the guide it has just been held to.
+      el.style.setProperty("--rb-dx", `${raw.x + guided.dx}px`);
+      el.style.setProperty("--rb-dy", `${raw.y + guided.dy}px`);
       drawGuides(section, guided.lines);
       state.outcome = dropAt({
         metrics,
@@ -8216,10 +8251,14 @@ export function Editor({
       `  padding: ${screenPx(3)} ${screenPx(8)}; font: 600 ${screenPx(12)}/1.2 ${UI_FONT}; color: #FFFFFF;`,
       `  background: ${CHROME_SCALE.ink}; border-radius: ${CHROME_SCALE.radiusSm};`,
       "  white-space: nowrap; pointer-events: none; opacity: 0; visibility: hidden;",
+      // **And from a blur** (sprint 36 día 7, measured first on an emulated phone — the note on
+      // `rb-arrive` below): the word comes into focus as it comes in, and goes out of it as it goes.
+      `  filter: blur(${CHROME_SCALE.blur});`,
       `  transition: opacity ${CHROME_SCALE.fast} ${CHROME_SCALE.ease},`,
+      `    filter ${CHROME_SCALE.fast} ${CHROME_SCALE.ease},`,
       `    visibility 0s linear ${CHROME_SCALE.fast}; }`,
       ".rb-action:focus-visible + .rb-tip, .rb-grip:focus-visible + .rb-tip {",
-      "  opacity: 1; visibility: visible; transition-delay: 0s; }",
+      "  opacity: 1; visibility: visible; filter: none; transition-delay: 0s; }",
       // Dragged low in its section, a word under the row would be drawn past the section's own
       // edge, or over the top of the next one. `placeActions` decides the side; this draws it.
       `.rb-actions-low .rb-tip { top: auto; bottom: calc(100% + ${screenPx(6)}); }`,
@@ -8231,7 +8270,7 @@ export function Editor({
        */
       `@media (hover: hover) { .rb-action:hover:not(:disabled), .rb-grip:hover {`,
       `  transform: scale(${VERB_SCALE.grow}); box-shadow: ${CHROME_SCALE.shadow3}; }`,
-      "  .rb-verb:hover .rb-tip { opacity: 1; visibility: visible; transition-delay: 0s; } }",
+      "  .rb-verb:hover .rb-tip { opacity: 1; visibility: visible; filter: none; transition-delay: 0s; } }",
       // The hole a delete leaves, drawn as mockup 11 draws it — `2px dashed`, its own margin, the
       // name above and what happens next below. `UI_FONT` because it is the editor talking, not the
       // site: every other `rb-` node in this frame does the same.
@@ -8440,6 +8479,18 @@ export function Editor({
       `.rb-ghost-no { border-color: ${CHROME_SCALE.danger}; border-style: solid;`,
       "  background: rgba(220,38,38,0.12); color: #7F1D1D; }",
       /*
+       * **What the hand carries leans the way it is carried** (sprint 36 día 7): the menu's label,
+       * the phone's row and the element picked up turn 2° toward where the hand is going, read from
+       * the sign of its horizontal travel (`editor/ghostTilt.ts`), and stand straight again when the
+       * hand stops or lets go. `rotate`, so it composes with the `transform` the drag writes and the
+       * `translate` a drop settles by; never under reduced motion, where nothing writes the lean.
+       */
+      `.rb-ghost, .rb-moving { transition: rotate ${CHROME_SCALE.fast} ${CHROME_SCALE.ease}; }`,
+      // Turned about where the element is now, not where it was picked up (the drag's own offset).
+      ".rb-moving { transform-origin: calc(50% + var(--rb-dx, 0px)) calc(50% + var(--rb-dy, 0px)); }",
+      '.rb-ghost[data-tilt="right"], .rb-moving[data-tilt="right"] { rotate: 2deg; }',
+      '.rb-ghost[data-tilt="left"], .rb-moving[data-tilt="left"] { rotate: -2deg; }',
+      /*
        * **The zones a menu may be dropped on** (ADR 0066, sprint 33 día 4), drawn the moment the
        * gesture begins: every place of this menu's vocabulary as a dashed box in the brand blue with
        * the panel's word in it; the place it is in now, solid and quiet; the one under the hand,
@@ -8452,12 +8503,19 @@ export function Editor({
       "  display: flex; align-items: center; justify-content: center; text-align: center;",
       `  border: ${screenPx(2)} dashed ${CHROME_SCALE.brand}; border-radius: ${screenPx(6)};`,
       `  background: rgba(21,111,231,0.08); color: ${CHROME_SCALE.brand};`,
-      `  font: 600 ${screenPx(12)}/1.3 ${UI_FONT}; }`,
+      `  font: 600 ${screenPx(12)}/1.3 ${UI_FONT};`,
+      `  transition: box-shadow ${CHROME_SCALE.fast} ${CHROME_SCALE.ease}; }`,
       ".rb-zone[data-current] { border-style: solid; opacity: 0.55; }",
-      ".rb-zone[data-hot] { border-style: solid; background: rgba(21,111,231,0.22); opacity: 1; }",
+      // **The zone under the hand glows** (sprint 36 día 7): a 2 px line inside and a 12 px light
+      // outside, at 24 %, in `--ui-fast` — a state that follows the hand, not a pulse. The pulse
+      // stays the one a zone gives when it receives the menu, the canvas's only one.
+      ".rb-zone[data-hot] { border-style: solid; background: rgba(21,111,231,0.22); opacity: 1;",
+      `  box-shadow: inset 0 0 0 ${screenPx(2)} ${CHROME_SCALE.brand}, 0 0 ${screenPx(12)} rgba(21,111,231,0.24); }`,
       `.rb-menu-ghost { position: fixed; z-index: 11; flex-direction: column; gap: ${screenPx(2)};`,
       `  padding: ${screenPx(6)} ${screenPx(10)}; border-style: solid; background: ${CHROME_SCALE.brand};`,
-      `  color: #FFFFFF; transform: translate(${screenPx(12)}, ${screenPx(12)}); white-space: nowrap; }`,
+      // Beside the hand by `translate`, which comes after a lean rather than before it: the label
+      // turns about its own centre (sprint 36 día 7).
+      `  color: #FFFFFF; translate: ${screenPx(12)} ${screenPx(12)}; white-space: nowrap; }`,
       ".rb-menu-ghost-note:empty { display: none; }",
       `.rb-menu-ghost-note { font-weight: 500; opacity: 0.9; }`,
       // **The hand is told before it pulls** (David's adjustment 2 of sprint 33): the open hand over
@@ -8725,8 +8783,27 @@ export function Editor({
        * a button still growing. So everything that arrives fades with its box still from the first
        * frame; only what leaves, which nobody can press, shrinks.
        */
-      "@keyframes rb-arrive { from { opacity: 0; } }",
+      /*
+       * **And it arrives from a blur** (sprint 36 día 7, the plan's decision 10): 4 px to none in the
+       * same 120 ms, the one `filter` the editor animates. Measured before it was applied, on an
+       * emulated phone (390 × 844, touch, three device pixels per CSS pixel, the CPU slowed fourfold):
+       * the insert menu at 240 × 711 and a verb's word at 47 × 20, three openings each with and
+       * without the blur — every frame 16.6 to 16.8 ms, none late, in both. A `filter` changes no
+       * box, so what arrives still does not move under the hand.
+       */
+      `@keyframes rb-arrive { from { opacity: 0; filter: blur(${CHROME_SCALE.blur}); } }`,
       `.rb-arrives { animation: rb-arrive ${CHROME_SCALE.fast} ${CHROME_SCALE.ease} backwards; }`,
+      /*
+       * **The section's verbs arrive one after another** (sprint 36 día 7), `--ui-stagger` apart in
+       * the order they are read, the sixth and every one after it together: the cluster is whole
+       * 320 ms after the press. Opacity and the blur only, like every arrival here — these are
+       * buttons about to be pressed.
+       */
+      `.rb-verbs-arrive > :nth-child(2) { animation-delay: calc(${CHROME_SCALE.stagger} * 1); }`,
+      `.rb-verbs-arrive > :nth-child(3) { animation-delay: calc(${CHROME_SCALE.stagger} * 2); }`,
+      `.rb-verbs-arrive > :nth-child(4) { animation-delay: calc(${CHROME_SCALE.stagger} * 3); }`,
+      `.rb-verbs-arrive > :nth-child(5) { animation-delay: calc(${CHROME_SCALE.stagger} * 4); }`,
+      `.rb-verbs-arrive > :nth-child(n+6) { animation-delay: calc(${CHROME_SCALE.stagger} * 5); }`,
       ".rb-actions, .rb-compositions { transform-origin: top right; }",
       ".rb-menu { transform-origin: top center; }",
       `@keyframes rb-leave { to { opacity: 0; scale: 0.96; } }`,
@@ -8757,6 +8834,22 @@ export function Editor({
       "::view-transition-new(root) { animation: none; }",
       `html.${SLIDING_CLASS} .rb-gap { visibility: hidden; }`,
       /*
+       * **Another page crosses over, and the bar stays** (sprint 36 día 7, `PAGING_CLASS`): what ADR
+       * 0062 §3 gives the published site between two of its pages, mirrored by the chrome. The old
+       * page fades out and the new one in, in `--ui-fast`, over the real DOM already final; the bar,
+       * named for this transition alone, is not part of the crossing — drawn at once as the page it
+       * belongs to now, neither fading nor travelling, even when the old page was scrolled past it.
+       */
+      "@keyframes rb-page-out { to { opacity: 0; } }",
+      "@keyframes rb-page-in { from { opacity: 0; } }",
+      `html.${PAGING_CLASS}::view-transition-old(root) { display: block;`,
+      `  animation: rb-page-out ${CHROME_SCALE.fast} ${CHROME_SCALE.ease} both; }`,
+      `html.${PAGING_CLASS}::view-transition-new(root) {`,
+      `  animation: rb-page-in ${CHROME_SCALE.fast} ${CHROME_SCALE.ease} both; }`,
+      `html.${PAGING_CLASS}::view-transition-group(rb-header) { animation: none; }`,
+      `html.${PAGING_CLASS}::view-transition-old(rb-header) { display: none; }`,
+      `html.${PAGING_CLASS}::view-transition-new(rb-header) { animation: none; }`,
+      /*
        * Everything inside the canvas that moves, flattened for somebody who asked for less of it —
        * the destination is never removed, only the travel, which is the same contract `globals.css`
        * keeps on the other side of the boundary.
@@ -8780,12 +8873,21 @@ export function Editor({
       "  .rb-handmade-in { animation-duration: 0.01ms; }",
       "  .rb-line-add { transition-duration: 0.01ms; }",
       "  .rb-arrives { animation-duration: 0.01ms; }",
+      // The verbs together, at once (sprint 36 día 7): the pace goes with the movement. As heavy as
+      // the delays it flattens, and later.
+      "  .rb-verbs-arrive > .rb-arrives { animation-delay: 0s; }",
+      "  .rb-tip { filter: none; }",
+      "  .rb-ghost, .rb-moving { transition-duration: 0.01ms; }",
+      "  .rb-ghost[data-tilt], .rb-moving[data-tilt] { rotate: none; }",
+      "  .rb-zone { transition-duration: 0.01ms; }",
       // The choice that fades in (sprint 35 día 7): coloured at once.
       "  [data-section], .rb-header, [data-rb-text] { transition-duration: 0.01ms; }",
       '  [data-leaving="popup"], [data-leaving="zone"] { animation-duration: 0.01ms; }',
       // Never started for somebody who asked for less movement (`canSlide`); flattened here too, so
       // the promise does not rest on one check.
       "  ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) {",
+      "    animation: none !important; }",
+      `  html.${PAGING_CLASS}::view-transition-old(root), html.${PAGING_CLASS}::view-transition-new(root) {`,
       "    animation: none !important; } }",
     ].join("\n");
     iframeDoc.head.appendChild(style);

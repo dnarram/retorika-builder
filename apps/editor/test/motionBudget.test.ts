@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { CHROME_SCALE } from "../src/editor/chromeScale.ts";
+import { PAGING_CLASS, SLIDING_CLASS } from "../src/editor/sectionSlide.ts";
 import { REVEAL_STAGGER_CAP } from "../src/questionnaire/ui.tsx";
 
 /**
@@ -516,6 +517,125 @@ describe("the budget inside the canvas", () => {
 });
 
 /**
+ * **The canvas responds** (sprint 36 día 7). Five things the canvas's own sheet gained, held to the
+ * rules they were written under: the one `filter` arrives and leaves with the popups and the verbs'
+ * words and nowhere else; the verbs arrive a stagger apart and are whole inside 320 ms, together and
+ * at once for somebody who asked for less; another page crosses over in `--ui-fast` with the bar out
+ * of the crossing; what the hand carries leans by `rotate` alone, 2° at most; and the zone under the
+ * hand glows without pulsing — the pulse stays the receiving zone's, the canvas's only one.
+ */
+describe("the canvas responds (sprint 36 día 7)", () => {
+  const SHEET = canvasSheet();
+  const RULES = cssRules(SHEET);
+  const reduced = (rule: CssRule) =>
+    rule.at.some((query) => query.includes("prefers-reduced-motion: reduce"));
+  const keyframes = (name: string) =>
+    RULES.find((rule) => rule.prelude === `@keyframes ${name}`)?.body ?? "";
+  const rule = (prelude: string) =>
+    RULES.find((each) => each.prelude === prelude && !reduced(each));
+
+  it("keeps filter to the arrival and the verbs' words, and the arrival to opacity and filter", () => {
+    const FILTERED = [
+      "@keyframes rb-arrive",
+      ".rb-tip",
+      ".rb-action:focus-visible + .rb-tip, .rb-grip:focus-visible + .rb-tip",
+      ".rb-verb:hover .rb-tip",
+    ];
+    const outside = RULES.filter(
+      (each) => /(^|[\s;{])filter\s*:/.test(each.body) && !reduced(each),
+    ).filter((each) => !FILTERED.includes(each.prelude));
+    expect(
+      outside.map((each) => each.prelude),
+      "a filter outside the arrival",
+    ).toEqual([]);
+    const arrive = keyframes("rb-arrive");
+    expect(arrive).toMatch(/filter:\s*blur\(4px\)/);
+    expect(arrive).toMatch(/opacity:\s*0/);
+    expect(arrive, "what arrives does not move under the hand").not.toMatch(
+      /transform|translate|scale|rotate/,
+    );
+    // The word comes into focus as it comes in: blurred hidden, sharp shown, the filter in its time.
+    expect(rule(".rb-tip")?.body).toMatch(/filter:\s*blur\(4px\)/);
+    expect(rule(".rb-tip")?.body).toMatch(/filter 120ms/);
+    expect(
+      rule(".rb-action:focus-visible + .rb-tip, .rb-grip:focus-visible + .rb-tip")?.body,
+    ).toMatch(/filter:\s*none/);
+    expect(rule(".rb-verb:hover .rb-tip")?.body).toMatch(/filter:\s*none/);
+  });
+
+  it("brings the verbs one after another, whole inside 320 ms, and all at once under reduced motion", () => {
+    const paced = RULES.filter(
+      (each) => each.prelude.startsWith(".rb-verbs-arrive > :nth-child(") && !reduced(each),
+    );
+    const delays = paced.map((each) => timesIn(each.body)[0]?.ms ?? -1);
+    expect(delays).toEqual([40, 80, 120, 160, 200]);
+    expect(paced.at(-1)?.prelude, "the sixth and every verb after it, together").toBe(
+      ".rb-verbs-arrive > :nth-child(n+6)",
+    );
+    expect(Number.parseFloat(CHROME_SCALE.fast) + Math.max(...delays)).toBeLessThanOrEqual(320);
+    // Flattened by a rule as heavy as the delays (a class and a class) and declared after them.
+    const flat = RULES.findIndex(
+      (each) =>
+        reduced(each) &&
+        each.prelude === ".rb-verbs-arrive > .rb-arrives" &&
+        /animation-delay:\s*0s/.test(each.body),
+    );
+    expect(flat, "the verbs keep their pace under reduced motion").toBeGreaterThan(-1);
+    expect(flat).toBeGreaterThan(RULES.indexOf(paced.at(-1) as CssRule));
+  });
+
+  it("crosses over to another page in --ui-fast, with the bar neither fading nor travelling", () => {
+    const old = rule("html.rb-paging::view-transition-old(root)")?.body ?? "";
+    const fresh = rule("html.rb-paging::view-transition-new(root)")?.body ?? "";
+    expect(old).toMatch(/display:\s*block/);
+    expect(old).toMatch(/rb-page-out 120ms/);
+    expect(fresh).toMatch(/rb-page-in 120ms/);
+    expect(keyframes("rb-page-out")).toMatch(/^\s*to\s*\{\s*opacity:\s*0;?\s*\}\s*$/);
+    expect(keyframes("rb-page-in")).toMatch(/^\s*from\s*\{\s*opacity:\s*0;?\s*\}\s*$/);
+    expect(rule("html.rb-paging::view-transition-group(rb-header)")?.body).toMatch(
+      /animation:\s*none/,
+    );
+    expect(rule("html.rb-paging::view-transition-old(rb-header)")?.body).toMatch(/display:\s*none/);
+    expect(rule("html.rb-paging::view-transition-new(rb-header)")?.body).toMatch(
+      /animation:\s*none/,
+    );
+    // The bar is named by the transition's own sheet, never by the canvas's: at rest it is a bar.
+    expect(SHEET).not.toMatch(/\.rb-header\s*\{[^}]*view-transition-name/);
+  });
+
+  it("leans what the hand carries by rotate alone, 2° at most, and only in --ui-fast", () => {
+    const leaning = RULES.filter(
+      (each) => /\[data-tilt="(left|right)"\]/.test(each.prelude) && !reduced(each),
+    );
+    expect(leaning.length).toBe(2);
+    for (const each of leaning) {
+      expect(each.body.trim()).toMatch(/^rotate:\s*-?2deg;?$/);
+    }
+    expect(rule(".rb-ghost, .rb-moving")?.body).toMatch(/^\s*transition:\s*rotate 120ms/);
+    expect(
+      RULES.some(
+        (each) =>
+          reduced(each) &&
+          each.prelude === ".rb-ghost[data-tilt], .rb-moving[data-tilt]" &&
+          /rotate:\s*none/.test(each.body),
+      ),
+      "a lean under reduced motion",
+    ).toBe(true);
+  });
+
+  it("glows the zone under the hand without a pulse: the receiving zone's stays the only one", () => {
+    expect(rule(".rb-zone")?.body).toMatch(/transition:\s*box-shadow 120ms/);
+    expect(rule(".rb-zone[data-hot]")?.body).toMatch(
+      /box-shadow:\s*inset 0 0 0 \S+ #156fe7, 0 0 \S+ rgba\(21,111,231,0\.24\)/,
+    );
+    const pulses = RULES.filter(
+      (each) => each.prelude.startsWith("@keyframes") && /box-shadow/.test(each.body),
+    ).map((each) => each.prelude);
+    expect(pulses).toEqual(["@keyframes rb-zone-got"]);
+  });
+});
+
+/**
  * **The vocabulary of sprint 36, and the second register** (día 2). Every piece declared here is
  * held to its ceiling before any screen wears it, and the two scenes that may take `--ui-scene`
  * are the only readers of it. David's four conditions of 11 November 2026 are the four assertions
@@ -1020,7 +1140,13 @@ function timesIn(source: string): { declaration: string; ms: number }[] {
     .replace(/\$\{CHROME_SCALE\.(\w+)\}/g, (_, key: string) =>
       String((CHROME_SCALE as Record<string, string | number>)[key] ?? "?"),
     )
-    .replace(/var\(--ui-(fast|base|slow|stagger|scene)\)/g, (_, name: string) => `${ms(name)}ms`);
+    .replace(/var\(--ui-(fast|base|slow|stagger|scene)\)/g, (_, name: string) => `${ms(name)}ms`)
+    // A pace written as a multiple of the stagger (the canvas's verbs, sprint 36 día 7) is read as
+    // the time it is, not as its first number.
+    .replace(
+      /calc\(\s*(\d*\.?\d+)ms\s*\*\s*(\d+)\s*\)/g,
+      (_, time: string, times: string) => `${Number(time) * Number(times)}ms`,
+    );
   const out: { declaration: string; ms: number }[] = [];
   for (const declaration of resolved.matchAll(
     /(?<![\w-])(transition|animation)(-duration|-delay|Duration|Delay)?\s*:\s*([^;}\n]+)/g,
@@ -1118,10 +1244,17 @@ function canvasSheet(): string {
       .slice(open, close)
       .matchAll(/"((?:[^"\\\n]|\\.)*)"|'((?:[^'\\\n]|\\.)*)'|`((?:[^`\\]|\\.)*)`/g),
   ].map((match) => match[1] ?? match[2] ?? match[3] ?? "");
-  return literals
-    .join("\n")
-    .replace(/\$\{CHROME_SCALE\.(\w+)\}/g, (_, key: string) =>
-      String((CHROME_SCALE as Record<string, string | number>)[key] ?? "?"),
-    )
-    .replace(/\$\{[^}]*\}/g, "0");
+  return (
+    literals
+      .join("\n")
+      .replace(/\$\{CHROME_SCALE\.(\w+)\}/g, (_, key: string) =>
+        String((CHROME_SCALE as Record<string, string | number>)[key] ?? "?"),
+      )
+      // The root's two classes while a transition runs, by their names (sprint 36 día 7): a rule for
+      // the page crossing has to be found as the browser reads it.
+      .replace(/\$\{(SLIDING_CLASS|PAGING_CLASS)\}/g, (_, name: string) =>
+        name === "PAGING_CLASS" ? PAGING_CLASS : SLIDING_CLASS,
+      )
+      .replace(/\$\{[^}]*\}/g, "0")
+  );
 }
