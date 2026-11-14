@@ -29988,6 +29988,18 @@ async function openByResting(page: Page): Promise<void> {
   await expect(page.locator(RAIL_FAN)).toHaveCount(1);
 }
 
+/**
+ * **Rest on the hub and reach the tools** (sprint 37 día 4). With «Secciones» as the hub the fan opens
+ * on the page's sections (ADR 0073), and «Herramientas», its last pill, turns it to the tools.
+ */
+async function openTools(page: Page): Promise<void> {
+  await openByResting(page);
+  if ((await page.locator(RAIL_FAN).getAttribute("data-ring")) === "sections") {
+    await pressSpoke(page, TOOLS_SPOKE);
+    await expect(page.locator(RAIL_FAN)).toHaveAttribute("data-ring", "tools");
+  }
+}
+
 /** Press a pill where it is drawn (`page.mouse`, never `locator.click()`, which scrolls). */
 async function pressSpoke(page: Page, id: string): Promise<void> {
   const box = await page.locator(`${RAIL_FAN} [data-spoke="${id}"]`).boundingBox();
@@ -30046,7 +30058,7 @@ describe("sprint 37 día 2 — el raíl tiene dos formas", () => {
         await page.setViewportSize({ width, height });
         for (const withPanel of [false, true]) {
           if (withPanel) {
-            await openByResting(page);
+            await openTools(page);
             await pressSpoke(page, "style");
             await expect(page.locator(RAIL_HUB)).toHaveAttribute("data-tool", "style");
           }
@@ -30130,6 +30142,11 @@ describe("sprint 37 día 2 — el raíl tiene dos formas", () => {
         `opened ${Math.round(waited)} ms after the hand stopped`,
       ).toBeGreaterThanOrEqual(HUB_INTENT_MS - 5);
       expect(waited).toBeLessThan(HUB_INTENT_MS + 250);
+      // With «Secciones» as the hub the fan opened on the page's sections (ADR 0073, día 4); the rest
+      // of this walk is about the tools' fan, which «Herramientas» turns it to.
+      await expect(page.locator(RAIL_FAN)).toHaveAttribute("data-ring", "sections");
+      await pressSpoke(page, TOOLS_SPOKE);
+      await expect(page.locator(RAIL_FAN)).toHaveAttribute("data-ring", "tools");
 
       // The pills are where the module says, each the thing under its own middle.
       const drawn = await page.evaluate(() => {
@@ -30224,7 +30241,7 @@ describe("sprint 37 día 2 — el raíl tiene dos formas", () => {
           return row ? row.children.length > 1 : false;
         });
       for (const id of ["style", "pages", "menu", "share", "photos", "sections"]) {
-        await openByResting(page);
+        await openTools(page);
         await pressSpoke(page, id);
         await expect(page.locator(RAIL_HUB)).toHaveAttribute("data-tool", id);
         await expect(page.locator(RAIL_FAN)).toHaveCount(0);
@@ -30349,18 +30366,32 @@ describe("sprint 37 día 3 — el eje con teclado y con el dedo", () => {
       await axeSerious(page, "el menú radial cerrado a 1280");
       const fans = () => page.locator(RAIL_FAN).count();
       const line = page.getByTestId("help-line-quiet");
+      const first = `pill ${await page
+        .frameLocator(PREVIEW)
+        .first()
+        .locator("[data-section]")
+        .first()
+        .getAttribute("data-section")}`;
+      const back = `pill ${TOOLS_SPOKE}`;
 
       // --- RECORRIDO SIN RATÓN: INICIO ---
-      // The keyboard arrives from the header, one Tab past its last control.
+      // The keyboard arrives from the header, one Tab past its last control. With «Secciones» as the
+      // hub, the fan opens on the page's sections (ADR 0073).
       await page.getByRole("button", { name: "Descargar", exact: true }).focus();
       await page.keyboard.press("Tab");
       expect(await focused(page)).toBe("hub");
-      await expect(page.locator(RAIL_FAN)).toHaveCount(1);
+      await expect(page.locator(RAIL_FAN)).toHaveAttribute("data-ring", "sections");
       await expect(line).toContainText("menú radial");
 
-      // The arrows enter by the open tool and walk the arc; Enter chooses, and the keyboard stays
-      // on the hub, which now says the tool and does not open again for the focus it was given.
+      // The arrows enter by the first section; End reaches «Herramientas», and Enter on it turns the
+      // fan to the tools with the keyboard on the open tool. Two arrows to «Páginas», Enter chooses,
+      // and the keyboard stays on the hub, which does not open again for the focus it was given.
       await page.keyboard.press("ArrowDown");
+      expect(await focused(page)).toBe(first);
+      await page.keyboard.press("End");
+      expect(await focused(page)).toBe(back);
+      await page.keyboard.press("Enter");
+      await expect(page.locator(RAIL_FAN)).toHaveAttribute("data-ring", "tools");
       expect(await focused(page)).toBe("pill sections");
       await page.keyboard.press("ArrowDown");
       await page.keyboard.press("ArrowDown");
@@ -30379,20 +30410,20 @@ describe("sprint 37 día 3 — el eje con teclado y con el dedo", () => {
       expect(await focused(page), "the keyboard was dropped when the panel closed").toBe("hub");
       expect(await fans()).toBe(0);
 
-      // An arrow on the closed hub opens it on the open tool; Escape folds it back to the hub.
+      // An arrow on the closed hub opens it on its first pill; Escape folds it back to the hub.
       await page.keyboard.press("ArrowDown");
       await expect(page.locator(RAIL_FAN)).toHaveCount(1);
-      expect(await focused(page)).toBe("pill sections");
+      expect(await focused(page)).toBe(first);
       await page.keyboard.press("Escape");
       await expect(page.locator(RAIL_FAN)).toHaveCount(0);
       expect(await focused(page)).toBe("hub");
 
       // The ends wrap; and the fan is one Tab stop: Tab from a pill leaves it, and it folds.
       await page.keyboard.press("ArrowDown");
-      await page.keyboard.press("End");
-      expect(await focused(page)).toBe("pill photos");
+      await page.keyboard.press("ArrowUp");
+      expect(await focused(page)).toBe(back);
       await page.keyboard.press("ArrowDown");
-      expect(await focused(page)).toBe("pill sections");
+      expect(await focused(page)).toBe(first);
       await page.keyboard.press("Tab");
       expect(await focused(page)).toBe("Herramientas de diseño");
       await expect(page.locator(RAIL_FAN)).toHaveCount(0);
@@ -30479,9 +30510,14 @@ describe("sprint 37 día 3 — el eje con teclado y con el dedo", () => {
       await page.touchscreen.tap(frame.x + frame.width - 40, frame.y + frame.height / 2);
       await expect(page.locator(RAIL_FAN)).toHaveCount(0);
 
-      // And a tap on a pill chooses it.
+      // And a tap on a pill chooses it — «Herramientas» first, since «Secciones» opens on the
+      // sections (ADR 0073).
       await page.touchscreen.tap(hub.x, hub.y);
-      await expect(page.locator(RAIL_FAN)).toHaveCount(1);
+      await expect(page.locator(RAIL_FAN)).toHaveAttribute("data-ring", "sections");
+      const back = await page.locator(`${RAIL_FAN} [data-spoke="${TOOLS_SPOKE}"]`).boundingBox();
+      if (!back) throw new Error("no «Herramientas» pill");
+      await page.touchscreen.tap(back.x + back.width / 2, back.y + back.height / 2);
+      await expect(page.locator(RAIL_FAN)).toHaveAttribute("data-ring", "tools");
       const style = await page.locator(`${RAIL_FAN} [data-spoke="style"]`).boundingBox();
       if (!style) throw new Error("no «Estilo» pill");
       await page.touchscreen.tap(style.x + style.width / 2, style.y + style.height / 2);
