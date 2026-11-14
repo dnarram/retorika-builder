@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  fanKeyAction,
   keyboardHolder,
   placeAfterRebuild,
   popupKeyAction,
@@ -385,5 +386,67 @@ describe("the canvas's popups — the composition menu and the hand-design offer
         }
       }
     }
+  });
+});
+
+describe("the radial rail's keys (sprint 37 día 3, ADR 0072)", () => {
+  /** Six tools, «Estilo» open: the keyboard enters by the open tool's pill. */
+  const place = (at: number, open = true) => ({ count: 6, at, entry: 1, open });
+
+  it("enters the fan by the open tool, from the hub, with any arrow", () => {
+    for (const key of ["ArrowDown", "ArrowUp", "ArrowRight", "ArrowLeft"]) {
+      expect(fanKeyAction(bare(key), place(-1)), key).toEqual({ kind: "focus", index: 1 });
+    }
+  });
+
+  it("opens the fan when an arrow is pressed on the closed hub, and lands on the entry", () => {
+    expect(fanKeyAction(bare("ArrowDown"), place(-1, false))).toEqual({ kind: "open", index: 1 });
+    expect(fanKeyAction(bare("End"), place(-1, false))).toEqual({ kind: "open", index: 5 });
+  });
+
+  it("walks the arc both ways, ↓ and → alike, and wraps at the ends", () => {
+    expect(fanKeyAction(bare("ArrowDown"), place(1))).toEqual({ kind: "focus", index: 2 });
+    expect(fanKeyAction(bare("ArrowRight"), place(1))).toEqual({ kind: "focus", index: 2 });
+    expect(fanKeyAction(bare("ArrowUp"), place(1))).toEqual({ kind: "focus", index: 0 });
+    expect(fanKeyAction(bare("ArrowLeft"), place(1))).toEqual({ kind: "focus", index: 0 });
+    expect(fanKeyAction(bare("ArrowDown"), place(5))).toEqual({ kind: "focus", index: 0 });
+    expect(fanKeyAction(bare("ArrowUp"), place(0))).toEqual({ kind: "focus", index: 5 });
+  });
+
+  it("goes to the ends with Home and End", () => {
+    expect(fanKeyAction(bare("Home"), place(3))).toEqual({ kind: "focus", index: 0 });
+    expect(fanKeyAction(bare("End"), place(3))).toEqual({ kind: "focus", index: 5 });
+  });
+
+  it("folds with Escape from a pill or from the hub, and leaves a closed hub's Escape alone", () => {
+    expect(fanKeyAction(bare("Escape"), place(2))).toEqual({ kind: "fold" });
+    expect(fanKeyAction(bare("Escape"), place(-1))).toEqual({ kind: "fold" });
+    // Closed, Escape is somebody else's: the page around, a dialog's, the browser's.
+    expect(fanKeyAction(bare("Escape"), place(-1, false))).toEqual({ kind: "ignore" });
+  });
+
+  it("never takes Tab, Enter, Space or a press with a modifier", () => {
+    for (const key of ["Tab", "Enter", " "]) {
+      expect(fanKeyAction(bare(key), place(2)), key).toEqual({ kind: "ignore" });
+    }
+    for (const modifier of ["altKey", "metaKey", "ctrlKey", "shiftKey"] as const) {
+      expect(fanKeyAction({ ...bare("ArrowDown"), [modifier]: true }, place(2)), modifier).toEqual({
+        kind: "ignore",
+      });
+    }
+  });
+
+  it("clamps an entry or a place past the end rather than losing the keyboard", () => {
+    expect(fanKeyAction(bare("ArrowDown"), { count: 3, at: -1, entry: 7, open: true })).toEqual({
+      kind: "focus",
+      index: 2,
+    });
+    expect(fanKeyAction(bare("ArrowDown"), { count: 3, at: 9, entry: 0, open: true })).toEqual({
+      kind: "focus",
+      index: 0,
+    });
+    expect(fanKeyAction(bare("ArrowDown"), { count: 0, at: -1, entry: 0, open: true })).toEqual({
+      kind: "ignore",
+    });
   });
 });
