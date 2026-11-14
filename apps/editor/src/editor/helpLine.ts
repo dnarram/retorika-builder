@@ -27,7 +27,9 @@ export type HelpChild = "live" | "quiet";
 
 /** Where the keyboard is, as far as the keys worth saying go. `null` is «nowhere that has keys of
  * its own»: a pointer on the page, the text bar closed, or the frame without focus. */
-export type KeyboardPlace = "section" | "bar" | "grip" | "writing" | null;
+/** «hub» is the radial rail's hub or one of its pills (sprint 37 día 3, ADR 0072), in the editor's
+ * own document rather than the frame — the same line says its keys. */
+export type KeyboardPlace = "section" | "bar" | "grip" | "writing" | "hub" | null;
 
 export interface HelpNotice {
   sectionName: string;
@@ -84,6 +86,8 @@ export function keysFor(place: Exclude<KeyboardPlace, null>, platform: "mac" | "
       return es["editor.help.keys.grip"];
     case "writing":
       return es["editor.help.keys.writing"].replace("{toBar}", toBar);
+    case "hub":
+      return es["editor.help.keys.hub"];
   }
 }
 

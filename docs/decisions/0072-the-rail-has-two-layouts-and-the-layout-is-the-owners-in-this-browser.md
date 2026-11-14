@@ -96,9 +96,7 @@ other rises into place; the canvas takes its new room once. Under reduced motion
 
 ## What this does not decide
 
-- **The keyboard and the finger on the hub** — focus that opens, arrows along the arc, Escape back to
-  the hub, a tap that opens and a tap that folds, the help line's keys. Sprint 37 día 3, with a note
-  here.
+- ~~**The keyboard and the finger on the hub**~~ — decided on sprint 37 día 3; see the note below.
 - **The second level** — the page's sections around «Secciones», and the way back to the tools — which
   is ADR 0073's (sprint 37 día 4).
 - **How the fan moves**: the pills sprouting from the hub, the change of ring as a named scene. That is
@@ -117,3 +115,34 @@ other rises into place; the canvas takes its new room once. Under reduced motion
   numbers; the radial layout is itself the relief, its strip needing only the hub and the two
   switches.
 - Day by day in `docs/design/REVIEW.md`, sprint 37.
+
+## Note — the keyboard and the finger (14 November 2026, sprint 37 día 3)
+
+David's rules of 13 November, as built: «teclado: enfocar el eje abre, flechas recorren el arco, Intro
+elige, Escape pliega y devuelve el foco al eje; táctil por toque (uno abre, otro cierra); Alt+F10 y la
+línea de ayuda siguen diciendo las teclas».
+
+1. **The keyboard arriving on the hub opens the fan** — `:focus-visible`, so a press with the mouse,
+   which also focuses the hub, does not open it twice. **A focus the code gives back never opens it**:
+   a pill chosen, the fan folded by Escape, a panel closed all put the keyboard on the hub, and the
+   hub is told so for the length of that focus (`focusQuietly`).
+2. **The pills are one Tab stop**, the open tool's until an arrow moves it — ADR 0052's roving rule,
+   once more. From the hub an arrow enters by the open tool, or opens the closed fan on it; ↑ ↓ ← →
+   walk the arc and wrap at its ends, as a menu's do (`popupKeyAction`'s reason); Home and End go to
+   the ends; Enter and Space press the pill, as a button is pressed; Escape folds and leaves the
+   keyboard on the hub. Tab is never taken: **leaving the hub and its pills folds the fan** — Tab past
+   the stop, Shift+Tab past the hub, a press anywhere else. All of it is one pure function,
+   `fanKeyAction`, beside `popupKeyAction` in `sectionKeys.ts`.
+3. **A finger never arms the intent**: a tap opens, a tap folds, a finger held on the hub opens it
+   once. A tap on the canvas folds the fan by two roads, because browsers differ: Chromium gives a
+   tapped button the focus, and the hub losing it is enough; Safari gives it none, and there the
+   editor's window losing the focus to the canvas's frame is what is heard. Both are walked.
+4. **In the radial layout a rail panel closes on Escape**, and however a panel closes — Escape, its
+   cross, the pill «Secciones» — a keyboard left on the page's body comes back to the hub. Not an
+   Escape typed in a field of the panel, which is the field's, nor one inside a dialog the panel
+   opened. **The fixed rail keeps what it had** — no Escape on a rail panel, and the focus falls to the
+   body when its cross is pressed — and aligning the two is named in the backlog, not done here.
+5. **The help line says the hub's keys** while the keyboard is on the hub or a pill: «En el menú
+   radial: ↑ ↓ recorrerlo · Intro: abrir la herramienta · Esc: cerrarlo» — `KeyboardPlace` «hub»,
+   quiet like every key the line says (ADR 0071), and nothing on a touched screen. Alt+F10 keeps its
+   one meaning, the text bar's; the hub is not the bar.

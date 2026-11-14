@@ -1038,6 +1038,9 @@ export function Editor({
    * that open or close those popups need not each remember to say so. `patchHelp` writes only what
    * changed, so an observer firing on every patch is not a render on every patch.
    */
+  /** The keyboard on the radial rail's hub or a pill (sprint 37 día 3): the line says their keys,
+   * which are the editor's own document's and not the frame's, so the frame's focus cannot tell. */
+  const [railKeys, setRailKeys] = useState(false);
   const [help, setHelp] = useState<
     Pick<HelpLineState, "keyboard" | "menuNote" | "bound" | "chosen" | "dragRefused">
   >({ keyboard: null, menuNote: null, bound: null, chosen: null, dragRefused: false });
@@ -2532,6 +2535,7 @@ export function Editor({
     {
       ...HELP_AT_REST,
       ...help,
+      ...(railKeys ? { keyboard: "hub" as const } : {}),
       ...machine,
       notice: toast
         ? {
@@ -9462,6 +9466,7 @@ export function Editor({
       }}
       railLayout={railLayout}
       railLayoutRefused={railLayoutRefused === true}
+      onRailKeyboard={setRailKeys}
       {...(onRailLayoutChange ? { onRailLayoutChange } : {})}
       // Which panel this is, so the slot can tell one panel replacing another — which leaves —
       // from the same panel with new props, which updates in place (sprint 35 día 2). The drawer

@@ -246,3 +246,60 @@ export function popupKeyAction(
   }
   return { kind: "ignore" };
 }
+
+/**
+ * What a key press means on the radial rail's hub or on one of its pills (sprint 37 día 3, ADR 0072).
+ *
+ * - `focus` — move the keyboard to this pill; the caller focuses it and the roving `tabindex` follows.
+ * - `open` — the hub was pressed an arrow while the fan was closed: open it, then `focus` `index`.
+ * - `fold` — Escape: fold the fan and leave the keyboard on the hub.
+ * - `ignore` — not ours. Enter and Space press the button that has focus, as buttons do; Tab leaves.
+ */
+export type FanKeyAction =
+  | { kind: "focus"; index: number }
+  | { kind: "open"; index: number }
+  | { kind: "fold" }
+  | { kind: "ignore" };
+
+/**
+ * Where a press moves on the radial rail, or whether it folds it.
+ *
+ * `at` is the index of the pill that has focus, or `-1` for the hub; `entry` is the pill the keyboard
+ * enters by — the open tool's, which is also the one Tab lands on (the roving `tabindex`); `open`
+ * says whether the fan is on the page.
+ *
+ * **The ends wrap**, as `popupKeyAction`'s do and for its reason: the fan is a short ring of
+ * alternatives with no document order to it, and every menu on every platform cycles. **From the hub,
+ * an arrow goes to the entry, not past it**, the way an arrow on a menu button opens the menu on its
+ * first item: the first thing the keyboard meets is where it already is. ← and → do what ↑ and ↓ do,
+ * because the arc is neither a column nor a row, and somebody who reads it as either must not be
+ * wrong. Home and End go to the ends. Escape folds — from a pill or from the hub — and Tab is never
+ * taken: leaving is how the fan folds itself (`focusout`), so nobody is held in it.
+ */
+export function fanKeyAction(
+  press: KeyPress,
+  place: {
+    readonly count: number;
+    readonly at: number;
+    readonly entry: number;
+    readonly open: boolean;
+  },
+): FanKeyAction {
+  if (press.altKey || press.metaKey || press.ctrlKey || press.shiftKey) return { kind: "ignore" };
+  if (press.key === "Escape") return place.open ? { kind: "fold" } : { kind: "ignore" };
+  const { count } = place;
+  if (count <= 0) return { kind: "ignore" };
+  const entry = Math.min(Math.max(place.entry, 0), count - 1);
+  const forward = press.key === "ArrowDown" || press.key === "ArrowRight";
+  const back = press.key === "ArrowUp" || press.key === "ArrowLeft";
+  const home = press.key === "Home";
+  const end = press.key === "End";
+  if (!forward && !back && !home && !end) return { kind: "ignore" };
+  const target = home ? 0 : end ? count - 1 : entry;
+  if (place.at < 0) {
+    return place.open ? { kind: "focus", index: target } : { kind: "open", index: target };
+  }
+  if (home || end) return { kind: "focus", index: target };
+  const at = Math.min(place.at, count - 1);
+  return { kind: "focus", index: forward ? (at + 1) % count : (at - 1 + count) % count };
+}

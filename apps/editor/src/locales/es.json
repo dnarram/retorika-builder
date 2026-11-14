@@ -732,6 +732,7 @@
   "editor.canvasKeys.chosen": "{section}: elegida",
   "editor.help.keys.section": "\u2191 \u2193 cambiar de secci\u00f3n \u00b7 Tab: lo de esta secci\u00f3n, y despu\u00e9s fuera del lienzo \u00b7 Intro: elegir \u00b7 Esc: soltar el lienzo",
   "editor.help.keys.bar": "En la barra del texto: \u2190 \u2192 recorrerla \u00b7 Esc: volver al texto",
+  "editor.help.keys.hub": "En el menú radial: ↑ ↓ recorrerlo · Intro: abrir la herramienta · Esc: cerrarlo",
   "editor.help.keys.grip": "En el asa: \u2191 \u2193 mover la secci\u00f3n \u00b7 Esc: soltar",
   "editor.help.keys.writing": "{toBar} \u00b7 Intro: guardar \u00b7 Esc: dejar el texto como estaba",
   "editor.moveSectionUp": "Subir esta sección",

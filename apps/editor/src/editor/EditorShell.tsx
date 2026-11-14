@@ -23,6 +23,7 @@ import {
 } from "./radialMenu.ts";
 import type { RailLayout } from "./railLayout.ts";
 import { wireRipples } from "./ripple.ts";
+import { fanKeyAction } from "./sectionKeys.ts";
 
 /**
  * **The one rule every in-flow rail panel has to obey: fit the row, and scroll what does not fit.**
@@ -839,6 +840,19 @@ function RailLeaves({ row }: { row: RefObject<HTMLElement | null> }) {
 }
 
 /**
+ * **Give the hub the keyboard without it taking that as a reason to open** (sprint 37 día 3): the hub
+ * opens its fan when the keyboard arrives on it, and a focus put there by the code — a pill pressed,
+ * the fan folded by Escape, a panel closed — arrives looking exactly like the keyboard's after a key.
+ * Marked for the length of the call, which is the length of the `focus` event it fires.
+ */
+function focusQuietly(hub: HTMLElement | null): void {
+  if (!hub) return;
+  hub.dataset["quietFocus"] = "1";
+  hub.focus({ preventScroll: true });
+  delete hub.dataset["quietFocus"];
+}
+
+/**
  * **The rail as a radial menu** (ADR 0072, sprint 37 día 2; David's decisions of 13 November 2026).
  *
  * A strip `HUB_STRIP` wide where the rail was, transparent, and in its vertical middle **the hub: the
@@ -874,6 +888,8 @@ function RadialRail({
   leaves,
   className,
   style,
+  hubRef: hub,
+  onKeyboard,
 }: {
   rail: RailItemId;
   tools: readonly RailItemId[];
@@ -883,10 +899,20 @@ function RadialRail({
   leaves: React.ReactNode;
   className: string;
   style: React.CSSProperties | undefined;
+  /** The hub, held by the shell so a panel closing can give it the keyboard back. */
+  hubRef: RefObject<HTMLButtonElement | null>;
+  /** Whether the keyboard is on the hub or a pill, for the help line's keys (ADR 0071). */
+  onKeyboard?: (on: boolean) => void;
 }) {
   const [openFor, setOpenFor] = useState<string | null>(null);
   const open = openFor === foldWhen;
-  const hub = useRef<HTMLButtonElement>(null);
+  const fanBox = useRef<HTMLFieldSetElement>(null);
+  /** The pill the keyboard is on, once an arrow has moved it; the open tool's until then. */
+  const [fanAt, setFanAt] = useState<number | null>(null);
+  /** A pill to give the keyboard to once the fan an arrow opened is on the page. */
+  const pendingFocus = useRef<number | null>(null);
+  const entry = Math.max(0, tools.indexOf(rail));
+  const roving = fanAt ?? entry;
   const intent = useRef<{ x: number; y: number; timer: ReturnType<typeof setTimeout> } | null>(
     null,
   );
@@ -909,6 +935,17 @@ function RadialRail({
     clearGrace();
     setOpenFor(null);
   };
+  const openFan = () => {
+    setFanAt(null);
+    setOpenFor(foldWhen);
+  };
+  const focusSpoke = (index: number) => {
+    setFanAt(index);
+    fanBox.current?.querySelector<HTMLElement>(`[data-spoke="${tools[index]}"]`)?.focus();
+  };
+  /** Whether focus going to `next` has left the hub and its pills — the group a keyboard is «in». */
+  const outsideTheGroup = (next: EventTarget | null) =>
+    !(next instanceof Node) || !(hub.current?.contains(next) || fanBox.current?.contains(next));
   const arm = (x: number, y: number) => {
     clearIntent();
     intent.current = {
@@ -916,7 +953,7 @@ function RadialRail({
       y,
       timer: setTimeout(() => {
         intent.current = null;
-        setOpenFor(foldWhen);
+        openFan();
       }, HUB_INTENT_MS),
     };
   };
@@ -927,11 +964,33 @@ function RadialRail({
     },
     [],
   );
+  /**
+   * **A tap on the canvas folds the fan** (sprint 37 día 3). The canvas is an `<iframe>`: a finger on
+   * it is heard by nobody here, and a phone's browser does not always give a tapped button the focus
+   * whose loss would say so. What it always does is take the focus into the frame, and the editor's
+   * window hears that as its own `blur` — so while the fan is open, that folds it.
+   */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `fold` is rebuilt each render and only clears and closes
+  useEffect(() => {
+    if (!open) return;
+    const view = hub.current?.ownerDocument.defaultView;
+    if (!view) return;
+    view.addEventListener("blur", fold);
+    return () => view.removeEventListener("blur", fold);
+  }, [open]);
+  // The pill an arrow opened the fan for, once it is on the page to take the keyboard.
+  useLayoutEffect(() => {
+    if (!open || pendingFocus.current === null) return;
+    const index = pendingFocus.current;
+    pendingFocus.current = null;
+    focusSpoke(index);
+  });
 
   const choose = (item: RailItemId) => {
     // The keyboard goes to the hub before the panel opens, so the panel remembers an element that
-    // stays — the pill it was pressed from is about to be gone — and «Cerrar» comes back here.
-    hub.current?.focus({ preventScroll: true });
+    // stays — the pill it was pressed from is about to be gone. Quietly: a hub that is given the
+    // keyboard back by the code must not take it as a reason to open again.
+    focusQuietly(hub.current);
     fold();
     if (item !== rail) onRailChange(item);
   };
@@ -966,6 +1025,33 @@ function RadialRail({
         // The disc's centre on the row's middle: the fan is placed by the same point.
         style={{ top: `calc(50% - ${HUB_DISC / 2}px)` }}
         className="group absolute left-0 z-[2] flex w-14 cursor-pointer flex-col items-center gap-[5px] border-0 bg-transparent p-0 focus-visible:outline-none"
+        /*
+         * **The keyboard arriving on the hub opens the fan** (David, 13 November 2026: «enfocar el eje
+         * abre»): `:focus-visible`, so a press with the mouse, which also focuses it, does not open it
+         * twice, and never for a focus the code gave back (`focusQuietly`).
+         */
+        onFocus={(event) => {
+          onKeyboard?.(true);
+          const self = event.currentTarget;
+          if (open || self.dataset["quietFocus"] === "1") return;
+          if (self.matches(":focus-visible")) openFan();
+        }}
+        onBlur={(event) => {
+          if (!outsideTheGroup(event.relatedTarget)) return;
+          onKeyboard?.(false);
+          if (open) fold();
+        }}
+        onKeyDown={(event) => {
+          const action = fanKeyAction(event, { count: tools.length, at: -1, entry, open });
+          if (action.kind === "ignore") return;
+          event.preventDefault();
+          if (action.kind === "fold") fold();
+          else if (action.kind === "focus") focusSpoke(action.index);
+          else {
+            pendingFocus.current = action.index;
+            openFan();
+          }
+        }}
         onPointerEnter={(event) => {
           if (event.pointerType === "touch" || quiet.current || open) return;
           arm(event.clientX, event.clientY);
@@ -986,7 +1072,7 @@ function RadialRail({
           if (open) {
             quiet.current = true;
             fold();
-          } else setOpenFor(foldWhen);
+          } else openFan();
         }}
       >
         <span className="relative flex h-[44px] w-[44px] items-center justify-center">
@@ -1023,6 +1109,7 @@ function RadialRail({
         // taken off as the panels' own are (`StylePanel`): a named group of the pills, never a second
         // `<nav>` (the rail is the editor's one).
         <fieldset
+          ref={fanBox}
           id="rail-fan"
           data-testid="rail-fan"
           aria-label={es["editor.rail.fan.tools"]}
@@ -1037,8 +1124,29 @@ function RadialRail({
           onPointerDown={(event) => {
             if (event.target === event.currentTarget) fold();
           }}
+          onFocus={() => onKeyboard?.(true)}
+          // Tab past the last stop, Shift+Tab back past the hub, a press anywhere else: the
+          // keyboard has left the hub and its pills, and the fan goes with it.
+          onBlur={(event) => {
+            if (!outsideTheGroup(event.relatedTarget)) return;
+            onKeyboard?.(false);
+            fold();
+          }}
+          onKeyDown={(event) => {
+            const id = (event.target as HTMLElement).closest<HTMLElement>("[data-spoke]")?.dataset[
+              "spoke"
+            ];
+            const at = id ? tools.indexOf(id as RailItemId) : -1;
+            const action = fanKeyAction(event, { count: tools.length, at, entry, open });
+            if (action.kind === "ignore") return;
+            event.preventDefault();
+            if (action.kind === "fold") {
+              fold();
+              focusQuietly(hub.current);
+            } else focusSpoke(action.index);
+          }}
         >
-          {fan.spokes.map((spoke) => {
+          {fan.spokes.map((spoke, index) => {
             const item = spoke.id as RailItemId;
             const active = item === rail;
             return (
@@ -1047,6 +1155,9 @@ function RadialRail({
                 type="button"
                 data-spoke={item}
                 aria-pressed={active}
+                // One stop for the whole fan, the open tool's until an arrow moves it (ADR 0052's
+                // roving rule, one more time): Tab from the hub lands here, Tab again leaves.
+                tabIndex={index === roving ? 0 : -1}
                 className="group absolute flex cursor-pointer border-0 bg-transparent p-0 focus-visible:outline-none"
                 style={{
                   left: spoke.left,
@@ -1126,6 +1237,7 @@ export function EditorShell({
   railLayout,
   railLayoutRefused = false,
   onRailLayoutChange,
+  onRailKeyboard,
   panel,
   panelKey,
   children,
@@ -1245,6 +1357,9 @@ export function EditorShell({
   /** Whether this browser refused to keep the layout — only ever said while the radial menu is on. */
   railLayoutRefused?: boolean;
   onRailLayoutChange?: (layout: RailLayout) => void;
+  /** Whether the keyboard is on the radial rail's hub or one of its pills — the help line says its
+   * keys while it is (sprint 37 día 3). */
+  onRailKeyboard?: (on: boolean) => void;
   /** The side panel the current rail item opens, if it has one. Rendered beside the canvas rather
    * than over it, which is how mockup 13 draws the style panel: the preview narrows and stays
    * visible while a choice is being made about how it looks. */
@@ -1387,6 +1502,8 @@ export function EditorShell({
    * nothing to arrive after but the scene, which `arriving` already covers.
    */
   const [railSwitched, setRailSwitched] = useState(false);
+  /** The radial rail's hub, for the keyboard to come back to when a panel closes (sprint 37 día 3). */
+  const radialHub = useRef<HTMLButtonElement>(null);
   const changeRailLayout = (next: RailLayout) => {
     setRailSwitched(true);
     onRailLayoutChange?.(next);
@@ -1547,6 +1664,51 @@ export function EditorShell({
   }, [available, layoutWidth]);
 
   const building = downloadState === "preparing" || downloadState === "downloading";
+
+  /**
+   * **In the radial layout, a rail panel closes on Escape and gives the keyboard back to the hub**
+   * (sprint 37 día 3). The hub is where the panel was opened from, and with the fan folded it is the
+   * one way back: a panel left with no key to leave it by would be a place the keyboard can enter and
+   * not get out of except by Tab past every control in it. Only for a rail panel — the fields drawer
+   * has its own Escape, which goes back to the section it was opened from — and only for an Escape
+   * nobody inside took first: not one typed in a field, where Escape belongs to the field, and not
+   * one inside a dialog the panel opened. The fixed rail keeps what it had; aligning it is named in
+   * the backlog.
+   */
+  const railPanelOpen =
+    panel !== undefined &&
+    panelKey !== undefined &&
+    panelKey !== "fields" &&
+    panelKey !== "sections";
+  const closePanelOnEscape = (event: React.KeyboardEvent<HTMLElement>) => {
+    if (railLayout !== "radial" || !railPanelOpen) return;
+    if (event.key !== "Escape" || event.defaultPrevented) return;
+    const row = panelRow.current;
+    const node = row?.lastElementChild;
+    const target = event.target as Element;
+    if (!row || !node || node === row.firstElementChild || !node.contains(target)) return;
+    if (target.closest('[aria-modal="true"], input, textarea, select, [contenteditable="true"]')) {
+      return;
+    }
+    event.preventDefault();
+    onRailChange("sections");
+  };
+  /**
+   * **And however it closes — Escape, its cross, the pill «Secciones» — the keyboard is not dropped
+   * on the page's body**: if the focus went with the panel, it comes back to the hub, quietly, so
+   * the fan does not open for it. A focus that is somewhere real (the hub already, after a pill) is
+   * left where it is.
+   */
+  const lastPanel = useRef(railPanelOpen);
+  useLayoutEffect(() => {
+    const was = lastPanel.current;
+    lastPanel.current = railPanelOpen;
+    if (!was || railPanelOpen || railLayout !== "radial") return;
+    const active = document.activeElement;
+    if (active === null || active === document.body || !active.isConnected) {
+      focusQuietly(radialHub.current);
+    }
+  });
 
   /** The two switches at the rail's foot, the same in either layout (ADR 0025 §4, ADR 0072). */
   const designSwitch =
@@ -1969,6 +2131,8 @@ export function EditorShell({
             }
             className={arrival(arriving || railSwitched, 1)}
             style={arrivalDelay(arriving, 1)}
+            hubRef={radialHub}
+            {...(onRailKeyboard ? { onKeyboard: onRailKeyboard } : {})}
           />
         ) : (
           <nav
@@ -2104,6 +2268,7 @@ export function EditorShell({
           className={`flex flex-grow gap-6 overflow-hidden pt-6 phone:px-2 ${
             viewWidth === null ? "phone:pt-3" : ""
           } ${panel ? "px-6" : "px-6 tablet:px-24 studio:px-24"}`}
+          onKeyDown={closePanelOnEscape}
         >
           {/* **The width notice lives in the gutter above the card, never over it** (ADR 0061 §2).
               Over the card it covered the canvas's own hint line at 1024 — measured in the first

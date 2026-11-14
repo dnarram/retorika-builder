@@ -29909,86 +29909,85 @@ describe("sprint 37 día 1 — el lienzo vuelve a su zoom", () => {
  * hub to a pill; and every panel is still reachable, beside the canvas, as the fixed rail opens it.
  * Nothing moves yet (día 5): the fan appears and goes.
  */
+/** The radial rail's walks share these (sprint 37 días 2 and 3, ADR 0072). */
+const RAIL_HUB = '[data-testid="rail-hub"]';
+const RAIL_FAN = '[data-testid="rail-fan"]';
+const SIX_TOOLS = ["sections", "style", "pages", "menu", "share", "photos"];
+
+/** Into the editor with the radial menu already chosen in this browser. */
+async function intoTheRadialEditor(page: Page): Promise<void> {
+  await page.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
+  await page.evaluate(() => localStorage.setItem("retorika.rail.v1", "radial"));
+  await intoTheCanvas(page);
+  await expect(page.locator('nav[data-rail-layout="radial"]')).toHaveCount(1);
+}
+
+/** The hub's disc centre, on screen: where a hand rests to open the fan. */
+async function hubCentre(page: Page): Promise<{ x: number; y: number }> {
+  const box = await page.locator(RAIL_HUB).boundingBox();
+  if (!box) throw new Error("the hub is not drawn");
+  return { x: box.x + box.width / 2, y: box.y + HUB_DISC / 2 };
+}
+
+/**
+ * **The window has finished changing under the walk**: the card fits its area and the hub is where
+ * it will stay, read in two consecutive frames. A new window size reaches the card through the
+ * shell's `ResizeObserver` a frame later, which no animation reports — measured at 768, the frame
+ * was read at −104 px, laid out for the room the window had a moment before.
+ */
+async function screenStill(page: Page): Promise<void> {
+  await motionSettled(page);
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          () =>
+            new Promise<boolean>((resolve) => {
+              const read = () => {
+                const card = document
+                  .querySelector('[data-testid="canvas-card"]')
+                  ?.getBoundingClientRect();
+                const area = document
+                  .querySelector('[data-testid="canvas-area"]')
+                  ?.getBoundingClientRect();
+                const hub = document
+                  .querySelector('[data-testid="rail-hub"]')
+                  ?.getBoundingClientRect();
+                const fits =
+                  !!card &&
+                  !!area &&
+                  card.left >= area.left - 0.5 &&
+                  card.right <= area.right + 0.5 &&
+                  card.top >= area.top - 0.5;
+                return `${fits} ${card?.left} ${card?.width} ${hub?.top}`;
+              };
+              const first = read();
+              requestAnimationFrame(() =>
+                requestAnimationFrame(() => resolve(first.startsWith("true") && first === read())),
+              );
+            }),
+        ),
+      { message: "the card never settled into its area" },
+    )
+    .toBe(true);
+}
+
+/** Rest the pointer on the hub until the fan is open. */
+async function openByResting(page: Page): Promise<void> {
+  await screenStill(page);
+  const at = await hubCentre(page);
+  await page.mouse.move(at.x, at.y);
+  await expect(page.locator(RAIL_FAN)).toHaveCount(1);
+}
+
+/** Press a pill where it is drawn (`page.mouse`, never `locator.click()`, which scrolls). */
+async function pressSpoke(page: Page, id: string): Promise<void> {
+  const box = await page.locator(`${RAIL_FAN} [data-spoke="${id}"]`).boundingBox();
+  if (!box) throw new Error(`the pill «${id}» is not drawn`);
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+}
+
 describe("sprint 37 día 2 — el raíl tiene dos formas", () => {
-  const HUB = '[data-testid="rail-hub"]';
-  const FAN = '[data-testid="rail-fan"]';
-  const SIX = ["sections", "style", "pages", "menu", "share", "photos"];
-
-  /** Into the editor with the radial menu already chosen in this browser. */
-  async function intoTheRadialEditor(page: Page): Promise<void> {
-    await page.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
-    await page.evaluate(() => localStorage.setItem("retorika.rail.v1", "radial"));
-    await intoTheCanvas(page);
-    await expect(page.locator('nav[data-rail-layout="radial"]')).toHaveCount(1);
-  }
-
-  /** The hub's disc centre, on screen: where a hand rests to open the fan. */
-  async function hubCentre(page: Page): Promise<{ x: number; y: number }> {
-    const box = await page.locator(HUB).boundingBox();
-    if (!box) throw new Error("the hub is not drawn");
-    return { x: box.x + box.width / 2, y: box.y + HUB_DISC / 2 };
-  }
-
-  /**
-   * **The window has finished changing under the walk**: the card fits its area and the hub is where
-   * it will stay, read in two consecutive frames. A new window size reaches the card through the
-   * shell's `ResizeObserver` a frame later, which no animation reports — measured at 768, the frame
-   * was read at −104 px, laid out for the room the window had a moment before.
-   */
-  async function screenStill(page: Page): Promise<void> {
-    await motionSettled(page);
-    await expect
-      .poll(
-        () =>
-          page.evaluate(
-            () =>
-              new Promise<boolean>((resolve) => {
-                const read = () => {
-                  const card = document
-                    .querySelector('[data-testid="canvas-card"]')
-                    ?.getBoundingClientRect();
-                  const area = document
-                    .querySelector('[data-testid="canvas-area"]')
-                    ?.getBoundingClientRect();
-                  const hub = document
-                    .querySelector('[data-testid="rail-hub"]')
-                    ?.getBoundingClientRect();
-                  const fits =
-                    !!card &&
-                    !!area &&
-                    card.left >= area.left - 0.5 &&
-                    card.right <= area.right + 0.5 &&
-                    card.top >= area.top - 0.5;
-                  return `${fits} ${card?.left} ${card?.width} ${hub?.top}`;
-                };
-                const first = read();
-                requestAnimationFrame(() =>
-                  requestAnimationFrame(() =>
-                    resolve(first.startsWith("true") && first === read()),
-                  ),
-                );
-              }),
-          ),
-        { message: "the card never settled into its area" },
-      )
-      .toBe(true);
-  }
-
-  /** Rest the pointer on the hub until the fan is open. */
-  async function openByResting(page: Page): Promise<void> {
-    await screenStill(page);
-    const at = await hubCentre(page);
-    await page.mouse.move(at.x, at.y);
-    await expect(page.locator(FAN)).toHaveCount(1);
-  }
-
-  /** Press a pill where it is drawn (`page.mouse`, never `locator.click()`, which scrolls). */
-  async function pressSpoke(page: Page, id: string): Promise<void> {
-    const box = await page.locator(`${FAN} [data-spoke="${id}"]`).boundingBox();
-    if (!box) throw new Error(`the pill «${id}» is not drawn`);
-    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
-  }
-
   /** What covers the canvas, with the fan closed: the hub against the frame's left edge, the point
    * just inside the frame's left edge, and the room the canvas has. */
   async function atRest(page: Page) {
@@ -30041,13 +30040,13 @@ describe("sprint 37 día 2 — el raíl tiene dos formas", () => {
           if (withPanel) {
             await openByResting(page);
             await pressSpoke(page, "style");
-            await expect(page.locator(HUB)).toHaveAttribute("data-tool", "style");
+            await expect(page.locator(RAIL_HUB)).toHaveAttribute("data-tool", "style");
           }
           const seen = await atRest(page);
           const at = `${width}${withPanel ? " con «Estilo»" : ""}`;
           if (seen.fans !== 0) found.push(`${at}: the fan is on the page at rest`);
-          if (seen.dots !== SIX.length)
-            found.push(`${at}: ${seen.dots} dots for ${SIX.length} tools`);
+          if (seen.dots !== SIX_TOOLS.length)
+            found.push(`${at}: ${seen.dots} dots for ${SIX_TOOLS.length} tools`);
           if (seen.word !== (withPanel ? "Estilo" : "Secciones"))
             found.push(`${at}: the hub says «${seen.word}»`);
           if (seen.hubRight === null || seen.frameLeft === null || seen.hubRight > seen.frameLeft)
@@ -30060,7 +30059,7 @@ describe("sprint 37 día 2 — el raíl tiene dos formas", () => {
           if (withPanel) {
             await openByResting(page);
             await pressSpoke(page, "sections");
-            await expect(page.locator(HUB)).toHaveAttribute("data-tool", "sections");
+            await expect(page.locator(RAIL_HUB)).toHaveAttribute("data-tool", "sections");
             // Away from the strip, so the next width starts with the hand on the page.
             await page.mouse.move(width - 40, height / 2);
           }
@@ -30077,7 +30076,7 @@ describe("sprint 37 día 2 — el raíl tiene dos formas", () => {
       expect(await navs()).toEqual(["Paneles del editor"]);
       await openByResting(page);
       expect(await navs()).toEqual(["Paneles del editor"]);
-      await expect(page.locator(HUB)).toHaveAttribute("aria-expanded", "true");
+      await expect(page.locator(RAIL_HUB)).toHaveAttribute("aria-expanded", "true");
       await axeSerious(page, "el menú radial abierto a 1280");
     } finally {
       await context.close();
@@ -30109,9 +30108,11 @@ describe("sprint 37 día 2 — el raíl tiene dos formas", () => {
         await page.mouse.move(at.x + (i % 2 === 0 ? -5 : 5), at.y);
         await page.waitForTimeout(50);
       }
-      expect(await page.locator(FAN).count(), "a hand that never rested opened the fan").toBe(0);
+      expect(await page.locator(RAIL_FAN).count(), "a hand that never rested opened the fan").toBe(
+        0,
+      );
       // A hand at rest: it opens, and no sooner than the intent.
-      await expect(page.locator(FAN)).toHaveCount(1);
+      await expect(page.locator(RAIL_FAN)).toHaveCount(1);
       const waited = await page.evaluate(() => {
         const w = window as unknown as { __lastMove: number; __fanAt: number | null };
         return (w.__fanAt ?? 0) - w.__lastMove;
@@ -30147,7 +30148,7 @@ describe("sprint 37 día 2 — el raíl tiene dos formas", () => {
           cornerInFan: corner?.closest('[data-testid="rail-fan"]') !== null && corner !== null,
         };
       });
-      const want = toolsRing(SIX);
+      const want = toolsRing(SIX_TOOLS);
       expect([drawn.width, drawn.height]).toEqual([want.width, want.height]);
       for (const [i, spoke] of drawn.spokes.entries()) {
         const box = want.spokes[i];
@@ -30167,7 +30168,7 @@ describe("sprint 37 día 2 — el raíl tiene dos formas", () => {
       // point 60 px right of «Fotos» is still inside it — the first version of this walk went there,
       // never left the fan, and passed the grace it never tested. So the premise is asserted too:
       // the strip heard the hand leave.
-      const photos = await page.locator(`${FAN} [data-spoke="photos"]`).boundingBox();
+      const photos = await page.locator(`${RAIL_FAN} [data-spoke="photos"]`).boundingBox();
       if (!photos) throw new Error("no «Fotos» pill");
       const inPill = { x: photos.x + photos.width / 2, y: photos.y + photos.height / 2 };
       const outside = { x: at.x + want.hull + 30, y: inPill.y };
@@ -30192,13 +30193,13 @@ describe("sprint 37 día 2 — el raíl tiene dos formas", () => {
         "the hand was away longer than the grace: the walk measures nothing",
       ).toBeLessThan(FAN_GRACE_MS);
       await page.waitForTimeout(FAN_GRACE_MS * 2);
-      expect(await page.locator(FAN).count(), "the fan folded inside its grace").toBe(1);
+      expect(await page.locator(RAIL_FAN).count(), "the fan folded inside its grace").toBe(1);
 
       // And out for good: it folds.
       await page.mouse.move(outside.x, outside.y);
       await page.waitForTimeout(FAN_GRACE_MS * 2);
-      expect(await page.locator(FAN).count(), "the fan stayed after the hand left").toBe(0);
-      await expect(page.locator(HUB)).toHaveAttribute("aria-expanded", "false");
+      expect(await page.locator(RAIL_FAN).count(), "the fan stayed after the hand left").toBe(0);
+      await expect(page.locator(RAIL_HUB)).toHaveAttribute("aria-expanded", "false");
     } finally {
       await context.close();
     }
@@ -30217,8 +30218,8 @@ describe("sprint 37 día 2 — el raíl tiene dos formas", () => {
       for (const id of ["style", "pages", "menu", "share", "photos", "sections"]) {
         await openByResting(page);
         await pressSpoke(page, id);
-        await expect(page.locator(HUB)).toHaveAttribute("data-tool", id);
-        await expect(page.locator(FAN)).toHaveCount(0);
+        await expect(page.locator(RAIL_HUB)).toHaveAttribute("data-tool", id);
+        await expect(page.locator(RAIL_FAN)).toHaveCount(0);
         expect(await panelOpen(), `«${id}»`).toBe(id !== "sections");
         expect(
           await page.evaluate(() => document.activeElement?.getAttribute("data-testid") ?? null),
@@ -30229,13 +30230,13 @@ describe("sprint 37 día 2 — el raíl tiene dos formas", () => {
       // that press does not open it again until the hand has left.
       const at = await hubCentre(page);
       await page.mouse.move(at.x, at.y);
-      await expect(page.locator(FAN)).toHaveCount(1);
+      await expect(page.locator(RAIL_FAN)).toHaveCount(1);
       await page.mouse.click(at.x, at.y);
-      await expect(page.locator(FAN)).toHaveCount(0);
+      await expect(page.locator(RAIL_FAN)).toHaveCount(0);
       // A resting hand is never quite still: a pixel of it, which would arm the intent again.
       await page.mouse.move(at.x + 1, at.y);
       await page.waitForTimeout(HUB_INTENT_MS * 3);
-      expect(await page.locator(FAN).count(), "resting after the press reopened it").toBe(0);
+      expect(await page.locator(RAIL_FAN).count(), "resting after the press reopened it").toBe(0);
     } finally {
       await context.close();
     }
@@ -30302,6 +30303,183 @@ describe("sprint 37 día 2 — el raíl tiene dos formas", () => {
       await page.getByRole("switch", { name: "Menú radial" }).click();
       await expect(page.locator('nav[data-testid="rail"]:not([data-rail-layout])')).toHaveCount(1);
       expect(await page.evaluate(() => localStorage.getItem("retorika.rail.v1"))).toBeNull();
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
+});
+
+/**
+ * **Sprint 37 día 3 — el eje con teclado y con el dedo** (ADR 0072's note of this day). David's rules
+ * for the radial rail without a mouse: the keyboard arriving on the hub opens the fan; the arrows walk
+ * the arc; Enter chooses; Escape folds and leaves the keyboard on the hub; leaving with Tab folds it.
+ * And with a finger: a tap opens, a tap folds, a tap on the canvas folds, a tap on a pill chooses. In
+ * the radial layout a rail panel also closes on Escape, and the keyboard comes back to the hub.
+ */
+describe("sprint 37 día 3 — el eje con teclado y con el dedo", () => {
+  /** Where the keyboard is, in the words a walk can compare: the hub, a pill, or a control's name. */
+  const focused = (page: Page) =>
+    page.evaluate(() => {
+      const at = document.activeElement as HTMLElement | null;
+      if (!at || at === document.body) return "body";
+      if (at.dataset["testid"] === "rail-hub") return "hub";
+      if (at.dataset["spoke"]) return `pill ${at.dataset["spoke"]}`;
+      return at.getAttribute("aria-label") ?? (at.textContent ?? "").trim().slice(0, 40);
+    });
+  const panelOpen = (page: Page) =>
+    page.evaluate(() => {
+      const row = document.querySelector('[data-testid="canvas-and-panel"]');
+      return row ? row.children.length > 1 : false;
+    });
+
+  it("el menú radial entero sin ratón: el foco abre, las flechas recorren, Escape vuelve al eje", async () => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+    const page = await context.newPage();
+    try {
+      await intoTheRadialEditor(page);
+      await screenStill(page);
+      await axeSerious(page, "el menú radial cerrado a 1280");
+      const fans = () => page.locator(RAIL_FAN).count();
+      const line = page.getByTestId("help-line-quiet");
+
+      // --- RECORRIDO SIN RATÓN: INICIO ---
+      // The keyboard arrives from the header, one Tab past its last control.
+      await page.getByRole("button", { name: "Descargar", exact: true }).focus();
+      await page.keyboard.press("Tab");
+      expect(await focused(page)).toBe("hub");
+      await expect(page.locator(RAIL_FAN)).toHaveCount(1);
+      await expect(line).toContainText("menú radial");
+
+      // The arrows enter by the open tool and walk the arc; Enter chooses, and the keyboard stays
+      // on the hub, which now says the tool and does not open again for the focus it was given.
+      await page.keyboard.press("ArrowDown");
+      expect(await focused(page)).toBe("pill sections");
+      await page.keyboard.press("ArrowDown");
+      await page.keyboard.press("ArrowDown");
+      expect(await focused(page)).toBe("pill pages");
+      await page.keyboard.press("Enter");
+      await expect(page.locator(RAIL_HUB)).toHaveAttribute("data-tool", "pages");
+      expect(await focused(page)).toBe("hub");
+      expect(await fans(), "the hub opened again for a focus the code gave it").toBe(0);
+      expect(await panelOpen(page)).toBe(true);
+
+      // Escape inside the panel closes it, and the keyboard comes back to the hub.
+      await page.getByRole("button", { name: "Cerrar las páginas" }).focus();
+      await page.keyboard.press("Escape");
+      await expect(page.locator(RAIL_HUB)).toHaveAttribute("data-tool", "sections");
+      expect(await panelOpen(page)).toBe(false);
+      expect(await focused(page), "the keyboard was dropped when the panel closed").toBe("hub");
+      expect(await fans()).toBe(0);
+
+      // An arrow on the closed hub opens it on the open tool; Escape folds it back to the hub.
+      await page.keyboard.press("ArrowDown");
+      await expect(page.locator(RAIL_FAN)).toHaveCount(1);
+      expect(await focused(page)).toBe("pill sections");
+      await page.keyboard.press("Escape");
+      await expect(page.locator(RAIL_FAN)).toHaveCount(0);
+      expect(await focused(page)).toBe("hub");
+
+      // The ends wrap; and the fan is one Tab stop: Tab from a pill leaves it, and it folds.
+      await page.keyboard.press("ArrowDown");
+      await page.keyboard.press("End");
+      expect(await focused(page)).toBe("pill photos");
+      await page.keyboard.press("ArrowDown");
+      expect(await focused(page)).toBe("pill sections");
+      await page.keyboard.press("Tab");
+      expect(await focused(page)).toBe("Herramientas de diseño");
+      await expect(page.locator(RAIL_FAN)).toHaveCount(0);
+      await expect(line).not.toContainText("menú radial");
+
+      // Back with Shift+Tab: the hub opens for the keyboard, and folds when it is left behind.
+      await page.keyboard.press("Shift+Tab");
+      expect(await focused(page)).toBe("hub");
+      await expect(page.locator(RAIL_FAN)).toHaveCount(1);
+      await page.keyboard.press("Shift+Tab");
+      expect(await focused(page)).toBe("Descargar");
+      await expect(page.locator(RAIL_FAN)).toHaveCount(0);
+      // --- RECORRIDO SIN RATÓN: FIN ---
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
+
+  /*
+   * **The canvas taking the focus folds the fan even when the hub never had it.** Chromium gives a
+   * tapped or clicked button the focus, so the hub's own `blur` folds the fan before anything else can;
+   * Safari gives a tapped button none, and there the one thing that says «the finger went to the
+   * canvas» is the editor's window losing the focus to the frame. Opened here by a resting pointer,
+   * which focuses nothing, so only the window's `blur` is left to fold it.
+   */
+  it("el lienzo que toma el foco pliega el abanico, aunque el eje nunca lo tuviera", async () => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+    const page = await context.newPage();
+    try {
+      await intoTheRadialEditor(page);
+      await openByResting(page);
+      expect(await focused(page), "the hub has the focus: this would not test the window").toBe(
+        "body",
+      );
+      await page.frameLocator(PREVIEW).first().locator('[data-section="sec-cover"]').focus();
+      await expect(page.locator(RAIL_FAN)).toHaveCount(0);
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
+
+  it("con el dedo a 768: un toque abre, otro pliega, el lienzo pliega, un radio elige", async () => {
+    const context = await browser.newContext({
+      viewport: { width: 768, height: 1024 },
+      isMobile: true,
+      hasTouch: true,
+      deviceScaleFactor: 2,
+    });
+    const page = await context.newPage();
+    try {
+      await intoTheRadialEditor(page);
+      await screenStill(page);
+      const hub = await hubCentre(page);
+      /*
+       * **A finger held on the hub longer than the intent still opens it, once.** A quick tap reaches
+       * its `click` before the intent's 100 ms and the click clears the intent anyway, so a quick tap
+       * cannot tell whether a finger arms it; a finger held 200 ms can — armed, the fan would open at
+       * 100 ms and the `click` would fold it again. `touchscreen.tap` has no hold, so the touch is
+       * written to Chromium directly.
+       */
+      const cdp = await context.newCDPSession(page);
+      await cdp.send("Input.dispatchTouchEvent", {
+        type: "touchStart",
+        touchPoints: [{ x: hub.x, y: hub.y }],
+      });
+      await page.waitForTimeout(HUB_INTENT_MS * 2);
+      await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+      await page.waitForTimeout(HUB_INTENT_MS * 2);
+      expect(await page.locator(RAIL_FAN).count(), "a finger held on the hub did not open it").toBe(
+        1,
+      );
+      await page.touchscreen.tap(hub.x, hub.y);
+      // Folded, and still folded after the intent's time: a finger is never a resting pointer.
+      await page.waitForTimeout(HUB_INTENT_MS * 3);
+      expect(await page.locator(RAIL_FAN).count(), "a second tap did not fold the fan").toBe(0);
+
+      // A tap on the canvas, far from the arc, folds it.
+      await page.touchscreen.tap(hub.x, hub.y);
+      await expect(page.locator(RAIL_FAN)).toHaveCount(1);
+      const frame = await page
+        .locator('[data-testid="canvas-card"] iframe:not([aria-hidden="true"])')
+        .boundingBox();
+      if (!frame) throw new Error("no canvas");
+      await page.touchscreen.tap(frame.x + frame.width - 40, frame.y + frame.height / 2);
+      await expect(page.locator(RAIL_FAN)).toHaveCount(0);
+
+      // And a tap on a pill chooses it.
+      await page.touchscreen.tap(hub.x, hub.y);
+      await expect(page.locator(RAIL_FAN)).toHaveCount(1);
+      const style = await page.locator(`${RAIL_FAN} [data-spoke="style"]`).boundingBox();
+      if (!style) throw new Error("no «Estilo» pill");
+      await page.touchscreen.tap(style.x + style.width / 2, style.y + style.height / 2);
+      await expect(page.locator(RAIL_HUB)).toHaveAttribute("data-tool", "style");
+      await expect(page.locator(RAIL_FAN)).toHaveCount(0);
+      expect(await panelOpen(page)).toBe(true);
     } finally {
       await context.close();
     }

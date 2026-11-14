@@ -40,9 +40,15 @@ describe("the quiet child, which goes with the focus", () => {
     expect(quietSays(at({ keyboard: "section" })).text).toContain("cambiar de sección");
     expect(quietSays(at({ keyboard: "bar" })).text).toContain("recorrerla");
     expect(quietSays(at({ keyboard: "grip" })).text).toContain("asa");
+    // The radial rail's hub (sprint 37 día 3): its keys, in its own words.
+    expect(quietSays(at({ keyboard: "hub" })).text).toBe(es["editor.help.keys.hub"]);
     expect(quietSays(at({ keyboard: "writing", platform: "mac" })).text).toContain("Fn+⌥+F10");
     expect(quietSays(at({ keyboard: "writing", platform: "other" })).text).toContain("Alt+F10");
     expect(keysFor("writing", "other")).not.toContain("{toBar}");
+  });
+
+  it("says no keys on the hub of a touched screen either", () => {
+    expect(quietSays(at({ keyboard: "hub", touch: true })).text).toBe(es["editor.editHint"]);
   });
 
   it("says no keys on a touched screen, where there are none", () => {
@@ -103,6 +109,7 @@ describe("the quiet child, which goes with the focus", () => {
   it("never sends a focus-driven text through the live child", () => {
     for (const patch of [
       { keyboard: "section" as const },
+      { keyboard: "hub" as const },
       { chosen: { text: true, movable: false } },
       { menuNote: "escalate" as const },
       { bound: { places: 2, list: "" } },
