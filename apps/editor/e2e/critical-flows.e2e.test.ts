@@ -30403,6 +30403,29 @@ describe("sprint 37 día 3 — el eje con teclado y con el dedo", () => {
     }
   }, 180_000);
 
+  /*
+   * **The canvas taking the focus folds the fan even when the hub never had it.** Chromium gives a
+   * tapped or clicked button the focus, so the hub's own `blur` folds the fan before anything else can;
+   * Safari gives a tapped button none, and there the one thing that says «the finger went to the
+   * canvas» is the editor's window losing the focus to the frame. Opened here by a resting pointer,
+   * which focuses nothing, so only the window's `blur` is left to fold it.
+   */
+  it("el lienzo que toma el foco pliega el abanico, aunque el eje nunca lo tuviera", async () => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+    const page = await context.newPage();
+    try {
+      await intoTheRadialEditor(page);
+      await openByResting(page);
+      expect(await focused(page), "the hub has the focus: this would not test the window").toBe(
+        "body",
+      );
+      await page.frameLocator(PREVIEW).first().locator('[data-section="sec-cover"]').focus();
+      await expect(page.locator(RAIL_FAN)).toHaveCount(0);
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
+
   it("con el dedo a 768: un toque abre, otro pliega, el lienzo pliega, un radio elige", async () => {
     const context = await browser.newContext({
       viewport: { width: 768, height: 1024 },
@@ -30415,8 +30438,24 @@ describe("sprint 37 día 3 — el eje con teclado y con el dedo", () => {
       await intoTheRadialEditor(page);
       await screenStill(page);
       const hub = await hubCentre(page);
-      await page.touchscreen.tap(hub.x, hub.y);
-      await expect(page.locator(RAIL_FAN)).toHaveCount(1);
+      /*
+       * **A finger held on the hub longer than the intent still opens it, once.** A quick tap reaches
+       * its `click` before the intent's 100 ms and the click clears the intent anyway, so a quick tap
+       * cannot tell whether a finger arms it; a finger held 200 ms can — armed, the fan would open at
+       * 100 ms and the `click` would fold it again. `touchscreen.tap` has no hold, so the touch is
+       * written to Chromium directly.
+       */
+      const cdp = await context.newCDPSession(page);
+      await cdp.send("Input.dispatchTouchEvent", {
+        type: "touchStart",
+        touchPoints: [{ x: hub.x, y: hub.y }],
+      });
+      await page.waitForTimeout(HUB_INTENT_MS * 2);
+      await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+      await page.waitForTimeout(HUB_INTENT_MS * 2);
+      expect(await page.locator(RAIL_FAN).count(), "a finger held on the hub did not open it").toBe(
+        1,
+      );
       await page.touchscreen.tap(hub.x, hub.y);
       // Folded, and still folded after the intent's time: a finger is never a resting pointer.
       await page.waitForTimeout(HUB_INTENT_MS * 3);
