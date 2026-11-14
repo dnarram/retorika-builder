@@ -9429,3 +9429,66 @@ nivel de las secciones (día 4); el movimiento (día 5).
 **La caminata del interruptor sin nombre**: una («el interruptor de diseño llega a la cuenta», que leía
 `getByRole("switch")` y ahora encuentra dos) pide el suyo por nombre. Las que pulsan «Secciones» por su nombre corren en el raíl fijo y no
 cambian.
+
+### Día 3 — el eje con teclado y con el dedo (PR de `feat/el-eje-con-teclado-y-con-el-dedo`)
+
+**Lo que hay** (nota de la [ADR 0072](../decisions/0072-the-rail-has-two-layouts-and-the-layout-is-the-owners-in-this-browser.md)
+del 14 de noviembre). El teclado que llega al eje abre el abanico (`:focus-visible`: un clic, que también
+lo enfoca, no lo abre dos veces). Las flechas entran por la herramienta abierta y recorren el arco; los
+extremos dan la vuelta, como en un menú; Inicio y Fin van a los extremos; Intro elige; Escape pliega y deja
+el teclado en el eje. Las píldoras son una sola parada de Tab, la de la herramienta abierta hasta que una
+flecha la mueve, y salir del eje y sus píldoras —Tab, Mayús+Tab, una pulsación en otro sitio— pliega el
+abanico. Un dedo nunca arma la intención: un toque abre, otro pliega, un dedo apoyado abre una vez. En la
+forma radial un panel del raíl se cierra con Escape, y se cierre como se cierre, el teclado que se quedaría
+en el cuerpo de la página vuelve al eje. La línea de ayuda dice las teclas del eje mientras el teclado está
+en él: «En el menú radial: ↑ ↓ recorrerlo · Intro: abrir la herramienta · Esc: cerrarlo».
+
+**Cuatro decisiones de construcción.**
+
+1. **`fanKeyAction`, pura, al lado de `popupKeyAction`** (`sectionKeys.ts`): desde el eje una flecha entra
+   por la herramienta abierta —la primera cosa que el teclado encuentra es donde ya está—, o abre el abanico
+   cerrado sobre ella; ← y → hacen lo de ↑ y ↓, porque el arco no es ni columna ni fila y quien lo lea como
+   cualquiera de las dos no puede equivocarse; Tab, Intro, Espacio y cualquier modificador no son suyos.
+2. **Un foco que da el código nunca abre el abanico** (`focusQuietly`): elegir una píldora, plegar con
+   Escape o cerrar un panel ponen el teclado en el eje, y ese foco llega igual que el de una tecla. El eje
+   lo sabe durante lo que dura su evento `focus`. El saboteo lo enseñó con matiz: al elegir con Intro el
+   abanico sigue abierto en ese instante y el propio estado lo frena; donde la marca muerde es al volver el
+   foco al eje tras cerrar un panel, y ahí se puso rojo.
+3. **Un toque en el lienzo pliega por dos caminos, porque los navegadores difieren.** Chromium da el foco a
+   un botón tocado, y perderlo basta; Safari no se lo da, y allí lo único que dice «el dedo se fue al
+   lienzo» es la ventana del editor perdiendo el foco hacia el marco. Los dos se caminan: el primero con el
+   dedo a 768, el segundo con el abanico abierto por un puntero quieto, que no enfoca nada, y el foco
+   entrando en una sección del lienzo.
+4. **El Escape del panel, solo en la forma radial y solo si nadie dentro lo tomó**: no uno escrito en un
+   campo, que es del campo, ni uno dentro de un diálogo que el panel abrió. El raíl fijo se queda como
+   estaba (Escape no hace nada en un panel del raíl y la cruz deja el foco en el cuerpo); igualarlos es un
+   manejador y un efecto ya escritos, y queda en el backlog con nombre, porque cambia una forma que nadie
+   pidió cambiar.
+
+**Las caminatas** (`sprint 37 día 3 — el eje con teclado y con el dedo`): el menú radial entero sin ratón,
+dentro de las marcas que `keyboardOnly.test.ts` vigila —Tab desde «Descargar» llega al eje y abre; ↓ ↓ ↓
+Intro abre «Páginas» con el teclado en el eje y el abanico cerrado; Escape dentro del panel lo cierra y
+devuelve el teclado al eje; ↓ con el eje cerrado abre en la herramienta abierta y Escape pliega; Fin y la
+vuelta del extremo; Tab desde una píldora sale al interruptor y pliega, y la línea deja de decir las teclas;
+Mayús+Tab vuelve al eje, que abre, y otra vez a «Descargar», que pliega—, con axe sobre el menú cerrado; el
+dedo a 768 (un dedo apoyado 200 ms abre una vez, un toque pliega y sigue plegado pasado el tiempo de la
+intención, un toque en el lienzo pliega, un toque en «Estilo» elige); y el lienzo que toma el foco pliega el
+abanico aunque el eje nunca lo tuviera.
+
+**Saboteos, cada uno en rojo en su paso**: todas las píldoras con `tabindex` 0, el Tab desde una píldora va a
+la siguiente; sin el pliegue al salir el foco del abanico, el abanico se queda tras el Tab; sin el del eje, se
+queda tras el Mayús+Tab; sin la marca del foco silencioso, el eje reabre al recibir el teclado tras cerrar el
+panel; sin el Escape del panel, el panel sigue abierto; sin la vuelta del foco, «el teclado se cayó al
+cerrarse el panel»; sin el filtro del dedo, «un dedo apoyado en el eje no lo abrió»; sin el `blur` de la
+ventana, el abanico se queda con el foco en el lienzo.
+
+**Dos saboteos se quedaron verdes al principio, y lo que enseñaron está escrito arriba.** El filtro del
+dedo, con un toque rápido: el toque llega a su `click` antes de los 100 ms y el `click` ya cancela la
+intención, así que solo un dedo apoyado puede ver el filtro; `touchscreen.tap` no sabe apoyar, y la caminata
+escribe el toque a Chromium por su protocolo (`Input.dispatchTouchEvent`). Y el `blur` de la ventana: en
+Chromium el foco del botón tocado siempre pliega antes, así que hacía falta abrir el abanico sin enfocar el
+eje para ver el otro camino. El primer intento lo hacía con el ratón dentro del contexto táctil, donde el
+ratón no abre por intención; vive en su propia caminata a 1280.
+
+**Lo que no entra hoy, con nombre**: el segundo nivel de las secciones (día 4); el movimiento (día 5); el
+Escape y la vuelta del foco en el raíl fijo (backlog).

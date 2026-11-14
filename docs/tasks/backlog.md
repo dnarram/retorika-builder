@@ -1703,6 +1703,14 @@ open survives.
   rail. The design-tools switch has the account half this lacks (`accounts.design_tools`, migration
   0001, `account/designTools.ts`); its twin would be a column, a sibling module and the same
   «browser refused / account refused» notice. Not built, and the switch says so in its `title`.
+
+  **And the two layouts do not leave a panel the same way** (sprint 37 día 3). In the radial layout
+  a rail panel closes on Escape and the keyboard comes back to the hub however the panel closes
+  (ADR 0072's note of 14 November). The fixed rail kept what it had: Escape does nothing in a rail
+  panel, and pressing a panel's cross drops the focus on the page's body. Giving the fixed rail the
+  same — Escape closes, the focus returns to the rail item the panel belongs to — is one handler and
+  one effect in `EditorShell`, already written for the radial case; it was not done because it
+  changes a layout nobody asked to change this sprint.
 - **The editor's preview never shows the typeface the ZIP ships, found on the way to the row above
   (2 October 2026) and not fixed.** The renderer emits `@font-face` with `fonts/*.woff2` relative,
   which is right for the ZIP and for `file://`. Inside the editor's `srcDoc` preview those eight

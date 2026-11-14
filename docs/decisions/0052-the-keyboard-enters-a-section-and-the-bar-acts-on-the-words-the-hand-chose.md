@@ -419,3 +419,11 @@ with the old revert put back.
   was drawn over what it was explaining.
 
 **Still `proposed`.** This ADR until David signs it.
+
+## Note — the radial rail's keys (14 November 2026, sprint 37 día 3)
+
+The rail stays the editor's one `nav` in both of its layouts (ADR 0072). In the radial one its stops
+are the hub, the fan's one roving stop while the fan is open, and the two switches; the keys of the hub
+and of its pills are in ADR 0072's note of this date, and the help line says them as it says this ADR's
+(«En el menú radial: ↑ ↓ recorrerlo · Intro: abrir la herramienta · Esc: cerrarlo»). Nothing here
+changes for the canvas, the text bar or Alt+F10.
