@@ -9342,3 +9342,90 @@ conmutador) y una enmienda con la tabla de arriba.
 **El e2e de la CI sube a 40 minutos el paso y a 50 el trabajo**, para que lo aceptes con esta PR: el paso
 fue 31–32 de sus 35 durante todo el sprint 36 (32 min 26 s en la ejecución del cierre, leído de la propia
 ejecución) y este sprint añade unas diez caminatas. Partirlo en dos trabajos sigue siendo tu decisión.
+
+### Día 2 — el raíl tiene dos formas: el modelo, solo y antes del movimiento (PR de `feat/el-rail-tiene-dos-formas`)
+
+**Lo que hay** ([ADR 0072](../decisions/0072-the-rail-has-two-layouts-and-the-layout-is-the-owners-in-this-browser.md)).
+Un interruptor «Menú radial» al pie del raíl, bajo el de las herramientas, en las dos formas. Encendido,
+el raíl es una franja de 56 px y, en su mitad vertical, **el eje: la herramienta abierta**, su icono
+sobre el tinte de la marca en un disco de 44 px y su palabra debajo (a 10 px: a 11, «Secciones» salía
+«Seccio…» en la primera captura), rodeado de un punto quieto por herramienta. Apoyar el puntero sobre el
+eje 100 ms sin moverse más que el umbral del arrastre, o pulsarlo, abre las herramientas en un abanico a
+su derecha: píldoras con icono y palabra sobre un arco de ±70°. Pulsar una la hace eje y abre su panel
+al lado del lienzo, como el raíl fijo. Salir de la franja y del abanico lo pliega a los 150 ms. Pulsar el
+eje con el abanico abierto lo pliega, y una mano que se queda encima no lo reabre hasta salir. Cerrado,
+el abanico no está en la página. En el teléfono, la barra de abajo de siempre y ningún interruptor. Nada
+se mueve hoy: el abanico aparece y se va; el movimiento es del día 5.
+
+**Tres decisiones de construcción.**
+
+1. **Paso vertical igual, no ángulos iguales** (`editor/radialMenu.ts`, puro). En la mitad derecha de un
+   disco dos píldoras de palabra siempre se solapan en horizontal, así que solo su distancia vertical las
+   separa; con ángulos iguales se apiñan en los extremos del arco. El radio es el menor que da a cada par
+   una píldora y su hueco de distancia, con suelo de 120 px, y **el paso es un entero**, para que redondear
+   nunca acerque dos píldoras más que su hueco. Seis herramientas: radio 120, caja de 276 × 261 px. Ocho:
+   radio 157, 314 × 330.
+2. **El elemento del abanico es su casco.** Recortado a un círculo alrededor del eje que justo contiene la
+   esquina más lejana de una píldora. `clip-path` recorta también el *hit-testing*: la página fuera del
+   arco sigue bajo el puntero con el abanico abierto, y pasar del casco al lienzo es un `pointerleave`
+   que el documento del editor oye. El lienzo es un `<iframe>`, y nadie aquí oye un puntero dentro de él.
+3. **Abierto es un estado de un contexto, no una bandera.** El abanico se abre para la herramienta, las
+   herramientas de diseño y el dispositivo sobre los que se abrió; si cualquiera cambia —un panel cerrado
+   con su cruz, las herramientas apagadas, el lienzo a la vista de móvil— queda cerrado por construcción,
+   sin un efecto que lo cierre un render tarde.
+
+**La caja que se pulsa no viaja** (el ajuste de David al aprobar). Cada píldora es un `<button>` en su
+sitio final desde el primer fotograma, y su cara es un `span` dentro: lo que el día 5 animará.
+
+**El cambio de forma se ve.** El raíl que se deja se va por una copia (`leaving.ts`, tipo `rail`, dibujada
+sobre la fila como la de un panel) que se funde en `--ui-fast`, y el otro sube con `ui-rise-in`; la
+tarjeta cambia de ancho una vez. La copia la dibuja un componente vacío dentro de cada `nav`, porque su
+limpieza corre en el instante antes de que React quite ese `nav`, y React ya le ha quitado el `ref` para
+entonces: el `nav` se lee como primer hijo de la fila.
+
+**La preferencia, solo en este navegador** (`retorika.rail.v1`, copia de la capa de navegador de
+`designTools.ts`): fuera de la sesión guardada y del documento, sobrevive a «Volver a empezar», el raíl
+fijo no deja clave, y un rechazo del navegador se queda puesto como el del interruptor de herramientas. El
+interruptor lo dice en su `title`: «Se guarda en este navegador, no en tu cuenta». La capa de cuenta queda
+en el backlog con nombre.
+
+**Lo que cuesta, medido.** El interruptor alarga el raíl fijo **65 px** (51 de interruptor y 14 de hueco),
+no los 45 que estimaba el plan. A 1280 × 720 con las herramientas encendidas el raíl desplazaba 81 px para
+llegar a su último control y ahora desplaza 146. La forma radial es el alivio, y el backlog lleva los
+números en su fila de la altura del raíl.
+
+**Las caminatas** (`sprint 37 día 2 — el raíl tiene dos formas`): el eje en reposo a 768, 1024, 1280 y
+1600, con y sin «Estilo» abierto (dice la herramienta abierta, seis puntos, su borde derecho antes del
+marco, el borde izquierdo del marco bajo el puntero, ningún abanico en la página, la tarjeta con 24 px
+más que con el raíl fijo, un solo `nav` con el abanico abierto y cerrado, axe con el abanico abierto);
+intención y gracia a 1280 (una mano que cruza 300 ms sin parar no abre nada; parada, abre no antes de
+100 ms; las píldoras donde dice el módulo, cada una lo que hay bajo su centro; la esquina de la caja fuera
+del casco no es del abanico; fuera del casco y de vuelta antes de 150 ms no pliega, fuera del todo sí);
+cada panel desde el abanico, con el teclado en el eje tras cada elección; y el cambio de forma a 1024 (la
+tarjeta toma dos anchos como mucho, la copia del raíl se ve, se recuerda tras recargar, a 768 sin el
+interruptor de herramientas, en un teléfono sin ninguno, y de vuelta al fijo sin clave guardada).
+
+**Dos hallazgos del arnés, los dos corregidos antes de contar nada.** (1) La caminata de la gracia salía
+a 60 px de «Fotos», que **sigue dentro del casco**: nunca salía del abanico y pasaba una gracia que no
+probaba; lo vio su propia segunda mitad, «el abanico se queda tras salir la mano», en rojo. Ahora sale más
+allá del radio del casco y asevera que la franja oyó el `pointerleave`. (2) Un rojo intermitente a 1600 y
+otro a 768 —el marco leído a −104 px— eran el mismo: tras cambiar el tamaño de la ventana, la tarjeta
+recibe su zoom un fotograma más tarde por el `ResizeObserver`, que ninguna animación anuncia. Las
+caminatas esperan ahora a que la tarjeta quepa en su área y el eje esté quieto en dos fotogramas seguidos.
+Y una aserción que no podía fallar: «pulsar el eje lo pliega y la mano encima no lo reabre» pasaba aunque
+faltase la guarda, porque el ratón del arnés no tiembla; ahora la mano se mueve un píxel, como una mano.
+
+**Saboteos, cada uno en rojo por su motivo**: sin `clip-path`, «el abanico toma el puntero más allá de su
+arco»; sin gracia, «el abanico se plegó dentro de su gracia»; la intención en `pointerenter`, «una mano que
+nunca paró abrió el abanico»; sin el foco al eje, «tras «Estilo» el teclado no está en el eje»; sin la guarda
+de la mano quieta, «reposar tras la pulsación lo reabrió»; un eje de 96 px, «768 con «Estilo»: el eje llega
+a 96 y la página empieza en 80»; sin la copia, «el raíl fijo no se fue por su copia»; guardar `"1"`, la prueba
+de la preferencia; el paso sin el hueco, «nunca acerca dos píldoras más que su hueco» con ocho.
+
+**Lo que no entra hoy, con nombre**: el teclado y el dedo sobre el eje (día 3); la vuelta del foco al eje al
+cerrar un panel con su cruz, que el raíl fijo tampoco tiene (día 3, con el Escape del panel); el segundo
+nivel de las secciones (día 4); el movimiento (día 5).
+
+**La caminata del interruptor sin nombre**: una («el interruptor de diseño llega a la cuenta», que leía
+`getByRole("switch")` y ahora encuentra dos) pide el suyo por nombre. Las que pulsan «Secciones» por su nombre corren en el raíl fijo y no
+cambian.

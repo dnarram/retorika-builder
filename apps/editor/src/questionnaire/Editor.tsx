@@ -200,6 +200,7 @@ import {
 import { countPhotos, listPhotos, type PhotoState } from "../editor/photoInventory.ts";
 import { canvasHtml, withFontUrls, withPhotoUrls } from "../editor/previewDocument.ts";
 import { record, serialOf } from "../editor/probe.ts";
+import type { RailLayout } from "../editor/railLayout.ts";
 import {
   atOrAboveReading,
   keepReadingPoint as putReadingPointBack,
@@ -667,6 +668,9 @@ export function Editor({
   designTools,
   switchNotice,
   onDesignToolsChange,
+  railLayout,
+  railLayoutRefused,
+  onRailLayoutChange,
   onEscalateSection,
   placementWasMoved,
   onRevertSection,
@@ -773,6 +777,11 @@ export function Editor({
    * canvas has no business with it, and `Variants` is where the write that failed happened. */
   switchNotice: SwitchNotice;
   onDesignToolsChange: (on: boolean) => void;
+  /** The rail's layout and its switch (ADR 0072), passed straight through to the shell: like the
+   * design-tools switch, it is the person's and the canvas has no business with it. */
+  railLayout?: RailLayout | undefined;
+  railLayoutRefused?: boolean;
+  onRailLayoutChange?: (layout: RailLayout) => void;
   /** This section starts being designed by hand, and goes back to the catalog's layout. One
    * history step each, so Ctrl+Z covers the first minutes — which is what the advanced dossier §5
    * asks for and the reason day 4's dialog is about the durable case rather than this one.
@@ -9451,6 +9460,9 @@ export function Editor({
         setAskingDesignTools(false);
         onDesignToolsChange(on);
       }}
+      railLayout={railLayout}
+      railLayoutRefused={railLayoutRefused === true}
+      {...(onRailLayoutChange ? { onRailLayoutChange } : {})}
       // Which panel this is, so the slot can tell one panel replacing another — which leaves —
       // from the same panel with new props, which updates in place (sprint 35 día 2). The drawer
       // is «fields» whatever section it shows: moving from one section's fields to another's is

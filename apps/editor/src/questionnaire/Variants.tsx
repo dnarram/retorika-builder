@@ -62,6 +62,7 @@ import {
   wasSectionEverEdited,
 } from "../editor/documentHistory.ts";
 import { logoPatch, logoRemovedPatch } from "../editor/headerState.ts";
+import { PHONE_BREAKPOINT } from "../editor/overflowCheck.ts";
 import {
   clearFontFiles,
   type FontFileHandle,
@@ -88,6 +89,12 @@ import {
 } from "../editor/photos.ts";
 import { withFontUrls, withPhotoUrls } from "../editor/previewDocument.ts";
 import { record } from "../editor/probe.ts";
+import {
+  loadRailLayout,
+  type RailLayout,
+  railLayoutFor,
+  saveRailLayout,
+} from "../editor/railLayout.ts";
 import { sampleUrl } from "../editor/samplePhotos.ts";
 import { transitionScreen } from "../editor/screenTransition.ts";
 import { useMediaQuery } from "../editor/viewport.ts";
@@ -828,6 +835,17 @@ export function Variants({
   const [accountRefused, setAccountRefused] = useState(false);
 
   /**
+   * **The rail's layout, the person's in this browser** (ADR 0072, sprint 37 día 2), held beside the
+   * design-tools switch and for the same reasons: outside the autosave effect, so switching it does
+   * not reach a save; read on mount, because `localStorage` does not exist while Next renders on the
+   * server. Its refusal latches like the browser's half of the switch above, and for the same
+   * asymmetry: going back to the fixed rail removes the key, which a browser that refuses to store it
+   * will happily do — and the fixed rail needs nothing stored to survive.
+   */
+  const [railLayout, setRailLayout] = useState<RailLayout>("fixed");
+  const [railRefused, setRailRefused] = useState(false);
+
+  /**
    * Who the switch belongs to, once there is somebody for it to belong to.
    *
    * `null` while unknown, and that is not the same as «nobody»: until the answer arrives the
@@ -837,6 +855,7 @@ export function Variants({
 
   useEffect(() => {
     setDesignTools(loadDesignTools());
+    setRailLayout(loadRailLayout());
     const measure = () => setViewportWidth(window.innerWidth);
     measure();
     window.addEventListener("resize", measure);
@@ -1647,6 +1666,13 @@ export function Variants({
             }
           }}
           switchNotice={switchNotice(browserRefused, accountRefused)}
+          railLayout={railLayoutFor(railLayout, viewportWidth <= PHONE_BREAKPOINT)}
+          railLayoutRefused={railRefused}
+          onRailLayoutChange={(layout) => {
+            // Not an edit, like the design-tools switch: no `dismissToast`, no history step.
+            setRailLayout(layout);
+            if (!saveRailLayout(layout)) setRailRefused(true);
+          }}
           onEscalateSection={(sectionId, boxes) => {
             dismissToast();
             // The boxes the canvas measured the instant before the press (ADR 0050 §3): this

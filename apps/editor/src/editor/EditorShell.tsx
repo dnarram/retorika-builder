@@ -10,6 +10,18 @@ import { leave } from "./leaving.ts";
 import { wireMagnet } from "./magnet.ts";
 import { DESKTOP_LAYOUT_WIDTH, desktopLayoutWidth, NARROWEST_WIDTH } from "./overflowCheck.ts";
 import { overscrollFor } from "./overscroll.ts";
+import {
+  DOT_RADIUS,
+  dotPositions,
+  FAN_GRACE_MS,
+  HUB_DISC,
+  HUB_INTENT_MS,
+  HUB_INTENT_SLOP,
+  HUB_STRIP,
+  hullClip,
+  toolsRing,
+} from "./radialMenu.ts";
+import type { RailLayout } from "./railLayout.ts";
 import { wireRipples } from "./ripple.ts";
 
 /**
@@ -731,6 +743,342 @@ function DeviceToggle({
   );
 }
 
+/** Each rail item's word, by its id: the hub says the open tool's, and a spoke says its own. */
+const RAIL_LABELS: Record<RailItemId, string> = {
+  sections: es["editor.rail.sections"],
+  style: es["editor.rail.style"],
+  pages: es["editor.rail.pages"],
+  menu: es["editor.rail.menu"],
+  share: es["editor.rail.share"],
+  photos: es["editor.rail.photos"],
+  design: es["editor.rail.design"],
+  collections: es["editor.rail.collections"],
+};
+
+/**
+ * **The switch between the two layouts of the rail** (ADR 0072, sprint 37 día 2), at the rail's foot
+ * under the design-tools switch, and drawn the same way: a track, a thumb, a word under it.
+ *
+ * It asks nothing in either direction: the radial menu adds no capability and removes none, so
+ * there is no question to answer before it — the press is the answer. **The note is honest about
+ * where the choice is kept**: «Se guarda en este navegador, no en tu cuenta», in the `title` with
+ * the sentence that says what the menu does, and «No se recordará» under the word only when the
+ * radial menu is on and this browser refused to keep it. Never for the fixed rail: nothing stored
+ * *is* the fixed rail, so a browser that stores nothing keeps it perfectly.
+ */
+function RailLayoutSwitch({
+  layout,
+  refused,
+  onChange,
+}: {
+  layout: RailLayout;
+  refused: boolean;
+  onChange: (layout: RailLayout) => void;
+}) {
+  const radial = layout === "radial";
+  return (
+    <div className="relative flex flex-col items-center gap-[5px] pt-1.5">
+      <span className="mb-1 h-px w-[52px] bg-ui-border" />
+      <button
+        type="button"
+        role="switch"
+        aria-checked={radial}
+        aria-label={es["editor.rail.layout.label"]}
+        title={`${es["editor.rail.layout.title"]} ${es["editor.rail.layout.note"]}`}
+        onClick={() => onChange(radial ? "fixed" : "radial")}
+        className={
+          "ui-interactive flex h-[19px] w-[34px] shrink-0 cursor-pointer items-center rounded-full border-0 px-0.5 " +
+          (radial ? "bg-ui-brand" : "bg-ui-border-strong")
+        }
+      >
+        <span
+          className={
+            "ui-interactive h-[15px] w-[15px] rounded-full bg-white shadow-ui-1 " +
+            (radial ? "translate-x-[15px]" : "translate-x-0")
+          }
+        />
+      </button>
+      <span
+        className={
+          "text-center text-[9px] leading-[1.25] " +
+          (radial ? "font-semibold text-ui-brand-deep" : "font-medium text-ui-muted")
+        }
+      >
+        {es["editor.rail.layout.label"]}
+      </span>
+      {radial && refused ? (
+        <span
+          title={es["editor.rail.layout.notRememberedHelp"]}
+          className="text-center text-[9px] font-semibold leading-[1.25] text-[#B45309]"
+        >
+          {es["editor.rail.layout.notRemembered"]}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * **The rail in the layout the owner switched away from is seen to leave** (ADR 0072). Rendered
+ * inside each layout's `<nav>`, so its cleanup runs in the instant before React removes that nav —
+ * the one moment it is still on the page — and hands it to `leave`, which draws a copy fading over
+ * the box it had while the other layout rises. The nav is found as the row's first child rather
+ * than by a ref, because React takes a deleted element's ref off before its children's cleanups run.
+ * `leave` draws nothing when the row went too (the editor closing) or under reduced motion.
+ */
+function RailLeaves({ row }: { row: RefObject<HTMLElement | null> }) {
+  useLayoutEffect(
+    () => () => {
+      const box = row.current;
+      const nav = box?.firstElementChild;
+      if (box && nav?.getAttribute("data-testid") === "rail") leave(nav, "rail", box);
+    },
+    [row],
+  );
+  return null;
+}
+
+/**
+ * **The rail as a radial menu** (ADR 0072, sprint 37 día 2; David's decisions of 13 November 2026).
+ *
+ * A strip `HUB_STRIP` wide where the rail was, transparent, and in its vertical middle **the hub: the
+ * tool that is open**, its icon on the brand's tint and its word under it, ringed by one dot per tool
+ * so that it reads as more than one button. The dots never move. Resting the pointer on the hub —
+ * `HUB_INTENT_MS` within `HUB_INTENT_SLOP` of where it stopped, so a pointer on its way across the
+ * edge opens nothing — or pressing it, fans the rail's tools out to its right as pills on an arc
+ * (`toolsRing`); pressing one makes it the hub and opens its panel beside the canvas, exactly as the
+ * fixed rail does. Leaving the strip and the fan folds it after `FAN_GRACE_MS`, so crossing the gap
+ * from the hub to a pill does not. Closed, the fan is not on the page at all: nothing of it covers a
+ * pixel of the canvas.
+ *
+ * **The box that is pressed never travels** (David's adjustment approving the plan): each pill is a
+ * `<button>` at its final place from its first frame, and what will move from sprint 37 día 5 on is
+ * the face inside it (`data-spoke-face`). Today nothing moves: the fan appears and goes.
+ *
+ * **The fan's element is its hull** (`hullClip`): clipped to a circle around the hub, which clips its
+ * hit-testing too, so the page beyond the arc stays under the pointer, and crossing from the hull to
+ * the canvas is a `pointerleave` this document hears — the canvas is an `<iframe>`, and a pointer
+ * inside it is heard by nobody here.
+ *
+ * **Open is a state of a context, not a flag** (`foldWhen`): opened for the tool, the design tools
+ * and the device it was opened over, and closed by construction the moment any of them is different
+ * — a panel closed from its own cross, the tools switched off, the canvas sent to the phone view —
+ * so a fan whose pills no longer say what is true is never on the screen, not even for one render.
+ */
+function RadialRail({
+  rail,
+  tools,
+  onRailChange,
+  foldWhen,
+  foot,
+  leaves,
+  className,
+  style,
+}: {
+  rail: RailItemId;
+  tools: readonly RailItemId[];
+  onRailChange: (item: RailItemId) => void;
+  foldWhen: string;
+  foot: React.ReactNode;
+  leaves: React.ReactNode;
+  className: string;
+  style: React.CSSProperties | undefined;
+}) {
+  const [openFor, setOpenFor] = useState<string | null>(null);
+  const open = openFor === foldWhen;
+  const hub = useRef<HTMLButtonElement>(null);
+  const intent = useRef<{ x: number; y: number; timer: ReturnType<typeof setTimeout> } | null>(
+    null,
+  );
+  const grace = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** A press closed the fan with the pointer still on the hub: resting there must not reopen it
+   * until the pointer has left. */
+  const quiet = useRef(false);
+  const fan = toolsRing(tools);
+
+  const clearIntent = () => {
+    if (intent.current) clearTimeout(intent.current.timer);
+    intent.current = null;
+  };
+  const clearGrace = () => {
+    if (grace.current !== null) clearTimeout(grace.current);
+    grace.current = null;
+  };
+  const fold = () => {
+    clearIntent();
+    clearGrace();
+    setOpenFor(null);
+  };
+  const arm = (x: number, y: number) => {
+    clearIntent();
+    intent.current = {
+      x,
+      y,
+      timer: setTimeout(() => {
+        intent.current = null;
+        setOpenFor(foldWhen);
+      }, HUB_INTENT_MS),
+    };
+  };
+  useEffect(
+    () => () => {
+      if (intent.current) clearTimeout(intent.current.timer);
+      if (grace.current !== null) clearTimeout(grace.current);
+    },
+    [],
+  );
+
+  const choose = (item: RailItemId) => {
+    // The keyboard goes to the hub before the panel opens, so the panel remembers an element that
+    // stays — the pill it was pressed from is about to be gone — and «Cerrar» comes back here.
+    hub.current?.focus({ preventScroll: true });
+    fold();
+    if (item !== rail) onRailChange(item);
+  };
+
+  return (
+    <nav
+      data-testid="rail"
+      data-rail-layout="radial"
+      aria-label={es["editor.rail.label"]}
+      className={`${className}relative z-[12] flex w-14 shrink-0 flex-col items-center`}
+      style={style}
+      onPointerEnter={clearGrace}
+      onPointerLeave={(event) => {
+        if (event.pointerType === "touch") return;
+        clearIntent();
+        if (!open) return;
+        clearGrace();
+        grace.current = setTimeout(() => {
+          grace.current = null;
+          setOpenFor(null);
+        }, FAN_GRACE_MS);
+      }}
+    >
+      {leaves}
+      <button
+        ref={hub}
+        type="button"
+        data-testid="rail-hub"
+        data-tool={rail}
+        aria-expanded={open}
+        aria-controls={open ? "rail-fan" : undefined}
+        // The disc's centre on the row's middle: the fan is placed by the same point.
+        style={{ top: `calc(50% - ${HUB_DISC / 2}px)` }}
+        className="group absolute left-0 z-[2] flex w-14 cursor-pointer flex-col items-center gap-[5px] border-0 bg-transparent p-0 focus-visible:outline-none"
+        onPointerEnter={(event) => {
+          if (event.pointerType === "touch" || quiet.current || open) return;
+          arm(event.clientX, event.clientY);
+        }}
+        onPointerMove={(event) => {
+          if (event.pointerType === "touch" || quiet.current || open) return;
+          const at = intent.current;
+          if (!at || Math.hypot(event.clientX - at.x, event.clientY - at.y) > HUB_INTENT_SLOP) {
+            arm(event.clientX, event.clientY);
+          }
+        }}
+        onPointerLeave={() => {
+          clearIntent();
+          quiet.current = false;
+        }}
+        onClick={() => {
+          clearIntent();
+          if (open) {
+            quiet.current = true;
+            fold();
+          } else setOpenFor(foldWhen);
+        }}
+      >
+        <span className="relative flex h-[44px] w-[44px] items-center justify-center">
+          <span className="ui-interactive ui-ripple flex h-full w-full items-center justify-center rounded-full bg-ui-brand-surface text-ui-brand-deep outline-2 outline-offset-2 outline-transparent group-focus-visible:outline-ui-brand">
+            {RAIL_ICONS[rail]}
+          </span>
+          <svg
+            data-testid="rail-dots"
+            aria-hidden="true"
+            width={HUB_STRIP}
+            height={HUB_STRIP}
+            viewBox={`${-HUB_STRIP / 2} ${-HUB_STRIP / 2} ${HUB_STRIP} ${HUB_STRIP}`}
+            className="pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-ui-border-strong"
+          >
+            {dotPositions(tools.length).map((dot) => (
+              <circle
+                key={`${dot.x} ${dot.y}`}
+                cx={dot.x}
+                cy={dot.y}
+                r={DOT_RADIUS}
+                fill="currentColor"
+              />
+            ))}
+          </svg>
+        </span>
+        {/* 10 px, where the fixed rail's words are 11: «Secciones» and «Compartir» in the strip's 56
+            without being cut, measured in the first screenshot of the day («Seccio…» at 11). */}
+        <span className="max-w-14 truncate text-[10px] font-semibold text-ui-brand-deep">
+          {RAIL_LABELS[rail]}
+        </span>
+      </button>
+      {open ? (
+        // A `<fieldset>`, the group the platform has, with its border, padding and minimum width
+        // taken off as the panels' own are (`StylePanel`): a named group of the pills, never a second
+        // `<nav>` (the rail is the editor's one).
+        <fieldset
+          id="rail-fan"
+          data-testid="rail-fan"
+          aria-label={es["editor.rail.fan.tools"]}
+          className="absolute left-0 z-[1] m-0 min-w-0 border-0 p-0"
+          style={{
+            top: `calc(50% - ${fan.hubY}px)`,
+            width: fan.width,
+            height: fan.height,
+            clipPath: hullClip(fan),
+          }}
+          // A press on the hull between the pills folds the fan and goes no further.
+          onPointerDown={(event) => {
+            if (event.target === event.currentTarget) fold();
+          }}
+        >
+          {fan.spokes.map((spoke) => {
+            const item = spoke.id as RailItemId;
+            const active = item === rail;
+            return (
+              <button
+                key={item}
+                type="button"
+                data-spoke={item}
+                aria-pressed={active}
+                className="group absolute flex cursor-pointer border-0 bg-transparent p-0 focus-visible:outline-none"
+                style={{
+                  left: spoke.left,
+                  top: spoke.top,
+                  width: spoke.width,
+                  height: spoke.height,
+                }}
+                onClick={() => choose(item)}
+              >
+                <span
+                  data-spoke-face=""
+                  className={
+                    "ui-interactive ui-ripple flex h-full w-full items-center gap-2 rounded-full border px-3 text-[13px] shadow-ui-2 " +
+                    "outline-2 outline-offset-2 outline-transparent group-focus-visible:outline-ui-brand " +
+                    (active
+                      ? "border-transparent bg-ui-brand-surface font-semibold text-ui-brand-deep"
+                      : "border-ui-border bg-ui-surface font-medium text-ui-ink group-hover:border-ui-border-strong group-hover:bg-ui-bg")
+                  }
+                >
+                  {RAIL_ICONS[item]}
+                  <span className="truncate">{RAIL_LABELS[item]}</span>
+                </span>
+              </button>
+            );
+          })}
+        </fieldset>
+      ) : null}
+      <div className="absolute inset-x-0 bottom-3.5 z-[2] flex flex-col items-center">{foot}</div>
+    </nav>
+  );
+}
+
 /**
  * The chrome's place in the queue when it arrives after the canvas scene (`arriving`): the header
  * first, then the rail, then the help line, each `--ui-stagger` after the one before, and all of them
@@ -775,6 +1123,9 @@ export function EditorShell({
   onAskDesignTools,
   onDismissDesignTools,
   onDesignToolsChange,
+  railLayout,
+  railLayoutRefused = false,
+  onRailLayoutChange,
   panel,
   panelKey,
   children,
@@ -884,6 +1235,16 @@ export function EditorShell({
   onAskDesignTools: () => void;
   onDismissDesignTools: () => void;
   onDesignToolsChange: (on: boolean) => void;
+  /**
+   * **The rail's layout, the owner's choice in this browser** (ADR 0072, sprint 37 día 2): the fixed
+   * rail, as it always was, or the radial menu. `undefined` on a phone, where the rail is the bar
+   * along the bottom (ADR 0042) and neither the menu nor its switch is offered — absent rather than
+   * disabled, as ADR 0025 §5 has it for the design tools. Absent too where no caller passes it.
+   */
+  railLayout?: RailLayout | undefined;
+  /** Whether this browser refused to keep the layout — only ever said while the radial menu is on. */
+  railLayoutRefused?: boolean;
+  onRailLayoutChange?: (layout: RailLayout) => void;
   /** The side panel the current rail item opens, if it has one. Rendered beside the canvas rather
    * than over it, which is how mockup 13 draws the style panel: the preview narrows and stays
    * visible while a choice is being made about how it looks. */
@@ -1017,6 +1378,19 @@ export function EditorShell({
    * `travels` only from the second placement on, so the first one does not slide in from a corner.
    */
   const railNav = useRef<HTMLElement>(null);
+  /** The row the rail and the canvas share, for the rail that leaves when the layout changes. */
+  const railRow = useRef<HTMLDivElement>(null);
+  /**
+   * **The rail that comes in after a switch of layout rises into place** (ADR 0072), as the chrome
+   * does around a canvas that has just landed — while the one that left fades where it stood
+   * (`RailLeaves`). Only after a press of the switch: an editor opened in the radial layout has
+   * nothing to arrive after but the scene, which `arriving` already covers.
+   */
+  const [railSwitched, setRailSwitched] = useState(false);
+  const changeRailLayout = (next: RailLayout) => {
+    setRailSwitched(true);
+    onRailLayoutChange?.(next);
+  };
   const [railMark, setRailMark] = useState<{
     left: number;
     top: number;
@@ -1059,7 +1433,9 @@ export function EditorShell({
     observer.observe(nav);
     for (const child of nav.children) observer.observe(child);
     return () => observer.disconnect();
-  }, [rail, designTools]);
+    // `railLayout`: the fixed rail is mounted again when the owner switches back to it, and its
+    // mark has to be placed in the new nav.
+  }, [rail, designTools, railLayout]);
   const currentTab = useRef<HTMLButtonElement>(null);
   const [marker, setMarker] = useState<{ left: number; width: number } | null>(null);
 
@@ -1171,6 +1547,37 @@ export function EditorShell({
   }, [available, layoutWidth]);
 
   const building = downloadState === "preparing" || downloadState === "downloading";
+
+  /** The two switches at the rail's foot, the same in either layout (ADR 0025 §4, ADR 0072). */
+  const designSwitch =
+    designTools === undefined ? null : (
+      <DesignToolsSwitch
+        on={designTools}
+        notice={switchNotice}
+        asking={askingDesignTools}
+        onAsk={onAskDesignTools}
+        onDismiss={onDismissDesignTools}
+        onChange={onDesignToolsChange}
+      />
+    );
+  const layoutSwitch =
+    railLayout === undefined ? null : (
+      <RailLayoutSwitch
+        layout={railLayout}
+        refused={railLayoutRefused}
+        onChange={changeRailLayout}
+      />
+    );
+  /** The rail's tools, in the fixed rail's order: the two the design tools add only while they are on. */
+  const railTools: RailItemId[] = [
+    "sections",
+    "style",
+    "pages",
+    "menu",
+    "share",
+    "photos",
+    ...(designTools ? (["design", "collections"] as const) : []),
+  ];
 
   const shell = (
     <div
@@ -1538,26 +1945,47 @@ export function EditorShell({
 
       {/* On a phone the rail is a bar fixed to the bottom, so this row leaves it room: its own
           height plus the home indicator's inset, which `viewport-fit: cover` makes non-zero. */}
-      <div className="flex flex-grow overflow-hidden phone:pb-[calc(56px+env(safe-area-inset-bottom))]">
+      <div
+        ref={railRow}
+        className="flex flex-grow overflow-hidden phone:pb-[calc(56px+env(safe-area-inset-bottom))]"
+      >
         {/* `overflow-y-auto`, for the reason `panelShell` above gives and measured the same way: the
             rail is as tall as this row and its items are not. Eight of them need 705px, so in a
             window 640px tall the last 65 were unreachable — and the last item is the design-tools
             switch, so the control that turns the studio off was behind the one edge nothing could
             scroll. It has 15px to spare at 720. */}
-        <nav
-          ref={railNav}
-          data-testid="rail"
-          // Named, because «navegación» alone says nothing about which: these are the panels the
-          // editor opens beside the canvas, and the design-tools switch that adds two of them.
-          aria-label={es["editor.rail.label"]}
-          // **A bottom bar on a phone (ADR 0042 §2):** fixed, full width, the five items in a
-          // row with icon and word, above the home indicator. The same five buttons — nothing is
-          // added or taken away by the move; the studio items and the switch are already absent
-          // below 1024 (ADR 0025 §5). An 80px rail took a quarter of a 320px screen.
-          className={`${arrival(arriving, 1)}relative flex w-20 shrink-0 flex-col items-center gap-3.5 overflow-y-auto border-r border-ui-border bg-ui-surface py-3.5 phone:fixed phone:inset-x-0 phone:bottom-0 phone:z-20 phone:h-auto phone:w-auto phone:flex-row phone:items-stretch phone:justify-around phone:gap-0 phone:overflow-visible phone:border-t phone:border-r-0 phone:pt-1 phone:pb-[calc(4px+env(safe-area-inset-bottom))]`}
-          style={arrivalDelay(arriving, 1)}
-        >
-          {/* **The chosen item's mark: one for the whole rail, and it travels** (sprint 35 día 2).
+        {railLayout === "radial" ? (
+          <RadialRail
+            rail={rail}
+            tools={railTools}
+            onRailChange={onRailChange}
+            foldWhen={`${rail}|${designTools}|${device}`}
+            leaves={<RailLeaves row={railRow} />}
+            foot={
+              <>
+                {designSwitch}
+                {layoutSwitch}
+              </>
+            }
+            className={arrival(arriving || railSwitched, 1)}
+            style={arrivalDelay(arriving, 1)}
+          />
+        ) : (
+          <nav
+            ref={railNav}
+            data-testid="rail"
+            // Named, because «navegación» alone says nothing about which: these are the panels the
+            // editor opens beside the canvas, and the design-tools switch that adds two of them.
+            aria-label={es["editor.rail.label"]}
+            // **A bottom bar on a phone (ADR 0042 §2):** fixed, full width, the five items in a
+            // row with icon and word, above the home indicator. The same five buttons — nothing is
+            // added or taken away by the move; the studio items and the switch are already absent
+            // below 1024 (ADR 0025 §5). An 80px rail took a quarter of a 320px screen.
+            className={`${arrival(arriving || railSwitched, 1)}relative flex w-20 shrink-0 flex-col items-center gap-3.5 overflow-y-auto border-r border-ui-border bg-ui-surface py-3.5 phone:fixed phone:inset-x-0 phone:bottom-0 phone:z-20 phone:h-auto phone:w-auto phone:flex-row phone:items-stretch phone:justify-around phone:gap-0 phone:overflow-visible phone:border-t phone:border-r-0 phone:pt-1 phone:pb-[calc(4px+env(safe-area-inset-bottom))]`}
+            style={arrivalDelay(arriving, 1)}
+          >
+            <RailLeaves row={railRow} />
+            {/* **The chosen item's mark: one for the whole rail, and it travels** (sprint 35 día 2).
               It used to be three cues on each item, appearing and disappearing — the square's tint,
               its shadow and a rule on the rail's inner edge. Now the tint and the rule are one
               thing that slides from the item that was chosen to the one that is, as the page tabs'
@@ -1565,105 +1993,99 @@ export function EditorShell({
               own scroll). The label keeps its weight and colour: the words still say which, without
               the mark. Hidden from assistive technology: `aria-pressed` already says it. Placed
               without travel the first time, so it does not slide in from the corner on load. */}
-          <span
-            aria-hidden="true"
-            data-testid="rail-mark"
-            className={`pointer-events-none absolute top-0 left-0 rounded-ui bg-ui-brand-surface shadow-ui-1 ${
-              railMark?.travels ? "ui-slide" : ""
-            }`}
-            style={{
-              width: railMark?.width ?? 0,
-              height: railMark?.height ?? 0,
-              transform: `translate(${railMark?.left ?? 0}px, ${railMark?.top ?? 0}px)`,
-              opacity: railMark ? 1 : 0,
-            }}
-          >
-            {/* The rule on the inner edge, «you are here» in a vertical navigation, riding with
+            <span
+              aria-hidden="true"
+              data-testid="rail-mark"
+              className={`pointer-events-none absolute top-0 left-0 rounded-ui bg-ui-brand-surface shadow-ui-1 ${
+                railMark?.travels ? "ui-slide" : ""
+              }`}
+              style={{
+                width: railMark?.width ?? 0,
+                height: railMark?.height ?? 0,
+                transform: `translate(${railMark?.left ?? 0}px, ${railMark?.top ?? 0}px)`,
+                opacity: railMark ? 1 : 0,
+              }}
+            >
+              {/* The rule on the inner edge, «you are here» in a vertical navigation, riding with
                 the tint: at the rail's left edge whatever the square's offset. Not on a phone,
                 where the rail is a bar along the bottom and has no inner edge. */}
-            <span
-              className="absolute top-1/2 h-7 w-[3px] -translate-y-1/2 rounded-full bg-ui-brand phone:hidden"
-              style={{ left: -(railMark?.left ?? 0) }}
+              <span
+                className="absolute top-1/2 h-7 w-[3px] -translate-y-1/2 rounded-full bg-ui-brand phone:hidden"
+                style={{ left: -(railMark?.left ?? 0) }}
+              />
+            </span>
+            <RailButton
+              icon="sections"
+              label={es["editor.rail.sections"]}
+              active={rail === "sections"}
+              onSelect={() => onRailChange("sections")}
             />
-          </span>
-          <RailButton
-            icon="sections"
-            label={es["editor.rail.sections"]}
-            active={rail === "sections"}
-            onSelect={() => onRailChange("sections")}
-          />
-          <RailButton
-            icon="style"
-            label={es["editor.rail.style"]}
-            active={rail === "style"}
-            onSelect={() => onRailChange("style")}
-          />
-          <RailButton
-            icon="pages"
-            label={es["editor.rail.pages"]}
-            active={rail === "pages"}
-            onSelect={() => onRailChange("pages")}
-          />
-          {/* The header of the site (ADR 0057, sprint 30 día 3), beside «Páginas» because the two
+            <RailButton
+              icon="style"
+              label={es["editor.rail.style"]}
+              active={rail === "style"}
+              onSelect={() => onRailChange("style")}
+            />
+            <RailButton
+              icon="pages"
+              label={es["editor.rail.pages"]}
+              active={rail === "pages"}
+              onSelect={() => onRailChange("pages")}
+            />
+            {/* The header of the site (ADR 0057, sprint 30 día 3), beside «Páginas» because the two
               menus it governs are the pages' and the sections'. */}
-          <RailButton
-            icon="menu"
-            label={es["editor.rail.menu"]}
-            active={rail === "menu"}
-            onSelect={() => onRailChange("menu")}
-          />
-          <RailButton
-            icon="share"
-            label={es["editor.rail.share"]}
-            active={rail === "share"}
-            onSelect={() => onRailChange("share")}
-          />
-          <RailButton
-            icon="photos"
-            label={es["editor.rail.photos"]}
-            active={rail === "photos"}
-            onSelect={() => onRailChange("photos")}
-          />
-          {/* The fifth item, and the only one the switch adds (ADR 0025 §6). **Absent** rather than
+            <RailButton
+              icon="menu"
+              label={es["editor.rail.menu"]}
+              active={rail === "menu"}
+              onSelect={() => onRailChange("menu")}
+            />
+            <RailButton
+              icon="share"
+              label={es["editor.rail.share"]}
+              active={rail === "share"}
+              onSelect={() => onRailChange("share")}
+            />
+            <RailButton
+              icon="photos"
+              label={es["editor.rail.photos"]}
+              active={rail === "photos"}
+              onSelect={() => onRailChange("photos")}
+            />
+            {/* The fifth item, and the only one the switch adds (ADR 0025 §6). **Absent** rather than
               dimmed while the tools are off: `RailLabel`'s own note records that the grey shade for
               "this exists but not yet" lost its last caller in sprint 6, and it is not coming back
               for a panel that is a setting away rather than a sprint away. */}
-          {designTools ? (
-            <RailButton
-              icon="design"
-              label={es["editor.rail.design"]}
-              active={rail === "design"}
-              onSelect={() => onRailChange("design")}
-              entersAfter={0}
-            />
-          ) : null}
-          {/* The seventh item, and the second the switch adds (ADR 0033 §11). **Absent** rather than
+            {designTools ? (
+              <RailButton
+                icon="design"
+                label={es["editor.rail.design"]}
+                active={rail === "design"}
+                onSelect={() => onRailChange("design")}
+                entersAfter={0}
+              />
+            ) : null}
+            {/* The seventh item, and the second the switch adds (ADR 0033 §11). **Absent** rather than
               dimmed while the tools are off, for the reason `RailLabel`'s own note gives and ADR 0025
               §6 fixes: the grey shade for «this exists but not yet» lost its last caller in sprint 6
               and is not coming back for a panel that is a setting away. */}
-          {designTools ? (
-            <RailButton
-              icon="collections"
-              label={es["editor.rail.collections"]}
-              active={rail === "collections"}
-              onSelect={() => onRailChange("collections")}
-              // Half a beat behind «Diseño», so the two read as a sequence rather than a flash.
-              // Small on purpose: a stagger long enough to notice is a stagger long enough to
-              // wait for, and this is a rail, not a reveal.
-              entersAfter={60}
-            />
-          ) : null}
-          {designTools === undefined ? null : (
-            <DesignToolsSwitch
-              on={designTools}
-              notice={switchNotice}
-              asking={askingDesignTools}
-              onAsk={onAskDesignTools}
-              onDismiss={onDismissDesignTools}
-              onChange={onDesignToolsChange}
-            />
-          )}
-        </nav>
+            {designTools ? (
+              <RailButton
+                icon="collections"
+                label={es["editor.rail.collections"]}
+                active={rail === "collections"}
+                onSelect={() => onRailChange("collections")}
+                // Half a beat behind «Diseño», so the two read as a sequence rather than a flash.
+                // Small on purpose: a stagger long enough to notice is a stagger long enough to
+                // wait for, and this is a rail, not a reveal.
+                entersAfter={60}
+              />
+            ) : null}
+            {designSwitch}
+            {/* Under the design-tools switch, and only where the layout is offered (ADR 0072). */}
+            {layoutSwitch}
+          </nav>
+        )}
 
         {/* The wide side gutters centre the canvas when it is alone; with a panel open they would
             only squeeze the preview, so they go. */}

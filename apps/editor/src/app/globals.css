@@ -528,6 +528,12 @@
 
 /* A whole screen fading before the next is asked for (`leaveScreen`, sprint 36 día 3): the real
    element, not a copy, and no pointer while it goes — a second press would ask twice. */
+/* The rail in the layout the owner just switched away from (sprint 37 día 2, ADR 0072): a copy over
+   the box it had, fading while the other layout rises in its place — opacity only, never the spring. */
+[data-leaving="rail"] {
+  animation: ui-fade-out var(--ui-fast) var(--ui-ease) forwards;
+}
+
 [data-leaving="screen"] {
   animation: ui-fade-out var(--ui-fast) var(--ui-ease) forwards;
   pointer-events: none;
