@@ -19,6 +19,10 @@ import {
   HUB_INTENT_SLOP,
   HUB_STRIP,
   hullClip,
+  SECTIONS_CAP,
+  SINGLE_ARC_MAX,
+  sectionsRing,
+  TOOLS_SPOKE,
   toolsRing,
 } from "./radialMenu.ts";
 import type { RailLayout } from "./railLayout.ts";
@@ -744,6 +748,25 @@ function DeviceToggle({
   );
 }
 
+/** «Herramientas», the second ring's way back to the first: four tiles, the tools as a set (ADR 0073). */
+const TOOLS_ICON = (
+  <svg
+    width="18"
+    height="18"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth={1.8}
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    <rect x="4" y="4" width="6.5" height="6.5" rx="1.5" />
+    <rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5" />
+    <rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5" />
+    <rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5" />
+  </svg>
+);
+
 /** Each rail item's word, by its id: the hub says the open tool's, and a spoke says its own. */
 const RAIL_LABELS: Record<RailItemId, string> = {
   sections: es["editor.rail.sections"],
@@ -770,10 +793,13 @@ const RAIL_LABELS: Record<RailItemId, string> = {
 function RailLayoutSwitch({
   layout,
   refused,
+  tooMany,
   onChange,
 }: {
   layout: RailLayout;
   refused: boolean;
+  /** The open page has more sections than the second ring holds (ADR 0073): the title says so. */
+  tooMany: boolean;
   onChange: (layout: RailLayout) => void;
 }) {
   const radial = layout === "radial";
@@ -785,7 +811,7 @@ function RailLayoutSwitch({
         role="switch"
         aria-checked={radial}
         aria-label={es["editor.rail.layout.label"]}
-        title={`${es["editor.rail.layout.title"]} ${es["editor.rail.layout.note"]}`}
+        title={`${es["editor.rail.layout.title"]} ${tooMany ? `${es["editor.rail.layout.tooMany"]} ` : ""}${es["editor.rail.layout.note"]}`}
         onClick={() => onChange(radial ? "fixed" : "radial")}
         className={
           "ui-interactive flex h-[19px] w-[34px] shrink-0 cursor-pointer items-center rounded-full border-0 px-0.5 " +
@@ -890,6 +916,9 @@ function RadialRail({
   style,
   hubRef: hub,
   onKeyboard,
+  sections,
+  onPointSection,
+  onChooseSection,
 }: {
   rail: RailItemId;
   tools: readonly RailItemId[];
@@ -903,15 +932,35 @@ function RadialRail({
   hubRef: RefObject<HTMLButtonElement | null>;
   /** Whether the keyboard is on the hub or a pill, for the help line's keys (ADR 0071). */
   onKeyboard?: (on: boolean) => void;
+  /** The open page's sections, for the second ring (ADR 0073). */
+  sections: readonly { id: string; name: string }[];
+  /** The section a pill points at, drawn dashed in the canvas as chrome; `null` for none. */
+  onPointSection?: ((sectionId: string | null) => void) | undefined;
+  /** A section's pill pressed: the canvas goes to it and chooses it. */
+  onChooseSection?: ((sectionId: string) => void) | undefined;
 }) {
   const [openFor, setOpenFor] = useState<string | null>(null);
   const open = openFor === foldWhen;
+  /**
+   * **Which ring is shown** (ADR 0073). With «Secciones» as the hub the fan opens on the page's
+   * sections — its second level — when there are between one and sixteen; otherwise, and after
+   * «Herramientas», on the tools. The two rings never share the fan.
+   */
+  const [level, setLevel] = useState<"tools" | "sections">("tools");
+  const sectionsFan = rail === "sections" ? sectionsRing(sections.map((s) => s.id)) : null;
+  const ring: "tools" | "sections" = !sectionsFan ? "tools" : open ? level : "sections";
+  const fan = ring === "sections" && sectionsFan ? sectionsFan : toolsRing(tools);
+  const ids = fan.spokes.map((spoke) => spoke.id);
+  const sectionName = new Map(sections.map((section) => [section.id, section.name]));
+  const pointing = useRef(onPointSection);
+  pointing.current = onPointSection;
   const fanBox = useRef<HTMLFieldSetElement>(null);
   /** The pill the keyboard is on, once an arrow has moved it; the open tool's until then. */
   const [fanAt, setFanAt] = useState<number | null>(null);
   /** A pill to give the keyboard to once the fan an arrow opened is on the page. */
   const pendingFocus = useRef<number | null>(null);
-  const entry = Math.max(0, tools.indexOf(rail));
+  // The keyboard enters the tools by the open tool, and the sections by the first of them.
+  const entry = ring === "sections" ? 0 : Math.max(0, tools.indexOf(rail));
   const roving = fanAt ?? entry;
   const intent = useRef<{ x: number; y: number; timer: ReturnType<typeof setTimeout> } | null>(
     null,
@@ -920,7 +969,6 @@ function RadialRail({
   /** A press closed the fan with the pointer still on the hub: resting there must not reopen it
    * until the pointer has left. */
   const quiet = useRef(false);
-  const fan = toolsRing(tools);
 
   const clearIntent = () => {
     if (intent.current) clearTimeout(intent.current.timer);
@@ -937,11 +985,13 @@ function RadialRail({
   };
   const openFan = () => {
     setFanAt(null);
+    setLevel(sectionsFan ? "sections" : "tools");
     setOpenFor(foldWhen);
   };
   const focusSpoke = (index: number) => {
     setFanAt(index);
-    fanBox.current?.querySelector<HTMLElement>(`[data-spoke="${tools[index]}"]`)?.focus();
+    const id = ids[index];
+    if (id) fanBox.current?.querySelector<HTMLElement>(`[data-spoke="${CSS.escape(id)}"]`)?.focus();
   };
   /** Whether focus going to `next` has left the hub and its pills — the group a keyboard is «in». */
   const outsideTheGroup = (next: EventTarget | null) =>
@@ -978,6 +1028,10 @@ function RadialRail({
     view.addEventListener("blur", fold);
     return () => view.removeEventListener("blur", fold);
   }, [open]);
+  /** Nothing is pointed at while the sections are not what the fan shows. */
+  useEffect(() => {
+    if (!(open && ring === "sections")) pointing.current?.(null);
+  }, [open, ring]);
   // The pill an arrow opened the fan for, once it is on the page to take the keyboard.
   useLayoutEffect(() => {
     if (!open || pendingFocus.current === null) return;
@@ -993,6 +1047,23 @@ function RadialRail({
     focusQuietly(hub.current);
     fold();
     if (item !== rail) onRailChange(item);
+  };
+  /** A section's pill: the fan folds and the canvas goes to the section and chooses it. */
+  const chooseSection = (sectionId: string) => {
+    fold();
+    pointing.current?.(null);
+    onChooseSection?.(sectionId);
+  };
+  /**
+   * **«Herramientas», the way back to the first ring** (ADR 0073). Today it simply swaps the rings;
+   * the swap becomes the third scene on sprint 37 día 5. A keyboard that pressed it lands on the open
+   * tool's pill, which is where it would have entered the tools.
+   */
+  const toTools = (pressed: HTMLElement) => {
+    const hadKeyboard = pressed.ownerDocument.activeElement === pressed;
+    setFanAt(null);
+    setLevel("tools");
+    if (hadKeyboard) pendingFocus.current = Math.max(0, tools.indexOf(rail));
   };
 
   return (
@@ -1042,7 +1113,7 @@ function RadialRail({
           if (open) fold();
         }}
         onKeyDown={(event) => {
-          const action = fanKeyAction(event, { count: tools.length, at: -1, entry, open });
+          const action = fanKeyAction(event, { count: ids.length, at: -1, entry, open });
           if (action.kind === "ignore") return;
           event.preventDefault();
           if (action.kind === "fold") fold();
@@ -1112,7 +1183,11 @@ function RadialRail({
           ref={fanBox}
           id="rail-fan"
           data-testid="rail-fan"
-          aria-label={es["editor.rail.fan.tools"]}
+          data-ring={ring}
+          data-arcs={ids.length > SINGLE_ARC_MAX ? 2 : 1}
+          aria-label={
+            es[ring === "sections" ? "editor.rail.fan.sections" : "editor.rail.fan.tools"]
+          }
           className="absolute left-0 z-[1] m-0 min-w-0 border-0 p-0"
           style={{
             top: `calc(50% - ${fan.hubY}px)`,
@@ -1136,8 +1211,8 @@ function RadialRail({
             const id = (event.target as HTMLElement).closest<HTMLElement>("[data-spoke]")?.dataset[
               "spoke"
             ];
-            const at = id ? tools.indexOf(id as RailItemId) : -1;
-            const action = fanKeyAction(event, { count: tools.length, at, entry, open });
+            const at = id ? ids.indexOf(id) : -1;
+            const action = fanKeyAction(event, { count: ids.length, at, entry, open });
             if (action.kind === "ignore") return;
             event.preventDefault();
             if (action.kind === "fold") {
@@ -1147,6 +1222,70 @@ function RadialRail({
           }}
         >
           {fan.spokes.map((spoke, index) => {
+            const tabIndex = index === roving ? 0 : -1;
+            const box = {
+              left: spoke.left,
+              top: spoke.top,
+              width: spoke.width,
+              height: spoke.height,
+            };
+            const face =
+              "ui-interactive ui-ripple flex h-full w-full items-center gap-2 rounded-full border px-3 text-[13px] shadow-ui-2 " +
+              "outline-2 outline-offset-2 outline-transparent group-focus-visible:outline-ui-brand ";
+            const resting =
+              "border-ui-border bg-ui-surface font-medium text-ui-ink group-hover:border-ui-border-strong group-hover:bg-ui-bg";
+            const buttonClass =
+              "group absolute flex cursor-pointer border-0 bg-transparent p-0 focus-visible:outline-none";
+            if (ring === "sections" && spoke.id === TOOLS_SPOKE) {
+              return (
+                <button
+                  key={spoke.id}
+                  type="button"
+                  data-spoke={spoke.id}
+                  tabIndex={tabIndex}
+                  className={buttonClass}
+                  style={box}
+                  onClick={(event) => toTools(event.currentTarget)}
+                >
+                  <span data-spoke-face="" className={`${face}${resting}`}>
+                    {TOOLS_ICON}
+                    <span className="truncate">{es["editor.rail.fan.toTools"]}</span>
+                  </span>
+                </button>
+              );
+            }
+            if (ring === "sections") {
+              const name = sectionName.get(spoke.id) ?? spoke.id;
+              return (
+                <button
+                  key={spoke.id}
+                  type="button"
+                  data-spoke={spoke.id}
+                  tabIndex={tabIndex}
+                  // The word on the pill is the section's name, which two sections can share (a
+                  // duplicated «Portada»); the name a reader hears says which one it is.
+                  aria-label={es["editor.rail.fan.sectionLabel"]
+                    .replace("{name}", name)
+                    .replace("{index}", String(index + 1))
+                    .replace("{count}", String(sections.length))}
+                  // The whole name, for an inner pill too narrow to show it (`INNER_PILL`).
+                  title={name}
+                  className={buttonClass}
+                  style={box}
+                  onPointerEnter={() => pointing.current?.(spoke.id)}
+                  onPointerLeave={() => pointing.current?.(null)}
+                  onFocus={() => pointing.current?.(spoke.id)}
+                  onClick={() => chooseSection(spoke.id)}
+                >
+                  <span
+                    data-spoke-face=""
+                    className={`${face.replace("text-[13px]", "text-[12px]")}justify-center ${resting}`}
+                  >
+                    <span className="truncate">{name}</span>
+                  </span>
+                </button>
+              );
+            }
             const item = spoke.id as RailItemId;
             const active = item === rail;
             return (
@@ -1157,24 +1296,18 @@ function RadialRail({
                 aria-pressed={active}
                 // One stop for the whole fan, the open tool's until an arrow moves it (ADR 0052's
                 // roving rule, one more time): Tab from the hub lands here, Tab again leaves.
-                tabIndex={index === roving ? 0 : -1}
-                className="group absolute flex cursor-pointer border-0 bg-transparent p-0 focus-visible:outline-none"
-                style={{
-                  left: spoke.left,
-                  top: spoke.top,
-                  width: spoke.width,
-                  height: spoke.height,
-                }}
+                tabIndex={tabIndex}
+                className={buttonClass}
+                style={box}
                 onClick={() => choose(item)}
               >
                 <span
                   data-spoke-face=""
                   className={
-                    "ui-interactive ui-ripple flex h-full w-full items-center gap-2 rounded-full border px-3 text-[13px] shadow-ui-2 " +
-                    "outline-2 outline-offset-2 outline-transparent group-focus-visible:outline-ui-brand " +
+                    face +
                     (active
                       ? "border-transparent bg-ui-brand-surface font-semibold text-ui-brand-deep"
-                      : "border-ui-border bg-ui-surface font-medium text-ui-ink group-hover:border-ui-border-strong group-hover:bg-ui-bg")
+                      : resting)
                   }
                 >
                   {RAIL_ICONS[item]}
@@ -1238,6 +1371,9 @@ export function EditorShell({
   railLayoutRefused = false,
   onRailLayoutChange,
   onRailKeyboard,
+  sections = [],
+  onPointSection,
+  onChooseSection,
   panel,
   panelKey,
   children,
@@ -1360,6 +1496,11 @@ export function EditorShell({
   /** Whether the keyboard is on the radial rail's hub or one of its pills — the help line says its
    * keys while it is (sprint 37 día 3). */
   onRailKeyboard?: (on: boolean) => void;
+  /** The open page's sections and what a pill of the radial rail's second ring does with one of them
+   * (sprint 37 día 4, ADR 0073): point at it as chrome, or choose it. */
+  sections?: readonly { id: string; name: string }[];
+  onPointSection?: (sectionId: string | null) => void;
+  onChooseSection?: (sectionId: string) => void;
   /** The side panel the current rail item opens, if it has one. Rendered beside the canvas rather
    * than over it, which is how mockup 13 draws the style panel: the preview narrows and stays
    * visible while a choice is being made about how it looks. */
@@ -1727,6 +1868,7 @@ export function EditorShell({
       <RailLayoutSwitch
         layout={railLayout}
         refused={railLayoutRefused}
+        tooMany={sections.length > SECTIONS_CAP}
         onChange={changeRailLayout}
       />
     );
@@ -2121,7 +2263,12 @@ export function EditorShell({
             rail={rail}
             tools={railTools}
             onRailChange={onRailChange}
-            foldWhen={`${rail}|${designTools}|${device}`}
+            // What the fan's pills say: the tool, the tools there are, the device, the page and its
+            // sections. Any of them different, and an open fan is closed by construction.
+            foldWhen={`${rail}|${designTools}|${device}|${currentPageId}|${sections.map((s) => s.id).join(",")}`}
+            sections={sections}
+            onPointSection={onPointSection}
+            onChooseSection={onChooseSection}
             leaves={<RailLeaves row={railRow} />}
             foot={
               <>

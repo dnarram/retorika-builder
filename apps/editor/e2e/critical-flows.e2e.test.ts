@@ -13,6 +13,7 @@ import {
   type Locator,
   type Page,
 } from "@playwright/test";
+import catalogEs from "@retorika/catalog/locales/es" with { type: "json" };
 import { GALLERY_SAMPLE_COUNT } from "@retorika/generator";
 import { HEADER_SCRIPT } from "@retorika/renderer";
 import {
@@ -54,7 +55,14 @@ import {
   NARROWEST_WIDTH,
   PHONE_BREAKPOINT,
 } from "../src/editor/overflowCheck.ts";
-import { FAN_GRACE_MS, HUB_DISC, HUB_INTENT_MS, toolsRing } from "../src/editor/radialMenu.ts";
+import {
+  FAN_GRACE_MS,
+  HUB_DISC,
+  HUB_INTENT_MS,
+  SECTIONS_CAP,
+  TOOLS_SPOKE,
+  toolsRing,
+} from "../src/editor/radialMenu.ts";
 import { BASE_URL, QUESTIONNAIRE_URL, startEditorServer, stopEditorServer } from "./server.ts"; /**
  * The preview frame. One per editor, three on the landing page's cards.
  *
@@ -30484,4 +30492,192 @@ describe("sprint 37 día 3 — el eje con teclado y con el dedo", () => {
       await context.close();
     }
   }, 180_000);
+});
+
+/**
+ * **Sprint 37 día 4 — el segundo nivel son las secciones** (ADR 0073). With «Secciones» as the hub,
+ * the fan opens on the page's sections — eight on one arc, a second arc 56 px further out up to
+ * sixteen, «Herramientas» last and lowest — on the page David named as the subject, twelve sections
+ * long. Built the way an owner builds it, by duplicating; the names are checked against the catalog
+ * through the page's own `data-preset`, which is not where the pills read them from.
+ */
+describe("sprint 37 día 4 — el segundo nivel son las secciones", () => {
+  /** Duplicates the cover until the open page has `count` sections, each duplicate one edit. */
+  async function pageOf(page: Page, count: number): Promise<void> {
+    const frame = page.frameLocator(PREVIEW).first();
+    const sections = frame.locator("[data-section]");
+    await frame.locator('[data-section="sec-cover"]').click({ position: { x: 12, y: 12 } });
+    while ((await sections.count()) < count) {
+      await afterTheEdit(page, () =>
+        frame
+          .locator('[data-section="sec-cover"] .rb-action[aria-label="Duplicar esta sección"]')
+          .click(),
+      );
+    }
+    expect(await sections.count()).toBe(count);
+    await screenStill(page);
+  }
+
+  /** The fan's pills as drawn, and the page's sections as the page has them. */
+  async function fanAndPage(page: Page) {
+    return page.evaluate(() => {
+      const fan = document.querySelector('[data-testid="rail-fan"]') as HTMLElement | null;
+      const frameDoc = document.querySelector<HTMLIFrameElement>(
+        '[data-testid="canvas-card"] iframe:not([aria-hidden="true"])',
+      )?.contentDocument;
+      return {
+        ring: fan?.dataset["ring"] ?? null,
+        arcs: fan?.dataset["arcs"] ?? null,
+        pills: fan
+          ? [...fan.querySelectorAll<HTMLElement>("[data-spoke]")].map((pill) => ({
+              id: pill.dataset["spoke"] ?? "",
+              word: pill.querySelector("[data-spoke-face]")?.textContent?.trim() ?? "",
+              top: pill.getBoundingClientRect().top,
+            }))
+          : [],
+        page: frameDoc
+          ? [...frameDoc.querySelectorAll<HTMLElement>("[data-section]")].map((section) => ({
+              id: section.dataset["section"] ?? "",
+              preset: section.dataset["preset"] ?? "",
+            }))
+          : [],
+        pointed: frameDoc
+          ? [...frameDoc.querySelectorAll<HTMLElement>(".rb-pointed")].map(
+              (el) => el.dataset["section"] ?? "?",
+            )
+          : [],
+      };
+    });
+  }
+
+  const pointedNow = async (page: Page) => (await fanAndPage(page)).pointed;
+
+  /** Rest the pointer on a pill's middle. */
+  async function restOn(page: Page, id: string): Promise<void> {
+    const box = await page.locator(`${RAIL_FAN} [data-spoke="${id}"]`).boundingBox();
+    if (!box) throw new Error(`the pill «${id}» is not drawn`);
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  }
+
+  it("con «Secciones» como eje, la web de 12 abre sus secciones: señalar no edita, pulsar elige", async () => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+    const page = await context.newPage();
+    try {
+      await intoTheRadialEditor(page);
+      await pageOf(page, 12);
+      await openByResting(page);
+      const seen = await fanAndPage(page);
+      expect([seen.ring, seen.arcs]).toEqual(["sections", "2"]);
+      expect(seen.pills.map((p) => p.id)).toEqual([...seen.page.map((s) => s.id), TOOLS_SPOKE]);
+      const names = catalogEs as Record<string, string>;
+      expect(seen.pills.slice(0, -1).map((p) => p.word)).toEqual(
+        seen.page.map((s) => names[`section.${s.preset}.name`] ?? `?${s.preset}`),
+      );
+      const last = seen.pills[seen.pills.length - 1];
+      expect(last?.word).toBe("Herramientas");
+      for (const pill of seen.pills) {
+        expect(last?.top ?? -1, `«Herramientas» is above ${pill.id}`).toBeGreaterThanOrEqual(
+          pill.top - 0.5,
+        );
+      }
+      await axeSerious(page, "las secciones del menú radial a 1280");
+
+      // Pointing draws the section dashed in the canvas, one at a time, and edits nothing.
+      const before = await editSerialOf(page);
+      const inner = seen.page[5]?.id ?? "";
+      const outer = seen.page[9]?.id ?? "";
+      await restOn(page, inner);
+      await expect.poll(() => pointedNow(page)).toEqual([inner]);
+      await restOn(page, outer);
+      await expect.poll(() => pointedNow(page)).toEqual([outer]);
+      /*
+       * **And it survives the section being drawn again under the resting pointer.** Whatever
+       * rebuilds a section — a patch, the frame's document replaced when a photograph's bytes arrive
+       * — builds it from the renderer, without the editor's chrome classes; the redraw that follows
+       * puts the pointing back. Simulated here: the section replaced by a copy without the class,
+       * then a redraw by a change of zoom (a narrower window), with the pointer never moved.
+       */
+      await page
+        .frameLocator(PREVIEW)
+        .first()
+        .locator(`[data-section="${outer}"]`)
+        .evaluate((el) => {
+          const copy = el.cloneNode(true) as HTMLElement;
+          copy.classList.remove("rb-pointed");
+          el.replaceWith(copy);
+        });
+      expect(await pointedNow(page)).toEqual([]);
+      await page.setViewportSize({ width: 1260, height: 800 });
+      await expect
+        .poll(() => pointedNow(page), { message: "the redraw did not point again" })
+        .toEqual([outer]);
+      await page.setViewportSize({ width: 1280, height: 800 });
+      await screenStill(page);
+      // Off the pills, onto the hub: nothing is pointed at, and nothing was edited.
+      await page.mouse.move(...(Object.values(await hubCentre(page)) as [number, number]));
+      await expect.poll(() => pointedNow(page)).toEqual([]);
+      expect(await editSerialOf(page), "pointing at a section edited the document").toBe(before);
+
+      // Pressing a section's pill: the fan folds, the canvas goes to it, chooses it, and the
+      // keyboard is on it — and still nothing was edited.
+      await expect(page.locator(RAIL_FAN)).toHaveCount(1);
+      const target = seen.page[8]?.id ?? "";
+      const pill = await page.locator(`${RAIL_FAN} [data-spoke="${target}"]`).boundingBox();
+      if (!pill) throw new Error("no pill");
+      await page.mouse.click(pill.x + pill.width / 2, pill.y + pill.height / 2);
+      await expect(page.locator(RAIL_FAN)).toHaveCount(0);
+      const chosen = await page
+        .frameLocator(PREVIEW)
+        .first()
+        .locator(`[data-section="${target}"]`)
+        .evaluate((el) => ({
+          selected: el.classList.contains("rb-selected"),
+          focused: el.ownerDocument.activeElement === el,
+          top: Math.round(el.getBoundingClientRect().top),
+          margin: Number.parseFloat(getComputedStyle(el).scrollMarginTop) || 0,
+          pointed: el.ownerDocument.querySelectorAll(".rb-pointed").length,
+        }));
+      expect(chosen.selected, "the section was not chosen").toBe(true);
+      expect(chosen.focused, "the keyboard is not on the section").toBe(true);
+      expect(
+        Math.abs(chosen.top - chosen.margin),
+        `its top is at ${chosen.top}`,
+      ).toBeLessThanOrEqual(1);
+      expect(chosen.pointed).toBe(0);
+      expect(await editSerialOf(page), "choosing a section edited the document").toBe(before);
+
+      // «Herramientas» turns the fan to the tools, today without a movement.
+      await openByResting(page);
+      await pressSpoke(page, TOOLS_SPOKE);
+      await expect(page.locator(RAIL_FAN)).toHaveAttribute("data-ring", "tools");
+      expect((await fanAndPage(page)).pills.map((p) => p.id)).toEqual(SIX_TOOLS);
+      expect(
+        await page.evaluate(
+          () =>
+            (document.querySelector('[data-testid="rail-fan"]') as HTMLElement).getAnimations({
+              subtree: true,
+            }).length,
+        ),
+      ).toBe(0);
+      // With another tool as the hub, the fan opens on the tools.
+      await pressSpoke(page, "style");
+      await expect(page.locator(RAIL_HUB)).toHaveAttribute("data-tool", "style");
+      await page.mouse.move(1200, 400);
+      await openByResting(page);
+      await expect(page.locator(RAIL_FAN)).toHaveAttribute("data-ring", "tools");
+      await pressSpoke(page, "sections");
+      await page.mouse.move(1200, 400);
+
+      // Past the cap, the sections are not offered: the fan opens on the tools, and the switch says why.
+      await pageOf(page, SECTIONS_CAP + 1);
+      await openByResting(page);
+      await expect(page.locator(RAIL_FAN)).toHaveAttribute("data-ring", "tools");
+      await expect(page.getByRole("switch", { name: "Menú radial" })).toHaveAttribute(
+        "title",
+        /más de 16 secciones/,
+      );
+    } finally {
+      await context.close();
+    }
+  }, 300_000);
 });
