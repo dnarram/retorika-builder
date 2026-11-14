@@ -97,8 +97,9 @@ other rises into place; the canvas takes its new room once. Under reduced motion
 ## What this does not decide
 
 - ~~**The keyboard and the finger on the hub**~~ — decided on sprint 37 día 3; see the note below.
-- **The second level** — the page's sections around «Secciones», and the way back to the tools — which
-  is ADR 0073's (sprint 37 día 4).
+- **The second level** — the page's sections around «Secciones», and the way back to the tools —
+  decided in [ADR 0073](0073-the-hub-is-the-open-tool-and-secciones-has-a-second-level.md) (sprint 37
+  día 4).
 - **How the fan moves**: the pills sprouting from the hub, the change of ring as a named scene. That is
   motion, which lives in REVIEW's budget (ADR 0015), not here.
 - **Where the choice is kept beyond this browser.**

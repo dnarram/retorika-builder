@@ -117,3 +117,12 @@ every patch is not a render on every patch.
   development's, and is one pull request from changing.
 
 **Still `proposed`.** This ADR until David signs it.
+
+## Note — the radial rail is a control, not an instruction (14 November 2026, sprint 37 día 4)
+
+The radial rail's fan ([ADR 0072](0072-the-rail-has-two-layouts-and-the-layout-is-the-owners-in-this-browser.md),
+[ADR 0073](0073-the-hub-is-the-open-tool-and-secciones-has-a-second-level.md)) is drawn over the page's
+left edge while it is open. It is not covered by this ADR's rule and does not break it: its pills are
+controls with a name each, as a drop zone's (ADR 0066) are, not words telling the person what to do — and
+at rest it is not on the page at all. The words about it (its keys) are the help line's, as every other
+key is.

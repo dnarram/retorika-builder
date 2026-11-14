@@ -9492,3 +9492,53 @@ ratón no abre por intención; vive en su propia caminata a 1280.
 
 **Lo que no entra hoy, con nombre**: el segundo nivel de las secciones (día 4); el movimiento (día 5); el
 Escape y la vuelta del foco en el raíl fijo (backlog).
+
+### Día 4 — el segundo nivel son las secciones (PR de `feat/el-segundo-nivel-son-las-secciones`)
+
+**Lo que hay** ([ADR 0073](../decisions/0073-the-hub-is-the-open-tool-and-secciones-has-a-second-level.md)).
+Con «Secciones» como eje, el abanico se abre en las secciones de la página abierta, en su orden y con los
+nombres del catálogo, y «Herramientas» como última píldora. Hasta ocho secciones en un arco; desde nueve,
+las ocho primeras en un arco interior y el resto en uno exterior 56 px más afuera; por encima de dieciséis
+el abanico se abre en las herramientas y el `title` del interruptor dice por qué. Pasar por una píldora, o
+llegar a ella con el teclado, dibuja la sección discontinua en el lienzo —«podrías», el par que los textos
+ya usan con el «es esto» continuo de la elegida— como cromo, sin parche. Pulsarla lleva el lienzo a la
+sección, la elige y deja el teclado en ella. «Herramientas» cambia el abanico a las herramientas, hoy en
+seco. El abanico se pliega si cambia la página o sus secciones.
+
+**Medido antes de construir, y corregido dos veces antes de contar nada.**
+
+1. **El arco exterior en la rejilla del interior.** Repartido por toda la altura, como el de las
+   herramientas, una píldora exterior quedaba a 2 px en horizontal y 5 en vertical de una interior en la
+   diagonal (cuentas a mano, doce secciones, antes de escribir código). En la misma rejilla de filas que el
+   interior y alineado abajo, cada píldora exterior comparte altura con una interior y ninguna otra, los 56
+   px de los radios las separan —12 px en la fila más justa con las anchuras de hoy, más lejos del medio—,
+   y «Herramientas» queda la última y la más baja. La prueba lo asevera de 1 a 16 secciones, contra las
+   cajas y no contra números copiados.
+2. **Los anchos, por la primera captura.** A 120 px, «Fotos de trabajos» y «Herramientas» salían cortadas;
+   las exteriores pasan a 150. Las interiores no pueden pasar de unos 100: se apoyan en su arco por el medio
+   y los 56 px tienen que caber su mitad y el hueco; quedan en 96 (8 px de holgura en la fila central), a
+   12 px de letra, con el nombre entero en el `title` y en el nombre accesible, que dice además cuál de
+   cuántas es («Portada, sección 3 de 12»: dos secciones pueden llamarse igual). Doce secciones dan un
+   abanico de 360 × 266 px; dieciséis, 360 × 300.
+
+**El anillo de herramientas sale idéntico al del día 2**: los dos anillos los coloca ahora una sola función
+(`fanOf`), y sus números —276 × 261 con seis, 314 × 330 con ocho— no se movieron un píxel.
+
+**La caminata** (`sprint 37 día 4 — el segundo nivel son las secciones`) construye la página de doce como
+la construiría el dueño, duplicando la portada, y compara los nombres de las píldoras con el catálogo a
+través del `data-preset` de la propia página, que no es de donde las píldoras los leen. Asevera: dos arcos,
+trece píldoras en el orden de la página, «Herramientas» última y la más baja; axe con el anillo abierto;
+señalar dibuja una sola sección y luego otra; **el señalado sobrevive a que la sección se dibuje de
+nuevo** (simulado: la sección sustituida por una copia sin la clase y un redibujo por cambio de zoom, con
+el puntero quieto); fuera de las píldoras no queda ninguna; señalar y elegir no mueven el serial de
+edición; elegir pliega, elige, deja el teclado en la sección y su borde superior en el del marco;
+«Herramientas» cambia a las seis herramientas sin ninguna animación; con «Estilo» como eje se abren las
+herramientas; y con diecisiete secciones, las herramientas y el `title` del interruptor.
+
+**Saboteos, cada uno en rojo por su motivo**: «Herramientas» primera (la caminata y la prueba de la
+geometría); sin tope (las dos); sin el redibujo del señalado, «el redibujo no volvió a señalar»; señalar como
+edición, «señalar una sección editó el documento»; sin el foco, «el teclado no está en la sección»; sin
+llevarla a la vista, «su borde superior está a 5153».
+
+**Lo que no entra hoy, con nombre**: por qué sección entra el teclado en el anillo (la primera; la elegida
+sería más amable y la cáscara no sabe cuál es); el movimiento del cambio de anillo (día 5).
