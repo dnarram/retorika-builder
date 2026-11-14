@@ -1223,6 +1223,114 @@
   animation: none;
 }
 
+/**
+ * ## The radial rail moves (sprint 37 día 5, ADR 0072)
+ *
+ * **What moves is what is seen, never what is pressed** (David's adjustment approving the sprint).
+ * The fan's buttons sit at their final boxes from their first frame; their faces are a layer of their
+ * own (`[data-fan-faces]`, blind to the pointer), and the faces are what arrive.
+ *
+ * **A face sprouts from the hub** (`ui-spoke-in`): from the hub's centre — `--ui-spoke-dx/dy`, its
+ * own offset, written on it by the shell as a position and never as a time — at three fifths of its
+ * size and transparent, to its place, in `--ui-base` on the spring, because it lands. One after
+ * another in the rail's order, `--ui-stagger` apart, the ninth and every one after it with the
+ * eighth: at rest within 8 × 40 + 180 = 500 ms, inside the budget's 600.
+ */
+@keyframes ui-spoke-in {
+  from {
+    opacity: 0;
+    transform: translate(var(--ui-spoke-dx, 0px), var(--ui-spoke-dy, 0px)) scale(0.6);
+  }
+}
+
+@utility ui-spoke-in {
+  animation: ui-spoke-in var(--ui-base) var(--ui-spring) backwards;
+  animation-delay: var(--ui-row-delay, 0ms);
+}
+
+/* The first face's place is zero, said rather than left unset: unset it inherits the strip's own
+   place in the queue of an editor that arrived by the canvas scene (280 ms), measured on the day. */
+[data-fan-faces] > :nth-child(1) {
+  --ui-row-delay: 0ms;
+}
+[data-fan-faces] > :nth-child(2) {
+  --ui-row-delay: calc(var(--ui-stagger) * 1);
+}
+[data-fan-faces] > :nth-child(3) {
+  --ui-row-delay: calc(var(--ui-stagger) * 2);
+}
+[data-fan-faces] > :nth-child(4) {
+  --ui-row-delay: calc(var(--ui-stagger) * 3);
+}
+[data-fan-faces] > :nth-child(5) {
+  --ui-row-delay: calc(var(--ui-stagger) * 4);
+}
+[data-fan-faces] > :nth-child(6) {
+  --ui-row-delay: calc(var(--ui-stagger) * 5);
+}
+[data-fan-faces] > :nth-child(7) {
+  --ui-row-delay: calc(var(--ui-stagger) * 6);
+}
+[data-fan-faces] > :nth-child(8) {
+  --ui-row-delay: calc(var(--ui-stagger) * 7);
+}
+[data-fan-faces] > :nth-child(n + 9) {
+  --ui-row-delay: calc(var(--ui-stagger) * 8);
+}
+
+/**
+ * **The fan folding** is a copy (`editor/leaving.ts`, kind `fan`) closing toward the hub where it
+ * stood — `--ui-fast`, never the spring, since it leaves.
+ */
+@keyframes ui-fold-out {
+  to {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+}
+
+[data-leaving="fan"] {
+  animation: ui-fold-out var(--ui-fast) var(--ui-ease) forwards;
+  transform-origin: 28px 50%;
+}
+
+/**
+ * **The third scene, `rb-scene-fan`: one ring folds into the hub while the other sprouts from it**
+ * (David, 13 November 2026: «cambiar de nivel es una transformación en la que los radios de un
+ * anillo se pliegan hacia el eje mientras los del otro brotan»). The faces' layer of the ring that
+ * goes leaves as a copy (`editor/leaving.ts`, kind `ring`) folding into the hub on the shape curve;
+ * the layer of the ring that comes sprouts from it on the spring; both in `--ui-scene`, both by
+ * transform and opacity, both about the hub's centre (written on the layer as `transform-origin`).
+ *
+ * **In CSS, and not as a view transition of the document**, which the plan named and which was
+ * measured against on the day: for the length of a document's view transition Chromium hit-tests the
+ * whole page to its root — `elementFromPoint` answered `<html>` at a pill's centre and at
+ * «Descargar» in every one of its frames — so nothing in the editor took a press for 400 ms, the
+ * opposite of what David asked of this control («la caja que se pulsa no viaja»). Here the buttons
+ * never stop being buttons.
+ */
+.rb-scene-fan[data-ring-arrival="scene"] {
+  animation: ui-fan-sprout var(--ui-scene) var(--ui-spring) backwards;
+}
+
+.rb-scene-fan[data-leaving="ring"] {
+  animation: ui-fan-fold var(--ui-scene) var(--ui-ease-shape) forwards;
+}
+
+@keyframes ui-fan-fold {
+  to {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+}
+
+@keyframes ui-fan-sprout {
+  from {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+}
+
 /* The building screen's veil, while its card contracts toward «Descargar» (`ui-scene-build`). */
 [data-leaving="build"] {
   animation: ui-fade-out var(--ui-fast) var(--ui-ease) forwards;
@@ -1417,6 +1525,14 @@
   ::view-transition-old(rb-scene-canvas),
   ::view-transition-new(rb-scene-canvas) {
     animation-duration: var(--ui-fast);
+    animation-timing-function: var(--ui-ease);
+  }
+
+  /* The rings swapping (sprint 37 día 5): the new ring fades in, in place; the old one, which would
+     only travel, is not drawn leaving at all (`leave` draws no copy under reduced motion). */
+  .rb-scene-fan[data-ring-arrival="scene"] {
+    animation-name: ui-fade-in;
+    animation-duration: var(--ui-fast) !important;
     animation-timing-function: var(--ui-ease);
   }
 

@@ -60,6 +60,7 @@ import {
   HUB_DISC,
   HUB_INTENT_MS,
   SECTIONS_CAP,
+  sectionsRing,
   TOOLS_SPOKE,
   toolsRing,
 } from "../src/editor/radialMenu.ts";
@@ -30567,7 +30568,11 @@ describe("sprint 37 día 4 — el segundo nivel son las secciones", () => {
         pills: fan
           ? [...fan.querySelectorAll<HTMLElement>("[data-spoke]")].map((pill) => ({
               id: pill.dataset["spoke"] ?? "",
-              word: pill.querySelector("[data-spoke-face]")?.textContent?.trim() ?? "",
+              // The face is its own layer since día 5 (what is seen, apart from what is pressed).
+              word:
+                fan
+                  .querySelector(`[data-face="${CSS.escape(pill.dataset["spoke"] ?? "")}"]`)
+                  ?.textContent?.trim() ?? "",
               top: pill.getBoundingClientRect().top,
             }))
           : [],
@@ -30687,14 +30692,15 @@ describe("sprint 37 día 4 — el segundo nivel son las secciones", () => {
       await pressSpoke(page, TOOLS_SPOKE);
       await expect(page.locator(RAIL_FAN)).toHaveAttribute("data-ring", "tools");
       expect((await fanAndPage(page)).pills.map((p) => p.id)).toEqual(SIX_TOOLS);
+      // Since día 5 the swap is the third scene: the tools' faces sprout as one ring (it was a cut
+      // on día 4, and this line said so).
       expect(
         await page.evaluate(
           () =>
-            (document.querySelector('[data-testid="rail-fan"]') as HTMLElement).getAnimations({
-              subtree: true,
-            }).length,
+            getComputedStyle(document.querySelector("[data-fan-faces]") as HTMLElement)
+              .animationName,
         ),
-      ).toBe(0);
+      ).toBe("ui-fan-sprout");
       // With another tool as the hub, the fan opens on the tools.
       await pressSpoke(page, "style");
       await expect(page.locator(RAIL_HUB)).toHaveAttribute("data-tool", "style");
@@ -30716,4 +30722,323 @@ describe("sprint 37 día 4 — el segundo nivel son las secciones", () => {
       await context.close();
     }
   }, 300_000);
+});
+
+/**
+ * **Sprint 37 día 5 — los anillos se transforman.** The faces sprout from the hub one after another
+ * when the fan opens; changing ring is the third scene — the ring that goes folds into the hub while
+ * the other sprouts from it, 400 ms — and through all of it **the box that is pressed never travels**
+ * (David's adjustment approving the sprint): a press on a pill's final place lands before its face has
+ * arrived, and during the scene. In CSS rather than as a view transition of the document, measured on
+ * the day: during one, Chromium hit-tests the whole page to its root and nothing takes a press.
+ */
+describe("sprint 37 día 5 — los anillos se transforman", () => {
+  /** Where a tool's pill will be on screen, from the module and the hub's centre — before it is drawn. */
+  async function finalBoxOf(page: Page, id: string) {
+    const ring = toolsRing(SIX_TOOLS);
+    const spoke = ring.spokes.find((s) => s.id === id);
+    if (!spoke) throw new Error(`no ${id} in the tools ring`);
+    const hub = await hubCentre(page);
+    return {
+      x: hub.x - ring.hubX + spoke.left + spoke.width / 2,
+      y: hub.y - ring.hubY + spoke.top + spoke.height / 2,
+    };
+  }
+
+  it("cambiar de anillo: uno se pliega al eje mientras el otro brota, nunca un hueco, el eje quieto", async () => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+    const page = await context.newPage();
+    try {
+      await intoTheRadialEditor(page);
+      await openByResting(page);
+      await screenStill(page);
+      await page.evaluate(() => {
+        type Frame = {
+          hub: string;
+          shown: number;
+          old: number;
+          sprouting: number;
+          moving: boolean;
+        };
+        const w = window as unknown as { __frames: Frame[] };
+        w.__frames = [];
+        const started = performance.now();
+        const tick = () => {
+          const hub = document.querySelector('[data-testid="rail-hub"]')?.getBoundingClientRect();
+          const layer = document.querySelector<HTMLElement>("[data-fan-faces]");
+          const copy = document.querySelector<HTMLElement>('[data-leaving="ring"]');
+          const running = (el: Element | null) =>
+            el?.getAnimations().filter((a) => a.playState === "running") ?? [];
+          w.__frames.push({
+            hub: hub ? `${hub.left},${hub.top},${hub.width},${hub.height}` : "none",
+            shown: layer ? Number(getComputedStyle(layer).opacity) : 0,
+            old: copy ? Number(getComputedStyle(copy).opacity) : 0,
+            // Only a face's own entrance: a face under the pointer changes colour by a transition,
+            // which is not a movement.
+            sprouting: layer
+              ? [...layer.querySelectorAll("[data-spoke-face]")].filter((f) =>
+                  running(f).some((a) => (a as CSSAnimation).animationName === "ui-spoke-in"),
+                ).length
+              : 0,
+            moving: !!copy || running(layer).length > 0,
+          });
+          if (performance.now() - started < 900) requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      });
+      await pressSpoke(page, TOOLS_SPOKE);
+      await page.waitForTimeout(1_000); // the sampler's window, not a wait for an effect
+      const frames = await page.evaluate(
+        () =>
+          (
+            window as unknown as {
+              __frames: {
+                hub: string;
+                shown: number;
+                old: number;
+                sprouting: number;
+                moving: boolean;
+              }[];
+            }
+          ).__frames,
+      );
+      const scene = frames.filter((f) => f.moving);
+      expect(scene.length, "no frame of the scene was seen").toBeGreaterThan(10);
+      // Never a hole: in every frame of the scene one ring or the other is on the screen.
+      expect(scene.filter((f) => Math.max(f.shown, f.old) <= 0)).toEqual([]);
+      // The old ring was really seen leaving, and the new one really arrived.
+      expect(Math.max(...scene.map((f) => f.old))).toBeGreaterThan(0.5);
+      expect(frames.at(-1)?.shown).toBe(1);
+      // The faces do not also play their own entrance: the ring sprouts once, as a whole.
+      expect(
+        scene.filter((f) => f.sprouting > 0),
+        "a face moved twice",
+      ).toEqual([]);
+      // The hub never moves.
+      expect([...new Set(frames.map((f) => f.hub))]).toHaveLength(1);
+      // At rest within the scene's time, in the boxes the module says.
+      expect(scene.length * 16.7).toBeLessThan(400 + 150);
+      await expect(page.locator(RAIL_FAN)).toHaveAttribute("data-ring", "tools");
+      const drawn = await page.evaluate(() => {
+        const fan = document.querySelector('[data-testid="rail-fan"]') as HTMLElement;
+        const box = fan.getBoundingClientRect();
+        return [...fan.querySelectorAll<HTMLElement>("[data-spoke]")].map((b) => {
+          const r = b.getBoundingClientRect();
+          return {
+            id: b.dataset["spoke"],
+            left: Math.round(r.left - box.left),
+            top: Math.round(r.top - box.top),
+          };
+        });
+      });
+      const want = toolsRing(SIX_TOOLS).spokes.map((s) => ({ id: s.id, left: s.left, top: s.top }));
+      expect(drawn).toEqual(want);
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
+
+  it("la caja que se pulsa no viaja: se pulsa donde va a estar, antes de que llegue y durante la escena", async () => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+    const page = await context.newPage();
+    try {
+      await intoTheRadialEditor(page);
+      // In the page: when the fan arrives, and what each press found the scene doing.
+      await page.evaluate(() => {
+        const w = window as unknown as {
+          __fanAt: number;
+          __presses: { at: number; scene: boolean; face: string }[];
+        };
+        w.__fanAt = 0;
+        w.__presses = [];
+        new MutationObserver(() => {
+          if (!w.__fanAt && document.querySelector('[data-testid="rail-fan"]'))
+            w.__fanAt = performance.now();
+          if (!document.querySelector('[data-testid="rail-fan"]')) w.__fanAt = 0;
+        }).observe(document.body, { childList: true, subtree: true });
+        document.addEventListener(
+          "pointerdown",
+          (event) => {
+            const pill = (event.target as HTMLElement).closest<HTMLElement>("[data-spoke]");
+            const face = pill
+              ? document.querySelector(`[data-face="${CSS.escape(pill.dataset["spoke"] ?? "")}"]`)
+              : null;
+            w.__presses.push({
+              at: performance.now() - w.__fanAt,
+              scene: !!document.querySelector('[data-leaving="ring"]'),
+              face: face ? getComputedStyle(face).opacity : "none",
+            });
+          },
+          true,
+        );
+      });
+
+      // 1. **David's test**: the hub pressed, and at once the last face's box — «Herramientas», the
+      // one that arrives last — where it is going to be, before its face is there.
+      await screenStill(page);
+      const ids = await page
+        .frameLocator(PREVIEW)
+        .first()
+        .locator("[data-section]")
+        .evaluateAll((all) => all.map((el) => (el as HTMLElement).dataset["section"] ?? ""));
+      const ring = sectionsRing(ids);
+      if (!ring) throw new Error("no sections ring for this page");
+      const last = ring.spokes[ring.spokes.length - 1];
+      if (last?.id !== TOOLS_SPOKE) throw new Error("«Herramientas» is not the last pill");
+      const hub = await hubCentre(page);
+      const back = {
+        x: hub.x - ring.hubX + last.left + last.width / 2,
+        y: hub.y - ring.hubY + last.top + last.height / 2,
+      };
+      await page.mouse.click(hub.x, hub.y);
+      await page.mouse.click(back.x, back.y);
+      await expect(page.locator(RAIL_FAN)).toHaveAttribute("data-ring", "tools");
+      const early = await page.evaluate(
+        () =>
+          (window as unknown as { __presses: { at: number; face: string }[] }).__presses.at(-1) ??
+          null,
+      );
+      expect(early, "no press was recorded").not.toBeNull();
+      expect(
+        Number(early?.face),
+        `the face was already there (opacity ${early?.face}, ${Math.round(early?.at ?? 0)} ms after the fan): the press proves nothing`,
+      ).toBeLessThan(1);
+
+      // 2. And during the scene that press began: «Páginas», at once, where it is going to be.
+      const pages = await finalBoxOf(page, "pages");
+      await page.mouse.click(pages.x, pages.y);
+      await expect(page.locator(RAIL_HUB)).toHaveAttribute("data-tool", "pages");
+      const duringScene = await page.evaluate(
+        () => (window as unknown as { __presses: { scene: boolean }[] }).__presses.at(-1)?.scene,
+      );
+      expect(duringScene, "the press came after the scene: it proves nothing").toBe(true);
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
+
+  it("los radios brotan del eje uno tras otro, se quedan quietos, y el abanico se va plegándose", async () => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+    const page = await context.newPage();
+    try {
+      await intoTheRadialEditor(page);
+      await openByResting(page);
+      const arriving = await page.evaluate(() =>
+        [...document.querySelectorAll<HTMLElement>("[data-fan-faces] [data-spoke-face]")].map(
+          (f) => {
+            const style = getComputedStyle(f);
+            return { name: style.animationName, delay: style.animationDelay };
+          },
+        ),
+      );
+      expect(arriving.length).toBeGreaterThan(5);
+      expect(arriving.map((a) => a.name)).toEqual(arriving.map(() => "ui-spoke-in"));
+      expect(arriving.map((a) => a.delay)).toEqual(
+        arriving.map((_, i) => `${(Math.min(i, 8) * 40) / 1000}s`),
+      );
+      await screenStill(page);
+      // Each sprouted from the hub: its offset is the hub's centre from its own, and then it is still.
+      const still = await page.evaluate(
+        () =>
+          new Promise<string[]>((resolve) => {
+            const hub = document
+              .querySelector('[data-testid="rail-hub"] span')
+              ?.getBoundingClientRect();
+            const read = () =>
+              [...document.querySelectorAll<HTMLElement>("[data-fan-faces] [data-spoke-face]")].map(
+                (f) => {
+                  const r = f.getBoundingClientRect();
+                  const style = getComputedStyle(f);
+                  const dx = Number.parseFloat(style.getPropertyValue("--ui-spoke-dx"));
+                  const dy = Number.parseFloat(style.getPropertyValue("--ui-spoke-dy"));
+                  const off =
+                    hub &&
+                    (Math.abs(hub.left + hub.width / 2 - (r.left + r.width / 2) - dx) > 1.5 ||
+                      Math.abs(hub.top + hub.height / 2 - (r.top + r.height / 2) - dy) > 1.5);
+                  return `${Math.round(r.left)},${Math.round(r.top)}${off ? " OFF" : ""}`;
+                },
+              );
+            const first = read();
+            requestAnimationFrame(() =>
+              requestAnimationFrame(() => {
+                const second = read();
+                resolve(first.map((box, i) => (box === second[i] ? box : `${box} → ${second[i]}`)));
+              }),
+            );
+          }),
+      );
+      expect(still.filter((box) => box.includes("OFF") || box.includes("→"))).toEqual([]);
+
+      // Folding: a copy closes where the fan stood, and is gone well inside a third of a second.
+      await page.evaluate(() => {
+        const w = window as unknown as { __copy: number[] };
+        w.__copy = [];
+        const t0 = performance.now();
+        new MutationObserver(() => {
+          w.__copy.push(
+            document.querySelector('[data-leaving="fan"]') ? performance.now() - t0 : -1,
+          );
+        }).observe(document.body, { childList: true, subtree: true });
+      });
+      await pressSpoke(page, TOOLS_SPOKE);
+      await pressSpoke(page, "style");
+      await expect(page.locator(RAIL_FAN)).toHaveCount(0);
+      await expect
+        .poll(() => page.locator('[data-leaving="fan"]').count(), { timeout: 600 })
+        .toBe(0);
+      const seen = await page.evaluate(() => (window as unknown as { __copy: number[] }).__copy);
+      expect(
+        seen.some((t) => t >= 0),
+        "the fan did not leave by its copy",
+      ).toBe(true);
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
+
+  it("y con menos movimiento: todo llega sin recorrido, y el cambio de anillo es un fundido de 120 ms", async () => {
+    const context = await browser.newContext({
+      viewport: { width: 1280, height: 800 },
+      reducedMotion: "reduce",
+    });
+    const page = await context.newPage();
+    try {
+      await intoTheRadialEditor(page);
+      await openByResting(page);
+      await screenStill(page);
+      expect(
+        await page.evaluate(() =>
+          [...document.querySelectorAll<HTMLElement>("[data-spoke-face]")].every(
+            (f) => getComputedStyle(f).opacity === "1",
+          ),
+        ),
+      ).toBe(true);
+      await pressSpoke(page, TOOLS_SPOKE);
+      const scene = await page.evaluate(() => {
+        const layer = document.querySelector<HTMLElement>("[data-fan-faces]");
+        const longest = Math.max(
+          0,
+          ...document.getAnimations().map((a) => Number(a.effect?.getTiming().duration) || 0),
+        );
+        return {
+          name: layer ? getComputedStyle(layer).animationName : "none",
+          duration: layer ? getComputedStyle(layer).animationDuration : "none",
+          copies: document.querySelectorAll('[data-leaving="ring"]').length,
+          longest,
+        };
+      });
+      expect(scene).toEqual({
+        name: "ui-fade-in",
+        duration: "0.12s",
+        copies: 0,
+        longest: scene.longest,
+      });
+      expect(scene.longest, "something still travels for longer than the fade").toBeLessThanOrEqual(
+        180,
+      );
+      await expect(page.locator(RAIL_FAN)).toHaveAttribute("data-ring", "tools");
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
 });
