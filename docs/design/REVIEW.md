@@ -9540,5 +9540,12 @@ geometría); sin tope (las dos); sin el redibujo del señalado, «el redibujo no
 edición, «señalar una sección editó el documento»; sin el foco, «el teclado no está en la sección»; sin
 llevarla a la vista, «su borde superior está a 5153».
 
+**Cinco caminatas de los días 2 y 3 reescritas, y es el coste esperado de un cambio de modelo**: abrían el
+abanico con «Secciones» como eje esperando las herramientas, y ahora se abre en las secciones. La primera
+pasada filtrada lo dijo con cinco rojos y una sola causa. Un ayudante (`openTools`) pulsa «Herramientas»
+cuando el abanico muestra las secciones; la caminata sin ratón llega a ella con Fin e Intro, que recorre
+ese camino también; la del dedo la toca. Dos saboteos de días anteriores repetidos contra las caminatas
+reescritas —la gracia y la parada itinerante— las siguen poniendo rojas.
+
 **Lo que no entra hoy, con nombre**: por qué sección entra el teclado en el anillo (la primera; la elegida
 sería más amable y la cáscara no sabe cuál es); el movimiento del cambio de anillo (día 5).
