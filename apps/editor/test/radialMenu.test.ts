@@ -15,9 +15,17 @@ import {
   HUB_INTENT_SLOP,
   HUB_STRIP,
   hullClip,
+  INNER_ARC_SECTIONS,
+  INNER_PILL,
   overlaps,
   PILL_GAP,
+  SECOND_ARC_GAP,
+  SECTION_PILL,
+  SECTIONS_CAP,
+  SINGLE_ARC_MAX,
+  sectionsRing,
   TOOL_PILL,
+  TOOLS_SPOKE,
   toolsRing,
 } from "../src/editor/radialMenu.ts";
 
@@ -144,5 +152,135 @@ describe("the hub", () => {
     expect(HUB_INTENT_MS).toBeLessThanOrEqual(200);
     expect(FAN_GRACE_MS).toBeLessThanOrEqual(200);
     expect(HUB_INTENT_SLOP).toBe(DRAG_THRESHOLD);
+  });
+});
+
+/** `count` section ids, as a page would give them. */
+const sections = (count: number) => Array.from({ length: count }, (_, i) => `sec-${i + 1}`);
+
+/** Every pair of pills closer than their gap, by id — empty is the only passing answer. */
+function crowded(fan: {
+  spokes: { id: string; left: number; top: number; width: number; height: number }[];
+}) {
+  const out: string[] = [];
+  for (const [i, a] of fan.spokes.entries()) {
+    for (const b of fan.spokes.slice(i + 1)) if (overlaps(a, b)) out.push(`${a.id} × ${b.id}`);
+  }
+  return out;
+}
+
+/** The `index`-th of a list, or a failure that says which: no `!` that would pass on `undefined`. */
+function nth<T>(list: readonly T[], index: number): T {
+  const found = list[index];
+  if (found === undefined) throw new Error(`nothing at ${index} of ${list.length}`);
+  return found;
+}
+
+/** The hub's own box, from its centre: the 44 px disc and the word under it, the strip's width. */
+const HUB_BOX = { left: 0, top: -HUB_DISC / 2, width: HUB_STRIP, height: 66 };
+
+describe("the sections ring (sprint 37 día 4, ADR 0073)", () => {
+  describe("on the subject David named: a page of twelve sections", () => {
+    const fan = sectionsRing(sections(12));
+
+    it("is two arcs: eight inside, four and the way back outside, 56 px further out", () => {
+      expect(fan).not.toBeNull();
+      if (!fan) return;
+      expect(fan.spokes).toHaveLength(13);
+      const inner = fan.spokes.slice(0, INNER_ARC_SECTIONS);
+      const outer = fan.spokes.slice(INNER_ARC_SECTIONS);
+      expect(inner.map((s) => s.id)).toEqual(sections(8));
+      expect(outer.map((s) => s.id)).toEqual([...sections(12).slice(8), TOOLS_SPOKE]);
+      for (const spoke of inner)
+        expect([spoke.width, spoke.height]).toEqual([INNER_PILL.width, INNER_PILL.height]);
+      for (const spoke of outer)
+        expect([spoke.width, spoke.height]).toEqual([SECTION_PILL.width, SECTION_PILL.height]);
+      // The two radii, read back from the pills themselves rather than from the module's numbers:
+      // an inner pill sits on its arc by its middle, an outer one by its left edge.
+      const from = (x: number, top: number, h: number) =>
+        Math.hypot(x - fan.hubX, top + h / 2 - fan.hubY);
+      const inRadius = from(
+        nth(inner, 3).left + nth(inner, 3).width / 2,
+        nth(inner, 3).top,
+        nth(inner, 3).height,
+      );
+      const outRadius = from(nth(outer, 0).left, nth(outer, 0).top, nth(outer, 0).height);
+      expect(Math.abs(outRadius - inRadius - SECOND_ARC_GAP)).toBeLessThanOrEqual(1);
+    });
+
+    it("puts the way back last, and lowest", () => {
+      if (!fan) throw new Error("no fan");
+      const last = nth(fan.spokes, fan.spokes.length - 1);
+      expect(last.id).toBe(TOOLS_SPOKE);
+      for (const spoke of fan.spokes) expect(last.top).toBeGreaterThanOrEqual(spoke.top);
+    });
+
+    it("never brings two pills closer than their gap, across the two arcs, nor onto the hub", () => {
+      if (!fan) throw new Error("no fan");
+      expect(crowded(fan), JSON.stringify(fan.spokes)).toEqual([]);
+      const hub = { ...HUB_BOX, top: HUB_BOX.top + fan.hubY };
+      for (const spoke of fan.spokes) expect(overlaps(spoke, hub), spoke.id).toBe(false);
+    });
+
+    it("keeps every pill inside its box and its hull, in whole pixels, the same every time", () => {
+      if (!fan) throw new Error("no fan");
+      for (const spoke of fan.spokes) {
+        expect(spoke.left).toBeGreaterThanOrEqual(0);
+        expect(spoke.top).toBeGreaterThanOrEqual(0);
+        expect(spoke.left + spoke.width).toBeLessThanOrEqual(fan.width);
+        expect(spoke.top + spoke.height).toBeLessThanOrEqual(fan.height);
+        for (const n of [spoke.left, spoke.top]) expect(Number.isInteger(n), spoke.id).toBe(true);
+        for (const [x, y] of [
+          [spoke.left + spoke.width, spoke.top],
+          [spoke.left + spoke.width, spoke.top + spoke.height],
+        ] as const) {
+          expect(Math.hypot(x - fan.hubX, y - fan.hubY)).toBeLessThan(fan.hull);
+        }
+      }
+      expect(sectionsRing(sections(12))).toEqual(fan);
+      expect(fanFits(fan, 542)).toBe(true);
+      console.log(
+        `[radialMenu] 12 sections: radius ${fan.radius}, pitch ${fan.pitch}, box ${fan.width} × ${fan.height}, hull ${fan.hull}`,
+      );
+    });
+  });
+
+  it("is one arc up to eight sections, and two from nine", () => {
+    for (const count of [1, 4, 8]) {
+      const fan = sectionsRing(sections(count));
+      expect(fan?.spokes).toHaveLength(count + 1);
+      expect(count + 1).toBeLessThanOrEqual(SINGLE_ARC_MAX);
+      expect(new Set(fan?.spokes.map((s) => s.width))).toEqual(new Set([SECTION_PILL.width]));
+    }
+    const nine = sectionsRing(sections(9));
+    expect(
+      nine?.spokes.slice(0, INNER_ARC_SECTIONS).every((s) => s.width === INNER_PILL.width),
+    ).toBe(true);
+  });
+
+  it("never crowds, from one section to sixteen, and always ends with the way back, lowest", () => {
+    for (let count = 1; count <= SECTIONS_CAP; count += 1) {
+      const fan = sectionsRing(sections(count));
+      expect(fan, `${count}`).not.toBeNull();
+      if (!fan) continue;
+      expect(crowded(fan), `${count} sections`).toEqual([]);
+      const last = nth(fan.spokes, fan.spokes.length - 1);
+      expect(last.id, `${count}`).toBe(TOOLS_SPOKE);
+      for (const spoke of fan.spokes)
+        expect(last.top, `${count}`).toBeGreaterThanOrEqual(spoke.top);
+      expect(fanFits(fan, 542), `${count} sections in the shortest studio row`).toBe(true);
+    }
+    const sixteen = sectionsRing(sections(16));
+    if (sixteen) {
+      console.log(
+        `[radialMenu] 16 sections: box ${sixteen.width} × ${sixteen.height}, hull ${sixteen.hull}`,
+      );
+    }
+  });
+
+  it("is not offered above sixteen sections, nor for a page with none", () => {
+    expect(sectionsRing(sections(SECTIONS_CAP + 1))).toBeNull();
+    expect(sectionsRing(sections(40))).toBeNull();
+    expect(sectionsRing([])).toBeNull();
   });
 });

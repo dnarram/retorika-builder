@@ -1450,6 +1450,14 @@ export function Editor({
    */
   const selectedSection = useRef<string | null>(null);
   /**
+   * **The section a pill of the radial rail points at** (sprint 37 día 4, ADR 0073): the pointer on a
+   * section's pill in the second ring draws that section's outline dashed in the canvas — «you could»,
+   * the pair the texts already use with «this is it». Chrome, never a patch: a class on the frame's
+   * section, kept here so the redraw after every patch draws it again (`drawPointed`). The edit
+   * serial does not move.
+   */
+  const pointedSection = useRef<string | null>(null);
+  /**
    * **The header is chosen** (ADR 0057, sprint 30 día 3) — the site's header in the canvas, which is
    * not a section: it has no verbs, no fields drawer and no place in the arrows' order, and choosing
    * it opens «Menú». A ref beside `selectedSection` rather than a fake section id, because every
@@ -2161,6 +2169,33 @@ export function Editor({
    * function clears its own chrome first, and no listener is attached here: the listeners are the
    * document's. Returns the cost, for the probe.
    */
+  /** The pointed section's dashed outline, wherever the pointer of the radial rail says (ADR 0073). */
+  function drawPointed(iframeDoc: Document) {
+    for (const el of iframeDoc.querySelectorAll(".rb-pointed")) el.classList.remove("rb-pointed");
+    const id = pointedSection.current;
+    if (id) {
+      iframeDoc.querySelector(`[data-section="${CSS.escape(id)}"]`)?.classList.add("rb-pointed");
+    }
+  }
+
+  /**
+   * **A section chosen from the radial rail** (sprint 37 día 4, ADR 0073): the path «Ir a…» already
+   * takes for the header's own sections menu — the canvas goes to it and chooses it — and then the
+   * keyboard goes where ↑ ↓ and Intro would have left it, on the section itself, so the next arrow
+   * moves from there. Nothing is edited.
+   */
+  function chooseFromRail(sectionId: string) {
+    const live = liveDoc();
+    pointedSection.current = null;
+    if (!live?.documentElement) return;
+    drawPointed(live);
+    const section = live.querySelector<HTMLElement>(`[data-section="${CSS.escape(sectionId)}"]`);
+    if (!section) return;
+    section.scrollIntoView({ block: "start" });
+    chooseSectionNow.current(section);
+    section.focus({ preventScroll: true });
+  }
+
   function redrawChrome(iframeDoc: Document): number {
     const started = performance.now();
     /*
@@ -2204,6 +2239,7 @@ export function Editor({
       placingElementIdNow.current,
     );
     settleSelection.current();
+    drawPointed(iframeDoc);
     if (
       onVerb?.sectionId &&
       !onVerb.element.isConnected &&
@@ -2531,6 +2567,13 @@ export function Editor({
   /** What the help line says now, in its two voices (ADR 0071): the one place every instruction the
    * editor used to draw over the page is said. `Date.now()` at render, because the announcement's
    * life is measured from when it was said and the effect above re-renders when it runs out. */
+  /** The open page's sections, in its order, by the names the catalog gives them — the radial rail's
+   * second ring (ADR 0073). */
+  const openPage = doc.pages.find((page) => page.id === pageId) ?? doc.pages[0];
+  const pageSections = (openPage?.sections ?? []).map((section) => ({
+    id: section.id,
+    name: sectionDisplayName(doc, section.id),
+  }));
   const helpSays = helpLineFor(
     {
       ...HELP_AT_REST,
@@ -8096,6 +8139,9 @@ export function Editor({
       `[data-section], .rb-header { outline: ${screenPx(2)} solid transparent; outline-offset: ${screenPx(-2)};`,
       `  transition: outline-color ${CHROME_SCALE.fast} ${CHROME_SCALE.ease}; }`,
       `[data-section].rb-selected { outline: ${screenPx(2)} solid #156FE7; outline-offset: ${screenPx(-2)}; }`,
+      // The section a pill of the radial rail points at (ADR 0073): dashed, «you could» — the texts'
+      // own pair — and never over the chosen one's solid «this is it».
+      `[data-section].rb-pointed:not(.rb-selected) { outline: ${screenPx(2)} dashed #156FE7; }`,
       // The header is chosen like a section and drawn like one (sprint 30 día 3): the same pointer,
       // the same outline. Its entries keep the pointer a link has.
       ".rb-header { cursor: pointer; }",
@@ -9467,6 +9513,13 @@ export function Editor({
       railLayout={railLayout}
       railLayoutRefused={railLayoutRefused === true}
       onRailKeyboard={setRailKeys}
+      sections={pageSections}
+      onPointSection={(sectionId) => {
+        pointedSection.current = sectionId;
+        const live = liveDoc();
+        if (live?.documentElement) drawPointed(live);
+      }}
+      onChooseSection={chooseFromRail}
       {...(onRailLayoutChange ? { onRailLayoutChange } : {})}
       // Which panel this is, so the slot can tell one panel replacing another — which leaves —
       // from the same panel with new props, which updates in place (sprint 35 día 2). The drawer

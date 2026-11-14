@@ -427,3 +427,10 @@ are the hub, the fan's one roving stop while the fan is open, and the two switch
 and of its pills are in ADR 0072's note of this date, and the help line says them as it says this ADR's
 («En el menú radial: ↑ ↓ recorrerlo · Intro: abrir la herramienta · Esc: cerrarlo»). Nothing here
 changes for the canvas, the text bar or Alt+F10.
+
+## Note — a section chosen from the radial rail (14 November 2026, sprint 37 día 4)
+
+A section chosen from the radial rail's second ring ([ADR 0073](0073-the-hub-is-the-open-tool-and-secciones-has-a-second-level.md))
+is chosen as a click chooses it and **the keyboard is left on the section itself**, the canvas's one Tab
+stop moved to it (§1–§2), so the next ↑ or ↓ moves from there. A pill pointed at by the keyboard outlines
+its section dashed in the canvas, as the pointer does; that is chrome, and moves no stop.
