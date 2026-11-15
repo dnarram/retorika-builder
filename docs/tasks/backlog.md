@@ -12,7 +12,7 @@ drift, and the facilitator's script already says findings go to the decision the
 a separate document nobody reads again». So an item with an ADR points at the ADR; an item with
 an issue points at the issue; and only the things with no other home are described here at all.
 
-Last reviewed: 15 November 2026, **closing sprint 37 — «el raíl se vuelve radial, y el móvil vuelve a
+Last reviewed: 16 November 2026, **closing sprint 37 — «el raíl se vuelve radial, y el móvil vuelve a
 su tamaño».** David asked for two things. First, the defect of a small screen: going back to «Ver en
 móvil» from «Ver en ordenador» left the buttons and sections oversized; it was fixed on day 1, alone
 and first. Second, a choice of how the editor's rail is shown: fixed on the left, still the default,

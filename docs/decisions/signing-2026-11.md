@@ -7,7 +7,7 @@
 > signing it changes. Prepared on sprint 34 día 7, 6 November 2026, and brought up to date closing
 > sprint 35, 11 November 2026, and again on sprint 36 día 1 the same day; checked closing sprint 36,
 > 13 November 2026, with nothing to add; brought up to date on sprint 37 día 2, 13 November 2026,
-> días 3 and 4, 14 November 2026, and día 6, 15 November 2026; checked closing sprint 37, 15 November
+> días 3 and 4, 14 November 2026, and día 6, 15 November 2026; checked closing sprint 37, 16 November
 > 2026, with nothing to add.
 > **Development does not sign.**
 

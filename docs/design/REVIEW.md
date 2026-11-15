@@ -9805,7 +9805,7 @@ los mismos minutos facturados más un arranque, la mitad del reloj), o **subir e
    [`docs/decisions/signing-2026-11.md`](../decisions/signing-2026-11.md). La 0072 y la 0073 son de este
    sprint y están en el lote A, con notas nuevas en la 0025, la 0042, la 0052, la 0053 y la 0071.
 2. **Las nueve fotografías a 1600 × 1072**: la exención **falla desde el 1 de diciembre de 2026, dentro de
-   16 días**. Su hoja, [`docs/tasks/las-nueve-fotos.md`](../tasks/las-nueve-fotos.md), y
+   15 días**. Su hoja, [`docs/tasks/las-nueve-fotos.md`](../tasks/las-nueve-fotos.md), y
    `pnpm photos:replace`; las dos preguntas de la hoja siguen siendo tuyas.
 3. **El e2e de la CI a cinco o seis minutos de su tope nuevo** (arriba): partirlo en dos o subirlo otra
    vez.
