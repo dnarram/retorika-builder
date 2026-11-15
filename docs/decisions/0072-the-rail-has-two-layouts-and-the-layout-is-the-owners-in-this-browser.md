@@ -147,3 +147,36 @@ línea de ayuda siguen diciendo las teclas».
    radial: ↑ ↓ recorrerlo · Intro: abrir la herramienta · Esc: cerrarlo» — `KeyboardPlace` «hub»,
    quiet like every key the line says (ADR 0071), and nothing on a touched screen. Alt+F10 keeps its
    one meaning, the text bar's; the hub is not the bar.
+
+## Note — the radial menu is offered once (15 November 2026, sprint 37 día 6)
+
+David's rule of 13 November, as built: «el editor ofrece probarlo una vez («Prueba el menú radial», un
+solo aviso, descartable)».
+
+1. **The offer is a sentence of the help line, not a popover.** A popover would open by itself, and at
+   a narrow width it would land on the canvas's lower left corner, against ADR 0071. It is the quiet
+   child's **lowest voice**: «Prueba el menú radial: se activa al pie de la barra.», said where the idle
+   sentence would be and only there, so anything the focus brings — keys, a chosen text's hint, a
+   popup's note, the example-text count — is said over it, and it is never news in the live child.
+2. **Made only where it can be taken up**: from 721 px, while the rail is the fixed one, and until it
+   is answered. A phone has the bottom bar and no switch to point at; whoever is on the radial menu
+   already found it.
+3. **Answered by its cross or by the switch, in either direction.** Either writes
+   `retorika.railNotice.v1` in this browser, beside the layout and for the same reasons (§5); «Volver
+   a empezar» does not bring it back. A browser that refuses the write still loses the offer for the
+   visit, and is offered it again on the next: the honest consequence of being refused, at the cost of
+   one sentence.
+4. **The cross is the quiet child's first button**, the delete notice's cross drawn beside the offer.
+   Answered from the keyboard, the focus goes to the «Menú radial» switch the sentence spoke of, rather
+   than falling to the page's body with the cross.
+5. **The switch does not ring.** The plan gave it `ui-ring-once` on arrival; that pulse takes 1.2 s to
+   come to rest, and the editor moves nothing for longer than 200 ms (`motionBudget.test.ts`), which is
+   the rule that has kept it out of the editor since sprint 22. The offer names the switch by its own
+   words instead: the sentence's first three are the switch's label.
+6. **The first wording was cut.** «… el interruptor «Menú radial» está al pie de la barra» measured
+   451 px in the 440 the line has at 768 and lost its place to the ellipsis; with the design tools on
+   there are two switches at the rail's foot, so «el interruptor» alone would not say which. The walk
+   holds the sentence whole at 768.
+
+**Not decided here**: a pill «Prueba el menú radial» in the header beside the device toggle, which
+also covers nothing and is seen sooner than the foot of the canvas. It is in the backlog for David.

@@ -1717,6 +1717,28 @@ open survives.
   same — Escape closes, the focus returns to the rail item the panel belongs to — is one handler and
   one effect in `EditorShell`, already written for the radial case; it was not done because it
   changes a layout nobody asked to change this sprint.
+
+  **What the radial rail leaves, named on sprint 37 día 6 (15 November 2026)**, each David's to take up
+  or leave:
+  - **The offer could be in the header.** «Prueba el menú radial» is the help line's quietest sentence
+    (ADR 0072's note of 15 November): it covers nothing, and it is read only by someone who looks at
+    the foot of the canvas. A pill beside the device toggle would also cover nothing and be seen
+    sooner; the line was chosen because it already had a cross and a priority, and a spontaneous pill
+    in the header would be the only one there.
+  - **«Campos» is not a pill of the fan**, because it is not a tool of the rail: it is the drawer a
+    section's own button opens from the canvas, in either layout, as it always was.
+  - **From the tools there is no pill back to the sections.** ADR 0073 §5's model: choose «Secciones»
+    and open the hub again. If owners get lost there, a last pill «Secciones de esta página» in the
+    tools ring is the answer, and it is not built.
+  - **The keyboard enters the sections ring by the first section**, not the chosen one (ADR 0073's
+    «what this does not decide»): the shell does not know which section is chosen.
+  - **Seen in Chromium only.** The radial rail was looked at in a real browser at 768, 1024, 1280 and
+    1440 and in an emulated iPad (gen 7) with reduced motion, all Chromium. The touch path Safari
+    takes (the window's `blur`) is walked in Chromium too. Nothing of the editor has been seen in WebKit
+    or Firefox, as sprint 36 already said.
+  - **The header's page tab at 1024 shows only an ellipsis**, in both layouts — seen in día 6's
+    screenshots at 1024 × 768, where the top row also holds «Guardado en este navegador» and «Guardar
+    en mi cuenta». Older than the sprint, and not investigated.
 - **The editor's preview never shows the typeface the ZIP ships, found on the way to the row above
   (2 October 2026) and not fixed.** The renderer emits `@font-face` with `fonts/*.woff2` relative,
   which is right for the ZIP and for `file://`. Inside the editor's `srcDoc` preview those eight
