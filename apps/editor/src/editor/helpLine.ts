@@ -57,6 +57,8 @@ export interface HelpLineState {
   /** A screen that is touched and never hovered: no keys are said, there are none. */
   touch: boolean;
   platform: "mac" | "other";
+  /** The radial menu offered once, at rest (sprint 37 día 6, ADR 0072): the line's lowest voice. */
+  offer: "radial" | null;
 }
 
 export interface HelpLineSays {
@@ -65,6 +67,8 @@ export interface HelpLineSays {
   tone: "info" | "warn" | "error";
   /** Drawn beside the text only for the delete notice: «Deshacer», and the cross if it stays. */
   notice?: { dismiss: boolean };
+  /** Drawn beside the quiet text only for the radial menu's offer: a cross that answers it. */
+  offer?: true;
 }
 
 /** How long an announcement holds the live child before the notice, or silence, has it back. */
@@ -179,6 +183,10 @@ export function quietSays(state: HelpLineState): HelpLineSays {
       "warn",
     );
   }
+  // **The offer is the quietest thing the line says** (sprint 37 día 6): only where nothing else has
+  // anything to say, in place of the idle hint, and never through the live child — it is a
+  // suggestion that waits to be read, not news.
+  if (state.offer === "radial") return { ...quiet(es["editor.rail.try.offer"]), offer: true };
   return quiet(es["editor.editHint"]);
 }
 
@@ -205,4 +213,5 @@ export const HELP_AT_REST: HelpLineState = {
   placeholders: 0,
   touch: false,
   platform: "other",
+  offer: null,
 };

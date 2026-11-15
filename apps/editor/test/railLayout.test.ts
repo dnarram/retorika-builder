@@ -1,7 +1,14 @@
 import { readFileSync } from "node:fs";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { clearSession } from "../src/editor/autosave.ts";
-import { loadRailLayout, railLayoutFor, saveRailLayout } from "../src/editor/railLayout.ts";
+import {
+  loadRailLayout,
+  loadRailOfferDismissed,
+  railLayoutFor,
+  railOfferFor,
+  saveRailLayout,
+  saveRailOfferDismissed,
+} from "../src/editor/railLayout.ts";
 
 /**
  * The rail's layout (ADR 0072, sprint 37 día 2): the owner's, in this browser, and nothing to do with
@@ -94,6 +101,51 @@ describe("on a phone", () => {
     saveRailLayout("radial");
     expect(railLayoutFor(loadRailLayout(), true)).toBeUndefined();
     expect(railLayoutFor(loadRailLayout(), false)).toBe("radial");
+  });
+});
+
+/**
+ * **The radial menu is offered once** (sprint 37 día 6): the answer is the person's, in this browser,
+ * like the layout it is about, and it is written by the cross or by the switch.
+ */
+describe("the offer of the radial menu", () => {
+  it("has not been answered on a first visit", () => {
+    expect(loadRailOfferDismissed()).toBe(false);
+  });
+
+  it("remembers the answer under its own key, apart from the layout", () => {
+    expect(saveRailOfferDismissed()).toBe(true);
+    expect(storage.getItem("retorika.railNotice.v1")).toBe("1");
+    expect(storage.getItem("retorika.rail.v1")).toBeNull();
+    expect(loadRailOfferDismissed()).toBe(true);
+  });
+
+  it("is unanswered for anything that is not the value it wrote", () => {
+    for (const stored of ["true", "0", "radial", ""]) {
+      storage.setItem("retorika.railNotice.v1", stored);
+      expect(loadRailOfferDismissed(), stored).toBe(false);
+    }
+  });
+
+  it("is made again next time when the browser refuses to keep the answer", () => {
+    storage.denied = true;
+    expect(saveRailOfferDismissed()).toBe(false);
+    expect(loadRailOfferDismissed()).toBe(false);
+  });
+
+  it("survives «Volver a empezar», like the layout", () => {
+    saveRailOfferDismissed();
+    clearSession();
+    expect(loadRailOfferDismissed()).toBe(true);
+  });
+
+  it("is made only where the radial menu can be chosen, only to the fixed rail, and only once", () => {
+    expect(railOfferFor("fixed", false)).toBe(true);
+    expect(railOfferFor("fixed", true)).toBe(false);
+    // Whoever is on the radial menu already found it.
+    expect(railOfferFor("radial", false)).toBe(false);
+    // A phone: the bar of ADR 0042, no switch to point at.
+    expect(railOfferFor(railLayoutFor("fixed", true), false)).toBe(false);
   });
 });
 

@@ -28,6 +28,7 @@ export function HelpLine({
   quiet,
   onUndo,
   onDismiss,
+  onDismissOffer,
   className = "",
   style,
 }: {
@@ -35,6 +36,8 @@ export function HelpLine({
   quiet: HelpLineSays;
   onUndo: () => void;
   onDismiss: () => void;
+  /** The answer to the radial menu's offer (sprint 37 día 6): the quiet child's only button. */
+  onDismissOffer?: () => void;
   className?: string;
   /** The shell's, for the line's place in the chrome's arrival (sprint 36 día 4). */
   style?: React.CSSProperties | undefined;
@@ -135,6 +138,34 @@ export function HelpLine({
           />
         ) : null}
       </div>
+      {
+        // **The offer's cross** (sprint 37 día 6): the delete notice's cross, beside the quiet child
+        // for the one sentence of it that can be answered. Only while that sentence is the one
+        // shown — under a live sentence the quiet child is hidden and so is its button.
+        live.text === "" && quiet.offer && onDismissOffer ? (
+          <button
+            type="button"
+            data-help-offer=""
+            onClick={onDismissOffer}
+            aria-label={es["editor.rail.try.dismiss"]}
+            title={es["editor.rail.try.dismiss"]}
+            className="ui-interactive flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded-[7px] border-0 bg-transparent text-ui-muted"
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              strokeLinecap="round"
+              aria-hidden="true"
+            >
+              <path d="M6 6l12 12M18 6L6 18" />
+            </svg>
+          </button>
+        ) : null
+      }
       {live.notice ? (
         <>
           <button

@@ -5,6 +5,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it } from "vitest";
 import { HelpLine, WORD_STEPS } from "../src/editor/HelpLine.tsx";
 import type { HelpLineSays } from "../src/editor/helpLine.ts";
+import es from "../src/locales/es.json" with { type: "json" };
 
 /**
  * **The line's two voices, as React draws them** (sprint 36 día 5, David's adjustment 2): what
@@ -26,7 +27,7 @@ afterEach(() => {
   document.body.innerHTML = "";
 });
 
-function draw(props: { live: HelpLineSays; quiet: HelpLineSays }) {
+function draw(props: { live: HelpLineSays; quiet: HelpLineSays; onDismissOffer?: () => void }) {
   if (!root) {
     host = document.createElement("div");
     document.body.append(host);
@@ -114,5 +115,31 @@ describe("what changes in the quiet child", () => {
     expect(host.querySelector("[data-help-leaving]")).toBeNull();
     draw({ live: live("Has borrado la sección «Qué hago»"), quiet: quiet("C") });
     expect(host.querySelector("[data-help-leaving]")).toBeNull();
+  });
+});
+
+/**
+ * **The offer's cross** (sprint 37 día 6): the one button the quiet child has, drawn for the one
+ * sentence of it that can be answered, and only while that sentence is the one shown.
+ */
+describe("the cross that answers the offer", () => {
+  const OFFER: HelpLineSays = { ...quiet("Prueba el menú radial"), offer: true };
+  const cross = () => host.querySelector<HTMLButtonElement>("[data-help-offer]");
+
+  it("is drawn beside the offer, named, and answers it", () => {
+    let answered = 0;
+    draw({ live: SILENT, quiet: OFFER, onDismissOffer: () => answered++ });
+    expect(cross()?.getAttribute("aria-label")).toBe(es["editor.rail.try.dismiss"]);
+    cross()?.click();
+    expect(answered).toBe(1);
+  });
+
+  it("is not drawn under a live sentence, for any other quiet one, or with nobody to answer", () => {
+    draw({ live: live("Has borrado la sección"), quiet: OFFER, onDismissOffer: () => {} });
+    expect(cross()).toBeNull();
+    draw({ live: SILENT, quiet: quiet("Haz doble clic"), onDismissOffer: () => {} });
+    expect(cross()).toBeNull();
+    draw({ live: SILENT, quiet: OFFER });
+    expect(cross()).toBeNull();
   });
 });
