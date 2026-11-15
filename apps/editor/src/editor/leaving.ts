@@ -41,16 +41,22 @@
  * the frame, which `globals.css` cannot reach: a menu, a bar or a ghost shrinking away, and the zone
  * that received a menu acknowledging it once. `rail` is the editor's again (sprint 37 día 2): the
  * rail in the layout the owner just switched away from, fading where it stood while the other one
- * rises in its place (ADR 0072).
+ * rises in its place (ADR 0072). `fan` is the radial rail's fan folding (sprint 37 día 5), drawn
+ * where it stood, inside the strip; `ring` is one of its rings folding into the hub while the other
+ * sprouts — the third scene — drawn over the strip so the new ring's hull does not clip it.
  */
-export type LeavingKind = "panel" | "dialog" | "toast" | "popup" | "zone" | "rail";
+export type LeavingKind = "panel" | "dialog" | "toast" | "popup" | "zone" | "rail" | "fan" | "ring";
 
 /**
  * **What leaves from the body, `fixed` over the box it had**: a panel, and the rail. Both are items
  * of a flex row, and a copy put back in the row would hold room the canvas is taking back — or, for
  * the rail, push the new rail aside for the length of the exit.
  */
-const OVER_THE_ROW: ReadonlySet<LeavingKind> = new Set(["panel", "rail"]);
+const OVER_THE_ROW: ReadonlySet<LeavingKind> = new Set(["panel", "rail", "ring"]);
+
+/** **A ring folds for the length of a scene** (`--ui-scene`, 400 ms), longer than every other exit:
+ * its copy is given that and room for a slow frame before the fallback takes it off. */
+const SCENE_FALLBACK_MS = 600;
 
 /** Longer than the longest exit (`--ui-fast`, 120 ms) with room for a slow frame, and short enough
  * that a copy left by an animation that never ran is gone before anybody could act on it. */
@@ -236,6 +242,15 @@ export function ghostOf(
   wordsAsPaint(ghost);
 
   ghost.classList.remove("ui-enter-right", "ui-rise-in", "rb-arrives");
+  // **And what is inside it** (sprint 37 día 5): the radial rail's fan leaves with its faces, which
+  // each sprout from the hub when they arrive — a copy playing that entrance again on its way out
+  // would be a fan opening while it closes.
+  for (const inside of ghost.querySelectorAll(".ui-spoke-in"))
+    inside.classList.remove("ui-spoke-in");
+  // Nor a ring that arrived by the third scene sprouting again inside a copy that is leaving.
+  for (const inside of [ghost, ...ghost.querySelectorAll("[data-ring-arrival]")]) {
+    inside.removeAttribute("data-ring-arrival");
+  }
   ghost.setAttribute("data-leaving", kind);
   ghost.setAttribute("aria-hidden", "true");
   ghost.setAttribute("inert", "");
@@ -310,7 +325,7 @@ export function leave(
       clearTimeout(timer);
       shown.remove();
     };
-    const timer = setTimeout(finish, LEAVING_FALLBACK_MS);
+    const timer = setTimeout(finish, kind === "ring" ? SCENE_FALLBACK_MS : LEAVING_FALLBACK_MS);
     // Its own end only: a dialog's card ends its exit inside the backdrop's, and that event
     // bubbles up through the backdrop on its way.
     ghost.addEventListener("animationend", (event) => {

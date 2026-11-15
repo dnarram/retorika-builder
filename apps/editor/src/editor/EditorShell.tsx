@@ -866,6 +866,44 @@ function RailLeaves({ row }: { row: RefObject<HTMLElement | null> }) {
 }
 
 /**
+ * **The fan that folds is seen to fold** (sprint 37 día 5): rendered inside the fan, so its cleanup
+ * runs in the instant before React removes it, and hands it to `leave`, which draws a copy closing
+ * toward the hub where it stood (`[data-leaving="fan"]`, `--ui-fast`, never the spring). Found
+ * through the strip, whose ref is still there — the fan's own is taken off before this runs. Nothing
+ * when the strip went too (the layout switched, the editor closed), or under reduced motion.
+ */
+function FanLeaves({ nav }: { nav: RefObject<HTMLElement | null> }) {
+  useLayoutEffect(
+    () => () => {
+      const box = nav.current;
+      const fan = box?.querySelector('[data-testid="rail-fan"]');
+      if (box && fan) leave(fan, "fan", box);
+    },
+    [nav],
+  );
+  return null;
+}
+
+/**
+ * **The ring that goes is seen to fold into the hub** (sprint 37 día 5, the third scene): rendered
+ * inside the faces' layer, which is keyed by its ring, so its cleanup runs in the instant before
+ * React removes the layer of the ring that is going — and draws it as a copy folding toward the hub
+ * while the new ring sprouts (`rb-scene-fan`). Nothing when the whole fan closed (the fan's own copy
+ * is `FanLeaves`), and nothing under reduced motion, where the new ring fades in.
+ */
+function RingLeaves({ fan }: { fan: RefObject<HTMLElement | null> }) {
+  useLayoutEffect(
+    () => () => {
+      const box = fan.current;
+      const layer = box?.querySelector("[data-fan-faces]");
+      if (box && layer) leave(layer, "ring", box);
+    },
+    [fan],
+  );
+  return null;
+}
+
+/**
  * **Give the hub the keyboard without it taking that as a reason to open** (sprint 37 día 3): the hub
  * opens its fan when the keyboard arrives on it, and a focus put there by the code — a pill pressed,
  * the fan folded by Escape, a panel closed — arrives looking exactly like the keyboard's after a key.
@@ -957,6 +995,16 @@ function RadialRail({
   const fanBox = useRef<HTMLFieldSetElement>(null);
   /** The pill the keyboard is on, once an arrow has moved it; the open tool's until then. */
   const [fanAt, setFanAt] = useState<number | null>(null);
+  /** The pill under the pointer or the keyboard, whose face is lit — the face is not inside its
+   * button any more, so no `:hover` reaches it. */
+  const [hot, setHot] = useState<string | null>(null);
+  /**
+   * **How the faces arrived** (sprint 37 día 5): `open` when the fan opened, and each face sprouts
+   * from the hub; `scene` when «Herramientas» swapped the rings inside a view transition, which
+   * carries the sprout itself — a face that also played its own entrance would move twice.
+   */
+  const [arrival, setArrival] = useState<"open" | "scene">("open");
+  const navBox = useRef<HTMLElement>(null);
   /** A pill to give the keyboard to once the fan an arrow opened is on the page. */
   const pendingFocus = useRef<number | null>(null);
   // The keyboard enters the tools by the open tool, and the sections by the first of them.
@@ -984,6 +1032,7 @@ function RadialRail({
     setOpenFor(null);
   };
   const openFan = () => {
+    setArrival("open");
     setFanAt(null);
     setLevel(sectionsFan ? "sections" : "tools");
     setOpenFor(foldWhen);
@@ -1061,13 +1110,27 @@ function RadialRail({
    */
   const toTools = (pressed: HTMLElement) => {
     const hadKeyboard = pressed.ownerDocument.activeElement === pressed;
+    // **The keyboard to the hub first, quietly**: the pill it is on is about to be removed with its
+    // ring. Chromium fires nothing when a focused element is removed (measured: without this line no
+    // walk changes), but a browser that fires `blur` would see the focus leave the group and fold
+    // the fan; on the hub it never left. Defensive, and said so. A keyboard that pressed
+    // «Herramientas» goes on to the tools below.
+    if (fanBox.current?.contains(pressed.ownerDocument.activeElement)) focusQuietly(hub.current);
+    // **The third scene** (sprint 37 día 5): the sections' faces fold into the hub, as a copy, while
+    // the tools' faces sprout from it as one layer (`rb-scene-fan` in the stylesheet). In CSS and not
+    // as a view transition of the document, which was the plan's word and was measured against: for
+    // the length of a document's view transition Chromium hit-tests the whole page to its root, so
+    // for 400 ms nothing in the editor — not a pill, not «Descargar» — took a press.
+    setArrival("scene");
     setFanAt(null);
+    setHot(null);
     setLevel("tools");
     if (hadKeyboard) pendingFocus.current = Math.max(0, tools.indexOf(rail));
   };
 
   return (
     <nav
+      ref={navBox}
       data-testid="rail"
       data-rail-layout="radial"
       aria-label={es["editor.rail.label"]}
@@ -1221,99 +1284,126 @@ function RadialRail({
             } else focusSpoke(action.index);
           }}
         >
-          {fan.spokes.map((spoke, index) => {
-            const tabIndex = index === roving ? 0 : -1;
-            const box = {
-              left: spoke.left,
-              top: spoke.top,
-              width: spoke.width,
-              height: spoke.height,
-            };
-            const face =
-              "ui-interactive ui-ripple flex h-full w-full items-center gap-2 rounded-full border px-3 text-[13px] shadow-ui-2 " +
-              "outline-2 outline-offset-2 outline-transparent group-focus-visible:outline-ui-brand ";
-            const resting =
-              "border-ui-border bg-ui-surface font-medium text-ui-ink group-hover:border-ui-border-strong group-hover:bg-ui-bg";
-            const buttonClass =
-              "group absolute flex cursor-pointer border-0 bg-transparent p-0 focus-visible:outline-none";
-            if (ring === "sections" && spoke.id === TOOLS_SPOKE) {
+          <FanLeaves nav={navBox} />
+          {/*
+           * **What is seen, apart from what is pressed** (David's adjustment approving sprint 37:
+           * «la caja que se pulsa no viaja; viaja lo que se ve»). The faces — the pills as they are
+           * drawn — are a layer of their own, hidden from assistive technology and blind to the
+           * pointer, and **that layer is what moves**: each face sprouts from the hub when the fan
+           * opens (`ui-spoke-in`), and the whole layer is the third scene's name when the rings swap
+           * (`rb-scene-fan`, día 5). The buttons below are at their final boxes from their first frame,
+           * carry no movement and no name, so a press where a pill is going to be lands on it before
+           * it has arrived — and during a view transition, which takes a named element out of
+           * hit-testing for as long as it runs, the buttons are never the named thing.
+           */}
+          <div
+            // A ring of its own each time: the ring that goes is drawn leaving (`RingLeaves`).
+            key={ring}
+            data-fan-faces=""
+            data-ring-arrival={arrival}
+            aria-hidden="true"
+            className="rb-scene-fan pointer-events-none absolute inset-0"
+            // The hub's centre, which the whole ring folds into and sprouts from.
+            style={{ transformOrigin: `${fan.hubX}px ${fan.hubY}px` }}
+          >
+            <RingLeaves fan={fanBox} />
+            {fan.spokes.map((spoke) => {
+              const back = ring === "sections" && spoke.id === TOOLS_SPOKE;
+              const section = ring === "sections" && !back;
+              const active = ring === "tools" && spoke.id === rail;
+              const lit = hot === spoke.id;
               return (
-                <button
-                  key={spoke.id}
-                  type="button"
-                  data-spoke={spoke.id}
-                  tabIndex={tabIndex}
-                  className={buttonClass}
-                  style={box}
-                  onClick={(event) => toTools(event.currentTarget)}
-                >
-                  <span data-spoke-face="" className={`${face}${resting}`}>
-                    {TOOLS_ICON}
-                    <span className="truncate">{es["editor.rail.fan.toTools"]}</span>
-                  </span>
-                </button>
-              );
-            }
-            if (ring === "sections") {
-              const name = sectionName.get(spoke.id) ?? spoke.id;
-              return (
-                <button
-                  key={spoke.id}
-                  type="button"
-                  data-spoke={spoke.id}
-                  tabIndex={tabIndex}
-                  // The word on the pill is the section's name, which two sections can share (a
-                  // duplicated «Portada»); the name a reader hears says which one it is.
-                  aria-label={es["editor.rail.fan.sectionLabel"]
-                    .replace("{name}", name)
-                    .replace("{index}", String(index + 1))
-                    .replace("{count}", String(sections.length))}
-                  // The whole name, for an inner pill too narrow to show it (`INNER_PILL`).
-                  title={name}
-                  className={buttonClass}
-                  style={box}
-                  onPointerEnter={() => pointing.current?.(spoke.id)}
-                  onPointerLeave={() => pointing.current?.(null)}
-                  onFocus={() => pointing.current?.(spoke.id)}
-                  onClick={() => chooseSection(spoke.id)}
-                >
-                  <span
-                    data-spoke-face=""
-                    className={`${face.replace("text-[13px]", "text-[12px]")}justify-center ${resting}`}
-                  >
-                    <span className="truncate">{name}</span>
-                  </span>
-                </button>
-              );
-            }
-            const item = spoke.id as RailItemId;
-            const active = item === rail;
-            return (
-              <button
-                key={item}
-                type="button"
-                data-spoke={item}
-                aria-pressed={active}
-                // One stop for the whole fan, the open tool's until an arrow moves it (ADR 0052's
-                // roving rule, one more time): Tab from the hub lands here, Tab again leaves.
-                tabIndex={tabIndex}
-                className={buttonClass}
-                style={box}
-                onClick={() => choose(item)}
-              >
                 <span
+                  key={spoke.id}
                   data-spoke-face=""
+                  data-face={spoke.id}
                   className={
-                    face +
+                    "ui-interactive absolute flex items-center gap-2 rounded-full border px-3 shadow-ui-2 " +
+                    (section ? "justify-center text-[12px] " : "text-[13px] ") +
+                    (arrival === "open" ? "ui-spoke-in " : "") +
                     (active
                       ? "border-transparent bg-ui-brand-surface font-semibold text-ui-brand-deep"
-                      : resting)
+                      : lit
+                        ? "border-ui-border-strong bg-ui-bg font-medium text-ui-ink"
+                        : "border-ui-border bg-ui-surface font-medium text-ui-ink")
+                  }
+                  // Where the face starts from: the hub's centre, as an offset from its own.
+                  style={
+                    {
+                      left: spoke.left,
+                      top: spoke.top,
+                      width: spoke.width,
+                      height: spoke.height,
+                      "--ui-spoke-dx": `${Math.round(fan.hubX - (spoke.left + spoke.width / 2))}px`,
+                      "--ui-spoke-dy": `${Math.round(fan.hubY - (spoke.top + spoke.height / 2))}px`,
+                    } as React.CSSProperties
                   }
                 >
-                  {RAIL_ICONS[item]}
-                  <span className="truncate">{RAIL_LABELS[item]}</span>
+                  {back ? TOOLS_ICON : section ? null : RAIL_ICONS[spoke.id as RailItemId]}
+                  <span className="truncate">
+                    {back
+                      ? es["editor.rail.fan.toTools"]
+                      : section
+                        ? (sectionName.get(spoke.id) ?? spoke.id)
+                        : RAIL_LABELS[spoke.id as RailItemId]}
+                  </span>
                 </span>
-              </button>
+              );
+            })}
+          </div>
+          {fan.spokes.map((spoke, index) => {
+            const back = ring === "sections" && spoke.id === TOOLS_SPOKE;
+            const section = ring === "sections" && !back;
+            const name = sectionName.get(spoke.id) ?? spoke.id;
+            const item = spoke.id as RailItemId;
+            const label = back
+              ? es["editor.rail.fan.toTools"]
+              : section
+                ? // The word on the face is the section's name, which two sections can share (a
+                  // duplicated «Portada»); the name a reader hears says which one it is.
+                  es["editor.rail.fan.sectionLabel"]
+                    .replace("{name}", name)
+                    .replace("{index}", String(index + 1))
+                    .replace("{count}", String(sections.length))
+                : RAIL_LABELS[item];
+            return (
+              <button
+                key={spoke.id}
+                type="button"
+                data-spoke={spoke.id}
+                aria-label={label}
+                aria-pressed={ring === "tools" ? item === rail : undefined}
+                // The whole name, for an inner face too narrow to show it (`INNER_PILL`).
+                title={section ? name : undefined}
+                // One stop for the whole fan, the open tool's until an arrow moves it (ADR 0052's
+                // roving rule, one more time): Tab from the hub lands here, Tab again leaves.
+                tabIndex={index === roving ? 0 : -1}
+                className="ui-ripple absolute cursor-pointer rounded-full border-0 bg-transparent p-0"
+                style={{
+                  left: spoke.left,
+                  top: spoke.top,
+                  width: spoke.width,
+                  height: spoke.height,
+                }}
+                onPointerEnter={() => {
+                  setHot(spoke.id);
+                  if (section) pointing.current?.(spoke.id);
+                }}
+                onPointerLeave={() => {
+                  setHot(null);
+                  if (section) pointing.current?.(null);
+                }}
+                onFocus={() => {
+                  setHot(spoke.id);
+                  if (section) pointing.current?.(spoke.id);
+                }}
+                onBlur={() => setHot(null)}
+                onClick={(event) => {
+                  if (back) toTools(event.currentTarget);
+                  else if (section) chooseSection(spoke.id);
+                  else choose(item);
+                }}
+              />
             );
           })}
         </fieldset>

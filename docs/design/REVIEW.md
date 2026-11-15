@@ -9549,3 +9549,75 @@ reescritas —la gracia y la parada itinerante— las siguen poniendo rojas.
 
 **Lo que no entra hoy, con nombre**: por qué sección entra el teclado en el anillo (la primera; la elegida
 sería más amable y la cáscara no sabe cuál es); el movimiento del cambio de anillo (día 5).
+
+### Día 5 — los anillos se transforman (PR de `feat/los-anillos-se-transforman`)
+
+**Lo que hay.** Al abrirse el abanico, cada cara brota del centro del eje hasta su sitio (`ui-spoke-in`:
+desde su propio desplazamiento hasta el eje y a tres quintos de tamaño, `--ui-base` con muelle, una tras
+otra a 40 ms; la novena y las siguientes con la octava: en reposo a los 500 ms como mucho). Pulsar
+«Herramientas» es **la tercera escena, `rb-scene-fan`**: el anillo que se va se pliega hacia el eje
+mientras el que llega brota de él, en 400 ms. El abanico que se cierra se va plegándose hacia el eje en
+`--ui-fast`, sin muelle. Bajo «Reducir movimiento», todo llega sin recorrido y el cambio de anillo es un
+fundido de 120 ms.
+
+**La caja que se pulsa no viaja** (el ajuste de David al aprobar). Cada píldora es ahora un botón
+transparente en su sitio final desde el primer fotograma, con su nombre para un lector, y su cara vive en
+una capa aparte, oculta a la tecnología de asistencia y ciega al puntero: lo que se mueve es la cara. La
+prueba es la suya, encadenada con otra: se pulsa el eje y en seguida la caja final de «Herramientas», la
+cara que llega la última, antes de que esté (la caminata lo asevera leyendo su opacidad en el momento de
+la pulsación); ese mismo clic empieza la escena, y en seguida se pulsa «Páginas» donde va a estar,
+durante la escena. Las dos llegan. Con la animación sobre el botón en vez de sobre la cara, la primera
+cae fuera y la caminata se pone roja.
+
+**Una decisión que el plan no tomaba así, medida antes de tomarla: la escena es CSS y no una View
+Transition del documento.** David nombró las View Transitions para el cambio de anillo. Construida así,
+la escena midió esto:
+
+1. Durante una View Transition del documento, Chromium hace la prueba de impacto de **todo el documento**
+   contra su raíz: `elementFromPoint` respondió `<html>` en el centro de una píldora y en el de
+   «Descargar», en cada fotograma de los 400 ms. Nada del editor recibía una pulsación, justo lo contrario
+   de lo que su ajuste pide de este control.
+2. En el instante de la captura, el `nav` oyó un `pointerleave` con la mano quieta, y la gracia plegaba
+   el abanico a los 166 ms, y la escena con él.
+
+En CSS, la copia del anillo que se va se pliega por encima de la franja (`leaving.ts`, tipo `ring`) y la
+capa del que llega brota; cada botón responde en todos los fotogramas (medido: bajo el centro de «Páginas»
+estuvo su botón en los 25), la escena dura 408 ms, y su fotograma más largo fue de 16,7 ms (33,3 con la
+CPU a 4×), bajo el tope de 32 del plan. **Si David prefiere la View Transition aceptando que el editor
+entero no se pulse durante 400 ms, el cambio es pequeño y está descrito en la PR.**
+
+**Y la medida corrige un límite del sprint 36**: no es «lo que lleva nombre» lo que no recibe
+pulsaciones durante una escena, es el documento entero. Medido aquí, en la escena del raíl construida como
+View Transition. Las otras View Transitions de documento del producto usan el mismo mecanismo y se
+infiere lo mismo, **sin haberlas medido una por una**: los 400 ms de la escena del lienzo (abrir una
+propuesta), el cruce de página dentro del lienzo y el paso de una pregunta. Queda en el backlog, en los
+límites de aquel sprint, con esa misma salvedad.
+
+**Lo que la caminata encontró por el camino.** (1) La primera cara no tenía su sitio en la cola escrito y
+heredaba el de la franja cuando el editor llega por la escena del lienzo: 280 ms de espera antes de
+brotar. Ahora dice 0 y el presupuesto lo exige. (2) Una copia que se va volvía a reproducir la entrada de
+sus caras, y la de su anillo si había llegado por la escena; `ghostOf` quita las dos. (3) El foco se pasa
+al eje antes de cambiar de anillo: es defensivo, y se dice así: Chromium no dispara nada al quitar un
+elemento enfocado, y sin esa línea ninguna caminata cambia.
+
+**El presupuesto con tres escenas.** `rb-scene-fan` entra en la lista de lo que puede leer `--ui-scene`
+(«una tercera escena es una decisión del presupuesto»: lo es, de David, del 13 de noviembre); la entrada
+de las caras brota con muelle y dentro del tope; la cola en reposo dentro de 600 ms, con el primer sitio
+escrito; el pliegue nunca con muelle; y ningún botón del abanico ni el eje llevan la entrada, un
+`transform` en línea ni un nombre de transición (aserción de fuente). Ninguna regla nombra `rb-scene-fan`
+como transición.
+
+**Las caminatas** (`sprint 37 día 5 — los anillos se transforman`): la escena (en cada fotograma un anillo
+o el otro a la vista, nunca un hueco; el anillo viejo se ve irse y el nuevo llega a 1; ninguna cara brota
+dos veces; el eje con la misma caja en todos; en reposo dentro del tiempo de la escena y en las cajas del
+módulo); la caja que no viaja (arriba); el brote (cada cara con `ui-spoke-in` y su retardo 0, 40, 80…;
+su desplazamiento es el centro del eje menos el suyo; quietas después; el abanico se va por su copia); y
+la gemela con menos movimiento (todo a opacidad 1 sin recorrido; el cambio de anillo es `ui-fade-in` de
+0,12 s, sin copia del anillo viejo y nada más largo de 180 ms). La caminata del día 4 que decía «sin
+movimiento hoy» al pulsar «Herramientas» asevera ahora la escena: la sexta caminata reescrita del sprint.
+
+**Saboteos, cada uno en rojo por su motivo**: la animación sobre el botón (la pulsación temprana no llega,
+y la aserción de fuente); sin la copia del anillo viejo («nunca un hueco»); sin la copia del abanico («no
+se fue por su copia»); las caras brotando también en la escena («una cara se movió dos veces»); el muelle
+cambiado por la curva de salida (el presupuesto); sin el primer sitio de la cola (el presupuesto y los
+retardos). Sin el foco al eje antes del cambio: **verde**, y por eso la línea se describe como defensiva.

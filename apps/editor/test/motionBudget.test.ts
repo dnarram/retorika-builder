@@ -656,8 +656,9 @@ describe("the vocabulary of sprint 36 and the second register", () => {
     "ui-skeleton",
     "ui-scene-build",
   ];
-  /** The two names that may read `--ui-scene`: a utility and a view-transition name. */
-  const SCENES = ["ui-scene-build", "rb-scene-canvas"];
+  /** The names that may read `--ui-scene`: a utility and two view-transition names — the third,
+   * the radial rail's rings swapping, decided by David on 13 November 2026 (sprint 37 día 5). */
+  const SCENES = ["ui-scene-build", "rb-scene-canvas", "rb-scene-fan"];
   const SCENE_CAP_MS = 400;
 
   it("declares every piece, each at rest inside the interaction cap but the scene", () => {
@@ -1295,5 +1296,101 @@ describe("the radial rail", () => {
     expect(at, "the hub's ring of dots is gone").toBeGreaterThan(0);
     const ring = shell.slice(shell.lastIndexOf("<svg", at), shell.indexOf("</svg>", at));
     expect(ring).not.toMatch(/(?<![\w-])(ui-[\w-]+|animate-[\w-]+|transition[\w-]*|animation)/);
+  });
+});
+
+/**
+ * **The radial rail moves what is seen and never what is pressed** (sprint 37 día 5; David's
+ * adjustment approving the sprint: «la caja que se pulsa no viaja; viaja lo que se ve»).
+ */
+describe("the radial rail's movement", () => {
+  const shell = readStripped(EDITOR_SRC, "editor", "EditorShell.tsx");
+  const RULES_ALL = cssRules(CSS);
+
+  /** The opening tag that starts at `from` (`<button`…`>`), braces counted so an arrow's `>` inside
+   * a handler does not end it. */
+  function openingTag(source: string, from: number): string {
+    let depth = 0;
+    for (let i = from; i < source.length; i += 1) {
+      const c = source[i];
+      if (c === "{") depth += 1;
+      if (c === "}") depth -= 1;
+      if (c === ">" && depth === 0) return source.slice(from, i + 1);
+    }
+    throw new Error(`no end to the tag at ${from}`);
+  }
+
+  it("sprouts a face from the hub on the spring, by transform and opacity, inside the cap", () => {
+    const frames = KEYFRAMES.get("ui-spoke-in") ?? "";
+    expect(frames, "globals.css declares no ui-spoke-in").not.toBe("");
+    expect(frames).not.toMatch(LAYOUT_PROPERTY);
+    expect(frames).toMatch(/var\(--ui-spoke-dx/);
+    const utility = UTILITIES.get("ui-spoke-in") ?? "";
+    expect(utility).toMatch(/var\(--ui-base\) var\(--ui-spring\) backwards/);
+    expect(restOf("ui-spoke-in")).toBeLessThanOrEqual(INTERACTION_CAP_MS);
+  });
+
+  it("brings the faces one after another, all at rest inside 600 ms", () => {
+    const queue = RULES_ALL.filter((rule) => rule.prelude.startsWith("[data-fan-faces]"));
+    const steps = queue.map((rule) =>
+      /--ui-row-delay:\s*0ms/.test(rule.body)
+        ? 0
+        : Number(/var\(--ui-stagger\)\s*\*\s*(\d+)/.exec(rule.body)?.[1] ?? Number.NaN),
+    );
+    // **The first face's place is said, not left unset** (found on the day): unset, it inherited the
+    // strip's own place in the queue of an editor that arrived by the canvas scene, 280 ms.
+    expect(
+      queue.find((rule) => rule.prelude.includes(":nth-child(1)"))?.body ?? "",
+      "the first face inherits a delay from the chrome around it",
+    ).toMatch(/--ui-row-delay:\s*0ms/);
+
+    expect(steps.length, "the fan's faces have no queue").toBeGreaterThan(5);
+    expect(steps.every(Number.isFinite)).toBe(true);
+    expect(Math.max(...steps) * ms("stagger") + ms("base")).toBeLessThanOrEqual(600);
+  });
+
+  it("folds the fan by opacity and transform, in --ui-fast, never on the spring", () => {
+    const leaving = RULES_ALL.find((rule) => rule.prelude === '[data-leaving="fan"]')?.body ?? "";
+    expect(leaving).toMatch(/animation:\s*ui-fold-out var\(--ui-fast\)/);
+    expect(leaving).not.toMatch(/--ui-spring/);
+    expect(KEYFRAMES.get("ui-fold-out") ?? "").not.toMatch(LAYOUT_PROPERTY);
+  });
+
+  it("swaps the rings as the third scene, in CSS: the old ring folds and the new sprouts, both on --ui-scene", () => {
+    const rule = (prelude: string) => RULES_ALL.find((r) => r.prelude === prelude)?.body ?? "";
+    expect(rule('.rb-scene-fan[data-ring-arrival="scene"]')).toMatch(
+      /animation:\s*ui-fan-sprout var\(--ui-scene\) var\(--ui-spring\)/,
+    );
+    expect(rule('.rb-scene-fan[data-leaving="ring"]')).toMatch(
+      /animation:\s*ui-fan-fold var\(--ui-scene\) var\(--ui-ease-shape\)/,
+    );
+    for (const name of ["ui-fan-fold", "ui-fan-sprout"]) {
+      expect(KEYFRAMES.get(name) ?? "", name).not.toMatch(LAYOUT_PROPERTY);
+    }
+    // **Not a view transition**: one would take every press in the editor for its 400 ms.
+    expect(RULES_ALL.some((r) => /view-transition-name:\s*rb-scene-fan/.test(r.body))).toBe(false);
+  });
+
+  it("puts no movement, no transform and no transition name on a pill's button or on the hub", () => {
+    // Every face that sprouts is a span marked as a face.
+    for (const match of shell.matchAll(/ui-spoke-in/g)) {
+      const at = match.index ?? 0;
+      const opener = [...shell.slice(0, at).matchAll(/<(span|button|div|fieldset)\b/g)].at(-1);
+      expect(opener?.[1], "ui-spoke-in on something that is not a face").toBe("span");
+      expect(shell.slice(opener?.index ?? 0, at)).toMatch(/data-spoke-face/);
+    }
+    // And the things that are pressed carry none of it.
+    const pressed = [...shell.matchAll(/<button\b/g)]
+      .map((m) => openingTag(shell, m.index ?? 0))
+      .filter((tag) => /data-spoke=\{|data-testid="rail-hub"/.test(tag));
+    expect(pressed.length, "neither the pills' buttons nor the hub were found").toBe(2);
+    for (const tag of pressed) {
+      expect(tag, "a pressed thing that moves").not.toMatch(
+        /ui-spoke-in|transform\s*:|viewTransition/,
+      );
+    }
+    expect(shell, "a transition name written in the shell rather than the stylesheet").not.toMatch(
+      /viewTransitionName/,
+    );
   });
 });

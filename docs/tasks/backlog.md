@@ -43,7 +43,13 @@ sprint 36.
    billed minutes plus one start-up, half the wall-clock) or raise the limit again. Actions minutes are
    his (protocol, part 9.2).
 4. **Limits of this sprint, named**: what carries a transition name takes no press while it runs (the
-   canvas for the scene's 400 ms, the bar for a page crossing's 120 ms); `.rb-announce` stays in the
+   canvas for the scene's 400 ms, the bar for a page crossing's 120 ms) — **wider than that, measured
+   on sprint 37 día 5**: for the length of a view transition of a document, Chromium hit-tests the whole
+   document to its root (measured on the radial rail's scene built as one: `<html>` at a pill and at
+   «Descargar» in every frame). The canvas scene, a page crossing and a question handing over use the
+   same mechanism, so the same is inferred — nothing in that document takes a press while they run —
+   but they were not each measured. The radial rail's own scene was built in CSS for that reason
+   (REVIEW, sprint 37 día 5); `.rb-announce` stays in the
    frame and the «≡» glyph is David's to veto; the ZIP's weight is not shown before the server builds
    it; and, seen and not investigated, going back to a site's first page leaves the canvas scrolled
    (207 px in the día 7 walk, with the crossing and without it — older than the sprint).
