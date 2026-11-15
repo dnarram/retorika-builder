@@ -9621,3 +9621,74 @@ y la aserción de fuente); sin la copia del anillo viejo («nunca un hueco»); s
 se fue por su copia»); las caras brotando también en la escena («una cara se movió dos veces»); el muelle
 cambiado por la curva de salida (el presupuesto); sin el primer sitio de la cola (el presupuesto y los
 retardos). Sin el foco al eje antes del cambio: **verde**, y por eso la línea se describe como defensiva.
+
+### Día 6 — prueba el menú radial (PR de `feat/prueba-el-menu-radial`)
+
+**Lo que hay.** La primera vez que un dueño abre el editor a 721 px o más con la barra fija, la línea de
+ayuda dice, en reposo, «Prueba el menú radial: se activa al pie de la barra.», con una cruz al lado.
+La cruz la responde, y también el interruptor «Menú radial», en cualquier sentido. Respondida, no vuelve
+en este navegador (`retorika.railNotice.v1`, al lado de la forma del raíl y por sus razones: «Volver a
+empezar» no la trae). Es la decisión 10 del plan y la regla de David: «el editor ofrece probarlo una vez,
+un solo aviso, descartable».
+
+**Por qué en la línea y no en un aviso flotante.** Un aviso que se abre solo, a 300 px de ancho, caería
+sobre la esquina inferior izquierda del lienzo, contra la 0071. En la línea es **la voz más baja del
+hijo silencioso**: se dice solo donde se diría la frase de reposo. Cualquier cosa que traiga el foco se
+dice encima de ella: las teclas, la pista de un texto elegido, la nota de un menú, el recuento de textos
+de ejemplo. Y nunca pasa por el hijo vivo, porque no es una noticia. La tabla de la unidad lo dice estado
+por estado, y la caminata del 36 que recorre los estados de la línea a 768, 1024 y 1280 la encuentra
+ahora en el reposo (la séptima caminata reescrita del sprint, un paso de una línea).
+
+**Dónde se ofrece.** Solo desde 721 px, solo a la barra fija y solo hasta que se responde. En un teléfono
+la barra es la de abajo y no hay interruptor al que señalar; quien ya está en el radial lo encontró.
+Un navegador que no deja guardar la respuesta la pierde igual durante la visita y la vuelve a ver en la
+siguiente: la consecuencia honesta del rechazo, al precio de una frase.
+
+**La frase se midió y se cambió.** La primera, «… el interruptor «Menú radial» está al pie de la barra»,
+medía 451 px en los 440 que la línea tiene a 768, y la elipsis se comía justo dónde. Además, con las
+herramientas de diseño hay dos interruptores al pie y «el interruptor» no dice cuál. La de ahora nombra
+el control por sus propias palabras (las tres primeras de la frase son su etiqueta) y cabe entera. La
+caminata la exige entera a 768, y con la frase larga se pone roja.
+
+**El interruptor no lleva anillo.** El plan le daba `ui-ring-once` al llegar. Ese pulso tarda 1,2 s en
+quedarse quieto, y el editor no mueve nada durante más de 200 ms: es la regla del presupuesto que lo
+mantiene fuera del editor desde el sprint 22. Se queda fuera.
+
+**La cruz y el foco.** La cruz es el primer botón del hijo silencioso, la misma del aviso de borrado.
+Si se responde con el teclado, el foco pasa al interruptor del que habla la frase en vez de caer al
+`body` con la cruz, que mandaría el siguiente Tab al principio de la página.
+
+**Las caminatas** (`sprint 37 día 6 — prueba el menú radial`):
+
+1. **A 1440.** La primera visita ofrece. La línea mide 32 px, no toca la tarjeta, la frase cabe entera
+   y axe pasa con la cruz a la vista. La cruz quita la oferta sin cambiar de forma y la tarjeta no se
+   mueve ni un píxel. Tras recargar no vuelve; sin la clave guardada, sí. Respondida con el teclado, el
+   foco queda en el interruptor. Con un navegador que rechaza la escritura, se va en la visita y vuelve
+   en la siguiente. A 768 se ofrece y cabe entera, a 390 no se ofrece, y al ensanchar vuelve.
+2. **El interruptor también responde.** Pulsarlo pasa al radial y guarda la respuesta. Al volver a la
+   barra fija la oferta no vuelve: esa mitad es la que prueba que el interruptor la escribió, porque en
+   el radial nunca se ofrece.
+
+**Saboteos, cada uno en rojo por su motivo.** En la unidad: la oferta en el hijo vivo, la oferta por
+encima de los textos de ejemplo y la cruz dibujada bajo una frase viva. En las caminatas: la cruz sin
+escribir la respuesta, el interruptor sin responder, sin el foco al interruptor, la oferta calculada con
+la forma guardada en vez de la efectiva (se ofrecía en el teléfono) y un rechazo que dejaba la oferta
+puesta. La frase larga, con la guarda de 768.
+
+**El navegador real.** Chromium a 768, 1024, 1280 y 1440, y un iPad (gen 7) emulado con «Reducir
+movimiento». En cada ancho: la oferta, la oferta con un panel abierto, el cambio de forma, el radial en
+reposo, el abanico de 12 secciones, «Herramientas», «Páginas» elegida desde el abanico y el teclado en el
+eje. En el iPad, la oferta, un toque que abre y «Herramientas» por toque. Nada que cambiar en el raíl. Con
+un panel abierto la oferta se corta por la elipsis a 768 y queda entera en el `title`, como cualquier
+frase de la línea. Visto de paso y más viejo que el sprint, porque pasa en las dos formas: a 1024 × 768
+la pestaña de página de la cabecera solo enseña su elipsis. Queda en el backlog, sin investigar.
+
+**Accesibilidad.** `test:a11y` no se corrió: lee `packages/renderer` y nada más, y hoy no cambia un
+byte de la web publicada. El axe del editor es el de las caminatas, y la de hoy lo corre con la oferta y
+su cruz.
+
+**Lo que quedó corto de los días 2–5** ya tenía nombre en el backlog: la altura de la barra fija (65 px
+más), la capa de cuenta de la preferencia y el Escape de los paneles en la barra fija. Hoy se añaden: la
+oferta podría ir en la cabecera, «Campos» no es herramienta de la barra y no es radio, del anillo de
+herramientas no se vuelve a las secciones sin pasar por el eje, el teclado entra en las secciones por la
+primera, y el editor solo se ha visto en Chromium.
