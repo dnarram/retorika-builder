@@ -795,18 +795,21 @@ function RailLayoutSwitch({
   refused,
   tooMany,
   onChange,
+  buttonRef,
 }: {
   layout: RailLayout;
   refused: boolean;
   /** The open page has more sections than the second ring holds (ADR 0073): the title says so. */
   tooMany: boolean;
   onChange: (layout: RailLayout) => void;
+  buttonRef: React.Ref<HTMLButtonElement>;
 }) {
   const radial = layout === "radial";
   return (
     <div className="relative flex flex-col items-center gap-[5px] pt-1.5">
       <span className="mb-1 h-px w-[52px] bg-ui-border" />
       <button
+        ref={buttonRef}
         type="button"
         role="switch"
         aria-checked={radial}
@@ -1499,6 +1502,8 @@ export function EditorShell({
     quiet: HelpLineSays;
     onUndo: () => void;
     onDismiss: () => void;
+    /** The answer to the radial menu's offer (sprint 37 día 6), when the line makes it. */
+    onDismissOffer?: () => void;
   };
   /**
    * **The zoom the canvas is drawn at, each time it changes** (ADR 0053, David's condition 3).
@@ -1735,6 +1740,8 @@ export function EditorShell({
   const [railSwitched, setRailSwitched] = useState(false);
   /** The radial rail's hub, for the keyboard to come back to when a panel closes (sprint 37 día 3). */
   const radialHub = useRef<HTMLButtonElement>(null);
+  /** The «Menú radial» switch, one in either layout, for the offer's cross to hand the focus to. */
+  const layoutSwitchButton = useRef<HTMLButtonElement>(null);
   const changeRailLayout = (next: RailLayout) => {
     setRailSwitched(true);
     onRailLayoutChange?.(next);
@@ -1960,6 +1967,7 @@ export function EditorShell({
         refused={railLayoutRefused}
         tooMany={sections.length > SECTIONS_CAP}
         onChange={changeRailLayout}
+        buttonRef={layoutSwitchButton}
       />
     );
   /** The rail's tools, in the fixed rail's order: the two the design tools add only while they are on. */
@@ -2590,6 +2598,21 @@ export function EditorShell({
                 quiet={helpLine.quiet}
                 onUndo={helpLine.onUndo}
                 onDismiss={helpLine.onDismiss}
+                {...(helpLine.onDismissOffer
+                  ? {
+                      onDismissOffer: () => {
+                        // The cross is about to leave the page with the focus on it, which would
+                        // drop the focus on <body> and send the next Tab back to the top. It goes
+                        // to the switch the sentence was about instead, where the answer can still
+                        // be changed — only when it was on the cross: a press from elsewhere moves
+                        // nothing.
+                        const fromTheCross = document.activeElement?.closest("[data-help-offer]");
+                        helpLine.onDismissOffer?.();
+                        if (fromTheCross)
+                          layoutSwitchButton.current?.focus({ preventScroll: true });
+                      },
+                    }
+                  : {})}
                 className={`${arrival(arriving, 2)}phone:order-first`}
                 style={arrivalDelay(arriving, 2)}
               />

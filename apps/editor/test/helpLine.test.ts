@@ -115,10 +115,61 @@ describe("the quiet child, which goes with the focus", () => {
       { bound: { places: 2, list: "" } },
       { dragRefused: true },
       { placeholders: 4 },
+      { offer: "radial" as const },
     ]) {
       const says = helpLineFor(at(patch), 0);
       expect(says.quiet.child).toBe("quiet");
       expect(says.live.text, JSON.stringify(patch)).toBe("");
+    }
+  });
+});
+
+/**
+ * **The radial menu, offered once** (sprint 37 día 6, ADR 0072): the line's lowest voice. It takes
+ * the idle hint's place and nothing else's, it is never news, and it is the one quiet sentence that
+ * carries a cross.
+ */
+describe("the offer of the radial menu", () => {
+  it("is said quietly at rest, in place of the idle hint, with its cross", () => {
+    const says = helpLineFor(at({ offer: "radial" }), 0);
+    expect(says.quiet).toEqual({
+      child: "quiet",
+      text: es["editor.rail.try.offer"],
+      tone: "info",
+      offer: true,
+    });
+    expect(says.live.text).toBe("");
+    expect(says.live.offer).toBeUndefined();
+    // A tablet can choose the radial menu too: a touched screen hides keys, not the offer.
+    expect(quietSays(at({ offer: "radial", touch: true })).offer).toBe(true);
+  });
+
+  it("yields to everything else the quiet child has to say, and leaves no cross behind", () => {
+    for (const patch of [
+      { dragRefused: true },
+      { keyboard: "section" as const },
+      { keyboard: "hub" as const },
+      { keyboard: "writing" as const },
+      { menuNote: "composition" as const },
+      { bound: { places: 2, list: "" } },
+      { chosen: { text: true, movable: false } },
+      { placeholders: 1 },
+    ]) {
+      expect(quietSays(at({ ...patch, offer: "radial" })), JSON.stringify(patch)).toEqual(
+        quietSays(at(patch)),
+      );
+    }
+  });
+
+  it("waits under the live child, which keeps its own sentence", () => {
+    for (const patch of [
+      { notice: NOTICE },
+      { announcement: { text: "x", at: 0 } },
+      { download: "error" as const },
+    ]) {
+      const says = helpLineFor(at({ ...patch, offer: "radial" }), 0);
+      expect(says.live).toEqual(liveSays(at(patch), 0));
+      expect(says.quiet.offer).toBe(true);
     }
   });
 });
@@ -213,6 +264,7 @@ describe("no instruction text is read outside the help line", () => {
     "editor.placeholder.",
     "editor.downloadError",
     "editor.downloadBusy",
+    "editor.rail.try.offer",
   ];
   const read = (file: string) =>
     readFileSync(fileURLToPath(new URL(`../src/${file}`, import.meta.url)), "utf8");

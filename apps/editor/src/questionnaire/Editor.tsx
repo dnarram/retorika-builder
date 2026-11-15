@@ -671,6 +671,8 @@ export function Editor({
   railLayout,
   railLayoutRefused,
   onRailLayoutChange,
+  railOffer,
+  onDismissRailOffer,
   onEscalateSection,
   placementWasMoved,
   onRevertSection,
@@ -782,6 +784,10 @@ export function Editor({
   railLayout?: RailLayout | undefined;
   railLayoutRefused?: boolean;
   onRailLayoutChange?: (layout: RailLayout) => void;
+  /** Whether the help line offers the radial menu at rest (sprint 37 día 6), and the answer to it.
+   * The offer is made only with somewhere to send the answer. */
+  railOffer?: boolean;
+  onDismissRailOffer?: () => void;
   /** This section starts being designed by hand, and goes back to the catalog's layout. One
    * history step each, so Ctrl+Z covers the first minutes — which is what the advanced dossier §5
    * asks for and the reason day 4's dialog is about the durable case rather than this one.
@@ -2591,6 +2597,7 @@ export function Editor({
       download: state,
       photoError,
       placeholders,
+      offer: railOffer === true && onDismissRailOffer ? "radial" : null,
     },
     Date.now(),
   );
@@ -9487,6 +9494,7 @@ export function Editor({
         ...helpSays,
         onUndo: undoFromHistory,
         onDismiss: onDismissToast,
+        ...(onDismissRailOffer ? { onDismissOffer: onDismissRailOffer } : {}),
       }}
       device={device}
       onDeviceChange={setDevice}

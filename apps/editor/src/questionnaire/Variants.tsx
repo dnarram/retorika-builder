@@ -91,9 +91,12 @@ import { withFontUrls, withPhotoUrls } from "../editor/previewDocument.ts";
 import { record } from "../editor/probe.ts";
 import {
   loadRailLayout,
+  loadRailOfferDismissed,
   type RailLayout,
   railLayoutFor,
+  railOfferFor,
   saveRailLayout,
+  saveRailOfferDismissed,
 } from "../editor/railLayout.ts";
 import { sampleUrl } from "../editor/samplePhotos.ts";
 import { transitionScreen } from "../editor/screenTransition.ts";
@@ -844,6 +847,18 @@ export function Variants({
    */
   const [railLayout, setRailLayout] = useState<RailLayout>("fixed");
   const [railRefused, setRailRefused] = useState(false);
+  /**
+   * **Whether the radial menu has been offered and answered** (sprint 37 día 6). `true` until the
+   * browser is read, so the server's render and the first frame never show an offer that the stored
+   * answer would take back; then the stored answer. Answering — the cross, or the switch in either
+   * direction — hides it for this session whatever the browser does with the write: a refusal only
+   * means it is offered again on the next visit.
+   */
+  const [railOfferDismissed, setRailOfferDismissed] = useState(true);
+  const dismissRailOffer = () => {
+    setRailOfferDismissed(true);
+    saveRailOfferDismissed();
+  };
 
   /**
    * Who the switch belongs to, once there is somebody for it to belong to.
@@ -856,6 +871,7 @@ export function Variants({
   useEffect(() => {
     setDesignTools(loadDesignTools());
     setRailLayout(loadRailLayout());
+    setRailOfferDismissed(loadRailOfferDismissed());
     const measure = () => setViewportWidth(window.innerWidth);
     measure();
     window.addEventListener("resize", measure);
@@ -1669,10 +1685,17 @@ export function Variants({
           railLayout={railLayoutFor(railLayout, viewportWidth <= PHONE_BREAKPOINT)}
           railLayoutRefused={railRefused}
           onRailLayoutChange={(layout) => {
-            // Not an edit, like the design-tools switch: no `dismissToast`, no history step.
+            // Not an edit, like the design-tools switch: no `dismissToast`, no history step. And an
+            // answer to the offer, in either direction: whoever found the switch needs no pointer to it.
             setRailLayout(layout);
             if (!saveRailLayout(layout)) setRailRefused(true);
+            dismissRailOffer();
           }}
+          railOffer={railOfferFor(
+            railLayoutFor(railLayout, viewportWidth <= PHONE_BREAKPOINT),
+            railOfferDismissed,
+          )}
+          onDismissRailOffer={dismissRailOffer}
           onEscalateSection={(sectionId, boxes) => {
             dismissToast();
             // The boxes the canvas measured the instant before the press (ADR 0050 §3): this

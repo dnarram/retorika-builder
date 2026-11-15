@@ -126,3 +126,12 @@ left edge while it is open. It is not covered by this ADR's rule and does not br
 controls with a name each, as a drop zone's (ADR 0066) are, not words telling the person what to do — and
 at rest it is not on the page at all. The words about it (its keys) are the help line's, as every other
 key is.
+
+## Note — the quiet child's lowest voice, and its one button (15 November 2026, sprint 37 día 6)
+
+The radial menu's offer ([ADR 0072](0072-the-rail-has-two-layouts-and-the-layout-is-the-owners-in-this-browser.md),
+note of 15 November) is said by this line, which is why it is not a popover. In §3's priority it sits
+**under everything and over rest**: the quiet child says it only where it would otherwise say the idle
+sentence, and never in the live one. It is the first sentence of the quiet child with a button beside
+it — a cross that answers it, drawn only while that sentence is the one shown. The line is still 32 px
+with it, and the walk measures it whole and clear of the card at 768 and 1440.

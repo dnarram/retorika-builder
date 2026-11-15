@@ -52,3 +52,35 @@ export function saveRailLayout(layout: RailLayout): boolean {
 export function railLayoutFor(stored: RailLayout, phone: boolean): RailLayout | undefined {
   return phone ? undefined : stored;
 }
+
+const OFFER_KEY = "retorika.railNotice.v1";
+
+/**
+ * **The radial menu is offered once** (sprint 37 día 6, David's decision of 13 November 2026: «el
+ * editor ofrece probarlo una vez»): a sentence in the help line, at rest, with a cross. Pressing the
+ * cross, or the switch itself in either direction, writes this — and the offer is not made again in
+ * this browser. A browser that refuses to keep it simply offers it again next time, which is the
+ * honest consequence of being refused, and costs one sentence.
+ */
+export function loadRailOfferDismissed(): boolean {
+  try {
+    return globalThis.localStorage.getItem(OFFER_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function saveRailOfferDismissed(): boolean {
+  try {
+    globalThis.localStorage.setItem(OFFER_KEY, "1");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Whether the help line offers the radial menu: only where it can be chosen, only while the rail is
+ * the fixed one, and only until the offer was answered. */
+export function railOfferFor(layout: RailLayout | undefined, dismissed: boolean): boolean {
+  return layout === "fixed" && !dismissed;
+}
