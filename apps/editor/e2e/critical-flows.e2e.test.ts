@@ -27921,8 +27921,12 @@ describe("sprint 36 día 1 — la línea de ayuda sale de la página", () => {
           expect(drawn, `${state}: an instruction is drawn over the page again`).toEqual([]);
         };
 
-        // 1. At rest: the idle sentence, and nothing in the live voice.
-        await expect(quiet).toContainText("Haz doble clic en cualquier texto");
+        // 1. At rest: the idle sentence, and nothing in the live voice. From 721 px on a first
+        //    visit, the radial menu's offer is said in its place (sprint 37 día 6) — the line's
+        //    lowest voice, which is what is at rest here, and which this guard then holds too.
+        await expect(quiet).toContainText(
+          width > 720 ? "Prueba el menú radial" : "Haz doble clic en cualquier texto",
+        );
         await expect(live).toHaveText("");
         await clear("en reposo");
 
@@ -31037,6 +31041,173 @@ describe("sprint 37 día 5 — los anillos se transforman", () => {
         180,
       );
       await expect(page.locator(RAIL_FAN)).toHaveAttribute("data-ring", "tools");
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
+});
+
+/**
+ * **Sprint 37 día 6 — prueba el menú radial** (David's decision of 13 November 2026: «el editor
+ * ofrece probarlo una vez … un solo aviso, descartable»). The offer is the help line's quietest
+ * sentence: said at rest, from 721 px, only to the fixed rail, and only until it is answered — by its
+ * cross or by the switch, in either direction. It is said in the line and never over the page (ADR
+ * 0071), and the answer is this browser's, like the layout it is about.
+ */
+describe("sprint 37 día 6 — prueba el menú radial", () => {
+  const OFFER = "Prueba el menú radial";
+  const IDLE = "Haz doble clic en cualquier texto";
+  const ANSWERED = "retorika.railNotice.v1";
+  const FIXED_RAIL = 'nav[data-testid="rail"]:not([data-rail-layout])';
+
+  /** ADR 0071's guard with the offer in the line: its height, whether it meets the card, the card's
+   * box, and whether the sentence is whole rather than cut by the ellipsis. */
+  async function lineBesideCard(page: Page) {
+    await motionSettled(page);
+    return page.evaluate(() => {
+      const line = document.querySelector('[data-testid="help-line"]')?.getBoundingClientRect();
+      const card = document.querySelector('[data-testid="canvas-card"]')?.getBoundingClientRect();
+      const quiet = document.querySelector<HTMLElement>('[data-testid="help-line-quiet"]');
+      if (!line || !card || !quiet)
+        throw new Error("the line, the card or the quiet child is missing");
+      return {
+        height: Math.round(line.height),
+        meets: !(
+          line.top >= card.bottom - 0.5 ||
+          line.bottom <= card.top + 0.5 ||
+          line.left >= card.right ||
+          line.right <= card.left
+        ),
+        card: [card.x, card.y, card.width, card.height].map(Math.round).join(","),
+        whole: quiet.scrollWidth <= quiet.clientWidth,
+      };
+    });
+  }
+
+  /** Press the cross where it is drawn (`page.mouse`, never `locator.click()`). */
+  async function pressCross(page: Page): Promise<void> {
+    const box = await page.locator("[data-help-offer]").boundingBox();
+    if (!box) throw new Error("the offer's cross is not drawn");
+    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  }
+
+  const answered = (page: Page) => page.evaluate((key) => localStorage.getItem(key), ANSWERED);
+
+  it("se ofrece una vez a 1440, en la línea y no sobre la página, y la cruz lo responde", async () => {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    const page = await context.newPage();
+    try {
+      await intoTheCanvas(page);
+      const quiet = page.getByTestId("help-line-quiet");
+      const cross = page.locator("[data-help-offer]");
+      // The header gains its status row with the first autosave; the card's box is read after it.
+      await expect(page.getByText("Guardado en este navegador")).toBeVisible();
+
+      // A first visit: the line offers, quietly, with a named cross, over nothing.
+      await expect(quiet).toContainText(OFFER);
+      await expect(page.getByTestId("help-line-live")).toHaveText("");
+      await expect(cross).toHaveAccessibleName("No mostrar más esta sugerencia");
+      await expect(page.locator(FIXED_RAIL)).toHaveCount(1);
+      const offered = await lineBesideCard(page);
+      expect(offered.height, "the line is not 32 px with the offer in it").toBe(32);
+      expect(offered.meets, "the offer's line meets the canvas card").toBe(false);
+      expect(offered.whole, "the offer is cut by the ellipsis at 1440").toBe(true);
+      await axeSerious(page, "la oferta del menú radial a 1440");
+
+      // The cross answers it — an answer, not a switch: the rail stays the fixed one, the idle
+      // sentence comes back, and the card does not move by a pixel (David's condition for the line).
+      await pressCross(page);
+      await expect(cross).toHaveCount(0);
+      await expect(quiet).toContainText(IDLE);
+      expect(await answered(page)).toBe("1");
+      await expect(page.locator(FIXED_RAIL)).toHaveCount(1);
+      expect((await lineBesideCard(page)).card, "the card moved when the offer went").toBe(
+        offered.card,
+      );
+
+      // Answered for good: the restored editor does not offer it again.
+      await page.reload({ waitUntil: "networkidle" });
+      await expect(page.locator(FIXED_RAIL)).toHaveCount(1);
+      await expect(quiet).toContainText(IDLE);
+      await expect(cross).toHaveCount(0);
+
+      // The stored answer is what keeps it away: without it, the next visit offers again. And
+      // answered from the keyboard, the focus goes to the switch the sentence spoke of — not to
+      // <body>, which would send the next Tab back to the top of the page.
+      await page.evaluate((key) => localStorage.removeItem(key), ANSWERED);
+      await page.reload({ waitUntil: "networkidle" });
+      await expect(quiet).toContainText(OFFER);
+      await cross.focus();
+      await page.keyboard.press("Enter");
+      await expect(cross).toHaveCount(0);
+      expect(
+        await page.evaluate(() => {
+          const at = document.activeElement;
+          return `${at?.getAttribute("role")} ${at?.getAttribute("aria-label")}`;
+        }),
+      ).toBe("switch Menú radial");
+      await expect(page.getByRole("switch", { name: "Menú radial" })).toHaveAttribute(
+        "aria-checked",
+        "false",
+      );
+      expect(await answered(page)).toBe("1");
+
+      // A browser that refuses to keep the answer: the offer goes for this visit, and is made
+      // again on the next — the honest consequence of being refused.
+      await page.evaluate((key) => localStorage.removeItem(key), ANSWERED);
+      await page.addInitScript((key) => {
+        const set = Storage.prototype.setItem;
+        Storage.prototype.setItem = function (name: string, value: string) {
+          if (name === key) throw new DOMException("refused", "SecurityError");
+          set.call(this, name, value);
+        };
+      }, ANSWERED);
+      await page.reload({ waitUntil: "networkidle" });
+      await expect(quiet).toContainText(OFFER);
+      await pressCross(page);
+      await expect(cross).toHaveCount(0);
+      await expect(quiet).toContainText(IDLE);
+      expect(await answered(page)).toBeNull();
+      await page.reload({ waitUntil: "networkidle" });
+      await expect(quiet).toContainText(OFFER);
+
+      // Offered from 721 px only: at 768 it is there, on a phone the rail is the bar along the
+      // bottom (ADR 0042) with no switch to point at, and widening the window brings it back.
+      await page.setViewportSize({ width: 768, height: 1024 });
+      await expect(quiet).toContainText(OFFER);
+      await page.setViewportSize({ width: 390, height: 844 });
+      await expect(page.getByRole("switch", { name: "Menú radial" })).toHaveCount(0);
+      await expect(quiet).not.toContainText(OFFER);
+      await expect(cross).toHaveCount(0);
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await expect(quiet).toContainText(OFFER);
+    } finally {
+      await context.close();
+    }
+  }, 240_000);
+
+  it("el interruptor también lo responde, en los dos sentidos", async () => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+    const page = await context.newPage();
+    try {
+      await intoTheCanvas(page);
+      const quiet = page.getByTestId("help-line-quiet");
+      await expect(quiet).toContainText(OFFER);
+      await page.getByRole("switch", { name: "Menú radial" }).click();
+      await expect(page.locator('nav[data-rail-layout="radial"]')).toHaveCount(1);
+      expect(await answered(page)).toBe("1");
+
+      // Radial after a reload, and nothing offered: whoever is on it found it.
+      await page.reload({ waitUntil: "networkidle" });
+      await expect(page.locator('nav[data-rail-layout="radial"]')).toHaveCount(1);
+      await expect(quiet).toContainText(IDLE);
+
+      // Back to the fixed rail, the offer stays answered. This is the half that proves the switch
+      // wrote it: on the radial menu the offer is never made, answered or not.
+      await page.getByRole("switch", { name: "Menú radial" }).click();
+      await expect(page.locator(FIXED_RAIL)).toHaveCount(1);
+      await expect(quiet).toContainText(IDLE);
+      await expect(page.locator("[data-help-offer]")).toHaveCount(0);
     } finally {
       await context.close();
     }
