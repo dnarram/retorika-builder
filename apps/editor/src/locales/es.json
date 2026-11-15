@@ -163,7 +163,7 @@
   "editor.rail.fan.sections": "Secciones de esta página",
   "editor.rail.fan.toTools": "Herramientas",
   "editor.rail.fan.sectionLabel": "{name}, sección {index} de {count}",
-  "editor.rail.try.offer": "Prueba el menú radial: el interruptor «Menú radial» está al pie de la barra.",
+  "editor.rail.try.offer": "Prueba el menú radial: se activa al pie de la barra.",
   "editor.rail.try.dismiss": "No mostrar más esta sugerencia",
   "editor.rail.layout.tooMany": "Esta página tiene más de 16 secciones: el menú radial abre las herramientas, no las secciones.",
   "editor.rail.style": "Estilo",

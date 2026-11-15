@@ -31175,6 +31175,12 @@ describe("sprint 37 día 6 — prueba el menú radial", () => {
       // bottom (ADR 0042) with no switch to point at, and widening the window brings it back.
       await page.setViewportSize({ width: 768, height: 1024 });
       await expect(quiet).toContainText(OFFER);
+      // And whole there, at the narrowest window it is made in: the line cuts with an ellipsis and
+      // keeps the sentence in its title, but an offer cut before «al pie de la barra» points
+      // nowhere. The first wording measured 451 px in the 440 the line has here.
+      const narrow = await lineBesideCard(page);
+      expect(narrow.whole, "the offer is cut by the ellipsis at 768").toBe(true);
+      expect(narrow.meets, "the offer's line meets the canvas card at 768").toBe(false);
       await page.setViewportSize({ width: 390, height: 844 });
       await expect(page.getByRole("switch", { name: "Menú radial" })).toHaveCount(0);
       await expect(quiet).not.toContainText(OFFER);
