@@ -1892,7 +1892,7 @@ describe("sprint 6 día 7 — fotos subidas desde el panel y desde el aviso, log
     try {
       await walkPage.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
       await walkPage.fill("#nombre", "Taberna Santo Domingo");
-      // The logo (day 6): a blue disc, close enough to classic-blue's own primary to choose it.
+      // The logo: a blue disc, `#2563EB`, whose colour the site carries (sprint 38 día 3).
       await walkPage.locator("#logo").setInputFiles(join(import.meta.dirname, "fixtures/logo.png"));
       await expect(walkPage.getByText(/Hemos sacado los colores de tu logo/)).toBeVisible();
       await walkPage.getByRole("button", { name: "Siguiente" }).click();
@@ -2078,9 +2078,10 @@ describe("sprint 6 día 7 — fotos subidas desde el panel y desde el aviso, log
       try {
         await offlinePage.goto(`file://${filePath}`, { waitUntil: "load" });
         await expect(offlinePage.getByText("Taberna Santo Domingo").first()).toBeVisible();
-        // The logo's palette (day 6): classic-blue's own primary, `#1D4ED8`, applied to the
-        // headline — not the terracotta `restaurante-bar`'s own sector default would have used.
-        await expect(offlinePage.locator("h1")).toHaveCSS("color", "rgb(29, 78, 216)");
+        // The logo's colours (sprint 38 día 3, ADR 0076): the disc's own blue, `#2563EB`, on the
+        // headline — no longer classic-blue's `#1D4ED8`, the predefined palette nearest to it, which
+        // is what the logo used to choose and the defect David named.
+        await expect(offlinePage.locator("h1")).toHaveCSS("color", "rgb(37, 99, 235)");
         const images = offlinePage.locator("img");
         // The cover, the gallery's photograph, and the logo in the header (ADR 0059) — loaded from
         // the ZIP, with no server behind the page: `failed` below is the proof.
@@ -31259,4 +31260,226 @@ describe("sprint 37 día 6 — prueba el menú radial", () => {
       await context.close();
     }
   }, 180_000);
+});
+
+/**
+ * **Sprint 38 día 3 — the logo's colours are the site's** (ADR 0076, David's brief of 16 November 2026:
+ * «los colores del logo SON los colores de marca del usuario»). Until today a logo only *chose* the
+ * predefined palette nearest to it, or none: a blue disc gave a site in classic-blue's `#1D4ED8`, a
+ * yellow one gave Retorika's neutral blue. The palette is now derived from the logo's own colour.
+ */
+describe("sprint 38 día 3 — los colores del logo son los de la web", () => {
+  const rgb = (hex: string) =>
+    `rgb(${[1, 3, 5].map((i) => Number.parseInt(hex.slice(i, i + 2), 16)).join(", ")})`;
+  /** What the canvas paints the headline and the first button with, read off the computed style. */
+  const painted = (frame: FrameLocator) =>
+    frame.locator("body").evaluate(() => {
+      const h1 = document.querySelector("h1");
+      const button = document.querySelector('.rb-section [role="button"]');
+      if (!h1 || !button) throw new Error("no headline or no button in the canvas");
+      return {
+        heading: getComputedStyle(h1).color,
+        button: getComputedStyle(button).backgroundColor,
+        buttonWords: getComputedStyle(button).color,
+      };
+    });
+
+  /** The five questions with a logo at the first, and the first proposal opened. */
+  async function generatedWith(page: Page, logo: string, says: RegExp): Promise<FrameLocator> {
+    await page.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
+    await page.fill("#nombre", "Taberna Santo Domingo");
+    await page.locator("#logo").setInputFiles(join(import.meta.dirname, `fixtures/${logo}`));
+    await expect(page.getByText(says)).toBeVisible();
+    await page.getByRole("button", { name: "Siguiente" }).click();
+    await page.getByText("Restaurante y bar", { exact: true }).click();
+    await page.getByRole("button", { name: "Siguiente" }).click();
+    await page.getByText("Comidas", { exact: true }).click();
+    await page.getByRole("button", { name: "Siguiente" }).click();
+    await page.fill("#direccion", "Cta. de Santo Domingo, 2, Ronda");
+    await page.getByRole("button", { name: "Siguiente" }).click();
+    await page.getByText("Que reserven", { exact: true }).click();
+    await page.fill("#enlace", "https://reservas.example.com/taberna");
+    await page.getByRole("button", { name: "Crear mi web" }).click();
+    await page.getByText("Ver a tamaño real →").first().click();
+    await sceneOver(page);
+    const frame = page.frameLocator(PREVIEW).first();
+    await frame.locator('[data-section="sec-cover"]').waitFor();
+    return frame;
+  }
+
+  it("lleva el color del logo desde la pregunta 1: el azul exacto, el amarillo como relleno, el blanco y negro neutro", async () => {
+    // A context per logo: a context's `localStorage` holds the session the first one generated, and
+    // the questionnaire's address would open that session's editor instead of question 1.
+    const contexts: BrowserContext[] = [];
+    const fresh = async () => {
+      const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+      contexts.push(context);
+      return context.newPage();
+    };
+    try {
+      // The blue disc: its own `#2563EB` everywhere, headline and button, under white.
+      const blue = await generatedWith(
+        await fresh(),
+        "logo.png",
+        /Hemos sacado los colores de tu logo: serán los de toda la web/,
+      );
+      expect(await painted(blue)).toEqual({
+        heading: rgb("#2563EB"),
+        button: rgb("#2563EB"),
+        buttonWords: expect.any(String),
+      });
+
+      // The yellow disc: too light to be read as text on white (1.50:1), so it fills the buttons as
+      // it is under the palette's dark ink, and the headline takes the darker sibling — and question
+      // 1 says so before anything is generated.
+      const yellowPage = await fresh();
+      const yellow = await generatedWith(yellowPage, "logo-amarillo.png", /un tono más oscuro/);
+      expect(await painted(yellow)).toEqual({
+        heading: rgb("#8D7000"),
+        button: rgb("#FFCD00"),
+        buttonWords: rgb("#201A09"),
+      });
+
+      // The white mark: no colour to take, said, and the neutral start.
+      const white = await generatedWith(
+        await fresh(),
+        "logo-blanco.png",
+        /Tu logo es en blanco y negro/,
+      );
+      expect((await painted(white)).heading).toBe(rgb("#156FE7"));
+
+      // And «Estilo» offers the logo's two palettes first, the light one ticked.
+      await yellowPage.getByRole("button", { name: "Estilo", exact: true }).click();
+      const radios = yellowPage.getByRole("group", { name: "COLORES" }).getByRole("radio");
+      await expect(
+        yellowPage.getByRole("radio", { name: "De tu logo", exact: true }),
+      ).toBeChecked();
+      await expect(radios.nth(0)).toHaveAccessibleName("De tu logo");
+      await expect(radios.nth(1)).toHaveAccessibleName("De tu logo, oscura");
+      // The dark one: the yellow is the text and the page is dark.
+      await yellowPage.getByRole("radio", { name: "De tu logo, oscura" }).check();
+      await expect.poll(async () => (await painted(yellow)).heading).toBe(rgb("#FFCD00"));
+    } finally {
+      for (const context of contexts) await context.close();
+    }
+  }, 240_000);
+
+  it("pinta una web sin tocar con el logo subido después, y Deshacer quita los colores y deja el logo", async () => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+    const studio = await context.newPage();
+    try {
+      await intoTheCanvas(studio);
+      const frame = studio.frameLocator(PREVIEW).first();
+      expect((await painted(frame)).heading).toBe(rgb("#156FE7"));
+
+      await studio.getByRole("button", { name: "Menú", exact: true }).click();
+      const panel = studio.getByRole("complementary", { name: "La cabecera de tu web" });
+      const upload = async () => {
+        const [chooser] = await Promise.all([
+          studio.waitForEvent("filechooser"),
+          panel
+            .getByRole("button", { name: /Subir tu logo|Cambiar/ })
+            .first()
+            .click(),
+        ]);
+        await chooser.setFiles(join(import.meta.dirname, "fixtures/logo-amarillo.png"));
+      };
+      await upload();
+      await expect(frame.locator("img.rb-logo")).toHaveCount(1);
+      await expect.poll(async () => (await painted(frame)).button).toBe(rgb("#FFCD00"));
+      expect((await painted(frame)).heading).toBe(rgb("#8D7000"));
+
+      // The line says it in its live voice, with «Deshacer»: one press takes the colours back and
+      // leaves the logo — the colours were a step of their own after the logo's.
+      const live = studio.getByTestId("help-line-live");
+      await expect(live).toContainText("Tu web ya lleva los colores de tu logo.");
+      await studio.getByTestId("help-line").getByRole("button", { name: "Deshacer" }).click();
+      await expect.poll(async () => (await painted(frame)).heading).toBe(rgb("#156FE7"));
+      await expect(frame.locator("img.rb-logo")).toHaveCount(1);
+
+      // Back in the untouched start with the logo on it: the line offers the colours instead.
+      await expect(studio.getByTestId("help-line-quiet")).toContainText(
+        "Los colores de tu logo están en «Estilo»",
+      );
+
+      // Uploaded again, applied again; then «Quitar» the logo, and the colours stay the owner's.
+      await upload();
+      await expect.poll(async () => (await painted(frame)).button).toBe(rgb("#FFCD00"));
+      await panel.getByRole("button", { name: "Quitar" }).click();
+      await expect(frame.locator("img.rb-logo")).toHaveCount(0);
+      expect((await painted(frame)).button).toBe(rgb("#FFCD00"));
+    } finally {
+      await context.close();
+    }
+  }, 240_000);
+
+  it("respeta una paleta elegida: el logo subido después solo se ofrece, una vez, y la cruz lo recuerda", async () => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+    const studio = await context.newPage();
+    try {
+      await intoTheCanvas(studio);
+      const frame = studio.frameLocator(PREVIEW).first();
+      // «Neutra» chosen on purpose after trying another palette: same colours as the untouched start,
+      // and still the owner's choice (David's adjustment 1) — the logo must not repaint it.
+      await studio.getByRole("button", { name: "Estilo", exact: true }).click();
+      await studio.getByRole("radio", { name: "Terracota cálida" }).check();
+      await studio.getByRole("radio", { name: "Neutra", exact: true }).check();
+      await expect.poll(async () => (await painted(frame)).heading).toBe(rgb("#156FE7"));
+
+      await studio.getByRole("button", { name: "Menú", exact: true }).click();
+      const panel = studio.getByRole("complementary", { name: "La cabecera de tu web" });
+      const [chooser] = await Promise.all([
+        studio.waitForEvent("filechooser"),
+        panel.getByRole("button", { name: "Subir tu logo" }).click(),
+      ]);
+      await chooser.setFiles(join(import.meta.dirname, "fixtures/logo-amarillo.png"));
+      await expect(frame.locator("img.rb-logo")).toHaveCount(1);
+      const quiet = studio.getByTestId("help-line-quiet");
+      await expect(quiet).toContainText("Los colores de tu logo están en «Estilo»");
+      expect((await painted(frame)).heading).toBe(rgb("#156FE7"));
+      await expect(studio.getByTestId("help-line-live")).not.toContainText(
+        "Tu web ya lleva los colores de tu logo",
+      );
+
+      // «Estilo» has «De tu logo» first, unticked.
+      await studio.getByRole("button", { name: "Estilo", exact: true }).click();
+      const fromLogo = studio.getByRole("radio", { name: "De tu logo", exact: true });
+      await expect(fromLogo).not.toBeChecked();
+      await expect(
+        studio.getByRole("group", { name: "COLORES" }).getByRole("radio").first(),
+      ).toHaveAccessibleName("De tu logo");
+
+      // The cross answers the offer, and a reload does not bring it back.
+      await studio
+        .getByTestId("help-line")
+        .getByRole("button", { name: "No mostrar más esta sugerencia" })
+        .click();
+      await expect(quiet).not.toContainText("Los colores de tu logo");
+      // The session is written 500 ms after the last change: a reload before that is a reload of the
+      // session before the logo, which is what a person a second later would not do.
+      await expect
+        .poll(() =>
+          studio.evaluate(() => {
+            const session = JSON.parse(localStorage.getItem("retorika.session.v1") ?? "{}") as {
+              openIndex?: number;
+              documents?: { header?: { brand?: { logo?: unknown } } }[];
+            };
+            return session.documents?.[session.openIndex ?? 0]?.header?.brand?.logo !== undefined;
+          }),
+        )
+        .toBe(true);
+      await studio.reload({ waitUntil: "networkidle" });
+      await frame.locator('[data-section="sec-cover"]').waitFor();
+      await expect(studio.frameLocator(PREVIEW).first().locator("img.rb-logo")).toHaveCount(1);
+      // The logo's colours are read again from its bytes — «De tu logo» is back in «Estilo» — and the
+      // offer, answered, is not.
+      await studio.getByRole("button", { name: "Estilo", exact: true }).click();
+      await expect(studio.getByRole("radio", { name: "De tu logo", exact: true })).toHaveCount(1);
+      await expect(studio.getByTestId("help-line-quiet")).not.toContainText(
+        "Los colores de tu logo",
+      );
+    } finally {
+      await context.close();
+    }
+  }, 240_000);
 });
