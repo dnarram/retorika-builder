@@ -128,6 +128,34 @@ describe("setTheme", () => {
     );
   });
 
+  // ADR 0075, sprint 38 día 3: the origin travels with the theme when the caller knows it, and an
+  // omitted origin leaves the one the document has.
+  it("writes the origin it is given, and keeps the one the document has when given none", () => {
+    const doc = documentWith(before);
+    const chosen = setTheme(doc, after, { kind: "palette", id: "classic-blue" });
+    expect(chosen.palette).toEqual({ kind: "palette", id: "classic-blue" });
+    const retyped = setTheme(chosen, { ...after, "font.body": "font.body-other" });
+    expect(retyped.palette).toEqual({ kind: "palette", id: "classic-blue" });
+    expect(Object.hasOwn(setTheme(doc, after), "palette")).toBe(false);
+  });
+
+  it("counts a new origin for the same colours as a change, and the same origin as none", () => {
+    // «Neutra» chosen on purpose after the untouched start: nothing visible moves, and the document
+    // still has to say somebody chose it.
+    const doc = documentWith(before);
+    const chosen = setTheme(doc, before, { kind: "palette", id: "neutral" });
+    expect(chosen).not.toBe(doc);
+    expect(chosen.palette).toEqual({ kind: "palette", id: "neutral" });
+    expect(setTheme(chosen, before, { kind: "palette", id: "neutral" })).toBe(chosen);
+    expect(setTheme(chosen, before)).toBe(chosen);
+  });
+
+  it("refuses an origin outside its three kinds", () => {
+    expect(() =>
+      setTheme(documentWith(before), after, { kind: "sector" } as unknown as never),
+    ).toThrow(/not a palette origin/);
+  });
+
   it("does not write anything when it refuses", () => {
     const doc = documentWith(before);
     const { "font.body": _dropped, ...partial } = after;

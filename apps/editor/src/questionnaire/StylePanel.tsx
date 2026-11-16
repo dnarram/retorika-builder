@@ -1,5 +1,6 @@
 "use client";
 
+import type { LogoColours } from "@retorika/generator";
 import type { OwnFont, Theme } from "@retorika/schema";
 import {
   type FontKey,
@@ -7,6 +8,7 @@ import {
   identifyScale,
   identifyTypePair,
   PALETTES,
+  type PaletteColors,
   RENDERED_COLOR_KEYS,
   SCALES,
   TYPE_PAIRS,
@@ -20,6 +22,8 @@ import {
   ownFaceCss,
   typePairNoteText,
 } from "../editor/letterGallery.ts";
+import { type LogoPalettes, sameColours } from "../editor/logoColours.ts";
+import { nearestPalette, parseHex } from "../editor/logoPalette.ts";
 import {
   PANEL_WIDTH,
   PanelClose,
@@ -88,6 +92,14 @@ export interface StylePanelProps {
   fonts: readonly OwnFont[];
   fontUrls: ReadonlyMap<string, string>;
   onPickPalette: (paletteId: string) => void;
+  /**
+   * The two palettes the logo's colours make, light and dark (sprint 38 día 3, ADR 0076), and the
+   * colours they came from — `null` without a logo, or for one with no colour in it. Offered first,
+   * because a logo's colours are the brand's; the predefined palettes are for whoever brought none.
+   */
+  logoPalettes: LogoPalettes | null;
+  logoColours: LogoColours | null;
+  onPickLogoPalette?: (colors: PaletteColors) => void;
   onPickTypePair: (typePairId: string) => void;
   /**
    * Open the letter chooser for one of the two font tokens (ADR 0046, sprint 29 día 1).
@@ -145,6 +157,9 @@ export function StylePanel({
   fonts,
   fontUrls,
   onPickPalette,
+  logoPalettes,
+  logoColours,
+  onPickLogoPalette,
   onPickTypePair,
   onOpenChooser,
   onPickScale,
@@ -155,7 +170,34 @@ export function StylePanel({
   const paletteGroup = useId();
   const typeGroup = useId();
   const scaleGroup = useId();
-  const current = identifyPalette(theme);
+  const logoNote = useId();
+  // Which logo palette the site wears, if any — compared on every colour, the fill pair included, as
+  // `identifyPalette` compares a predefined one.
+  const logoRows =
+    logoPalettes && onPickLogoPalette
+      ? (
+          [
+            ["light", es["editor.style.fromLogo"], logoPalettes.light],
+            ["dark", es["editor.style.fromLogoDark"], logoPalettes.dark],
+          ] as const
+        ).map(([surface, label, colors]) => ({
+          surface,
+          label,
+          colors,
+          selected: sameColours(theme, colors),
+        }))
+      : [];
+  const wearingLogo = logoRows.some((row) => row.selected);
+  const current = wearingLogo ? undefined : identifyPalette(theme);
+  // «Se parece a» is information about a predefined palette, never a choice of one (ADR 0076).
+  const near = logoColours ? nearestPalette(parseHex(logoColours.brand)) : null;
+  const nearName = near
+    ? PALETTES.find((palette) => palette.id === near.paletteId)?.nameKey
+    : undefined;
+  const logoNotes = [
+    ...(logoPalettes?.darkerForText ? [es["editor.style.darkerForText"]] : []),
+    ...(nearName ? [es["editor.style.looksLike"].replace("{palette}", nameOf(nearName))] : []),
+  ];
   const currentType = identifyTypePair(theme);
   const currentScale = identifyScale(theme);
   const familyRows = FAMILY_CHOICES.map((choice) => ({
@@ -186,12 +228,60 @@ export function StylePanel({
         <legend className="mb-1 p-0 text-[11px] font-bold tracking-[0.09em] text-ui-muted">
           {es["editor.style.colors"]}
         </legend>
-        {current === undefined ? (
+        {current === undefined && !wearingLogo ? (
           // Not an error and not a blank space to wonder about: the honest state for a theme no
           // palette produced, which a restored document or a hand-edited one can be. Clicking any
           // palette resolves it.
           <p className="m-0 text-[12px] leading-snug text-ui-muted">
             {es["editor.style.noPalette"]}
+          </p>
+        ) : null}
+        {logoRows.map((row) => (
+          <label
+            key={row.surface}
+            data-logo-palette={row.surface}
+            className={
+              "relative flex h-14 cursor-pointer items-center gap-3.5 px-4 " +
+              (row.selected ? panelRowSelected : panelRow)
+            }
+          >
+            <input
+              type="radio"
+              name={paletteGroup}
+              checked={row.selected}
+              onChange={() => onPickLogoPalette?.(row.colors)}
+              {...(logoNotes.length > 0 ? { "aria-describedby": logoNote } : {})}
+              className="absolute h-px w-px opacity-0"
+            />
+            <span className="flex gap-1.5" aria-hidden="true">
+              {/* The fill first: the brand's own colour, exact, where the predefined palettes show
+                  their primary — which is the same colour for every palette that has no fill. */}
+              {[
+                row.colors["color.fill"] ?? row.colors["color.primary"],
+                ...RENDERED_COLOR_KEYS.slice(1).map((key) => row.colors[key]),
+              ].map((colour, index) => (
+                <span
+                  // The swatches never reorder, so their place is their identity.
+                  // biome-ignore lint/suspicious/noArrayIndexKey: see above
+                  key={index}
+                  className="h-[17px] w-[17px] rounded-full border border-black/10"
+                  style={{ background: colour }}
+                />
+              ))}
+            </span>
+            <span
+              className={
+                "text-[15px] " +
+                (row.selected ? "font-semibold text-ui-ink" : "font-medium text-ui-ink")
+              }
+            >
+              {row.label}
+            </span>
+          </label>
+        ))}
+        {logoRows.length > 0 && logoNotes.length > 0 ? (
+          <p id={logoNote} className="m-0 text-[12px] leading-snug text-ui-muted">
+            {logoNotes.join(" ")}
           </p>
         ) : null}
         {PALETTES.map((palette) => {

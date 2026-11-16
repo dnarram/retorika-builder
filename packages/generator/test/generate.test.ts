@@ -11,7 +11,12 @@ import {
   type RetorikaDocument,
   type Section,
 } from "@retorika/schema";
-import { PALETTES, STARTING_PALETTE_ID } from "@retorika/tokens";
+import {
+  derivePalette,
+  identifyPalette,
+  STARTING_PALETTE_ID,
+  validateTheme,
+} from "@retorika/tokens";
 import { describe, expect, it } from "vitest";
 import {
   type Answers,
@@ -678,48 +683,76 @@ describe("the bank's gallery (ADR 0039)", () => {
   });
 });
 
-describe("the logo's palette (sprint 6 day 6)", () => {
-  /** A Theme is a flat map of resolved token values, with no palette id in it — so the palette is
-   * identified the way anything else would identify it: by the colour it actually produced. */
-  function paletteOf(document: RetorikaDocument): string | undefined {
-    return PALETTES.find(
-      (palette) => palette.colors["color.primary"] === document.theme["color.primary"],
-    )?.id;
-  }
-
-  it("starts in the neutral palette when no logo chose one (ADR 0041)", () => {
-    // ADR 0010 said «sin logo, la paleta por defecto del sector» until 13 October 2026; since
-    // then the proposals start neutral and the owner picks a colour in «Estilo». The sector still
-    // decides the typography, and nothing else.
-    expect(paletteOf(generate(MINIMAL).document)).toBe(STARTING_PALETTE_ID);
+describe("the logo's colours are the site's (sprint 38 día 3, ADR 0076)", () => {
+  it("starts in the neutral palette without a logo, and writes no origin (ADR 0041, ADR 0075)", () => {
+    // Absent is the untouched start: nobody chose these colours, and a logo uploaded later repaints a
+    // site that is still in them (David's adjustment 1). Writing `{kind: "palette", id: "neutral"}`
+    // here would make it indistinguishable from «Neutra» chosen on purpose.
+    const { document } = generate(MINIMAL);
+    expect(identifyPalette(document.theme)?.id).toBe(STARTING_PALETTE_ID);
+    expect(Object.hasOwn(document, "palette")).toBe(false);
+    expect(Object.hasOwn(document.theme, "color.fill")).toBe(false);
   });
 
-  it("uses the logo's palette instead, when the logo chose one", () => {
-    const { document } = generate(answers({ ...MINIMAL, logoPaletteId: "forest-emerald" }));
-    expect(paletteOf(document)).toBe("forest-emerald");
+  it("derives the palette from the logo's colour, exact, and says it came from the logo", () => {
+    const blue = generate(answers({ ...MINIMAL, logoColours: { brand: "#2563EB", second: null } }));
+    expect(blue.document.theme["color.primary"]).toBe("#2563EB");
+    expect(Object.hasOwn(blue.document.theme, "color.fill")).toBe(false);
+    expect(blue.document.palette).toEqual({ kind: "logo" });
+    // Not the predefined palette nearest to it, which is what the logo used to choose.
+    expect(identifyPalette(blue.document.theme)).toBeUndefined();
   });
 
-  it("falls back to the neutral start when the logo chose nothing", () => {
-    // `null` is what `paletteForLogo` answers for a logo with no colour in it, and for one whose
-    // colour no palette is near. Both arrive here as the same thing, on purpose.
-    const { document } = generate(answers({ ...MINIMAL, logoPaletteId: null }));
-    expect(paletteOf(document)).toBe(STARTING_PALETTE_ID);
+  it("fills with a light brand's colour exact and writes its text in the sibling", () => {
+    const { document } = generate(
+      answers({ ...MINIMAL, logoColours: { brand: "#FFCD00", second: null } }),
+    );
+    const derived = derivePalette({ brand: "#FFCD00" }).colors;
+    expect(document.theme["color.fill"]).toBe("#FFCD00");
+    expect(document.theme["color.onFill"]).toBe(derived["color.onFill"]);
+    expect(document.theme["color.primary"]).toBe(derived["color.primary"]);
+    expect(document.theme["color.primary"]).not.toBe("#FFCD00");
+    expect(validateTheme(document.theme)).toEqual([]);
   });
 
-  it("leaves the typography to the sector even when the logo chose the palette", () => {
+  it("takes a logo's second tint as the secondary and the accent", () => {
+    const one = generate(answers({ ...MINIMAL, logoColours: { brand: "#1D4ED8", second: null } }));
+    const two = generate(
+      answers({ ...MINIMAL, logoColours: { brand: "#1D4ED8", second: "#FACC15" } }),
+    );
+    expect(two.document.theme["color.accent"]).toBe("#FACC15");
+    expect(two.document.theme["color.secondary"]).not.toBe(one.document.theme["color.secondary"]);
+    expect(two.document.theme["color.primary"]).toBe(one.document.theme["color.primary"]);
+  });
+
+  it("leaves the typography to the sector even when the logo gave the colours", () => {
     // A logo's colours say nothing about whether a business reads as editorial or as modern.
-    const withLogo = generate(answers({ ...MINIMAL, logoPaletteId: "forest-emerald" }));
+    const withLogo = generate(
+      answers({ ...MINIMAL, logoColours: { brand: "#047857", second: null } }),
+    );
     const without = generate(MINIMAL);
     expect(withLogo.document.theme["font.heading"]).toBe(without.document.theme["font.heading"]);
     expect(withLogo.document.theme["font.body"]).toBe(without.document.theme["font.body"]);
   });
 
-  it("stays a pure function of its answers — same answers, same theme, twice", () => {
-    // The whole reason the analysis happens in the browser and only a string travels: `INV_5`,
+  it("stays a pure function of its answers — same answers, same theme and origin, twice", () => {
+    // The whole reason the analysis happens in the browser and only two hex strings travel: `INV_5`,
     // the golden corpus and «mismas respuestas, misma web» all rest on this staying true.
-    const once = generate(answers({ ...MINIMAL, logoPaletteId: "warm-terracotta" }));
-    const twice = generate(answers({ ...MINIMAL, logoPaletteId: "warm-terracotta" }));
+    const logo = { brand: "#B45309", second: "#0F766E" };
+    const once = generate(answers({ ...MINIMAL, logoColours: logo }));
+    const twice = generate(answers({ ...MINIMAL, logoColours: { ...logo } }));
     expect(once.document.theme).toEqual(twice.document.theme);
+    expect(once.document.palette).toEqual(twice.document.palette);
+  });
+
+  it("gives all three proposals the same colours: the logo's", () => {
+    const sites = generateVariants(
+      answers({ ...MINIMAL, logoColours: { brand: "#7145D6", second: null } }),
+    );
+    for (const site of sites) {
+      expect(site.document.theme["color.primary"]).toBe("#7145D6");
+      expect(site.document.palette).toEqual({ kind: "logo" });
+    }
   });
 });
 

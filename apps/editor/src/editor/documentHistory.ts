@@ -12,6 +12,7 @@ import type {
   MenuLabelTarget,
   MobilePatchEdit,
   OwnFont,
+  PaletteOrigin,
   PlacementEdit,
   RetorikaDocument,
   Section,
@@ -263,7 +264,9 @@ export type HistoryAction =
   | { type: "fillSlot"; variant: number; fill: SlotFill }
   | { type: "clearSlot"; variant: number; address: SlotAddress }
   | { type: "setSectionInMenu"; variant: number; sectionId: string; inMenu: boolean }
-  | { type: "setTheme"; variant: number; theme: Theme }
+  /** `palette`, when given, is where the colours came from (ADR 0075): «Estilo» names the palette
+   * chosen, a logo names itself. A type pair or a scale gives none, and the origin stays. */
+  | { type: "setTheme"; variant: number; theme: Theme; palette?: PaletteOrigin }
   /** The three verbs of a letter chooser session — see the `chooseFamily` cause. `theme` is the
    * whole theme with the one token already rewritten, composed by `Variants` with `withFamily` the
    * way `setTheme`'s callers compose theirs; `key` is what tells one session from the next. */
@@ -686,8 +689,8 @@ function setSectionInMenu(history: History, sectionId: string, inMenu: boolean):
  * asked for, so pressing the palette this site already uses is caught here and adds no step. The
  * undo arrow does not light up for a step that would undo to itself.
  */
-function setTheme(history: History, theme: Theme): History {
-  const document = setThemeInDoc(history.present.document, theme);
+function setTheme(history: History, theme: Theme, palette?: PaletteOrigin): History {
+  const document = setThemeInDoc(history.present.document, theme, palette);
   if (document === history.present.document) return history;
   return {
     past: [...history.past, history.present].slice(-LIMIT),
@@ -1433,7 +1436,7 @@ function apply(history: History, action: HistoryAction): History {
     case "setSectionInMenu":
       return setSectionInMenu(history, action.sectionId, action.inMenu);
     case "setTheme":
-      return setTheme(history, action.theme);
+      return setTheme(history, action.theme, action.palette);
     case "chooseFamily":
       return chooseFamily(history, action.key, action.theme);
     case "settleChooser":

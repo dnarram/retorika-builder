@@ -32,7 +32,7 @@ import { identifyPalette } from "./restyle.ts";
  */
 
 /** The six colours of a palette, and the fill pair when the palette needs one (ADR 0074). */
-export type PaletteColors = Record<ColorKey, string> & { [K in FillKey]?: string };
+export type PaletteColors = Record<ColorKey, string> & { [K in FillKey]?: string | undefined };
 
 export interface DeriveInput {
   /** The brand's colour: the logo's dominant tint, or the one the owner typed. `#rrggbb`. */

@@ -1,5 +1,12 @@
 import type { RetorikaDocument } from "./document.ts";
-import { FILL_KEYS, type Theme, TOKEN_KEYS, themeSchema } from "./tokens.ts";
+import {
+  FILL_KEYS,
+  type PaletteOrigin,
+  paletteOriginSchema,
+  type Theme,
+  TOKEN_KEYS,
+  themeSchema,
+} from "./tokens.ts";
 
 /**
  * The document's theme, replaced whole.
@@ -25,7 +32,18 @@ import { FILL_KEYS, type Theme, TOKEN_KEYS, themeSchema } from "./tokens.ts";
  * are structural — orphan elements, roles, placements inside the grid — and a theme touches no
  * page, no section and no element.
  */
-export function setTheme(doc: RetorikaDocument, theme: Theme): RetorikaDocument {
+export function setTheme(
+  doc: RetorikaDocument,
+  theme: Theme,
+  /**
+   * Where these colours come from, when the caller knows (ADR 0075, sprint 38 día 3): a palette the
+   * owner chose in «Estilo», their logo, or their own. **Omitted means «the origin does not change»**
+   * — a type pair or a scale is a theme too, and choosing one says nothing about the colours — never
+   * «clear it». Nothing clears an origin but undo, which restores the whole document it came from:
+   * the generator's untouched start is the only document without one, and no verb makes a new one.
+   */
+  origin?: PaletteOrigin,
+): RetorikaDocument {
   const parsed = themeSchema.safeParse(theme);
   if (!parsed.success) {
     const detail = parsed.error.issues
@@ -42,7 +60,20 @@ export function setTheme(doc: RetorikaDocument, theme: Theme): RetorikaDocument 
   // **The fill pair counts** (ADR 0074): a theme whose only change is its fill — the owner moving the
   // button's colour and nothing else — is a change, and comparing the nineteen alone would call it
   // none, open no step and patch nothing.
-  if ([...TOKEN_KEYS, ...FILL_KEYS].every((key) => doc.theme[key] === parsed.data[key])) return doc;
+  const sameTheme = [...TOKEN_KEYS, ...FILL_KEYS].every(
+    (key) => doc.theme[key] === parsed.data[key],
+  );
 
-  return { ...doc, theme: parsed.data };
+  if (origin === undefined) return sameTheme ? doc : { ...doc, theme: parsed.data };
+
+  const checked = paletteOriginSchema.safeParse(origin);
+  if (!checked.success) {
+    throw new Error(`setTheme: not a palette origin — ${JSON.stringify(origin)}`);
+  }
+  // The same colours from the same origin are not a change either. The same colours from a *new*
+  // origin are: «Neutra» chosen on purpose after the untouched start writes nothing visible and
+  // still has to be told apart from it (ADR 0075 §2), which is the one thing the origin is for.
+  if (sameTheme && JSON.stringify(doc.palette) === JSON.stringify(checked.data)) return doc;
+
+  return { ...doc, theme: parsed.data, palette: checked.data };
 }

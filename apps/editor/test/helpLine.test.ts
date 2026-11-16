@@ -116,6 +116,7 @@ describe("the quiet child, which goes with the focus", () => {
       { dragRefused: true },
       { placeholders: 4 },
       { offer: "radial" as const },
+      { offer: "logoColours" as const },
     ]) {
       const says = helpLineFor(at(patch), 0);
       expect(says.quiet.child).toBe("quiet");
@@ -291,5 +292,43 @@ describe("no instruction text is read outside the help line", () => {
   it("while the help line reads every key it owns", () => {
     const source = read("editor/helpLine.ts");
     for (const key of INSTRUCTION_KEYS) expect(source, key).toContain(`"${key}`);
+  });
+});
+
+/**
+ * **The logo's colours** (sprint 38 día 3, ADR 0076): applied to an untouched site, they are news
+ * with «Deshacer», in the live voice like the delete notice; not applied, they are offered once in the
+ * quiet voice with a cross, like the radial menu.
+ */
+describe("the logo's colours in the line", () => {
+  it("says they were applied in the live voice, with «Deshacer» and no cross", () => {
+    const says = helpLineFor(at({ coloursApplied: true }), 0);
+    expect(says.live).toEqual({
+      child: "live",
+      text: es["editor.logo.coloursApplied"],
+      tone: "info",
+      notice: { dismiss: false },
+    });
+    // An announcement is newer and says first; the delete notice outranks it, since a delete clears it.
+    expect(
+      helpLineFor(at({ coloursApplied: true, announcement: { text: "x", at: 0 } }), 0).live.text,
+    ).toBe("x");
+  });
+
+  it("offers them quietly at rest, with a cross, never through the live voice", () => {
+    const says = helpLineFor(at({ offer: "logoColours" }), 0);
+    expect(says.quiet).toEqual({
+      child: "quiet",
+      text: es["editor.logo.offer"],
+      tone: "info",
+      offer: true,
+    });
+    expect(says.live.text).toBe("");
+  });
+
+  it("yields like every offer to whatever else the quiet child has to say", () => {
+    for (const patch of [{ keyboard: "section" as const }, { placeholders: 2 }]) {
+      expect(quietSays(at({ ...patch, offer: "logoColours" }))).toEqual(quietSays(at(patch)));
+    }
   });
 });

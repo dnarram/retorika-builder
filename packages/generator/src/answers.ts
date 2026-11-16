@@ -23,30 +23,38 @@ export type SectorId = (typeof SECTOR_IDS)[number] | "otro";
 
 export type MainAction = "call" | "book" | "message" | "email" | "visit";
 
+/** A logo's colours as the questionnaire reads them: the brand's tint, and a second when there is one. */
+export interface LogoColours {
+  brand: string;
+  second: string | null;
+}
+
 export interface Answers {
   businessName: string;
   logo: File | null;
   /**
-   * The palette the logo's own colours chose, or `null` for "nothing close enough — let the sector
-   * decide" (ADR 0010's «sin logo, la paleta por defecto del sector», reached by a second road).
+   * The logo's own colours — its dominant tint and, when it really has one, a second — or `null` for
+   * no logo, or a logo with no colour in it (sprint 38 día 3, ADR 0076).
    *
-   * **A palette id, never a colour and never the logo itself.** The analysis happens in the
-   * browser while the questionnaire is being filled in (`apps/editor/src/editor/logoPalette.ts`)
-   * and only its conclusion travels, which is what keeps this generator a pure function of its
-   * arguments — no image decoding, no canvas, no clock. `INV_5`, the golden corpus and «mismas
-   * respuestas, misma web» all depend on that and none of them move.
+   * **Colours, never the logo itself**, and read in the browser while the questionnaire is filled in
+   * (`apps/editor/src/editor/logoImage.ts`, `logoColoursOf`): what travels is two hex strings, which
+   * keeps this generator a pure function of its arguments — no image decoding, no canvas, no clock.
+   * `INV_5`, the golden corpus and «mismas respuestas, misma web» all depend on that. It replaced
+   * `logoPaletteId`, the id of the predefined palette nearest the logo, which was the defect sprint 38
+   * exists to fix: the logo's colours are the brand's, and the site carries them.
    *
-   * It also means this survives a reload while the logo does not: `autosave.ts` drops `logo`,
-   * because a `File` is not serialisable, and keeps everything else.
+   * It also survives a reload while the logo does not: `autosave.ts` drops `logo`, because a `File`
+   * is not serialisable, and keeps everything else. A session saved before 1.20.0 carries the old
+   * field and not this one, and is restored over `EMPTY_ANSWERS`, so this reads `null` there.
    */
-  logoPaletteId: string | null;
+  logoColours: LogoColours | null;
   /**
    * The file the logo's bytes are kept under, minted in the browser the moment the file is chosen
    * (`logo-<8 hex>.png`, ADR 0059), and the size it was kept at — or `null` for no logo, or for a
    * logo that could not be kept.
    *
-   * **A name and two numbers, never the bytes**, for the same reason `logoPaletteId` is an id and
-   * not a colour: the generator stays a pure function of its answers, and what it writes into the
+   * **A name and two numbers, never the bytes**, for the same reason `logoColours` is two hex strings
+   * and not a file: the generator stays a pure function of its answers, and what it writes into the
    * document is the reference the header carries (`header.brand.logo`). The bytes travel the path a
    * photograph travels — IndexedDB, the preview's object URL, the multipart form, the account's
    * bucket — and this is what ties them to the document. The size is read where the bytes are
@@ -73,7 +81,7 @@ export interface Answers {
 export const EMPTY_ANSWERS: Answers = {
   businessName: "",
   logo: null,
-  logoPaletteId: null,
+  logoColours: null,
   keptLogo: null,
   sector: null,
   otherSectorDescription: "",

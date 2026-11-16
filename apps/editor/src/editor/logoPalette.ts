@@ -1,23 +1,20 @@
 import { PALETTES } from "@retorika/tokens";
 
 /**
- * The palette a logo chooses, or nothing.
+ * The colours of a logo, read from its pixels — and which predefined palette they resemble.
  *
- * The questionnaire has promised «De sus colores sacamos los de toda la web» since the first
- * sprint, and `packages/generator/src/theme.ts` has said in its own comment that the logo «is
- * captured by the questionnaire but never analysed». This is the day those two sentences stop
- * contradicting each other.
- *
- * **It chooses among the four palettes that already exist, and never invents one.** The same
- * reasoning that rejected an exact colour picker: a palette whose contrast has not been tested is
- * not something this product publishes, and `packages/tokens/src/contrast.ts` tests these four.
- * So a logo can pick, never mix.
+ * **What it used to be, and why it changed.** Since sprint 6 this module picked a palette: the logo's
+ * dominant colour was compared with the four palettes' primaries and the nearest within ΔE 40 became
+ * the site's palette, or the site started neutral. David, 16 November 2026: «los colores del logo SON
+ * los colores de marca del usuario, y la web generada tiene que llevarlos siempre que haya un logo».
+ * So from sprint 38 día 3 (ADR 0076) this reads the logo's tints (`dominantColours`) and
+ * `@retorika/tokens`' `derivePalette` builds the site's palette from them, every pair proved;
+ * `nearestPalette` stays as information only.
  *
  * **Pure, and it runs in the browser.** The analysis happens during the questionnaire and what
- * travels onward is the *chosen palette id*, saved as one more answer — never the logo, never a
- * colour. The generator receives a string and stays what it has always been: a pure function of
- * its arguments, no clock, no randomness, no file read. `INV_5`, the golden corpus and «mismas
- * respuestas, misma web» all rest on that, and none of them move because of this.
+ * travels onward is two hex strings, saved as one more answer — never the logo itself. The generator
+ * stays a pure function of its arguments: no clock, no randomness, no file read. `INV_5`, the golden
+ * corpus and «mismas respuestas, misma web» all rest on that.
  */
 
 export interface Rgb {
@@ -42,8 +39,8 @@ const MIN_ALPHA = 128;
  * whole image is the classic way to turn every brand into the same mud.
  *
  * Their consequence is deliberate and worth naming: **a logo that is genuinely only black and
- * white chooses nothing**, and the sector's palette stands. That is the honest answer — there is no
- * colour in it to take.
+ * white gives no colour**, and the site starts neutral. That is the honest answer — there is no
+ * colour in it to take — and question 1 says so.
  */
 const NEAR_WHITE = 240;
 const NEAR_BLACK = 32;
@@ -241,9 +238,12 @@ export interface PaletteMatch {
  * hold their logo up against. Matching on the accent instead would pick a palette by a colour that
  * appears three times on the page.
  *
- * `null` is a real answer, not a failure. ADR 0010 already says «sin logo, la paleta por defecto
- * del sector», and a logo whose colour no palette shares is the same situation arriving by a
- * different road — the sector decides, and nothing tells the owner their logo chose it.
+ * **Information, never a choice** (sprint 38 día 3, ADR 0076). Until then this decided the site's
+ * palette: a logo within `MAX_DISTANCE` of a predefined primary got that palette, and one further away
+ * got the neutral start — the defect David named, «los colores del logo SON los colores de marca».
+ * The site now carries the logo's own colours (`derivePalette`), and this only says which predefined
+ * palette they resemble, for «Se parece a «{nombre}»» in question 1 and in «Estilo». `null` is a real
+ * answer: no palette is near, and nothing is said.
  */
 export function nearestPalette(colour: Rgb): PaletteMatch | null {
   let best: PaletteMatch | null = null;
@@ -257,18 +257,6 @@ export function nearestPalette(colour: Rgb): PaletteMatch | null {
   }
   if (!best || best.distance > MAX_DISTANCE) return null;
   return best;
-}
-
-/**
- * A logo's pixels to the palette id it chooses, or `null` for "let the sector decide".
- *
- * The whole feature in one function, so the questionnaire does nothing but decode an image and
- * store a string.
- */
-export function paletteForLogo(pixels: Uint8ClampedArray): string | null {
-  const colour = dominantColour(pixels);
-  if (!colour) return null;
-  return nearestPalette(colour)?.paletteId ?? null;
 }
 
 /**
