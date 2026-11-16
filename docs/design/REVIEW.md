@@ -9692,3 +9692,140 @@ más), la capa de cuenta de la preferencia y el Escape de los paneles en la barr
 oferta podría ir en la cabecera, «Campos» no es herramienta de la barra y no es radio, del anillo de
 herramientas no se vuelve a las secciones sin pasar por el eje, el teclado entra en las secciones por la
 primera, y el editor solo se ha visto en Chromium.
+
+### Día 7 — colchón y cierre (PR de `test/el-cierre-del-sprint-37`)
+
+**Lo que quedó corto, primero: nada que hacer hoy.** Lo que un día dejó a otro lo cerró el siguiente: el
+teclado del día 3 entró en las secciones del día 4, el movimiento que el día 2 dejó en seco llegó el
+día 5, y la oferta del día 6 cerró la lista del plan. Lo que el plan nombraba y el producto no tiene se
+dijo el día que se vio, y está abajo, en lo que el sprint deja abierto.
+
+**El sprint, en una frase por día.** Volver a «Ver en móvil» deja los botones de su tamaño: el cromo lee
+el zoom de la cáscara y no de una tarjeta a medio transicionar (día 1). El raíl tiene dos formas, la fija
+por defecto y un menú radial cuyo eje es la herramienta abierta (día 2, ADR 0072). El eje se usa sin
+ratón y con el dedo (día 3). Con «Secciones» como eje, el abanico son las secciones de la página, hasta
+dieciséis en dos arcos (día 4, ADR 0073). Los radios brotan del eje, y cambiar de anillo es la tercera
+escena (día 5). Y el editor ofrece el menú radial una vez, en la línea de ayuda (día 6).
+
+**El presupuesto, con tres escenas.** Nada del cromo pasa de 200 ms salvo el cambio de dispositivo
+(`ui-reflow`, 260 ms) y las tres escenas con nombre del registro `--ui-scene` (400 ms): la salida de la
+construcción, la propuesta que se convierte en el lienzo y, desde el día 5, el cambio de anillo del raíl
+(`rb-scene-fan`). Bajo movimiento reducido las tres son un fundido de 120 ms. La intención de 100 ms y la
+gracia de 150 ms son constantes con nombre, y el raíl no cuenta ningún tiempo con un número suelto.
+Ningún bucle: el anillo de puntos del eje es estático. **Las medidas antes de aceptar**: el defecto del
+zoom, rojo antes del arreglo en 390 y en 320 (día 1); y la escena del raíl, de 408 ms, con el
+fotograma más largo en 16,7 ms (33,3 con la CPU cuatro veces más lenta) y cada botón respondiendo en
+cada fotograma (día 5).
+
+**La web publicada no cambia un byte.** El corpus se construyó con el publicador de cada árbol
+(`build-corpus.mts`) contra el inicio del sprint (`2602b37`): **132 ficheros en 23 webs, cero
+diferencias**. El script de la cabecera tiene el mismo hash (`7fd756d0ec6a914c`) en las 13 páginas que
+lo llevan, con 0,8 KB gzip. `git diff 2602b37..HEAD -- packages/ fixtures/` está vacío: ningún paquete
+que viaje a una web se tocó. **Por eso la auditoría de menús no corre**: varía lo que el renderer
+dibuja, y el renderer no ha cambiado. `document-rules.md` no cambia: ninguna regla del documento se
+toca, y la preferencia del raíl vive en el navegador, fuera del documento.
+
+**Lighthouse**, los sujetos en el perfil móvil, contra el cierre del 36:
+
+| Sujeto | Rendimiento | Accesibilidad | Buenas prácticas | SEO | LCP | CLS |
+|---|---|---|---|---|---|---|
+| v1 image-right | 99 | 100 | 100 | 100 | 1,80 s (1,80) | 0,003 (0,003) |
+| v2 image-background | 98 | 100 | 100 | 100 | 2,40 s (2,40) | 0,003 (0,003) |
+| v3 image-left | 98 | 100 | 100 | 100 | 2,33 s (2,33) | 0,003 (0,000) |
+| letra propia `.ttf` | 99 | 100 | 100 | 100 | 1,80 s (1,80) | 0,000 (0,000) |
+| cabecera fija con logo, con la línea | 100 | 100 | 100 | 100 | 1,35 s (1,35) | 0,002 (0,002) |
+| marca grande | 100 | 100 | 100 | 100 | 1,35 s (1,35) | 0,001 (0,001) |
+| cabecera en columnas | 100 | 100 | 100 | 100 | 1,35 s (1,35) | 0,004 (0,004) |
+| página por ficha | 100 | 100 | 100 | 100 | 0,90 s (0,90) | 0,000 (0,000) |
+
+Las mismas puntuaciones y los mismos LCP que al cierre del 36. El CLS de v3 pasa de 0,000 a 0,003 sobre
+bytes idénticos: es el ruido de la pasada, el mismo que el 36 vio entre v2 y v3.
+
+**Suites del cierre**, una tras otra y nada en paralelo:
+
+| Suite | Resultado |
+|---|---|
+| `pnpm test` | 4002 en verde, 189 ficheros (3943 y 187 al cierre del 36) |
+| `typecheck`, `lint` | en verde; 82 avisos (81 al cierre del 36), ningún error |
+| invariantes, golden, `renderer:deps` | en verde; golden 27, cero cambios; 2 dependencias permitidas |
+| `schema:guard 2602b37..HEAD` | «la forma del documento no cambia; no hace falta migración» |
+| `secrets:scope` | 140 módulos, 33 de cliente, 2 solo de servidor, ninguno cruza (138 y 33 al cierre del 36) |
+| `size` | las 28 dentro; el script en 0,8 KB de 2 |
+| `test:a11y` local | 1750 en verde, 124 s, como al cierre del 36: el renderer no cambió |
+| `pnpm lighthouse` | 27 de 27, los números de arriba |
+| `pnpm audit:menus` | **no corre**: el renderer no cambia un byte (arriba) |
+| e2e completa | una pasada, **350 verdes y 1 omitida en 1638 s** (333 al cierre del 36: las caminatas del raíl, sus gemelas reducidas y la oferta) |
+
+**El e2e en la CI, contra su límite.** El día 1 subió el tope del paso de 35 a 40 minutos y el del
+trabajo de 45 a 50, con la medida en el bloque de comentario del trabajo, y entró al fusionarse la
+#375. Cada día del sprint añadió caminatas:
+
+| PR | Rama | Minutos del paso |
+|---|---|---|
+| cierre del 36 | `test/el-cierre-del-sprint-36` | 32,4 |
+| día 1 (#375) | `fix/el-lienzo-vuelve-a-su-zoom` | 32,3 |
+| día 2 (#376) | `feat/el-rail-tiene-dos-formas` | 32,9 |
+| día 3 (#377) | `feat/el-eje-con-teclado-y-con-el-dedo` | 33,8 |
+| día 4 (#378) | `feat/el-segundo-nivel-son-las-secciones` | 34,0 |
+| día 5 (#379) | `feat/los-anillos-se-transforman` | 34,9 |
+| día 6 (#380) | `feat/prueba-el-menu-radial` | 34,1 |
+
+A cinco o seis minutos del tope nuevo, y subiendo con cada día que añade caminatas. Las dos salidas del
+cierre del 36 siguen en pie, y la elección sigue siendo tuya porque son minutos de Actions (protocolo,
+parte 9.2): **partir las caminatas en dos trabajos** (`--shard 1/2` y `2/2`, cada uno con su servidor;
+los mismos minutos facturados más un arranque, la mitad del reloj), o **subir el tope** otra vez.
+
+**Lo que el sprint encontró sin buscarlo**, por día:
+
+1. **El aviso de zoom llegaba con la tarjeta a medio camino** (día 1). La ADR 0053 §5 suponía que la
+   tarjeta ya tenía su `transform` nuevo cuando la cáscara avisaba. Es cierto para un panel, que no
+   transiciona, y falso para el conmutador de dispositivo.
+2. **Una caminata de la gracia que no podía fallar** (día 2). El punto «fuera del arco» estaba dentro de
+   la cáscara. Ahora sale más allá de la cáscara y asevera que la franja oyó el `pointerleave`. En la
+   misma línea: tras un cambio de ventana, el zoom de la tarjeta llega un fotograma después por el
+   `ResizeObserver`, sin animación que lo diga. Y el ratón de Playwright nunca tiembla, así que «una mano
+   quieta no reabre» necesita un movimiento de 1 px para poder fallar.
+3. **El interruptor de forma alargó el raíl fijo 65 px, no los 45 del plan** (día 2). Está en el
+   backlog, con el radial como alivio.
+4. **Un toque rápido no deja ver el filtro táctil** (día 3): el dedo se sostiene por CDP. Chromium
+   enfoca el botón tocado, y el `blur` del eje tapaba el camino del `blur` de la ventana.
+5. **El segundo arco, calculado a mano antes del código** (día 4): repartido en toda la altura, una
+   píldora exterior quedaba a 2 px de una interior en diagonal. Ahora usa las filas del arco interior.
+6. **Una View Transition del documento se lleva toda pulsación** (día 5). Chromium hace la prueba de
+   impacto de todo el documento contra `<html>` mientras corre, y eso corrige un límite del sprint 36,
+   con la salvedad de que solo se midió aquí. La escena del raíl es CSS por eso. Además, la primera cara
+   heredaba 280 ms de espera de la franja, y una copia que se iba volvía a reproducir su entrada.
+7. **La primera frase de la oferta no cabía a 768** (día 6): 451 px en los 440 de la línea.
+8. **Dos copias de seguridad cuyo nombre solo cambia de mayúscula son un solo fichero en macOS** (día
+   6): restaurar un saboteo escribió el componente sobre el módulo. Se rehízo desde el commit.
+
+### Lo que el sprint 37 deja abierto
+
+1. **Treinta y una firmas**: 0042, 0043 y de la 0045 a la 0073, todas `proposed`, con su paquete al día:
+   [`docs/decisions/signing-2026-11.md`](../decisions/signing-2026-11.md). La 0072 y la 0073 son de este
+   sprint y están en el lote A, con notas nuevas en la 0025, la 0042, la 0052, la 0053 y la 0071.
+2. **Las nueve fotografías a 1600 × 1072**: la exención **falla desde el 1 de diciembre de 2026, dentro de
+   15 días**. Su hoja, [`docs/tasks/las-nueve-fotos.md`](../tasks/las-nueve-fotos.md), y
+   `pnpm photos:replace`; las dos preguntas de la hoja siguen siendo tuyas.
+3. **El e2e de la CI a cinco o seis minutos de su tope nuevo** (arriba): partirlo en dos o subirlo otra
+   vez.
+4. **La escena del cambio de anillo es CSS y no una View Transition del documento** (día 5, la PR #379).
+   Fue una desviación medida de lo que pediste, y vetarla sigue siendo tuyo. Volver a la View Transition
+   es un cambio pequeño, a cambio de un editor que no recibe pulsaciones durante 400 ms.
+5. **Lo que el raíl radial deja, con nombre**, para decir si se hace:
+   - La oferta podría ir en la cabecera, como una píldora junto al conmutador de dispositivo (día 6).
+   - Del anillo de herramientas no se vuelve a las secciones sin pasar por el eje (ADR 0073 §5).
+   - El teclado entra en el anillo de secciones por la primera, no por la elegida (ADR 0073).
+   - **Tras elegir con el ratón desde el abanico, la línea dice las teclas del eje.** El foco queda en
+     el eje y la línea dice las teclas de donde está el foco, sea cual sea la mano (ADR 0072, nota del
+     día 3). Visto en el navegador real el día 6. Pedir `:focus-visible` donde el eje enciende sus teclas, como ya lo pide para abrir, sería probablemente el arreglo, y no se ha probado.
+   - La preferencia de forma vive en el navegador y no en la cuenta: la capa de cuenta tiene nombre en
+     el backlog.
+   - La barra fija no cierra un panel con Escape ni devuelve el foco como la radial (día 3).
+   - La barra fija es 65 px más larga con el segundo interruptor, y nada guarda la altura.
+6. **Límites medidos o vistos, sin investigar**: el límite de pulsación de las escenas del sprint 36 se
+   midió en el raíl y se infiere en el resto; a 1024 × 768 la pestaña de página de la cabecera solo
+   enseña su elipsis, en las dos formas, así que ya ocurría antes de este sprint.
+7. **De los sprints 36, 35 y 34, sin tocar**: lo que dicen sus listas. **Y el editor sigue sin verse fuera
+   de Chromium**: el raíl radial, su escena y su toque tampoco se han visto en WebKit ni en Firefox.
+8. **El sprint 38, sin planificar.**

@@ -12,7 +12,57 @@ drift, and the facilitator's script already says findings go to the decision the
 a separate document nobody reads again». So an item with an ADR points at the ADR; an item with
 an issue points at the issue; and only the things with no other home are described here at all.
 
-Last reviewed: 13 November 2026, **closing sprint 36 — «el editor se encadena, y la ayuda tiene su
+Last reviewed: 16 November 2026, **closing sprint 37 — «el raíl se vuelve radial, y el móvil vuelve a
+su tamaño».** David asked for two things. First, the defect of a small screen: going back to «Ver en
+móvil» from «Ver en ordenador» left the buttons and sections oversized; it was fixed on day 1, alone
+and first. Second, a choice of how the editor's rail is shown: fixed on the left, still the default,
+or a radial menu whose central image never disappears and which leaves practically all of the editor
+in view. Asked which bar, he changed the decision: the whole rail becomes radial, with a model that
+hides nothing. The hub is the open tool, in a 56 px strip, ringed by one still dot per tool. Opening
+it fans out the tools; with «Secciones» as the hub it fans out the page's sections, eight on one arc
+and up to sixteen on two, with «Herramientas» as the way back. The two rings never share the fan, and
+changing ring is a third named scene. Intent of 100 ms and grace of 150 ms, both named. His adjustment
+approving: the box that is pressed never travels, only what is seen. Seven days in seven PRs
+(#375–#380 and the close). What changed for somebody visiting a site: **nothing**. The corpus's 132
+files are byte-identical to the sprint's start, and no package that travels was touched, which is why
+the menu audit did not run. For the owner:
+- the chrome keeps its size across the device toggle (day 1, ADR 0053's notes)
+- the rail has two layouts ([ADR 0072](../decisions/0072-the-rail-has-two-layouts-and-the-layout-is-the-owners-in-this-browser.md), day 2)
+- the hub works with the keyboard and the finger (day 3)
+- the sections are the second level ([ADR 0073](../decisions/0073-the-hub-is-the-open-tool-and-secciones-has-a-second-level.md), day 4)
+- the rings move, with the ring change built as a CSS scene (day 5)
+- the radial menu is offered once, in the help line (day 6)
+
+The record is `docs/design/REVIEW.md`, sprint 37.
+
+**What sprint 37 leaves open** — the full text is the last section of REVIEW's sprint 37:
+
+1. **Thirty-one signatures**: 0042, 0043, 0045–0073, all `proposed`, with their pack up to date,
+   [`docs/decisions/signing-2026-11.md`](../decisions/signing-2026-11.md). 0072 and 0073 are in batch A.
+2. **The nine photographs**: the exemption fails on **1 December 2026**. Their sheet,
+   [`docs/tasks/las-nueve-fotos.md`](las-nueve-fotos.md), and `pnpm photos:replace`.
+3. **The CI e2e step at 34–35 of its 40 minutes.** Day 1 raised the limit from 35, and REVIEW's close
+   has the table, PR by PR. David's decision, because Actions minutes are his (protocol, part 9.2):
+   split the walks into two `--shard` jobs, or raise the limit again.
+4. **The ring change is a CSS scene, not the document View Transition David named.** This was a
+   measured deviation (PR #379): a document view transition leaves nothing in the editor pressable for
+   its 400 ms. Vetoing it is still David's.
+5. **What the radial rail leaves, named** (the rows under «the rail's height» below):
+   - the offer as a header pill
+   - no pill from the tools back to the sections
+   - the keyboard entering the sections by the first one
+   - the hub's keys said after a mouse press, because the focus stays on the hub
+   - the account layer for the layout
+   - the fixed rail's Escape and focus return
+   - the fixed rail's extra 65 px
+6. **Limits measured or seen, not investigated**: sprint 36's scene press limit was measured on the
+   rail and only inferred for the other scenes (item 4 of sprint 36 below). At 1024 × 768 the
+   header's page tab shows only its ellipsis.
+7. **From sprints 36, 35 and 34, untouched**, under their own reviews below. The editor, the radial
+   rail included, has still not been seen outside Chromium.
+8. **Sprint 38 unplanned.**
+
+The review before that: 13 November 2026, **closing sprint 36 — «el editor se encadena, y la ayuda tiene su
 línea».** David asked for an editor whose animations and transitions look of their time, taking
 `aymanelimam.com/frontend/` as the reference and «que no te dé miedo innovar», and for one rule: no
 instruction text may cover the page being edited, on a desktop or on a phone. His four answers before
@@ -1732,6 +1782,13 @@ open survives.
     tools ring is the answer, and it is not built.
   - **The keyboard enters the sections ring by the first section**, not the chosen one (ADR 0073's
     «what this does not decide»): the shell does not know which section is chosen.
+  - **After a mouse press in the fan, the line says the hub's keys.** Choosing a pill puts the focus on
+    the hub, where the keyboard would want it, and the help line says the keys of the place the focus
+    is in, whichever hand put it there (ADR 0072's note of día 3). Seen in día 6's screenshots at 1440,
+    after «Páginas» was pressed with the mouse. The keys are switched on by the hub's own `onFocus`
+    in `EditorShell`'s `RadialRail`, on any focus. Reading `:focus-visible` there, as the opening
+    already does, would probably be the fix, but it is not tried. Whether a mouse user should read
+    keys there is David's call.
   - **Seen in Chromium only.** The radial rail was looked at in a real browser at 768, 1024, 1280 and
     1440 and in an emulated iPad (gen 7) with reduced motion, all Chromium. The touch path Safari
     takes (the window's `blur`) is walked in Chromium too. Nothing of the editor has been seen in WebKit
