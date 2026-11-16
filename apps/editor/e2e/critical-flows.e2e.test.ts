@@ -16171,6 +16171,18 @@ describe("nada sobresale en un móvil", () => {
         },
         samples: "serve",
       },
+      // The theme's own grey on its own white, 1,0:1 (sprint 38 día 3): the theme is what every
+      // colour is judged against, so it is a block before any exact colour is looked at.
+      {
+        kind: "theme",
+        title: "Los colores de tu web no se leen bien",
+        doc: () => {
+          const doc = corpus("estilo-por-elemento");
+          const theme = doc["theme"] as Record<string, string>;
+          theme["color.muted"] = theme["color.surface"] ?? "#FFFFFF";
+          return doc;
+        },
+      },
       // 1,0:1 — the surface's own white. Below 3:1, so a block.
       {
         kind: "unreadable",
@@ -27330,11 +27342,19 @@ describe("sprint 35 día 5 — el panel de la marca", () => {
       expect(await logoHeight()).toBeCloseTo(normal, 0);
       expect(await editSerialOf(studio)).toBe(serial);
 
-      // **No step of history**: «Deshacer» now undoes the upload, the step before the hover.
-      await studio.getByRole("button", { name: "Deshacer", exact: true }).click();
-      await expect(logo).toHaveCount(0);
-      await studio.getByRole("button", { name: "Rehacer", exact: true }).click();
+      // **No step of history**: «Deshacer» undoes the steps before the hover and nothing else. Since
+      // sprint 38 día 3 (ADR 0076) a logo uploaded to an untouched site brings its colours as a step of
+      // their own after the upload — the line offers its own «Deshacer» for it — so the bar's arrow
+      // takes the colours back first, then the upload; and «Rehacer» puts both back.
+      const undo = studio.locator('button[aria-label="Deshacer"]');
+      const redo = studio.locator('button[aria-label="Rehacer"]');
+      await undo.click();
       await expect(logo).toHaveCount(1);
+      await undo.click();
+      await expect(logo).toHaveCount(0);
+      await redo.click();
+      await expect(logo).toHaveCount(1);
+      await redo.click();
       await imageLoaded(logo);
 
       // 3. Pressed, it is written: the canvas draws it from the document now.
