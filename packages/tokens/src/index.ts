@@ -9,6 +9,27 @@ export {
   relativeLuminance,
   resolveFill,
 } from "./contrast.ts";
+export type {
+  DerivedPalette,
+  DeriveInput,
+  LegibleAxis,
+  LegibleSteps,
+  PaletteColors,
+  PaletteLabel,
+  UnreadablePair,
+} from "./derive.ts";
+export {
+  derivePalette,
+  GLASS_MIX,
+  inkOn,
+  LEGIBLE_STEPS,
+  legibleSteps,
+  maxChroma,
+  paletteLabel,
+  validateTheme,
+} from "./derive.ts";
+export type { Oklch } from "./oklch.ts";
+export { hexToOklch, hexToRgb, inGamut, oklchToHex, rgbToHex, toGamut } from "./oklch.ts";
 export type { ColorKey, Palette } from "./palettes.ts";
 export { PALETTES, STARTING_PALETTE_ID } from "./palettes.ts";
 

@@ -1,4 +1,10 @@
-import { AA_NORMAL_TEXT, contrastRatio, mixHex, PALETTES } from "@retorika/tokens";
+import {
+  AA_NORMAL_TEXT,
+  contrastRatio,
+  GLASS_MIX as DERIVED_GLASS_MIX,
+  mixHex,
+  PALETTES,
+} from "@retorika/tokens";
 import { describe, expect, it } from "vitest";
 import { GLASS_BACKGROUNDS, GLASS_MIX } from "../src/index.ts";
 
@@ -36,6 +42,9 @@ describe("the glass bar clears AA over black and over white, in every palette", 
 
   it("is the mix the stylesheet writes, and the two schemes it names", () => {
     expect(GLASS_MIX).toBe(0.88);
+    // A derived palette is proved on the same glass (sprint 38 día 2): the renderer cannot import
+    // `@retorika/tokens`, so the number lives twice, and this is what holds the two together.
+    expect(DERIVED_GLASS_MIX).toBe(GLASS_MIX);
     expect(GLASS_BACKGROUNDS).toEqual({ surface: "ink", ink: "surface" });
   });
 
