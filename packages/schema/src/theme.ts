@@ -1,5 +1,5 @@
 import type { RetorikaDocument } from "./document.ts";
-import { type Theme, TOKEN_KEYS, themeSchema } from "./tokens.ts";
+import { FILL_KEYS, type Theme, TOKEN_KEYS, themeSchema } from "./tokens.ts";
 
 /**
  * The document's theme, replaced whole.
@@ -38,7 +38,11 @@ export function setTheme(doc: RetorikaDocument, theme: Theme): RetorikaDocument 
   // history built on reference equality does not open a step. Pressing the palette a site is
   // already using should leave the undo arrow exactly as it was, not light it up for a step that
   // undoes to itself.
-  if (TOKEN_KEYS.every((key) => doc.theme[key] === parsed.data[key])) return doc;
+  //
+  // **The fill pair counts** (ADR 0074): a theme whose only change is its fill — the owner moving the
+  // button's colour and nothing else — is a change, and comparing the nineteen alone would call it
+  // none, open no step and patch nothing.
+  if ([...TOKEN_KEYS, ...FILL_KEYS].every((key) => doc.theme[key] === parsed.data[key])) return doc;
 
   return { ...doc, theme: parsed.data };
 }

@@ -15,7 +15,9 @@ import {
   SCALES,
   TYPE_PAIRS,
   withFamily,
+  withFill,
   withOwnFont,
+  withoutFill,
   withPalette,
   withScale,
   withTypePair,
@@ -67,6 +69,26 @@ describe("withPalette", () => {
 
   it("refuses an unknown palette rather than leaving the theme as it was", () => {
     expect(() => withPalette(start, "coral-cercano")).toThrow(/Unknown paletteId/);
+  });
+
+  // ADR 0074: a fill left over from a logo would keep its yellow on every button of a site that just
+  // chose a palette — and the palette fills with its own primary.
+  it("drops a fill of the theme's own, so the palette fills with its primary again", () => {
+    const yellow = withFill(start, "#FFCD00", "#000000");
+    const next = withPalette(yellow, "warm-terracotta");
+    expect(Object.hasOwn(next, "color.fill")).toBe(false);
+    expect(Object.hasOwn(next, "color.onFill")).toBe(false);
+    expect(Object.keys(next).sort()).toEqual([...TOKEN_KEYS].sort());
+  });
+});
+
+describe("withFill and withoutFill", () => {
+  it("writes the pair together and takes it away together, touching nothing else", () => {
+    const yellow = withFill(start, "#FFCD00", "#000000");
+    expect(yellow["color.fill"]).toBe("#FFCD00");
+    expect(yellow["color.onFill"]).toBe("#000000");
+    expect(withoutFill(yellow)).toEqual(start);
+    expect(withoutFill(start)).toEqual(start);
   });
 });
 

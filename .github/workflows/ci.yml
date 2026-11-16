@@ -236,12 +236,19 @@ jobs:
     # `--shard` jobs (the same minutes, half the wall-clock) stay David's decision, for the same
     # reason as above.
     #
+    # **The step gets 45 and the job 55 since 16 November 2026 (sprint 38 día 1), raised by
+    # development on the sprint's plan, for David to accept with the pull request.** The step ran
+    # 34–35 of its 40 minutes through sprint 37 (32.3, 32.9, 33.8, 34.0, 34.9 and 34.1 on its six
+    # pull requests; the table is in REVIEW's sprint 37 close), and sprint 38 adds about twelve walks —
+    # the logo's colours, the palette cards, the colour field, three or four minutes — to a limit
+    # already grazed. The same five minutes of slack as every raise before; sharding stays David's.
+    #
     # **One job again since sprint 27 día 1.** There were two from sprint 26 día 3: this one and
     # `e2e (swap)`, the same walks with the canvas on the route it had since sprint 15, chosen by
     # `localStorage["rb.canvas"]`. Both blocked, both took 17–20 minutes, and every defect had to be
     # looked for in two places. The route was retired with the suite green on both for a sprint,
     # which is the evidence ADR 0051 §6 asked for.
-    timeout-minutes: 50
+    timeout-minutes: 55
     # Protocol Part 9.2: "El job `e2e` se limita a los pull request porque los minutos de
     # Actions son finitos y Playwright es lo más lento de todo." A push straight to main skips
     # it — every push that matters had a pull request first, which already ran this.
@@ -272,7 +279,7 @@ jobs:
       # default reporter prints nothing at all before a kill, which cost a diagnosis on 22 October.
       # It was the retired `e2e (swap)` job that carried this flag; the lesson outlived the job.
       - run: pnpm e2e --reporter=verbose
-        timeout-minutes: 40
+        timeout-minutes: 45
 
   security:
     name: security

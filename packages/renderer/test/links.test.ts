@@ -20,6 +20,13 @@ const BUTTON_RULE = [
   "  background: var(--color-primary); color: var(--color-surface); font-family: var(--font-heading);",
   "  font-weight: 700; border-radius: 999px; text-decoration: none; }",
 ].join("\n");
+/** The same rule for a theme with a fill of its own (ADR 0074): the fill under its ink. */
+const FILL_BUTTON_RULE = BUTTON_RULE.replace(
+  "background: var(--color-primary); color: var(--color-surface);",
+  "background: var(--color-fill); color: var(--color-on-fill);",
+);
+const buttonRuleOf = (theme: { "color.fill"?: string | undefined }) =>
+  theme["color.fill"] === undefined ? BUTTON_RULE : FILL_BUTTON_RULE;
 
 const corpus = loadCorpus();
 
@@ -38,13 +45,16 @@ describe("plain links", () => {
       if (!entry) throw new Error(`missing fixture ${name}`);
       const css = styleOf(render(entry.document, "html").html);
       expect(css.split(LINK_RULE).length - 1).toBe(1);
-      expect(css).toContain([PARAGRAPH_RULE, LINK_RULE, BUTTON_RULE].join("\n"));
+      expect(css).toContain(
+        [PARAGRAPH_RULE, LINK_RULE, buttonRuleOf(entry.document.theme)].join("\n"),
+      );
     },
   );
 
   it("leaves the button rule exactly as it was", () => {
     for (const { name, document } of corpus) {
-      expect(styleOf(render(document, "html").html).split(BUTTON_RULE).length - 1, name).toBe(1);
+      const rule = buttonRuleOf(document.theme);
+      expect(styleOf(render(document, "html").html).split(rule).length - 1, name).toBe(1);
     }
   });
 

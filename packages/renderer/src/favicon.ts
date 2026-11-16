@@ -30,9 +30,11 @@ export function faviconLetter(siteName: string): string | undefined {
 /**
  * The icon itself, as SVG text.
  *
- * **Surface on primary, because that pair is proved**: it is the button's own pair, one of the five
+ * **The fill's ink on the fill, because that pair is proved**: it is the button's own pair, one of the
  * `CONTRAST_PAIRS` in `packages/tokens` that clear 4.5:1 in every palette, so whatever palette the
- * owner chose, the letter reads. A name with no letter or digit gets the disc alone — never a
+ * owner chose, the letter reads. Without a fill of its own a theme fills with its primary and writes in
+ * its surface, as every favicon did before 1.20.0; with one — a logo's yellow — the disc is the brand's
+ * own colour and the letter its ink (ADR 0074). A name with no letter or digit gets the disc alone — never a
  * placeholder glyph, which would be a letter the business does not have.
  *
  * **The letter is drawn in the visitor's own system font** (`system-ui`), and that is said rather
@@ -45,11 +47,11 @@ export function faviconLetter(siteName: string): string | undefined {
  * string to the schema.
  */
 export function faviconSvg(theme: Theme, siteName: string): string {
-  const disc = `<circle cx="16" cy="16" r="16" fill="${escapeHtml(theme["color.primary"])}"/>`;
+  const disc = `<circle cx="16" cy="16" r="16" fill="${escapeHtml(theme["color.fill"] ?? theme["color.primary"])}"/>`;
   const letter = faviconLetter(siteName);
   const glyph =
     letter === undefined
       ? ""
-      : `<text x="16" y="16" dy=".35em" text-anchor="middle" font-family="system-ui, sans-serif" font-size="20" font-weight="700" fill="${escapeHtml(theme["color.surface"])}">${escapeHtml(letter)}</text>`;
+      : `<text x="16" y="16" dy=".35em" text-anchor="middle" font-family="system-ui, sans-serif" font-size="20" font-weight="700" fill="${escapeHtml(theme["color.onFill"] ?? theme["color.surface"])}">${escapeHtml(letter)}</text>`;
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">${disc}${glyph}</svg>\n`;
 }

@@ -286,6 +286,38 @@ describe("the header's parts", () => {
     expect(reviewStyle(onPrimary).blocking).toEqual([]);
   });
 
+  // ADR 0074, sprint 38 día 1: with a fill of the theme's own, a primary bar is the fill and its
+  // button inverts to the fill's ink; the section's button is the fill. Every judgement follows.
+  it("judges against the theme's own fill and its ink, when the theme carries them", () => {
+    const yellow = { ...theme, "color.fill": "#FFCD00", "color.onFill": "#000000" } as Theme;
+    const filled = (header: RetorikaDocument["header"]) =>
+      parseDocument({ ...headerDoc(header), theme: yellow });
+    // The bar in the primary scheme is the fill, and the logo and the words are judged against it.
+    expect(headerBarBackground(filled({ look: { background: "primary" } }))).toBe("#FFCD00");
+    expect(headerBarBackground(filled({ look: { background: "ink" } }))).toBe(theme["color.ink"]);
+    // Black words on the inverted button (black) block; yellow words on it read.
+    const blackOnBlack = filled({
+      look: { background: "primary" },
+      style: { action: { color: exact("#000000") } },
+    });
+    expect(reviewStyle(blackOnBlack).blocking.map((f) => f.exception.role)).toEqual(["button"]);
+    const yellowOnBlack = filled({
+      look: { background: "primary" },
+      style: { action: { color: exact("#FFCD00") } },
+    });
+    expect(reviewStyle(yellowOnBlack).blocking).toEqual([]);
+    // White words on the section's yellow button block: that is the pair the fill exists to avoid.
+    const whiteOnYellow = parseDocument({
+      ...docWith(["el-cta", "color", exact("#FFFFFF")]),
+      theme: yellow,
+    });
+    expect(reviewStyle(whiteOnYellow).blocking.map((f) => f.exception.elementId)).toEqual([
+      "el-cta",
+    ]);
+    // And the same white on the same button without a fill of the theme's own is the proved pair.
+    expect(reviewStyle(docWith(["el-cta", "color", exact("#FFFFFF")])).blocking).toEqual([]);
+  });
+
   it("warns between the two thresholds, as it does for an element", () => {
     const review = reviewStyle(
       headerDoc({ style: { sectionsLinks: { color: exact(greyAt(3.6)) } } }),

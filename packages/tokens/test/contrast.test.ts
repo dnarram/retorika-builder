@@ -6,6 +6,7 @@ import {
   PALETTES,
   provedOn,
   relativeLuminance,
+  resolveFill,
 } from "../src/index.ts";
 
 describe("contrast", () => {
@@ -19,8 +20,11 @@ describe("contrast", () => {
     describe(`palette "${palette.id}"`, () => {
       for (const pair of PAIRS) {
         it(`meets AA contrast threshold (>= 4.5:1) for ${pair.label}`, () => {
-          const fgColor = palette.colors[pair.fg];
-          const bgColor = palette.colors[pair.bg];
+          // Resolved, so the fill pair is measured in what the renderer draws for a palette that
+          // carries none: its primary under its surface (ADR 0074).
+          const colors = resolveFill(palette.colors);
+          const fgColor = colors[pair.fg];
+          const bgColor = colors[pair.bg];
           const ratio = contrastRatio(fgColor, bgColor);
 
           expect(
@@ -77,6 +81,9 @@ describe("CONTRAST_PAIRS as the toolbar's source of truth", () => {
       "color.muted",
     ]);
     expect(provedOn("color.primary")).toEqual(["color.surface"]);
+    // And the fill's own ink on the fill (ADR 0074): the one pair a theme with a fill of its own
+    // proves on the button, where the six references cannot be offered.
+    expect(provedOn("color.fill")).toEqual(["color.onFill"]);
   });
 
   it("answers nothing for a background no pair has been measured against", () => {
@@ -85,5 +92,34 @@ describe("CONTRAST_PAIRS as the toolbar's source of truth", () => {
     // text colour on it.
     expect(provedOn("color.muted")).toEqual([]);
     expect(provedOn("color.accent")).toEqual([]);
+  });
+});
+
+/**
+ * The fill pair's fallback (ADR 0074, sprint 38 día 1): absent, the fill is the primary and its ink
+ * the surface — what every site drew before 1.20.0; present, both are what the theme says.
+ */
+describe("resolveFill", () => {
+  it("falls back to primary under surface when the theme carries no fill", () => {
+    for (const palette of PALETTES) {
+      const colors = resolveFill(palette.colors);
+      expect(colors["color.fill"], palette.id).toBe(palette.colors["color.primary"]);
+      expect(colors["color.onFill"], palette.id).toBe(palette.colors["color.surface"]);
+    }
+  });
+
+  it("keeps a fill of the theme's own, and measures the pair in it", () => {
+    const neutral = PALETTES[0]?.colors;
+    if (!neutral) throw new Error("no palettes");
+    const yellow = resolveFill({ ...neutral, "color.fill": "#FFCD00", "color.onFill": "#000000" });
+    expect(yellow["color.fill"]).toBe("#FFCD00");
+    expect(yellow["color.onFill"]).toBe("#000000");
+    expect(yellow["color.primary"]).toBe(neutral["color.primary"]);
+    // The case the pair exists for: a yellow under black clears AA; under the old ink, white, it
+    // does not come near it.
+    expect(contrastRatio(yellow["color.onFill"], yellow["color.fill"])).toBeGreaterThanOrEqual(
+      AA_NORMAL_TEXT,
+    );
+    expect(contrastRatio(yellow["color.surface"], yellow["color.fill"])).toBeLessThan(2);
   });
 });

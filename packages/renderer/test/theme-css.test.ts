@@ -1,5 +1,7 @@
 import {
   type ContentElement,
+  parseDocument,
+  type RetorikaDocument,
   SORTED_TOKEN_KEYS,
   type Theme,
   TOKEN_KEYS,
@@ -78,6 +80,99 @@ describe("the theme's custom properties", () => {
       const used = variablesUsed(cssOf(render(entry.document, "html").html));
       expect(used, entry.name).not.toContain("--color-accent");
     }
+  });
+});
+
+/**
+ * **The two shapes of the stylesheet** (ADR 0074, sprint 38 día 1). A theme without a fill of its own
+ * — every document of the corpus but one, every site before 1.20.0 — publishes the stylesheet it
+ * always did: the goldens are the byte-for-byte proof, and this says why in one line each. A theme
+ * with one fills with `--color-fill`, writes on it in `--color-on-fill`, and re-points the primary bar
+ * alone, so the secondary and ink bars keep their surface words.
+ */
+describe("the fill and its ink", () => {
+  const yellowEntry = corpus.find((entry) => entry.name === "logo-amarillo");
+  if (!yellowEntry) throw new Error("logo-amarillo is not in the corpus");
+  const yellow = yellowEntry.document;
+  const withHeader = (doc: RetorikaDocument, header: object) =>
+    parseDocument({ ...doc, header: { ...doc.header, ...header } });
+  /** The same yellow with a rail on the left and the sections in «Ir a…», so every bar part shows. */
+  const everyPart = withHeader(yellow, {
+    pages: { shown: true, position: "left" },
+    sections: { shown: true, position: "fold" },
+    sticky: true,
+    progress: true,
+  });
+
+  it("is absent from every document without a fill, which is the corpus's every other one", () => {
+    for (const entry of corpus) {
+      if (entry.name === "logo-amarillo") continue;
+      const css = cssOf(render(entry.document, "html").html);
+      expect(css, entry.name).not.toContain("--color-fill");
+      expect(css, entry.name).not.toContain("--color-on-fill");
+    }
+  });
+
+  it("declares the pair after the nineteen, and fills nothing with the primary any more", () => {
+    for (const doc of [yellow, everyPart]) {
+      const css = cssOf(render(doc, "html").html);
+      const root = css.slice(0, css.indexOf("}"));
+      expect(root.trimEnd().endsWith("--color-on-fill: #000000;"), root).toBe(true);
+      expect(root).toContain("--color-fill: #FFCD00;");
+      // No shape is filled with the text's colour: every `background` that read the primary reads
+      // the fill now. The text roles — the heading, the links, the skip link — keep the primary, and
+      // so do the two thin marks drawn on a surface bar (the indicator under the current entry and
+      // the progress line), which are read against the surface like an underline is: in the fill a
+      // yellow would draw them at 1.5:1 on white. On a coloured bar both are re-pointed anyway.
+      const stillPrimary = css
+        .split("\n")
+        .filter((line) => line.includes("background: var(--color-primary)"));
+      for (const line of stillPrimary) {
+        expect(line, line).toMatch(/left: anchor\(left\)|height: 2px/);
+      }
+      expect(css).toMatch(/color: var\(--color-primary\)/);
+    }
+  });
+
+  it("re-points the primary bar alone, and never the secondary or ink bars", () => {
+    const css = cssOf(render(everyPart, "html").html);
+    const lines = css.split("\n");
+    // Every rule that names the fill's ink names the primary bar or the button — never another scheme.
+    for (const line of lines.filter((l) => l.includes("--color-on-fill)"))) {
+      expect(line, line).not.toMatch(/data-bg=(secondary|ink)\]/);
+    }
+    // Each shared rule that writes the surface on the three coloured bars is followed by its
+    // primary-bar twin in the fill's ink: the brand and entries, the current entry, the indicator, the
+    // hover, the button, the progress line, the rail's divider and «Ir a…».
+    for (const twin of [
+      ".rb-header[data-bg=primary] :is(.rb-brand, .rb-nav a, .rb-nav-narrow > summary) {",
+      ".rb-header[data-bg=primary] .rb-nav a[aria-current] { text-decoration-color: var(--color-on-fill); }",
+      ".rb-header[data-bg=primary] .rb-nav::after { background: var(--color-on-fill); }",
+      ".rb-header[data-bg=primary] .rb-nav-action { background: var(--color-on-fill); color: var(--color-fill); }",
+      ".rb-header[data-bg=primary] .rb-rail > .rb-nav + .rb-nav {",
+      ".rb-header[data-bg=primary] .rb-nav-fold > summary { color: var(--color-on-fill); }",
+      ".rb-header[data-bg=primary] .rb-rail { background: var(--color-fill); }",
+      ".rb-header[data-bg=primary] .rb-nav-fold > :is(summary, .rb-nav) { background: var(--color-fill); }",
+      ".rb-header[data-progress][data-bg=primary]::after { background: var(--color-on-fill); }",
+    ]) {
+      expect(css, twin).toContain(twin);
+    }
+    // And the secondary and ink bars still write in the surface, by the shared rules unchanged.
+    expect(css).toContain(
+      ".rb-header:is([data-bg=primary], [data-bg=secondary], [data-bg=ink]) .rb-nav-action {\n  background: var(--color-surface); color: var(--color-primary); }",
+    );
+  });
+
+  it("puts the twin after the shared rule it overrides, at the same weight", () => {
+    const css = cssOf(render(yellow, "html").html);
+    const shared = css.indexOf(
+      ".rb-header:is([data-bg=primary], [data-bg=secondary], [data-bg=ink])\n  :is(.rb-brand, .rb-nav a, .rb-nav-narrow > summary) { color: var(--color-surface); }",
+    );
+    const twin = css.indexOf(
+      ".rb-header[data-bg=primary] :is(.rb-brand, .rb-nav a, .rb-nav-narrow > summary) {",
+    );
+    expect(shared).toBeGreaterThan(-1);
+    expect(twin).toBeGreaterThan(shared);
   });
 });
 

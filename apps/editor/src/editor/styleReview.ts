@@ -7,7 +7,13 @@ import type {
   StyleException,
 } from "@retorika/schema";
 import { listHeaderStyleExceptions, listStyleExceptions } from "@retorika/schema";
-import { AA_NORMAL_TEXT, contrastRatio, mixHex, relativeLuminance } from "@retorika/tokens";
+import {
+  AA_NORMAL_TEXT,
+  contrastRatio,
+  mixHex,
+  relativeLuminance,
+  resolveFill,
+} from "@retorika/tokens";
 import es from "../locales/es.json" with { type: "json" };
 import { backgroundOf } from "./textToolbar.ts";
 
@@ -72,11 +78,14 @@ export interface StyleReview {
  *   `Diseño` panel's audit still shows them.
  *
  * A reference is never judged either, and that is not an omission: every reference the toolbar can
- * write is a pair `packages/tokens` has proved at 4.5:1 in all four palettes. The exception arm is
+ * write is a pair `packages/tokens` has proved at 4.5:1 in every palette. The exception arm is
  * the only way an unproved combination can enter a document at all, which is what makes this review
  * exactly as large as the hazard it exists for.
  */
 export function reviewStyle(doc: RetorikaDocument): StyleReview {
+  // The theme's colours with the fill pair resolved (ADR 0074): the button and a primary bar are
+  // judged against what the renderer fills them with, the theme's own fill or its primary.
+  const colours = resolveFill(doc.theme);
   const blocking: ContrastFinding[] = [];
   const warning: ContrastFinding[] = [];
   const judge = (exception: StyleException, background: string) => {
@@ -92,7 +101,7 @@ export function reviewStyle(doc: RetorikaDocument): StyleReview {
 
   for (const exception of listStyleExceptions(doc)) {
     if (exception.property !== "color" || exception.hidden) continue;
-    judge(exception, doc.theme[backgroundOf(exception.role)]);
+    judge(exception, colours[backgroundOf(exception.role, doc.theme)]);
   }
 
   // **The header's parts, against the bar they sit on** (ADR 0057, sprint 30 día 2). The bar's own
@@ -103,15 +112,19 @@ export function reviewStyle(doc: RetorikaDocument): StyleReview {
   const headerExceptions = listHeaderStyleExceptions(doc);
   const scheme = doc.header?.look?.background ?? "surface";
   const bar = headerBarBackground(doc);
+  // On a primary bar the button inverts to the fill's ink (ADR 0074), which without a fill of the
+  // theme's own is the surface, as it always was.
   const buttonBackground =
     scheme === "surface" || scheme === "transparent"
-      ? doc.theme["color.primary"]
-      : doc.theme["color.surface"];
+      ? colours["color.fill"]
+      : scheme === "primary"
+        ? colours["color.onFill"]
+        : colours["color.surface"];
   // **And the panels that hang from the bar** (sprint 31 día 5): the phone's «Menú» and «Ir a…» are
   // drawn in the scheme's colour, never in an exact one painted on the bar, so a link that reads on
   // the bar can vanish in its panel. The pages hang in «Menú» on every phone; the sections hang in a
   // panel only behind «Ir a…». The worse of the two is the finding.
-  const panel = doc.theme[HEADER_BACKGROUND_TOKEN[scheme]];
+  const panel = colours[HEADER_BACKGROUND_TOKEN[scheme]];
   const settings = headerSettings(doc);
   const sectionsInPanel =
     settings.sectionsPosition === "fold" || settings.sectionsMobile === "fold";
@@ -145,14 +158,15 @@ export function reviewStyle(doc: RetorikaDocument): StyleReview {
   return { blocking, warning };
 }
 
-/** The token each scheme paints the bar with; `transparent` shows the cover's surface through it. */
+/** The token each scheme paints the bar with; `transparent` shows the cover's surface through it. The
+ * primary bar is the fill (ADR 0074), which resolves to the primary in a theme without one. */
 const HEADER_BACKGROUND_TOKEN: Record<
   HeaderBackground,
-  "color.surface" | "color.primary" | "color.secondary" | "color.ink"
+  "color.surface" | "color.fill" | "color.secondary" | "color.ink"
 > = {
   surface: "color.surface",
   transparent: "color.surface",
-  primary: "color.primary",
+  primary: "color.fill",
   secondary: "color.secondary",
   ink: "color.ink",
 };
@@ -163,7 +177,10 @@ export function headerBarBackground(doc: RetorikaDocument): string {
   const exact = listHeaderStyleExceptions(doc).find(
     (e) => e.part === "bar" && e.property === "color",
   )?.exact;
-  return exact ?? doc.theme[HEADER_BACKGROUND_TOKEN[doc.header?.look?.background ?? "surface"]];
+  return (
+    exact ??
+    resolveFill(doc.theme)[HEADER_BACKGROUND_TOKEN[doc.header?.look?.background ?? "surface"]]
+  );
 }
 
 /**

@@ -1,3 +1,4 @@
+import type { FillKey } from "@retorika/schema";
 import type { ColorKey } from "./palettes.ts";
 
 /**
@@ -107,12 +108,15 @@ export const AA_NORMAL_TEXT = 4.5;
  * measures 3.19:1 on surface in `classic-blue`.
  *
  * Adding a pair here is a claim, and the test is what makes it one: an entry that does not clear
- * 4.5:1 in all four palettes turns the suite red before it can reach a toolbar.
+ * 4.5:1 in every palette turns the suite red before it can reach a toolbar.
  */
 export interface ContrastPair {
-  fg: ColorKey;
-  bg: ColorKey;
+  fg: PairKey;
+  bg: PairKey;
 }
+
+/** A colour a pair can name: the six of every palette, plus the fill and its ink (ADR 0074). */
+export type PairKey = ColorKey | FillKey;
 
 export const CONTRAST_PAIRS: readonly ContrastPair[] = [
   { fg: "color.ink", bg: "color.surface" },
@@ -127,11 +131,35 @@ export const CONTRAST_PAIRS: readonly ContrastPair[] = [
   // thought — measured 1.23 in dark-slate and was refused; the schemes read these two instead.
   { fg: "color.surface", bg: "color.secondary" },
   { fg: "color.surface", bg: "color.ink" },
+  // **The fill and its ink** (ADR 0074, sprint 38 día 1): wherever the page fills a shape — the
+  // button, a coloured bar, the favicon's disc — it fills it with `color.fill` and writes on it in
+  // `color.onFill`. Both are optional and resolve to `color.primary` and `color.surface` when absent
+  // (`resolveFill`), so for every palette above this pair *is* surface on primary, measured twice;
+  // it earns its place on the day a theme carries a fill of its own, a logo's yellow under black.
+  // Surface on primary stays: it is what a fill-less button carries, and the toolbar offers it there.
+  { fg: "color.onFill", bg: "color.fill" },
 ];
+
+/**
+ * The colours a pair is measured in, with the fill pair resolved: `color.fill` falls back to
+ * `color.primary` and `color.onFill` to `color.surface`, which is what the renderer draws when a
+ * theme carries no fill of its own (ADR 0074). A palette, or a whole theme, goes in; the eight colours
+ * a pair can name come out. The one place the fallback is written for the arithmetic, so the tests and
+ * the editor's review cannot disagree with the stylesheet about what a fill-less button is drawn in.
+ */
+export function resolveFill(
+  colors: Record<ColorKey, string> & { [K in FillKey]?: string | undefined },
+): Record<PairKey, string> {
+  return {
+    ...colors,
+    "color.fill": colors["color.fill"] ?? colors["color.primary"],
+    "color.onFill": colors["color.onFill"] ?? colors["color.surface"],
+  };
+}
 
 /** The foregrounds proved against this background, in the order above. Empty is a real answer: a
  * background nobody has measured a pair against offers no colours at all, rather than offering
  * five and hoping. */
-export function provedOn(background: ColorKey): ColorKey[] {
+export function provedOn(background: PairKey): PairKey[] {
   return CONTRAST_PAIRS.filter((pair) => pair.bg === background).map((pair) => pair.fg);
 }

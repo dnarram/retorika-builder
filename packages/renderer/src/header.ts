@@ -17,6 +17,7 @@ import {
   tokenPx,
 } from "@retorika/schema";
 import { safeUrl } from "./escape.ts";
+import { type FillVars, fillVars } from "./fill.ts";
 import {
   BAR_EXCESS,
   BAR_EXCESS_DIGITS,
@@ -1112,6 +1113,7 @@ export function headerCss(doc: RetorikaDocument, target: "html" | "dom"): string
   if (!headerDrawn(doc)) return [];
   const widths = headerWidths(doc);
   const settings = headerSettings(doc);
+  const fill = fillVars(doc.theme);
   return [
     // The skip link: off-screen until it has focus, and then the first thing on the page. `top`
     // rather than a clip, so the one transition it makes is the one a sighted keyboard user sees.
@@ -1235,7 +1237,7 @@ export function headerCss(doc: RetorikaDocument, target: "html" | "dom"): string
     // names its verbs `.rb-action`, inside the same frame this stylesheet lives in, and the first
     // name restyled every verb of the toolbar — measured by the sprint 20 walk.
     ".rb-nav-action { display: inline-block; padding: var(--space-sm) var(--space-lg);",
-    "  background: var(--color-primary); color: var(--color-surface); font-family: var(--font-heading);",
+    `  background: ${fill.fill}; color: ${fill.ink}; font-family: var(--font-heading);`,
     "  font-size: var(--size-body); font-weight: 700; border-radius: 999px; text-decoration: none;",
     "  white-space: nowrap; }",
     "@media (hover: hover) {",
@@ -1312,7 +1314,7 @@ export function headerCss(doc: RetorikaDocument, target: "html" | "dom"): string
     // contrasts with the page — the indicator and the rule under the current entry are `surface`
     // too, and the button inverts to `surface` with `primary` words, since a `primary` button on a
     // `primary` bar is no button (and 1.77 against `ink`).
-    ".rb-header[data-bg=primary] { background: var(--color-primary); border-bottom: 0; }",
+    `.rb-header[data-bg=primary] { background: ${fill.fill}; border-bottom: 0; }`,
     ".rb-header[data-bg=secondary] { background: var(--color-secondary); border-bottom: 0; }",
     ".rb-header[data-bg=ink] { background: var(--color-ink); border-bottom: 0; }",
     ".rb-header:is([data-bg=primary], [data-bg=secondary], [data-bg=ink])",
@@ -1326,8 +1328,24 @@ export function headerCss(doc: RetorikaDocument, target: "html" | "dom"): string
     "  text-decoration-color: color-mix(in srgb, var(--color-surface) 50%, transparent); }",
     ".rb-header:is([data-bg=primary], [data-bg=secondary], [data-bg=ink]) .rb-nav-action {",
     "  background: var(--color-surface); color: var(--color-primary); }",
+    // **A bar in a fill of its own writes in the fill's ink** (ADR 0074): the five shared rules above
+    // write `surface` on all three coloured schemes, which on a yellow bar is white on yellow. The
+    // primary scheme alone is re-pointed, right after them and at the same weight, so the secondary
+    // and ink bars keep their surface — and a theme without a fill emits none of it.
+    ...(fill.own
+      ? [
+          ".rb-header[data-bg=primary] :is(.rb-brand, .rb-nav a, .rb-nav-narrow > summary) {",
+          `  color: ${fill.ink}; }`,
+          `.rb-header[data-bg=primary] .rb-nav a[aria-current] { text-decoration-color: ${fill.ink}; }`,
+          `.rb-header[data-bg=primary] .rb-nav::after { background: ${fill.ink}; }`,
+          ".rb-header[data-bg=primary][data-hover] .rb-nav a:hover,",
+          ".rb-header[data-bg=primary][data-hover] .rb-nav a:focus-visible {",
+          `  text-decoration-color: color-mix(in srgb, ${fill.ink} 50%, transparent); }`,
+          `.rb-header[data-bg=primary] .rb-nav-action { background: ${fill.ink}; color: ${fill.fill}; }`,
+        ]
+      : []),
     // The phone's open menu keeps the bar's colours, since it hangs from the bar.
-    ".rb-header[data-bg=primary] .rb-nav-narrow .rb-nav { background: var(--color-primary); }",
+    `.rb-header[data-bg=primary] .rb-nav-narrow .rb-nav { background: ${fill.fill}; }`,
     ".rb-header[data-bg=secondary] .rb-nav-narrow .rb-nav { background: var(--color-secondary); }",
     ".rb-header[data-bg=ink] .rb-nav-narrow .rb-nav { background: var(--color-ink); }",
     // **Transparent lies over the cover** (David's adjustment 1a): the bar is taken out of the flow
@@ -1376,7 +1394,7 @@ export function headerCss(doc: RetorikaDocument, target: "html" | "dom"): string
     `    background: color-mix(in srgb, var(--color-ink) ${Math.round(GLASS_MIX * 100)}%, transparent);`,
     "    -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }",
     "}",
-    ...progressCss(settings, widths, target),
+    ...progressCss(settings, widths, target, fill),
     ...railCss(doc, widths),
     ...foldCss(doc, widths),
     ...headerStyleCss(doc),
@@ -1617,6 +1635,7 @@ function progressCss(
   settings: HeaderSettings,
   widths: HeaderWidths,
   target: "html" | "dom",
+  fill: FillVars,
 ): string[] {
   if (target !== "html" || !settings.progress) return [];
   return [
@@ -1628,6 +1647,10 @@ function progressCss(
     "      animation-timeline: scroll(root); }",
     "    .rb-header[data-progress]:is([data-bg=primary], [data-bg=secondary], [data-bg=ink])::after {",
     "      background: var(--color-surface); }",
+    // On a bar in a fill of its own, the line is the fill's ink, like the words (ADR 0074).
+    ...(fill.own
+      ? [`    .rb-header[data-progress][data-bg=primary]::after { background: ${fill.ink}; }`]
+      : []),
     "    @keyframes rb-progress { from { transform: scaleX(0); } to { transform: scaleX(1); } }",
     // The phone's block, nested: its own `@media` and brace indented to sit inside this one.
     ...toPhone(widths, [
@@ -1655,6 +1678,7 @@ function progressCss(
  * - **z-index 2**, under the skip link's 3: the first Tab stop is drawn over a rail on the left.
  */
 function railCss(doc: RetorikaDocument, widths: HeaderWidths): string[] {
+  const fill = fillVars(doc.theme);
   const settings = headerSettings(doc);
   // No rail travels where none ever stands (ADR 0067): a bar that is the phone's at every width.
   if (!usesRail(settings) || widths.rails === "none") return [];
@@ -1681,11 +1705,17 @@ function railCss(doc: RetorikaDocument, widths: HeaderWidths): string[] {
     ".rb-header[data-hairline=none] .rb-rail,",
     ".rb-header:is([data-bg=primary], [data-bg=secondary], [data-bg=ink]) .rb-rail {",
     "  border-left: 0; border-right: 0; }",
-    ".rb-header[data-bg=primary] .rb-rail { background: var(--color-primary); }",
+    `.rb-header[data-bg=primary] .rb-rail { background: ${fill.fill}; }`,
     ".rb-header[data-bg=secondary] .rb-rail { background: var(--color-secondary); }",
     ".rb-header[data-bg=ink] .rb-rail { background: var(--color-ink); }",
     ".rb-header:is([data-bg=primary], [data-bg=secondary], [data-bg=ink]) .rb-rail > .rb-nav + .rb-nav {",
     "  border-top-color: color-mix(in srgb, var(--color-surface) 20%, transparent); }",
+    ...(fill.own
+      ? [
+          ".rb-header[data-bg=primary] .rb-rail > .rb-nav + .rb-nav {",
+          `  border-top-color: color-mix(in srgb, ${fill.ink} 20%, transparent); }`,
+        ]
+      : []),
     // **In a column the current entry is marked by a bar at its edge**, not by the rule under it: a
     // list read down is scanned along its edge. Every entry keeps the bar's room, in no colour, so
     // nothing moves when the mark arrives — and the negative margin keeps the words in line with the
@@ -1775,6 +1805,7 @@ function foldCss(doc: RetorikaDocument, widths: HeaderWidths): string[] {
   const settings = headerSettings(doc);
   if (!usesFold(settings)) return [];
   const coloured = ":is([data-bg=primary], [data-bg=secondary], [data-bg=ink])";
+  const fill = fillVars(doc.theme);
   const placed = ".rb-header[data-sections=fold] .rb-nav-fold";
   return [
     "/* «Ir a…» (ADR 0060) */",
@@ -1791,7 +1822,10 @@ function foldCss(doc: RetorikaDocument, widths: HeaderWidths): string[] {
     ".rb-header[data-size=small] .rb-nav-fold > summary { font-size: calc(var(--size-body) * 0.875); }",
     ".rb-header[data-uppercase] .rb-nav-fold > summary { text-transform: uppercase; letter-spacing: 0.06em; }",
     `.rb-header${coloured} .rb-nav-fold > summary { color: var(--color-surface); }`,
-    ".rb-header[data-bg=primary] .rb-nav-fold > :is(summary, .rb-nav) { background: var(--color-primary); }",
+    ...(fill.own
+      ? [`.rb-header[data-bg=primary] .rb-nav-fold > summary { color: ${fill.ink}; }`]
+      : []),
+    `.rb-header[data-bg=primary] .rb-nav-fold > :is(summary, .rb-nav) { background: ${fill.fill}; }`,
     ".rb-header[data-bg=secondary] .rb-nav-fold > :is(summary, .rb-nav) { background: var(--color-secondary); }",
     ".rb-header[data-bg=ink] .rb-nav-fold > :is(summary, .rb-nav) { background: var(--color-ink); }",
     // Its panel comes in: from 4 px above, out of nothing — one `animation` on the element, filled

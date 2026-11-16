@@ -152,9 +152,10 @@ describe("cssThemeValue — theme values inside <style>", () => {
   it("accepts every theme value of the golden corpus, unchanged", () => {
     for (const { name, document } of corpus) {
       for (const key of keys) {
-        expect(cssThemeValue(key, document.theme[key]), `${name}: ${key}`).toBe(
-          document.theme[key],
-        );
+        const value = document.theme[key];
+        // The fill pair is optional (ADR 0074): absent, there is nothing to emit.
+        if (value === undefined) continue;
+        expect(cssThemeValue(key, value), `${name}: ${key}`).toBe(value);
       }
     }
   });

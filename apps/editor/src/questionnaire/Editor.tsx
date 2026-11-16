@@ -4765,7 +4765,7 @@ export function Editor({
       const role = el.dataset["role"] as Role | undefined;
       if (!section || !sectionId || !elementId || !role) return;
 
-      const controls = toolbarFor({ role }, designToolsNow.current === true);
+      const controls = toolbarFor({ role }, designToolsNow.current === true, docNow.current.theme);
       if (!controls || !hasAnyControl(controls)) return;
 
       const address: ElementAddress = { sectionId, elementId };

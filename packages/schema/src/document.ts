@@ -5,14 +5,19 @@ import { type MarkRun, marksSchema, markTextIssue } from "./marks.ts";
 import { roleSchema } from "./roles.ts";
 import { siteUrlIssue } from "./siteUrl.ts";
 import { SLUG_PATTERN } from "./slug.ts";
-import { type ElementStyle, elementStyleSchema, themeSchema } from "./tokens.ts";
+import {
+  type ElementStyle,
+  elementStyleSchema,
+  paletteOriginSchema,
+  themeSchema,
+} from "./tokens.ts";
 
 /**
  * Semver rather than an integer so the asymmetry of ADR 0004 is expressible: adding a
  * role or a token is additive and bumps the minor; removing or renaming one breaks and
  * bumps the major.
  */
-export const SCHEMA_VERSION = "1.19.0";
+export const SCHEMA_VERSION = "1.20.0";
 
 const idSchema = z.string().min(1).max(128);
 
@@ -411,6 +416,12 @@ export const documentSchema = z.strictObject({
       message: "siteUrl must be an https origin and nothing else, e.g. https://midominio.es",
     }),
   theme: themeSchema,
+  /**
+   * Where the theme's colours came from (ADR 0075): a palette the owner chose, their logo, or their
+   * own. **Absent is the ordinary state** — the untouched start and every document before 1.20.0 —
+   * and absent means nobody chose; see `paletteOriginSchema`.
+   */
+  palette: paletteOriginSchema.optional(),
   /**
    * The fonts the owner brought, at most two (ADR 0056). Absent on every document written before
    * 1.14.0 and on every document whose owner never imported one, which is the ordinary state.

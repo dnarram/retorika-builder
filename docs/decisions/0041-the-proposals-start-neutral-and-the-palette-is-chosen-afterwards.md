@@ -64,3 +64,12 @@ choose the colour afterwards, in «Estilo», once the kind of site is settled.
   sprint 9 walk read the neutral values where they read the sector's.
 - Every generated site's colours change; no golden moves (the corpus is hand-written) and Lighthouse
   is re-measured on the change.
+
+## Note — sprint 38 día 1: an origin is stored, and the tick still is not (ADR 0075)
+
+§4 said the panel deduces the ticked palette from the theme and «nothing is stored». Since 1.20.0 the
+document may keep **where its colours came from** (`palette`: a palette the owner chose, the logo, or
+the owner's own), because a palette with one colour moved and one derived from a logo are themes no
+value-matching can name. The label is still computed and nothing stores the tick. **The proposals'
+neutral start writes no origin**: absent means nobody chose, which is what keeps it apart from «Neutra»
+chosen on purpose.

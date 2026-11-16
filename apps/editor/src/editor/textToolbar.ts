@@ -1,6 +1,6 @@
-import type { ContentElement, Role, StyleProperty } from "@retorika/schema";
+import type { ContentElement, Role, StyleProperty, Theme } from "@retorika/schema";
 import { STYLE_REFS } from "@retorika/schema";
-import { type ColorKey, provedOn } from "@retorika/tokens";
+import { type ColorKey, type PairKey, provedOn } from "@retorika/tokens";
 
 /**
  * The references each control may write, taken from the schema's own narrowed lists rather than
@@ -44,9 +44,15 @@ type RadiusRef = (typeof STYLE_REFS)["borderRadius"][number];
  * So there is no case here for an image, and none for a section variant. If a future rule paints a
  * third background, this function is where it is added and `provedOn` is what will answer "no
  * colours yet" until somebody measures a pair for it.
+ *
+ * **The button's background is the fill when the theme carries one** (ADR 0074, sprint 38 día 1): a
+ * logo's yellow fills the button, and the one colour proved on it is the fill's own ink, which no
+ * reference can name — so the toolbar offers no colour on that button rather than five unmeasured
+ * ones. Without a fill of its own the button is the primary, exactly as before.
  */
-export function backgroundOf(role: Role): ColorKey {
-  return role === "button" ? "color.primary" : "color.surface";
+export function backgroundOf(role: Role, theme?: Pick<Theme, "color.fill">): PairKey {
+  if (role !== "button") return "color.surface";
+  return theme?.["color.fill"] === undefined ? "color.primary" : "color.fill";
 }
 
 /**
@@ -58,9 +64,11 @@ export function backgroundOf(role: Role): ColorKey {
  * 1:1, invisible, and a perfectly legal value of the schema. Offering all five roles everywhere
  * would reproduce in miniature the hazard `REVIEW.md` refuses at full size.
  */
-export function colorRolesFor(role: Role): ColorRef[] {
+export function colorRolesFor(role: Role, theme?: Pick<Theme, "color.fill">): ColorRef[] {
   const admitted: readonly ColorKey[] = STYLE_REFS.color;
-  return provedOn(backgroundOf(role)).filter((key): key is ColorRef => admitted.includes(key));
+  return provedOn(backgroundOf(role, theme)).filter((key): key is ColorRef =>
+    (admitted as readonly PairKey[]).includes(key),
+  );
 }
 
 /** The size steps, which are the three the system declares and no fourth. A step between
@@ -179,10 +187,11 @@ export const EXACT_TODAY: readonly StyleProperty[] = [
 export function toolbarFor(
   element: Pick<ContentElement, "role">,
   designTools = false,
+  theme?: Pick<Theme, "color.fill">,
 ): ToolbarControls | undefined {
   if (!TOOLBARED_ROLES.has(element.role)) return undefined;
   return {
-    color: colorRolesFor(element.role),
+    color: colorRolesFor(element.role, theme),
     size: sizeRefsFor(),
     link: element.role === "button" || element.role === "link",
     marks: element.role !== "button" && element.role !== "link",

@@ -19,6 +19,7 @@ import theLogoKeepsItsSize from "./0017-the-logo-keeps-its-size.ts";
 import eachMenuHasItsPlace from "./0018-each-menu-has-its-place.ts";
 import theFixedBarSaysHowMuchIsRead from "./0019-the-fixed-bar-says-how-much-is-read.ts";
 import theBrandHasASizeAndAPlace from "./0020-the-brand-has-a-size-and-a-place.ts";
+import theFillKeepsTheBrandsColour from "./0021-the-fill-keeps-the-brands-colour.ts";
 
 export interface Migration {
   version: string;
@@ -49,6 +50,7 @@ export const MIGRATIONS: readonly Migration[] = [
   eachMenuHasItsPlace,
   theFixedBarSaysHowMuchIsRead,
   theBrandHasASizeAndAPlace,
+  theFillKeepsTheBrandsColour,
 ];
 
 /** `1.2.0` → `[1, 2, 0]`, for comparing two versions without a dependency. A missing or

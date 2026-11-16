@@ -5,7 +5,7 @@ import {
   STYLE_PROPERTIES,
   STYLE_REFS,
 } from "@retorika/schema";
-import { CONTRAST_PAIRS, contrastRatio, PALETTES } from "@retorika/tokens";
+import { CONTRAST_PAIRS, contrastRatio, PALETTES, resolveFill } from "@retorika/tokens";
 import { describe, expect, it } from "vitest";
 import {
   backgroundOf,
@@ -97,17 +97,34 @@ describe("the colours the bar offers", () => {
       const background = backgroundOf(role);
       for (const key of colorRolesFor(role)) {
         for (const palette of PALETTES) {
-          const ratio = contrastRatio(palette.colors[key], palette.colors[background]);
+          const colors = resolveFill(palette.colors);
+          const ratio = contrastRatio(colors[key], colors[background]);
           expect(ratio, `${palette.id}: ${key} on ${background}`).toBeGreaterThanOrEqual(4.5);
         }
       }
     }
   });
 
+  // ADR 0074, sprint 38 día 1: a theme with a fill of its own fills the button with it, and the one
+  // colour proved there is the fill's ink, which no reference names — so the row is empty, never five
+  // unmeasured references. Without one, the button is the primary and offers the surface as before.
+  it("offers no colour on a button filled with a theme's own fill, and the surface on one without", () => {
+    const filled = { "color.fill": "#FFCD00" };
+    expect(backgroundOf("button", filled)).toBe("color.fill");
+    expect(colorRolesFor("button", filled)).toEqual([]);
+    expect(backgroundOf("button", {})).toBe("color.primary");
+    expect(colorRolesFor("button", {})).toEqual(["color.surface"]);
+    // The words on the page are on the surface whatever fills the button.
+    expect(backgroundOf("body", filled)).toBe("color.surface");
+    expect(colorRolesFor("body", filled)).toEqual(colorRolesFor("body"));
+  });
+
   it("would offer nothing at all if the pair list were empty, rather than falling back", () => {
     // The failure mode worth naming: no silent default. Every offered key traces to a declared
     // pair, so an empty list means an empty row.
-    const everyOffered = (["heading", "body", "button"] as const).flatMap(colorRolesFor);
+    const everyOffered = (["heading", "body", "button"] as const).flatMap((role) =>
+      colorRolesFor(role),
+    );
     for (const key of everyOffered) {
       expect(CONTRAST_PAIRS.some((pair) => pair.fg === key)).toBe(true);
     }

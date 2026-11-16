@@ -228,10 +228,20 @@ export {
   styleFor,
 } from "./style.ts";
 export { setTheme } from "./theme.ts";
-export type { ElementStyle, StyleProperty, StyleValue, Theme, TokenKey } from "./tokens.ts";
+export type {
+  ElementStyle,
+  FillKey,
+  PaletteOrigin,
+  StyleProperty,
+  StyleValue,
+  Theme,
+  TokenKey,
+} from "./tokens.ts";
 export {
   admitsExact,
   elementStyleSchema,
+  FILL_KEYS,
+  paletteOriginSchema,
   SORTED_TOKEN_KEYS,
   STYLE_PROPERTIES,
   STYLE_REFS,

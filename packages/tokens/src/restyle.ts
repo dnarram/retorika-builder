@@ -1,4 +1,4 @@
-import { type OwnFont, type Theme, TOKEN_KEYS } from "@retorika/schema";
+import { FILL_KEYS, type OwnFont, type Theme, TOKEN_KEYS } from "@retorika/schema";
 import { type ColorKey, PALETTES, type Palette } from "./palettes.ts";
 import type { RadiusKey, Scale, SizeKey, SpaceKey } from "./scales.ts";
 import { SCALES } from "./scales.ts";
@@ -101,9 +101,26 @@ function scaleById(scaleId: string): Scale {
   return scale;
 }
 
-/** The same theme with this palette's six colours in place of its own. */
+/**
+ * The same theme with this palette's six colours in place of its own — **and no fill of its own**
+ * (ADR 0074). A predefined palette fills with its primary and writes on it in its surface, so a fill
+ * left over from a logo would keep the old brand's yellow on every button of a site that just chose
+ * «Terracota cálida».
+ */
 export function withPalette(theme: Theme, paletteId: string): Theme {
-  return { ...theme, ...paletteById(paletteId).colors };
+  return { ...withoutFill(theme), ...paletteById(paletteId).colors };
+}
+
+/** The same theme filling with `fill` and writing on it in `onFill` (ADR 0074): the pair, together. */
+export function withFill(theme: Theme, fill: string, onFill: string): Theme {
+  return { ...theme, "color.fill": fill, "color.onFill": onFill };
+}
+
+/** The same theme with no fill of its own: it fills with its primary and writes in its surface again. */
+export function withoutFill(theme: Theme): Theme {
+  const rest: Record<string, string | undefined> = { ...theme };
+  for (const key of FILL_KEYS) delete rest[key];
+  return rest as Theme;
 }
 
 /** The same theme with this pair's two typefaces in place of its own. */
@@ -195,10 +212,10 @@ export function withScale(theme: Theme, scaleId: string): Theme {
  * Which palette produced this theme's colours, or `undefined` if none did.
  *
  * A theme keeps values, not identities: `buildTheme` flattens a palette into nineteen strings and
- * leaves no record of where they came from, and `themeSchema` is a total `z.strictObject`, so
- * adding a `paletteId` would be a schema change and a migration to store something the values
- * already determine. So the panel asks this instead, and it is deterministic: an exact match on
- * every colour key or no match at all.
+ * leaves no record of where they came from. **Since 1.20.0 the document may keep its origin beside
+ * the theme** (`doc.palette`, ADR 0075) — because a palette with one colour moved, or one derived from
+ * a logo, is a theme no value-matching can name — and this is the fallback for a document that has
+ * none: an exact match on every colour key or no match at all.
  *
  * **All six colours are compared, `color.accent` included**, even though nothing renders it. The
  * question here is "did this palette write these values", and a match on five of six would answer
@@ -209,6 +226,12 @@ export function withScale(theme: Theme, scaleId: string): Theme {
  * whose palette values have since changed, or one assembled by hand, need not. The panel shows
  * nothing selected and says so, rather than highlighting a palette the site is not using.
  */
+//
+// **The fill pair is not compared** (ADR 0074): no predefined palette carries one, and a theme that
+// does was not written by any of them — but it is the six colours that say so, since a theme with a
+// fill of its own always has a primary that differs from the fill. From the day «Estilo» reads the
+// document's own `palette` origin (ADR 0075, sprint 38 día 3), this is the fallback for a document
+// that has none.
 export function identifyPalette(theme: Theme): Palette | undefined {
   return PALETTES.find((palette) => COLOR_KEYS.every((key) => theme[key] === palette.colors[key]));
 }
