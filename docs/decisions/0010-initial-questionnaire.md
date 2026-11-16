@@ -166,3 +166,10 @@ the thing ADR 0017 was most afraid of.
   owner. That trade is direction's to make, not development's — and nothing in it is blocked
   meanwhile: the draft ships the register change both owners asked for, without the specifics
   neither was ever asked to give.
+
+## Note — sprint 38 día 3: the logo is the source of the palette, literally (ADR 0076)
+
+«The source of the palette» meant, from sprint 6, that the logo chose the predefined palette nearest to it.
+Since 16 November 2026 it means what it says: the logo's own colours are read and the site's palette is
+derived from them, the brand's colour exact. Without a logo, or with one that has no colour, the neutral
+start of ADR 0041 stands.

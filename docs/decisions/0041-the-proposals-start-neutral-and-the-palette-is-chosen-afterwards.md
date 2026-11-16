@@ -73,3 +73,11 @@ the owner's own), because a palette with one colour moved and one derived from a
 value-matching can name. The label is still computed and nothing stores the tick. **The proposals'
 neutral start writes no origin**: absent means nobody chose, which is what keeps it apart from «Neutra»
 chosen on purpose.
+
+## Note — sprint 38 día 3: §2 and §5, the logo derives rather than chooses (ADR 0076)
+
+§2 «the logo still decides» stands, more strongly: a logo's colours are now the site's palette, derived,
+rather than the predefined palette nearest to it. §5 (the neutral start is not a colour a logo chooses) is
+moot — a logo chooses no palette — and `nearestPalette` only says which palette the colours resemble. The
+neutral start is still what a site without a logo, or with a colourless one, starts in, with no origin
+recorded.

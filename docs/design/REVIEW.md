@@ -9964,3 +9964,52 @@ cristal fuera de `validateTheme` → roja; `GLASS_MIX` a 0,6 en tokens → 24 ro
 la fixture un byte distinta → el testigo y su golden rojas; la segunda tinta sin su décimo → roja; la
 tolerancia de gama suelta → 5 rojas.
 
+### Día 3 — los colores del logo son los de la web (PR de `feat/los-colores-del-logo-son-los-de-la-web`)
+
+**El arreglo del defecto, visible.** La pregunta 1 ya no elige la paleta predefinida más cercana al logo:
+lee sus colores (la tinta dominante y, si de verdad la hay, una segunda con al menos un décimo de los
+píxeles y a ΔE ≥ 20 de la primera) y el generador deriva de ellos la paleta de la web con el motor del día
+2. El disco azul de las caminatas da su propio `#2563EB` en titular y botón, no el `#1D4ED8` de «Azul
+confianza»; el disco amarillo llena los botones de `#FFCD00` con la tinta oscura de su paleta y escribe el
+titular en su hermano `#8D7000`; el logo blanco y negro empieza en neutro y lo dice. El documento guarda
+`palette: { kind: "logo" }`; **sin logo no guarda nada** (ajuste 1 de David: ausente es el arranque sin
+tocar). La frase de la pregunta deja de prometer «los de tu sector», falso desde la ADR 0041, y dice lo que
+pasó: los colores del logo serán los de toda la web; en los textos, un tono más oscuro si hace falta; o que
+el logo es en blanco y negro. «Se parece a «{nombre}»» queda como información, nunca como elección.
+
+**«Estilo»** ofrece primero «De tu logo» y «De tu logo, oscura» (el mismo color sobre una página oscura,
+donde un amarillo es texto tal cual), con la nota del tono más oscuro y del parecido; elegir una predefinida
+escribe su origen. Hoy son filas como las de siempre: las tarjetas son del día 6.
+
+**El logo subido después** (P2 de David) repinta solo una web **sin tocar** —sin origen y con los colores
+exactos de «Neutra»—, como un segundo paso tras el del logo, y la línea lo anuncia en su voz viva con
+«Deshacer», que quita los colores y deja el logo. La pregunta se hace al documento **de ahora**, después de
+preparar el fichero y leer sus colores, nunca al que vio la pulsación (la lección del sprint 36: lo que
+llega tras un `await` escribe contra el presente). Cualquier otra web conserva su paleta y la línea ofrece
+una vez, en su voz silenciosa y con cruz, que los colores del logo están en «Estilo»; la respuesta se
+recuerda en este navegador. La oferta se deriva del documento, así que también la ve una web guardada con
+logo y los colores de la paleta que el logo eligió entonces: **ninguna web guardada se repinta sola**.
+«Quitar» el logo deja los colores.
+
+**La puerta de descarga juzga el tema**: los ocho pares con el relleno resuelto y los cuatro del cristal,
+bloqueo bajo 4,5 con un diálogo que dice cada par en palabras del dueño y manda a «Estilo». Ninguna paleta
+del editor puede dispararla; un documento editado a mano o un defecto, sí. Y la nota que el día 1 dejó para
+hoy: **una referencia de color en un botón** (`color.surface`, la que la barra de texto ofrecía cuando el
+botón era el primario) se juzga contra el relleno propio del tema, con el arreglo de un clic de los colores
+exactos.
+
+**Trampas que costaron tiempo.** (1) El detector de secretos tomó por una clave de API la constante que guarda el
+nombre de la clave de `localStorage` de la oferta, porque se llamaba `…_KEY` y su valor tiene entropía de
+sobra: se renombró la constante (`OFFER_STORAGE`), no se silenció el detector. (2) Tres páginas en un mismo contexto comparten `localStorage`, y la segunda abre la sesión de la
+primera en vez de la pregunta 1: un contexto por logo. (3) El autoguardado escribe 500 ms después del
+último cambio; una caminata que recarga antes recarga la sesión anterior al logo. Espera a que la sesión
+guardada tenga el logo, como haría una persona un segundo después.
+
+**Saboteos, deshechos por script**: «sin tocar» mirando solo los colores → la unidad de «Neutra elegida a
+propósito» roja (ahora sí puede ponerse roja, ajuste 1); el generador escribiendo un origen sin logo → 2
+rojas; `themeFor` sin la segunda tinta → roja; la oferta en la voz viva → 2 rojas; la puerta sin el tema →
+roja; las referencias sobre un relleno sin juzgar → roja; «Estilo» sin escribir el origen → la caminata de
+la paleta elegida roja (el logo repinta la «Neutra» elegida).
+
+**ADR 0076** (`proposed`), notas en 0010, 0015, 0041, 0054 y 0059; el paquete de firmas, 34 filas.
+
