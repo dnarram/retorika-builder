@@ -256,6 +256,7 @@ import {
   OverflowDialog,
   PhotosFailedDialog,
   StackedTextDialog,
+  ThemeDialog,
   TooManyPhotosDialog,
 } from "./DownloadGateDialogs.tsx";
 import { FieldsPanel } from "./FieldsPanel.tsx";
@@ -9394,6 +9395,9 @@ export function Editor({
               onDownloadAnyway={() => acceptAndContinue("fonts")}
               onCancel={() => setDownloadDialog(null)}
             />
+          ) : null}
+          {downloadDialog?.kind === "theme" ? (
+            <ThemeDialog pairs={downloadDialog.pairs} onClose={() => setDownloadDialog(null)} />
           ) : null}
           {downloadDialog?.kind === "tooManyPhotos" ? (
             <TooManyPhotosDialog

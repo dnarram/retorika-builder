@@ -6,6 +6,7 @@ import {
   overlappingTexts,
   type RetorikaDocument,
 } from "@retorika/schema";
+import type { UnreadablePair } from "@retorika/tokens";
 import { HEAVY_FONT_BYTES } from "./fontBytes.ts";
 import { foldWarning, type LoudFold, phoneButtonTooLong } from "./headerState.ts";
 import type { OverflowFinding } from "./overflowCheck.ts";
@@ -17,6 +18,7 @@ import {
   type LogoFinding,
   reviewLogo,
   reviewStyle,
+  reviewTheme,
 } from "./styleReview.ts";
 
 /**
@@ -157,6 +159,13 @@ export type DownloadGate =
    */
   | { kind: "fontsMissing"; families: string[] }
   | { kind: "tooManyPhotos"; count: number; max: number }
+  /**
+   * The theme's own colours do not clear a pair every palette is held to (sprint 38 día 3): a block,
+   * before the exact colours are looked at, because every one of them is judged against a background
+   * the theme paints. Reachable only by a document edited by hand or a defect — the editor's palettes
+   * are proved — and named as what it is rather than skipped because it cannot happen.
+   */
+  | { kind: "theme"; pairs: UnreadablePair[] }
   | { kind: "unreadable"; findings: ContrastFinding[] }
   | { kind: "warn"; sample: number; empty: number }
   /**
@@ -250,6 +259,9 @@ export function downloadGateFor(
   const real = counts.own + counts.sample;
   if (real > MAX_PHOTOS) return { kind: "tooManyPhotos", count: real, max: MAX_PHOTOS };
 
+  const pairs = reviewTheme(doc);
+  if (pairs.length > 0) return { kind: "theme", pairs };
+
   const review = reviewStyle(doc);
   if (review.blocking.length > 0) return { kind: "unreadable", findings: review.blocking };
 
@@ -318,6 +330,7 @@ export const DIALOG_KINDS = [
   "photosFailed",
   "fontsMissing",
   "tooManyPhotos",
+  "theme",
   "unreadable",
   "warn",
   "lowContrast",

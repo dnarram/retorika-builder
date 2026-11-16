@@ -1,6 +1,7 @@
 import { COVER_ID } from "@retorika/catalog";
 import { GLASS_BACKGROUNDS, GLASS_MIX, headerDrawn, headerSettings } from "@retorika/renderer";
 import type {
+  ContentElement,
   HeaderBackground,
   HeaderPart,
   RetorikaDocument,
@@ -13,6 +14,8 @@ import {
   mixHex,
   relativeLuminance,
   resolveFill,
+  type UnreadablePair,
+  validateTheme,
 } from "@retorika/tokens";
 import es from "../locales/es.json" with { type: "json" };
 import { backgroundOf } from "./textToolbar.ts";
@@ -102,6 +105,18 @@ export function reviewStyle(doc: RetorikaDocument): StyleReview {
   for (const exception of listStyleExceptions(doc)) {
     if (exception.property !== "color" || exception.hidden) continue;
     judge(exception, colours[backgroundOf(exception.role, doc.theme)]);
+  }
+
+  // **A reference on a button filled with a theme's own fill** (sprint 38 día 3, carried from día 1).
+  // A reference is proved against the background it was offered on, and the text bar offered
+  // `color.surface` on a button when the button was the primary. A theme that gains a fill of its own
+  // — a logo's yellow — keeps that reference and writes white on yellow: proved once, false now. So
+  // here, and only here, a reference is judged like an exact colour, with the same one-click fix:
+  // dropping it returns the button to the fill's own ink.
+  if (doc.theme["color.fill"] !== undefined) {
+    for (const reference of buttonColourReferences(doc)) {
+      judge(reference, colours["color.fill"]);
+    }
   }
 
   // **The header's parts, against the bar they sit on** (ADR 0057, sprint 30 día 2). The bar's own
@@ -272,6 +287,51 @@ function asStyleException(
 }
 
 /** How the ratio is written for a person: one decimal, with a Spanish comma, never «3.4». */
+/**
+ * Every visible button whose colour is a reference, with the reference resolved in this theme — shaped
+ * as the exception the review already knows how to show and fix, `exact` holding the colour the
+ * reference paints. In the order `listStyleExceptions` reads the site, for the same reason.
+ */
+function buttonColourReferences(doc: RetorikaDocument): StyleException[] {
+  const out: StyleException[] = [];
+  const walk = (pageId: string, sectionId: string, elements: readonly ContentElement[]) => {
+    for (const element of elements) {
+      const value = element.style?.color;
+      if (element.role === "button" && !element.hidden && value && "ref" in value) {
+        const text = element.value?.kind === "link" ? element.value.text : undefined;
+        out.push({
+          pageId,
+          sectionId,
+          elementId: element.id,
+          slot: element.slot,
+          role: element.role,
+          property: "color",
+          exact: doc.theme[value.ref],
+          ...(text === undefined ? {} : { label: text }),
+          hidden: false,
+        });
+      }
+      for (const item of element.items ?? []) walk(pageId, sectionId, item.elements);
+    }
+  };
+  for (const page of doc.pages) {
+    for (const section of page.sections) walk(page.id, section.id, section.content);
+  }
+  return out;
+}
+
+/**
+ * **The theme itself, judged** (sprint 38 día 3, ADR 0076 and the plan's decision 7): every pair every
+ * palette is held to — the eight `CONTRAST_PAIRS` with the fill resolved and the glass bar's four —
+ * measured in this document's own colours. Empty for every predefined palette and every palette the
+ * engine derives, which `derive.test.ts` sweeps; non-empty only for a document edited by hand or a
+ * defect. The guarantee stays even though nothing in the editor can trigger it: the filter is the
+ * validation, not the trust.
+ */
+export function reviewTheme(doc: RetorikaDocument): UnreadablePair[] {
+  return validateTheme(doc.theme);
+}
+
 export function formatRatio(ratio: number): string {
   return ratio.toFixed(1).replace(".", ",");
 }

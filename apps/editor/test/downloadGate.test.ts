@@ -18,7 +18,7 @@ import {
   type Theme,
   TOKEN_KEYS,
 } from "@retorika/schema";
-import { PALETTES } from "@retorika/tokens";
+import { derivePalette, PALETTES } from "@retorika/tokens";
 import { describe, expect, it } from "vitest";
 import {
   type AcceptedWarning,
@@ -281,6 +281,67 @@ describe("the gate with the contrast review in it", () => {
  * showed the photo warning, and «Descargar igualmente» downloaded — so the second warning was never
  * said at all. Both were true; the owner was told one of them.
  */
+/**
+ * **The theme itself, and a reference on a filled button** (sprint 38 día 3). Every palette the editor
+ * offers is proved, so a theme that fails a pair is a document edited by hand or a defect — and still
+ * blocked, said pair by pair. A colour reference on a button, proved when the button was the primary,
+ * is judged again when the theme gains a fill of its own.
+ */
+describe("the gate with the theme in it (sprint 38 día 3)", () => {
+  it("blocks a theme that fails a pair, before anything else about colour, and names the pair", () => {
+    // The grey text moved onto the page's own white: every pair it is part of fails.
+    const broken = parseDocument({ ...plain, theme: { ...plain.theme, "color.muted": "#FFFFFF" } });
+    const gate = downloadGateFor(counts({ sample: 2, total: 2 }), broken);
+    expect(gate.kind).toBe("theme");
+    if (gate.kind === "theme") {
+      expect(gate.pairs.map((pair) => [pair.fg, pair.bg])).toEqual([
+        ["color.muted", "color.surface"],
+      ]);
+      expect(gate.pairs[0]?.ratio).toBe(1);
+    }
+    // And an exact colour that would also block waits behind it: the theme is what it is judged on.
+    const both = parseDocument({
+      ...docWith(["el-headline", { exact: "#FDFDFD", exception: true }]),
+      theme: { ...plain.theme, "color.muted": "#FFFFFF" },
+    });
+    expect(downloadGateFor(counts({}), both).kind).toBe("theme");
+  });
+
+  it("passes every predefined palette and a palette derived from a logo", () => {
+    for (const palette of PALETTES) {
+      const doc = parseDocument({ ...plain, theme: { ...plain.theme, ...palette.colors } });
+      expect(downloadGateFor(counts({}), doc).kind, palette.id).toBe("ready");
+    }
+    const yellow = parseDocument({
+      ...plain,
+      theme: { ...plain.theme, ...derivePalette({ brand: "#FFCD00" }).colors },
+    });
+    expect(downloadGateFor(counts({}), yellow).kind).toBe("ready");
+  });
+
+  it("judges a colour reference on a button against a theme's own fill, with the exact colours' fix", () => {
+    const yellow = derivePalette({ brand: "#FFCD00" }).colors;
+    // `color.surface` on the button: what the text bar offered when the button was the primary.
+    const referenced = docWith(["el-cta", { ref: "color.surface" }]);
+    expect(downloadGateFor(counts({}), referenced).kind).toBe("ready");
+    const filled = parseDocument({ ...referenced, theme: { ...referenced.theme, ...yellow } });
+    const gate = downloadGateFor(counts({}), filled);
+    expect(gate.kind).toBe("unreadable");
+    if (gate.kind === "unreadable") {
+      expect(gate.findings.map((f) => [f.exception.elementId, f.exception.exact])).toEqual([
+        ["el-cta", yellow["color.surface"]],
+      ]);
+      expect(gate.findings[0]?.exception.label).toBe("Llamar");
+    }
+    // The reference that reads on the fill passes: the ink is the fill's own here.
+    const inked = parseDocument({
+      ...docWith(["el-cta", { ref: "color.ink" }]),
+      theme: { ...plain.theme, ...yellow },
+    });
+    expect(downloadGateFor(counts({}), inked).kind).toBe("ready");
+  });
+});
+
 describe("the gate with the logo in it (ADR 0059)", () => {
   const withLogo = setHeader(plain, { brand: { logo: { src: "logo-3f9a7c21.png" } } });
 
