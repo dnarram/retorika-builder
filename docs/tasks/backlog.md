@@ -58,6 +58,14 @@ The record is `docs/design/REVIEW.md`, sprint 37.
 6. **Limits measured or seen, not investigated**: sprint 36's scene press limit was measured on the
    rail and only inferred for the other scenes (item 4 of sprint 36 below). At 1024 × 768 the
    header's page tab shows only its ellipsis.
+7. **Found on sprint 38 día 1: the page tab's mark arrives seconds late, sliding in from the left.**
+   Measured on 16 November at 1280: right after the editor opens and the bank's photograph lands, the
+   2 px mark under the current tab starts its 180 ms slide (`ui-slide`, the spring) from the strip's
+   left edge at opacity ~0 — `marker` was `null` until a later re-measure, so its first placing is a
+   transition from nothing rather than an arrival in place. Something moving that no hand asked for.
+   The walk that read the strip inside that slide went red once on CI and now waits for the strip to
+   be still; the product is untouched, for David to decide (the natural fix is a first placing
+   without transition, as `Segments` does for its mark).
 7. **From sprints 36, 35 and 34, untouched**, under their own reviews below. The editor, the radial
    rail included, has still not been seen outside Chromium.
 8. **Sprint 38 unplanned.**

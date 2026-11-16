@@ -9898,3 +9898,14 @@ corpus no carga; la instantánea del esquema sin regenerar → `schema:guard` ro
 fue 32–35 de sus 40 en las seis PR del sprint 37 y este sprint añade unas doce caminatas. Partirlo en dos
 sigue siendo tu decisión.
 
+**Un rojo en la CI que no era de este día, y lo que enseñó.** La primera ejecución de la PR #382 falló en
+«la barra superior reparte su ancho entre el logo y las pestañas»: «con una sola página ya había barra».
+Ni el diff toca la barra del editor ni se reproduce aquí (la suite completa, la caminata sola tres veces,
+y un muestreo por fotograma durante 12 s con la CPU normal y seis veces más lenta). Medido el instante en
+que la caminata lee la tira: **la marca bajo la pestaña acababa de empezar a deslizarse**, 17 ms de 180,
+desde el borde izquierdo y con opacidad casi 0, segundos después de abrir el editor —cuando llega la foto
+del banco y la barra se vuelve a medir—. La caminata leía una barra en movimiento; ahora espera a que no
+corra ninguna animación dentro de la tira y, si vuelve a fallar, el mensaje dice el ancho de la tira, la
+caja de cada hijo y cada parte de la barra. **El producto no cambia en esta PR**: que la marca llegue
+tarde y deslizándose sin que nadie lo pida queda en el backlog (sprint 37, punto 7) para que lo decidas.
+
