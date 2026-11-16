@@ -266,9 +266,10 @@ for (const [name, type] of ENGINES) {
           await page.context().close();
         }
       };
-      const fill = rgb("#FFCD00");
-      const ink = rgb("#000000");
-      const surface = rgb("#FFFFFF");
+      // The fixture's own colours, which día 2's engine writes (`derive.test.ts` holds them equal):
+      // the yellow is the fill, its ink the palette's own dark tint, the heading the text sibling.
+      const fill = rgb(yellow.theme["color.fill"] ?? "");
+      const ink = rgb(yellow.theme["color.onFill"] ?? "");
       // The yellow on a primary bar: the bar is the fill, its words the ink, and the nav's button
       // inverts to ink with yellow words; the section's button is yellow under black; the heading
       // keeps the text role, the darker sibling.
@@ -279,14 +280,14 @@ for (const [name, type] of ENGINES) {
         actionWords: fill,
         button: fill,
         buttonWords: ink,
-        heading: rgb("#8F7319"),
+        heading: rgb(yellow.theme["color.primary"]),
       });
       // The same theme on an ink bar: the bar and its words are the surface's as always — the split
       // reached the primary bar alone — and the section's button is still the fill.
       const onInk = await read(looked(yellow, "ink"));
-      expect(onInk.bar).toBe(rgb("#0F172A"));
-      expect(onInk.brand).toBe(surface);
-      expect(onInk.action).toBe(surface);
+      expect(onInk.bar).toBe(rgb(yellow.theme["color.ink"]));
+      expect(onInk.brand).toBe(rgb(yellow.theme["color.surface"]));
+      expect(onInk.action).toBe(rgb(yellow.theme["color.surface"]));
       expect(onInk.button).toBe(fill);
       // And a theme without a fill draws what it always drew: the primary bar in the primary, its
       // words in the surface, the button primary under surface.

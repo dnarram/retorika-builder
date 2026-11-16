@@ -117,8 +117,11 @@ describe("the fill and its ink", () => {
     for (const doc of [yellow, everyPart]) {
       const css = cssOf(render(doc, "html").html);
       const root = css.slice(0, css.indexOf("}"));
-      expect(root.trimEnd().endsWith("--color-on-fill: #000000;"), root).toBe(true);
-      expect(root).toContain("--color-fill: #FFCD00;");
+      expect(
+        root.trimEnd().endsWith(`--color-on-fill: ${yellow.theme["color.onFill"]};`),
+        root,
+      ).toBe(true);
+      expect(root).toContain(`--color-fill: ${yellow.theme["color.fill"]};`);
       // No shape is filled with the text's colour: every `background` that read the primary reads
       // the fill now. The text roles — the heading, the links, the skip link — keep the primary, and
       // so do the two thin marks drawn on a surface bar (the indicator under the current entry and

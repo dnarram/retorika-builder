@@ -1,4 +1,4 @@
-import { meanLuminance, paletteForLogo } from "./logoPalette.ts";
+import { dominantColours, meanLuminance, paletteForLogo, toHex } from "./logoPalette.ts";
 
 /**
  * Decoding a logo far enough to read its colours, and no further.
@@ -76,4 +76,24 @@ export async function paletteFromLogoFile(file: File): Promise<string | null> {
 export async function logoLuminanceOf(source: Blob): Promise<number | null> {
   const pixels = await samplePixels(source);
   return pixels === null ? null : meanLuminance(pixels);
+}
+
+/** The colours a logo brings: its brand tint and, when it really has one, a second. */
+export interface LogoColours {
+  brand: string;
+  second: string | null;
+}
+
+/**
+ * The logo's tints as hex, for the palette the site derives from them (sprint 38 día 2, ADR 0076) —
+ * or `null` for a logo with no colour in it (a black wordmark on white) and for a file the browser
+ * cannot decode. The same 64×64 sample the other two questions read; `dominantColours` holds the
+ * arithmetic and its test, and this is the canvas in front of it.
+ */
+export async function logoColoursOf(source: Blob): Promise<LogoColours | null> {
+  const pixels = await samplePixels(source);
+  if (pixels === null) return null;
+  const [brand, second] = dominantColours(pixels);
+  if (!brand) return null;
+  return { brand: toHex(brand), second: second ? toHex(second) : null };
 }

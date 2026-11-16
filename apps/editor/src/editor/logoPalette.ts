@@ -132,6 +132,59 @@ export function parseHex(hex: string): Rgb {
   return { r: (value >> 16) & 255, g: (value >> 8) & 255, b: value & 255 };
 }
 
+/** A bucket of near-identical pixels: how many, and their channel sums, for the average. */
+interface Bucket {
+  key: number;
+  count: number;
+  r: number;
+  g: number;
+  b: number;
+}
+
+/** The pixels worth counting, grouped into buckets of 32 levels per channel, most populous first
+ * and ties on the lower key — never on `Map` order, which follows the order pixels happen to come. */
+function buckets(pixels: Uint8ClampedArray): Bucket[] {
+  const counts = new Map<number, Bucket>();
+  for (let i = 0; i + 3 < pixels.length; i += 4) {
+    const r = pixels[i] ?? 0;
+    const g = pixels[i + 1] ?? 0;
+    const b = pixels[i + 2] ?? 0;
+    const alpha = pixels[i + 3] ?? 0;
+
+    if (alpha < MIN_ALPHA) continue;
+    if (r >= NEAR_WHITE && g >= NEAR_WHITE && b >= NEAR_WHITE) continue;
+    if (r <= NEAR_BLACK && g <= NEAR_BLACK && b <= NEAR_BLACK) continue;
+
+    const key =
+      (Math.floor(r / BUCKET) << 10) | (Math.floor(g / BUCKET) << 5) | Math.floor(b / BUCKET);
+    const bucket = counts.get(key) ?? { key, count: 0, r: 0, g: 0, b: 0 };
+    bucket.count += 1;
+    bucket.r += r;
+    bucket.g += g;
+    bucket.b += b;
+    counts.set(key, bucket);
+  }
+  return [...counts.values()].sort((a, b) => b.count - a.count || a.key - b.key);
+}
+
+function averageOf(bucket: Bucket): Rgb {
+  return {
+    r: Math.round(bucket.r / bucket.count),
+    g: Math.round(bucket.g / bucket.count),
+    b: Math.round(bucket.b / bucket.count),
+  };
+}
+
+/**
+ * A second tint is a second colour only when it is really there and really different (sprint 38
+ * día 2): at least this share of the counted pixels, and at least this far from the first in ΔE. The
+ * share keeps a stray pixel of a third colour from becoming the site's secondary; the distance keeps
+ * the anti-aliased fringe of the first colour — a bucket beside it, a few units away — from counting
+ * as a colour of its own, which it is not.
+ */
+const SECOND_SHARE = 0.1;
+const SECOND_DISTANCE = 20;
+
 /**
  * The one colour that best stands for an image, or `null` when it has none worth taking.
  *
@@ -144,44 +197,33 @@ export function parseHex(hex: string): Rgb {
  * caller does nothing but decode and hand it over.
  */
 export function dominantColour(pixels: Uint8ClampedArray): Rgb | null {
-  const counts = new Map<number, { count: number; r: number; g: number; b: number }>();
+  return dominantColours(pixels)[0] ?? null;
+}
 
-  for (let i = 0; i + 3 < pixels.length; i += 4) {
-    const r = pixels[i] ?? 0;
-    const g = pixels[i + 1] ?? 0;
-    const b = pixels[i + 2] ?? 0;
-    const alpha = pixels[i + 3] ?? 0;
+/**
+ * The image's tints, most present first: the dominant colour, and a second one when the logo really
+ * has one (`SECOND_SHARE`, `SECOND_DISTANCE`) — the secondary and the accent of a derived palette
+ * (ADR 0076). One entry for a logo of one colour, none for a logo with no colour in it.
+ */
+export function dominantColours(pixels: Uint8ClampedArray): Rgb[] {
+  const sorted = buckets(pixels);
+  const first = sorted[0];
+  if (!first) return [];
+  const counted = sorted.reduce((sum, bucket) => sum + bucket.count, 0);
+  const firstColour = averageOf(first);
+  const second = sorted
+    .slice(1)
+    .find(
+      (bucket) =>
+        bucket.count >= counted * SECOND_SHARE &&
+        colourDistance(averageOf(bucket), firstColour) >= SECOND_DISTANCE,
+    );
+  return second ? [firstColour, averageOf(second)] : [firstColour];
+}
 
-    if (alpha < MIN_ALPHA) continue;
-    if (r >= NEAR_WHITE && g >= NEAR_WHITE && b >= NEAR_WHITE) continue;
-    if (r <= NEAR_BLACK && g <= NEAR_BLACK && b <= NEAR_BLACK) continue;
-
-    const key = ((r >> 3) << 10) | ((g >> 3) << 5) | (b >> 3);
-    const bucket = counts.get(key) ?? { count: 0, r: 0, g: 0, b: 0 };
-    bucket.count += 1;
-    bucket.r += r;
-    bucket.g += g;
-    bucket.b += b;
-    counts.set(key, bucket);
-  }
-
-  let best: { count: number; r: number; g: number; b: number } | undefined;
-  let bestKey = Number.POSITIVE_INFINITY;
-  for (const [key, bucket] of counts) {
-    // Ties break on the lower key, so the answer never depends on `Map` insertion order — which
-    // depends on the order pixels happen to appear in. Same reason the renderer sorts its output.
-    if (!best || bucket.count > best.count || (bucket.count === best.count && key < bestKey)) {
-      best = bucket;
-      bestKey = key;
-    }
-  }
-  if (!best) return null;
-
-  return {
-    r: Math.round(best.r / best.count),
-    g: Math.round(best.g / best.count),
-    b: Math.round(best.b / best.count),
-  };
+/** `{r, g, b}` as `#RRGGBB`, the way every palette in `@retorika/tokens` is written. */
+export function toHex({ r, g, b }: Rgb): string {
+  return `#${[r, g, b].map((v) => v.toString(16).padStart(2, "0")).join("")}`.toUpperCase();
 }
 
 export interface PaletteMatch {

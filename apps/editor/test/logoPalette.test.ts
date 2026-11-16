@@ -3,11 +3,13 @@ import { describe, expect, it } from "vitest";
 import {
   colourDistance,
   dominantColour,
+  dominantColours,
   meanLuminance,
   nearestPalette,
   paletteForLogo,
   parseHex,
   type Rgb,
+  toHex,
 } from "../src/editor/logoPalette.ts";
 
 /**
@@ -102,6 +104,56 @@ describe("dominantColour", () => {
     // cannot start depending on which pixel happened to come first.
     const logo = mixed("#2563EB", 32, "#DC2626", 64);
     expect(dominantColour(logo)).toEqual(dominantColour(logo));
+  });
+});
+
+/**
+ * A logo's second tint (sprint 38 día 2): the secondary and the accent of a derived palette, when
+ * the logo really has one — at least a tenth of the counted pixels and at least ΔE 20 from the first.
+ */
+describe("dominantColours", () => {
+  it("reads one tint from a flat logo and two from a two-colour one, most present first", () => {
+    expect(dominantColours(solid("#2563EB"))).toEqual([parseHex("#2563EB")]);
+    expect(dominantColours(mixed("#2563EB", 48, "#DC2626", 64))).toEqual([
+      parseHex("#2563EB"),
+      parseHex("#DC2626"),
+    ]);
+    expect(dominantColours(mixed("#DC2626", 48, "#2563EB", 64))).toEqual([
+      parseHex("#DC2626"),
+      parseHex("#2563EB"),
+    ]);
+  });
+
+  it("does not count a second colour under a tenth of the pixels", () => {
+    expect(dominantColours(mixed("#2563EB", 60, "#DC2626", 64))).toEqual([parseHex("#2563EB")]);
+    // Exactly a tenth counts.
+    expect(dominantColours(mixed("#2563EB", 90, "#DC2626", 100))).toHaveLength(2);
+  });
+
+  it("does not count the first colour's own fringe as a second colour", () => {
+    // Two buckets apart by a few units: the anti-aliased edge of a shape, not a colour of its own.
+    const fringe = mixed("#2563EB", 40, "#2F6AEE", 64);
+    expect(colourDistance(parseHex("#2563EB"), parseHex("#2F6AEE"))).toBeLessThan(20);
+    expect(dominantColours(fringe)).toEqual([parseHex("#2563EB")]);
+  });
+
+  it("skips a near second to reach a real one further down", () => {
+    const three = new Uint8ClampedArray(100 * 4);
+    three.set(solid("#2563EB", 50), 0);
+    three.set(solid("#2F6AEE", 30), 50 * 4);
+    three.set(solid("#DC2626", 20), 80 * 4);
+    expect(dominantColours(three)).toEqual([parseHex("#2563EB"), parseHex("#DC2626")]);
+  });
+
+  it("gives nothing for a logo with no colour in it, and the same answer every time", () => {
+    expect(dominantColours(solid("#FFFFFF"))).toEqual([]);
+    const logo = mixed("#2563EB", 32, "#DC2626", 64);
+    expect(dominantColours(logo)).toEqual(dominantColours(logo));
+  });
+
+  it("writes a tint as the upper-case hex the palettes are written in", () => {
+    expect(toHex({ r: 37, g: 99, b: 235 })).toBe("#2563EB");
+    expect(toHex({ r: 0, g: 11, b: 43 })).toBe("#000B2B");
   });
 });
 

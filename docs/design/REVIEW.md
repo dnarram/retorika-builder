@@ -9909,3 +9909,58 @@ corra ninguna animación dentro de la tira y, si vuelve a fallar, el mensaje dic
 caja de cada hijo y cada parte de la barra. **El producto no cambia en esta PR**: que la marca llegue
 tarde y deslizándose sin que nadie lo pida queda en el backlog (sprint 37, punto 7) para que lo decidas.
 
+### Día 2 — la paleta se deriva: el motor, puro (PR de `feat/la-paleta-se-deriva`)
+
+**Un motor sin interfaz, en `packages/tokens`, y la tabla que lo mide.** `oklch.ts` escribe sRGB ↔ OKLCH
+a mano (ida y vuelta al byte sobre las 13 paletas y un cubo de 216 colores; recorte de gama por croma,
+nunca por claridad). `derive.ts` deriva de un color de marca los seis colores de una paleta con la regla
+de David: **el color de marca es el relleno, exacto, siempre**, con la tinta encima que más contraste dé
+—la superficie o la tinta de la propia paleta si llegan a 4,5; negro o blanco puros si no—, y el papel
+de texto es el mismo color cuando se lee sobre la superficie o, si no, **un hermano del mismo matiz y
+croma movido en claridad lo mínimo** (bisección de 30 pasos, y un paso más si el redondeo a hex lo deja
+por debajo). La superficie clara es casi blanca con una pizca del matiz de la marca (L 0,985, croma
+0,006, como `#FAFAF9`), la tinta casi negra tintada (L 0,22), el gris medio a L 0,47 bajado hasta 4,5;
+un gris de marca no presta matiz a nada. El secundario es la segunda tinta del logo si la hay, hecha
+legible por el mismo camino, o un hermano del primario un décimo más oscuro; el acento, la segunda
+tinta exacta o el matiz a +150°, sin garantía como siempre. La superficie oscura es la alternativa
+(«De tu logo, oscura»): allí el amarillo, el naranja, el lima y el azul claro son texto exactos.
+
+**Los doce logos, fijados.** Relleno exacto **12 de 12**; texto exacto **7 de 12**: el fucsia `#DB2777`,
+que daba 4,60 sobre blanco puro en la tabla del plan, da 4,49 sobre su propia superficie tintada y se
+mueve a `#D82475` —una unidad de rojo y dos de verde, que ningún ojo ve—; los cuatro hermanos: amarillo
+`#8D7000`, naranja `#BA5700`, lima `#508100`, azul claro `#0079BB`. Cinco paletas llevan el par. Cada
+hermano está en el mínimo: un paso de claridad más arriba ya no llega a 4,5.
+
+**Lo que garantiza, medido igual que una predefinida.** `validateTheme` juzga los ocho pares con el
+relleno resuelto **y los cuatro del cristal** (`ink` sobre `surface` al 0,88 sobre negro y sobre blanco,
+`surface` sobre `ink` igual; `GLASS_MIX` vive también en tokens y `glass.test` sostiene los dos iguales),
+y devuelve los pares que fallan con su cifra, la frase de la ficha del día 7. `derivePalette` lo asevera
+y lanza. El barrido —matiz cada 10°, claridad 0,15–0,95 cada 0,05, cuatro cromas (tres fijos y el máximo
+de la gama), claro y oscuro: **4 896 paletas**— no lanza ni falla un par, en 150 ms.
+
+**La fixture es testigo del motor** (ajuste 2 de David): `derive.test` lee `logo-amarillo.json` y exige
+que sus colores sean byte a byte `derivePalette(#FFCD00)`; eran los provisionales del día 1 y se
+reescribieron desde el motor, regenerando **solo** su golden (las 23 siguen sin tocar). La tinta sobre
+el amarillo no es el negro puro del día 1 sino la tinta de la paleta, `#201A09`: la regla, no el primer
+valor a mano. Las pruebas del renderer que decían esos colores a mano ahora los leen de la fixture.
+
+**Una trampa que midió la propia prueba.** La tolerancia de gama estaba en espacio lineal a una milésima:
+cerca del negro todos los canales son diminutos y un croma de 0,11 «cabía» a L 0,02. Ahora es ruido de
+coma flotante (1e-6), y tres hermanos se movieron una unidad al dejar de recortar por canal.
+
+**`legibleSteps`** (para los deslizadores del día 7): a matiz y croma fijos, cuáles de 101 pasos de
+claridad siguen legibles contra los pares en que entra ese color; a claridad fija, cuáles de 72 de matiz.
+Para `primary` sobre la superficie es un intervalo cerrado por arriba; para `surface`, por abajo; editar
+`fill` recalcula su tinta y todo paso es legible por construcción; el acento, libre. **`paletteLabel`**
+(ADR 0075): la paleta elegida, «personalizada» si un valor —o el par— difiere del catálogo; «De tu logo»,
+personalizada solo contra la derivación del logo cuando se conoce; propia; o, sin origen, lo de siempre.
+
+**La segunda tinta** (`dominantColours`, en el editor, sin cablear aún): el segundo cubo con al menos un
+décimo de los píxeles contados y a ΔE ≥ 20 del primero, para que la franja antialiasada de un color no
+cuente como otro. `logoColoursOf(blob)` las devuelve en hex. `nearestPalette` se queda, informativo.
+
+**Saboteos, deshechos por script**: la bisección quitada → 7 rojas; la tinta solo blanca → 2 rojas; el
+cristal fuera de `validateTheme` → roja; `GLASS_MIX` a 0,6 en tokens → 24 rojas (`glass.test` y el motor);
+la fixture un byte distinta → el testigo y su golden rojas; la segunda tinta sin su décimo → roja; la
+tolerancia de gama suelta → 5 rojas.
+
