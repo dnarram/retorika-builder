@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "1.19.0",
+  "schemaVersion": "1.20.0",
   "document": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
@@ -101,6 +101,14 @@
           "radius.lg": {
             "type": "string",
             "minLength": 1
+          },
+          "color.fill": {
+            "type": "string",
+            "minLength": 1
+          },
+          "color.onFill": {
+            "type": "string",
+            "minLength": 1
           }
         },
         "required": [
@@ -125,6 +133,55 @@
           "radius.lg"
         ],
         "additionalProperties": false
+      },
+      "palette": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "palette"
+              },
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              }
+            },
+            "required": [
+              "kind",
+              "id"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "logo"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "const": "own"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "additionalProperties": false
+          }
+        ]
       },
       "fonts": {
         "maxItems": 2,

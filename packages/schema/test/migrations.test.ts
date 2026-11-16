@@ -1928,8 +1928,9 @@ describe("1.15.0 — the header is the owner's", () => {
       );
       if (raw.header === undefined && !labelled) continue;
       // 1.15.0 or later: `cabecera-con-marca` moved to 1.16.0 when its logo gained a size, and to
-      // 1.17.0 when its row became a position; `marca-grande` was written at 1.19.0.
-      expect(["1.15.0", "1.16.0", "1.17.0", "1.19.0"], file).toContain(raw.schemaVersion);
+      // 1.17.0 when its row became a position; `marca-grande` was written at 1.19.0, and
+      // `logo-amarillo` at 1.20.0 with a bar in its fill (sprint 38 día 1).
+      expect(["1.15.0", "1.16.0", "1.17.0", "1.19.0", "1.20.0"], file).toContain(raw.schemaVersion);
     }
   });
 });
@@ -2323,9 +2324,8 @@ describe("1.19.0 — the brand has a size and a place", () => {
     },
   });
 
-  it("is registered, and it is the one the chain ends at", () => {
+  it("is registered", () => {
     expect(step("1.19.0").version).toBe("1.19.0");
-    expect(SCHEMA_VERSION).toBe("1.19.0");
   });
 
   it("seals a 1.18.0 document and moves nothing, because the keys are optional", () => {
@@ -2413,6 +2413,129 @@ describe("1.19.0 — the brand has a size and a place", () => {
       expect(raw.schemaVersion, `${file} carries ${carries.join(", ")}`).toBe("1.19.0");
     }
     // `marca-grande` (sprint 35 día 4) is the one that does, and it is there to pin the published bytes.
+    expect(stamped).toBe(1);
+  });
+});
+
+/**
+ * `0021` — the fill keeps the brand's colour (ADR 0074 and 0075, sprint 38 día 1): an optional pair
+ * `color.fill` / `color.onFill` in the theme and an optional `palette` origin beside it. `up` seals and
+ * moves nothing; what the generator and «Estilo» will write parses; half a pair and an origin outside
+ * its three kinds do not; `down` drops the three keys and keeps the six colours.
+ */
+describe("1.20.0 — the fill keeps the brand's colour", () => {
+  /** A 1.19.0 site, the way every site was until today: six colours and no origin. */
+  function before(): Record<string, unknown> {
+    return {
+      schemaVersion: "1.19.0",
+      id: "doc-relleno",
+      siteName: "Correos de barrio",
+      theme,
+      collections: [],
+      pages: [
+        {
+          id: "home",
+          slug: "index",
+          title: "Correos de barrio",
+          sections: [
+            {
+              id: "sec-cover",
+              preset: { catalogId: "cover", variantId: "image-right" },
+              source: "catalog",
+              layout: null,
+              content: [],
+            },
+          ],
+        },
+      ],
+    };
+  }
+  /** The same site at 1.20.0 with a yellow fill, black ink on it, and its origin: the logo. */
+  const after = () => ({
+    ...before(),
+    schemaVersion: "1.20.0",
+    theme: { ...theme, "color.fill": "#FFCD00", "color.onFill": "#000000" },
+    palette: { kind: "logo" },
+  });
+
+  it("is registered, and it is the one the chain ends at", () => {
+    expect(step("1.20.0").version).toBe("1.20.0");
+    expect(SCHEMA_VERSION).toBe("1.20.0");
+  });
+
+  it("seals a 1.19.0 document and moves nothing, because the three keys are optional", () => {
+    const migrated = upTo(before(), "1.20.0");
+    expect(migrated).toEqual({ ...before(), schemaVersion: "1.20.0" });
+    expect(Object.hasOwn(migrated, "palette")).toBe(false);
+    const migratedTheme = migrated["theme"] as Record<string, unknown>;
+    expect(Object.hasOwn(migratedTheme, "color.fill")).toBe(false);
+    expect(Object.hasOwn(migratedTheme, "color.onFill")).toBe(false);
+    expect(() => parseDocument(migrated)).not.toThrow();
+    const once = migrateToCurrent(before());
+    expect(migrateToCurrent(once)).toEqual(once);
+  });
+
+  it("parses the pair with its origin, the origin alone, and each of the three kinds", () => {
+    expect(() => parseDocument(after())).not.toThrow();
+    const base = after();
+    const { palette: _, ...pairOnly } = base;
+    expect(() => parseDocument(pairOnly)).not.toThrow();
+    for (const palette of [{ kind: "palette", id: "neutral" }, { kind: "logo" }, { kind: "own" }]) {
+      expect(() => parseDocument({ ...before(), schemaVersion: "1.20.0", palette })).not.toThrow();
+    }
+  });
+
+  it("refuses half a pair, and an origin outside its three kinds", () => {
+    const base = after();
+    const fillAlone = { ...base, theme: { ...theme, "color.fill": "#FFCD00" } };
+    expect(() => parseDocument(fillAlone)).toThrow(/color\.onFill/);
+    const inkAlone = { ...base, theme: { ...theme, "color.onFill": "#000000" } };
+    expect(() => parseDocument(inkAlone)).toThrow(/color\.onFill/);
+    const empty = { ...base, theme: { ...theme, "color.fill": "", "color.onFill": "#000000" } };
+    expect(() => parseDocument(empty)).toThrow(/color\.fill/);
+    expect(() => parseDocument({ ...base, palette: { kind: "sector" } })).toThrow(/palette/);
+    expect(() => parseDocument({ ...base, palette: { kind: "palette" } })).toThrow(/palette/);
+    expect(() => parseDocument({ ...base, palette: { kind: "logo", id: "x" } })).toThrow(/palette/);
+  });
+
+  /** **`down` is lossy, and this is the loss, named:** the pair and the origin go, the colours stay. */
+  it("takes the pair and the origin away on the way down and keeps the six colours", () => {
+    const down = step("1.20.0").down;
+    expect(down, "1.20.0 has no `down`").toBeDefined();
+    const back = down?.(after()) ?? {};
+    expect(back["schemaVersion"]).toBe("1.19.0");
+    expect(Object.hasOwn(back, "palette")).toBe(false);
+    expect(back["theme"]).toEqual(theme);
+    expect(() => parseDocument(upTo(back, "1.19.0"))).not.toThrow();
+  });
+
+  it("round-trips a document with none of the three, and one with only an origin", () => {
+    const down = step("1.20.0").down;
+    const input = before();
+    expect(down?.(migrateToCurrent(input))).toEqual(input);
+    const chosen = { ...after(), theme };
+    expect(down?.(chosen)).toEqual({ ...before() });
+  });
+
+  it("is the claim it rests on: no corpus fixture stamped before 1.20.0 carries any of the three", () => {
+    const corpus = readdirSync(DOCUMENTS_DIR).filter((file) => file.endsWith(".json"));
+    expect(corpus.length).toBeGreaterThan(0);
+    let stamped = 0;
+    for (const file of corpus) {
+      const raw = JSON.parse(readFileSync(join(DOCUMENTS_DIR, file), "utf8")) as {
+        schemaVersion: string;
+        theme: Record<string, unknown>;
+        palette?: unknown;
+      };
+      const carries = [
+        ...["color.fill", "color.onFill"].filter((key) => key in raw.theme),
+        ...("palette" in raw ? ["palette"] : []),
+      ];
+      if (carries.length === 0) continue;
+      stamped += 1;
+      expect(raw.schemaVersion, `${file} carries ${carries.join(", ")}`).toBe("1.20.0");
+    }
+    // `logo-amarillo` (sprint 38 día 1) is the one that does: the second shape of the stylesheet.
     expect(stamped).toBe(1);
   });
 });

@@ -28,19 +28,20 @@ export const arbitraryText = fc.oneof(
  * the whole namespace for a single click to restyle the whole site.
  */
 export const arbitraryTheme: fc.Arbitrary<Theme> = fc
-  .tuple(fc.string({ minLength: 1, maxLength: 8 }), fc.integer({ min: 0, max: 96 }))
-  .map(
-    ([suffix, space]) =>
-      Object.fromEntries(
-        // The five lengths are pixels, as every real theme's are since 1.6.0 (migration 0007):
-        // `escalate` reads `space.md` to set the fine grid's vertical rhythm (ADR 0050) and
-        // refuses a theme that says «space.md-x» where a length should be, which is right.
-        TOKEN_KEYS.map((key) => [
-          key,
-          key.startsWith("space.") ? `${space}px` : `${key}-${suffix}`,
-        ]),
-      ) as Theme,
-  );
+  .tuple(fc.string({ minLength: 1, maxLength: 8 }), fc.integer({ min: 0, max: 96 }), fc.boolean())
+  .map(([suffix, space, filled]) => {
+    const theme = Object.fromEntries(
+      // The five lengths are pixels, as every real theme's are since 1.6.0 (migration 0007):
+      // `escalate` reads `space.md` to set the fine grid's vertical rhythm (ADR 0050) and
+      // refuses a theme that says «space.md-x» where a length should be, which is right.
+      TOKEN_KEYS.map((key) => [key, key.startsWith("space.") ? `${space}px` : `${key}-${suffix}`]),
+    ) as Theme;
+    // Half the themes carry the fill pair (ADR 0074), so the invariants see both shapes of the
+    // stylesheet: the one every site drew before 1.20.0 and the one a logo's yellow draws.
+    return filled
+      ? { ...theme, "color.fill": `fill-${suffix}`, "color.onFill": `onfill-${suffix}` }
+      : theme;
+  });
 
 /**
  * Marks that are valid for this exact text: inside it, in the normal form, and not cutting a

@@ -270,3 +270,12 @@ surface scheme now writes its words in ink. Every switch of this ADR still switc
 draws is the 0063 vocabulary. Its first rule as sprint 31 restated it («ninguna web guardada cambia de
 aspecto hasta que el dueño elija») is a rule about placement and is set aside, on purpose and in
 writing, for the look.
+
+## Note — sprint 38 día 1: the primary bar is the fill (ADR 0074)
+
+The bar's closed set of backgrounds stays closed. What `primary` paints with changed meaning on one
+condition: in a theme that carries a fill of its own (a logo's yellow), **the primary bar is the fill**
+and its words, its indicator and its line are the fill's ink, while its button inverts to the ink with
+words in the fill. The secondary and ink bars write in the surface as before — the shared rules are
+followed by primary-bar twins rather than rewritten — and a theme without a fill draws the bar it always
+drew, byte for byte. The review judges the bar's words against the fill.

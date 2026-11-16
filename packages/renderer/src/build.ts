@@ -2,6 +2,7 @@ import { FOOTER_ID, presetFor, TEASER_ID } from "@retorika/catalog";
 import {
   type Collection,
   type ContentElement,
+  FILL_KEYS,
   FINE_COLUMNS,
   fineTemplateColumns,
   fineTrack,
@@ -19,6 +20,7 @@ import {
   tokenToCssVariable,
 } from "@retorika/schema";
 import { cssAttributeValue, cssThemeValue, safeUrl } from "./escape.ts";
+import { fillVars } from "./fill.ts";
 import { fontFaceCss } from "./fonts.ts";
 import { headerCss, headerDrawn, headerMobileCss, headerNodes } from "./header.ts";
 import { h1SectionIds } from "./headings.ts";
@@ -1019,9 +1021,16 @@ function motionCss(doc: RetorikaDocument, target: "html" | "dom"): string[] {
  * one of the two silently.
  */
 export function buildCss(doc: RetorikaDocument, target: "html" | "dom"): string {
-  const variables = SORTED_TOKEN_KEYS.map(
-    (key) => `  ${tokenToCssVariable(key)}: ${cssThemeValue(key, doc.theme[key])};`,
-  ).join("\n");
+  const fill = fillVars(doc.theme);
+  // The nineteen every theme has, then the fill pair **only when the theme carries it** (ADR 0074):
+  // appended rather than sorted in, so a theme without one emits exactly the block it always did.
+  const fillPair = FILL_KEYS.flatMap((key) => {
+    const value = doc.theme[key];
+    return value === undefined ? [] : [[key, value] as const];
+  });
+  const variables = [...SORTED_TOKEN_KEYS.map((key) => [key, doc.theme[key]] as const), ...fillPair]
+    .map(([key, value]) => `  ${tokenToCssVariable(key)}: ${cssThemeValue(key, value)};`)
+    .join("\n");
 
   return [
     ":root {",
@@ -1160,7 +1169,7 @@ export function buildCss(doc: RetorikaDocument, target: "html" | "dom"): string 
     // The site's one idea of a button (ADR 0063, ADR 0064): the pill the bar's button is, in the
     // heading letter, bold.
     ".rb-section [role=button] { display: inline-block; padding: var(--space-sm) var(--space-lg);",
-    "  background: var(--color-primary); color: var(--color-surface); font-family: var(--font-heading);",
+    `  background: ${fill.fill}; color: ${fill.ink}; font-family: var(--font-heading);`,
     "  font-weight: 700; border-radius: 999px; text-decoration: none; }",
     // The panel under text that overlaps an image (panelArea): the image keeps z-index auto
     // and paints first, the panel over it, the text over the panel. Grid items honour

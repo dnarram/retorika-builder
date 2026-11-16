@@ -230,6 +230,73 @@ for (const [name, type] of ENGINES) {
       }
     }
 
+    /**
+     * **The fill and its ink** (ADR 0074, sprint 38 día 1): a theme with a fill of its own fills the
+     * button and a primary bar with the brand's colour and writes on them in its ink, and only the
+     * primary bar — a secondary or ink bar keeps writing in the surface. A theme without one draws
+     * what it always drew. Read as computed colours, in each engine, because the split rides on two
+     * selectors of equal weight and source order, which is exactly what an engine could disagree on.
+     */
+    it("fills with the brand's colour and writes on it in its ink, and only on the primary bar", async () => {
+      const rgb = (hex: string) =>
+        `rgb(${[1, 3, 5].map((i) => Number.parseInt(hex.slice(i, i + 2), 16)).join(", ")})`;
+      const yellow = fixture("logo-amarillo");
+      const looked = (doc: RetorikaDocument, background: "primary" | "ink") =>
+        parseDocument({ ...doc, header: { ...doc.header, look: { background } } });
+      const read = async (doc: RetorikaDocument) => {
+        const page = await openSite(browser, doc, 1280, false);
+        try {
+          return await page.evaluate(() => {
+            const css = (selector: string, property: "color" | "background-color") => {
+              const el = document.querySelector(selector);
+              if (!el) throw new Error(`nothing matches ${selector}`);
+              return getComputedStyle(el)[property === "color" ? "color" : "backgroundColor"];
+            };
+            return {
+              bar: css(".rb-header", "background-color"),
+              brand: css(".rb-header .rb-brand", "color"),
+              action: css(".rb-nav-action", "background-color"),
+              actionWords: css(".rb-nav-action", "color"),
+              button: css(".rb-section [role=button]", "background-color"),
+              buttonWords: css(".rb-section [role=button]", "color"),
+              heading: css("h1", "color"),
+            };
+          });
+        } finally {
+          await page.context().close();
+        }
+      };
+      const fill = rgb("#FFCD00");
+      const ink = rgb("#000000");
+      const surface = rgb("#FFFFFF");
+      // The yellow on a primary bar: the bar is the fill, its words the ink, and the nav's button
+      // inverts to ink with yellow words; the section's button is yellow under black; the heading
+      // keeps the text role, the darker sibling.
+      expect(await read(yellow)).toEqual({
+        bar: fill,
+        brand: ink,
+        action: ink,
+        actionWords: fill,
+        button: fill,
+        buttonWords: ink,
+        heading: rgb("#8F7319"),
+      });
+      // The same theme on an ink bar: the bar and its words are the surface's as always — the split
+      // reached the primary bar alone — and the section's button is still the fill.
+      const onInk = await read(looked(yellow, "ink"));
+      expect(onInk.bar).toBe(rgb("#0F172A"));
+      expect(onInk.brand).toBe(surface);
+      expect(onInk.action).toBe(surface);
+      expect(onInk.button).toBe(fill);
+      // And a theme without a fill draws what it always drew: the primary bar in the primary, its
+      // words in the surface, the button primary under surface.
+      const plain = await read(looked(fixture("cabecera-con-marca"), "primary"));
+      expect(plain.bar).toBe(rgb("#9A3412"));
+      expect(plain.brand).toBe(rgb("#FAFAF9"));
+      expect(plain.button).toBe(rgb("#9A3412"));
+      expect(plain.buttonWords).toBe(rgb("#FAFAF9"));
+    });
+
     it("marks the current page under its entry: the indicator where it anchors, the rule where it does not", async () => {
       // A page other than the first: the first is reached by the brand and has no entry of its own.
       const page = await openSite(

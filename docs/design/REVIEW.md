@@ -9829,3 +9829,83 @@ los mismos minutos facturados más un arranque, la mitad del reloj), o **subir e
 7. **De los sprints 36, 35 y 34, sin tocar**: lo que dicen sus listas. **Y el editor sigue sin verse fuera
    de Chromium**: el raíl radial, su escena y su toque tampoco se han visto en WebKit ni en Firefox.
 8. **El sprint 38, sin planificar.**
+
+## Sprint 38 — «Los colores del logo son los de la web, y la paleta es del dueño» (desde el 16 de noviembre de 2026)
+
+David, con la #381 fusionada y redesplegada, pide cinco cosas por prioridad. **Un defecto de concepto,
+primero y solo**: cuando el dueño aporta su logo, el sistema comprueba si su color se parece a alguna
+paleta de «Estilo» y, si no, usa otros colores; «los colores del logo SON los colores de marca del
+usuario». Medido en el código: el logo solo *elegía* una de cuatro paletas por ΔE ≤ 40 contra su
+primario, y si no, la web salía en «Neutra» mientras el texto prometía «los de tu sector»; un logo
+subido después desde «Menú» no tocaba la paleta. Después, **más paletas predefinidas**, **una paleta
+propia sin logo**, **retocar un color de una predefinida** sin dejar de ser «esa paleta, personalizada»,
+y **un rediseño de los paneles derechos**, «Estilo» el primero, con el vocabulario de movimiento de los
+sprints 35–37. Ocho respuestas antes de planificar, una de ellas una cuarta opción suya: **el color de
+marca se queda exacto y cambia de papel** —relleno con tinta negra o blanca cuando no se lee como texto,
+y un hermano oscurecido lo mínimo solo para los textos—. Dos ajustes al aprobar: el generador no escribe
+el origen de la paleta (ausente = arranque sin tocar), y la fixture amarilla es testigo del motor, no al
+revés. El plan está en la memoria del proyecto (`project-sprint-38-plan`).
+
+### Día 1, primero y solo — el relleno y su tinta (PR de `feat/el-relleno-y-su-tinta`)
+
+**Un cambio de modelo sin cambio visible, y la prueba es que nada cambió.** `color.primary` tenía dos
+papeles: **texto** sobre la superficie (titulares, enlaces, el nombre de la marca: cinco reglas) y
+**relleno** (el botón, la barra en el primario y lo que cuelga de ella, el disco del favicon: diez reglas
+y el icono), con `color.surface` de tinta sobre todo relleno. Por eso un amarillo de logo no podía ser
+el primario de ninguna web: un solo valor tenía que leerse como texto sobre blanco **y** llevar tinta
+blanca encima. Hoy el tema gana **un par opcional**, `color.fill` y `color.onFill` (las dos o ninguna),
+fuera de `TOKEN_KEYS` —porque todo lo que esa lista gobierna debe seguir significando «las diecinueve
+que tiene todo tema»—, y el documento un `palette` opcional que dice de dónde salieron los colores
+(ADR 0074 y 0075, esquema 1.20.0, migración 0021: `up` sella y no escribe nada; `down` quita las tres
+claves y deja los seis colores).
+
+**Las dos formas de la hoja se deciden en un sitio** (`fillVars`). Sin el par, el relleno es
+`var(--color-primary)` y su tinta `var(--color-surface)`: la hoja de siempre, byte a byte. **Las 23
+goldens del corpus pasan sin regenerar**, que era la condición de David. Con el par, el `:root` añade
+`--color-fill` y `--color-on-fill` detrás de las diecinueve, el botón, el botón de la cabecera, la barra
+en el primario y lo que cuelga de ella leen esas dos, y **solo la barra primaria cambia de tinta**: cinco
+reglas escriben la superficie en las tres barras de color a la vez, así que cada una gana una gemela
+`[data-bg=primary]` justo detrás y con el mismo peso; las barras `secondary` e `ink` siguen en la
+superficie. La fixture 24, `logo-amarillo` (amarillo `#FFCD00` bajo negro, un primario provisional que el
+motor del día 2 fijará), es la segunda forma.
+
+**Una desviación del plan, con su motivo.** El plan contaba como relleno las dos marcas finas de una
+barra de superficie: el indicador bajo la entrada actual y la línea de progreso. No lo son: se leen
+contra la superficie como un subrayado, y en el amarillo saldrían a 1,5 : 1 sobre blanco. Se quedan en
+el primario (el papel de texto, probado a 4,5 en todo tema) y, sobre una barra de color, en la tinta de
+la barra, como antes.
+
+**Los pares y la revisión siguen a los papeles.** `CONTRAST_PAIRS` gana `onFill sobre fill`, medido con el
+par resuelto (`resolveFill`), y **conserva `surface sobre primary`**: el plan decía cambiar uno por otro, y
+eso habría dejado sin colores la barra de texto sobre todo botón de hoy. Sobre un botón con relleno
+propio la barra no ofrece ningún color (la única tinta probada es la del relleno, que ninguna referencia
+nombra). La revisión previa a la descarga juzga el botón, la barra primaria y el botón invertido contra el
+relleno y su tinta; `withPalette` quita el relleno propio, para que elegir «Terracota» sobre el amarillo
+no deje los botones amarillos; `setTheme` cuenta el par, para que mover solo el relleno sea un paso.
+
+**Los tres motores**: la prueba nueva de `engines.browser.test.ts` lee los colores calculados de la
+barra, la marca, el botón de la cabecera, el botón de la sección y el titular en Chromium, Firefox y
+WebKit, con el amarillo sobre barra primaria, el mismo sobre barra `ink` (la marca sigue en blanco) y un
+tema sin relleno (lo de siempre). Verde en los tres.
+
+**Saboteos, uno por aserción, deshechos por script**: el `:root` con el par siempre → 24 rojas (las 23
+goldens y `theme-css`); la tinta sin su caída a la superficie → 47 rojas; las gemelas de la barra primaria
+quitadas → `theme-css` roja; `setTheme` comparando solo las diecinueve → roja; `withPalette` sin quitar el
+relleno → roja; `down` que deja `color.fill` → ida y vuelta roja; la fixture con relleno y sin tinta → el
+corpus no carga; la instantánea del esquema sin regenerar → `schema:guard` roja.
+
+**El e2e de la CI sube a 45 minutos el paso y a 55 el trabajo**, para que lo aceptes con esta PR: el paso
+fue 32–35 de sus 40 en las seis PR del sprint 37 y este sprint añade unas doce caminatas. Partirlo en dos
+sigue siendo tu decisión.
+
+**Un rojo en la CI que no era de este día, y lo que enseñó.** La primera ejecución de la PR #382 falló en
+«la barra superior reparte su ancho entre el logo y las pestañas»: «con una sola página ya había barra».
+Ni el diff toca la barra del editor ni se reproduce aquí (la suite completa, la caminata sola tres veces,
+y un muestreo por fotograma durante 12 s con la CPU normal y seis veces más lenta). Medido el instante en
+que la caminata lee la tira: **la marca bajo la pestaña acababa de empezar a deslizarse**, 17 ms de 180,
+desde el borde izquierdo y con opacidad casi 0, segundos después de abrir el editor —cuando llega la foto
+del banco y la barra se vuelve a medir—. La caminata leía una barra en movimiento; ahora espera a que no
+corra ninguna animación dentro de la tira y, si vuelve a fallar, el mensaje dice el ancho de la tira, la
+caja de cada hijo y cada parte de la barra. **El producto no cambia en esta PR**: que la marca llegue
+tarde y deslizándose sin que nadie lo pida queda en el backlog (sprint 37, punto 7) para que lo decidas.
+

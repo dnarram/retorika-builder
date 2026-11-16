@@ -10161,15 +10161,53 @@ describe("la barra superior reparte su ancho entre el logo y las pestañas", () 
    * direction's to decide rather than quietly asserted away here.
    */
   async function strip(page: Page) {
+    // **Measured once the strip is still** (sprint 38 día 1). The mark under the current tab arrives
+    // late: measured on 16 November, it starts its 180 ms slide from the strip's left edge seconds
+    // after the editor opens — when the bank's photograph lands and the bar is measured again — and
+    // this walk used to read the strip 17 ms into that slide. That is a reading of a bar in motion,
+    // and it went red once on CI (PR #382) while never here; the walk now waits for every animation
+    // and transition inside the strip to finish, which is what it means by «the bar».
+    await page.waitForFunction(() => {
+      const tabs = document.querySelector('[data-testid="page-tabs"]');
+      return (
+        tabs !== null &&
+        tabs.getAnimations({ subtree: true }).every((a) => a.playState !== "running")
+      );
+    });
     return page.evaluate(() => {
       const tabs = document.querySelector('[data-testid="page-tabs"]');
       const shell = document.querySelector('[data-testid="editor-shell"]');
       const back = shell?.firstElementChild?.querySelector("button");
       if (!tabs || !back) return { error: "no bar" } as const;
+      // **What the bar was made of when it was measured** (sprint 38 día 1). This walk went red once on
+      // CI (PR #382, run 43849540182) with one page, and never here — not in the full suite, not alone
+      // three times, not sampled every frame for 12 s from the scene on at 1× and 6× slower CPU. At 1280
+      // the strip is 395 px for a tab of under 200, so whatever overflowed it was large: the strip's
+      // children, each with its box inside the strip (the sliding mark is absolute and `transform`ed,
+      // and a transform counts towards a scroll container's overflow), and every part of the bar.
+      const bar = shell?.firstElementChild;
+      const origin = tabs.getBoundingClientRect().left;
+      const inside = [...tabs.children]
+        .map((child) => {
+          const box = child.getBoundingClientRect();
+          const style = (child as HTMLElement).style;
+          const moved = style.transform ? ` ${style.transform} w=${style.width}` : "";
+          return `${child.tagName.toLowerCase()}[${Math.round(box.left - origin)}..${Math.round(box.right - origin)}]${moved}`;
+        })
+        .join(" ");
+      const parts = bar
+        ? [...bar.children]
+            .map(
+              (child) =>
+                `${Math.round(child.getBoundingClientRect().width)}px «${(child.textContent ?? "").trim().slice(0, 40)}»`,
+            )
+            .join(" | ")
+        : "";
       return {
         tabCount: tabs.querySelectorAll("button").length,
         scrolls: tabs.scrollWidth > tabs.clientWidth + 1,
         backWidth: Math.round(back.getBoundingClientRect().width),
+        bar: `strip ${tabs.scrollWidth}/${tabs.clientWidth}px holding ${inside}, in a bar of ${Math.round(bar?.getBoundingClientRect().width ?? 0)}px: ${parts}`,
       };
     });
   }
@@ -10201,7 +10239,7 @@ describe("la barra superior reparte su ancho entre el logo y las pestañas", () 
       const alone = await strip(walker);
       expect(alone, "una página").not.toHaveProperty("error");
       if ("error" in alone) return;
-      expect(alone.scrolls, "con una sola página ya había barra").toBe(false);
+      expect(alone.scrolls, `con una sola página ya había barra — ${alone.bar}`).toBe(false);
       expect(
         alone.backWidth,
         "el botón del logo vuelve a crecer sin límite: era 395px para ~250px de contenido",
@@ -10239,7 +10277,10 @@ describe("la barra superior reparte su ancho entre el logo y las pestañas", () 
         if ("error" in now) continue;
         // The rule, in one line: fewer than four pages must not need a scrollbar.
         if (now.tabCount < 4) {
-          expect(now.scrolls, `${now.tabCount} páginas no deberían necesitar barra`).toBe(false);
+          expect(
+            now.scrolls,
+            `${now.tabCount} páginas no deberían necesitar barra — ${now.bar}`,
+          ).toBe(false);
         }
         // And the mark must never be squeezed out of existence; it used to reach 12px.
         expect(now.backWidth, `el logo quedó en ${now.backWidth}px`).toBeGreaterThanOrEqual(130);

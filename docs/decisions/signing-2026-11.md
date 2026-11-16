@@ -1,6 +1,6 @@
 # Signing pack — November 2026
 
-> **For David.** Thirty-one ADRs are `proposed`: 0042, 0043 and 0045 to 0073. Each one records a
+> **For David.** Thirty-three ADRs are `proposed`: 0042, 0043 and 0045 to 0075. Each one records a
 > decision of yours, and none of them is accepted until you say so in writing. This file is the
 > one place to read them from: what each decides in a sentence, what was added to it after it was
 > written and when, what development decided under your delegation rather than you, and what
@@ -8,12 +8,13 @@
 > sprint 35, 11 November 2026, and again on sprint 36 día 1 the same day; checked closing sprint 36,
 > 13 November 2026, with nothing to add; brought up to date on sprint 37 día 2, 13 November 2026,
 > días 3 and 4, 14 November 2026, and día 6, 15 November 2026; checked closing sprint 37, 16 November
-> 2026, with nothing to add.
+> 2026, with nothing to add; brought up to date on sprint 38 día 1, 16 November 2026.
 > **Development does not sign.**
 
 The sprint 34 plan counted 24 (0042, 0043, 0045–0066). ADR 0067 and ADR 0068 were written during
 sprint 34, ADR 0069 and ADR 0070 during sprint 35 (its día 4), ADR 0071 on sprint 36 día 1, ADR 0072
-on sprint 37 día 2 and ADR 0073 on its día 4, so the pack has 31 rows.
+on sprint 37 día 2 and ADR 0073 on its día 4, ADR 0074 and ADR 0075 on sprint 38 día 1, so the pack
+has 33 rows.
 
 ## What signing changes, and what it does not
 
@@ -62,6 +63,7 @@ A suggestion, so that each chain of amendments is signed together. Any other gro
 | **B** | 0045, 0046, 0055, 0056 | The letter: no reserved names, the gallery, forty families, an owner's own font |
 | **C** | 0043, 0057, 0058, 0059, 0060, 0063, 0065, 0067, 0069, 0070 | The header: two menus, the owner's header, its script, the logo, the places, the bar of 2026, the sheet, the fold, the brand's size and its place |
 | **D** | 0054, 0062, 0064, 0068 | The published page: its icon, its motion and the progress line that amends it, its measure and rhythm |
+| **E** | 0074, 0075 | The colours: the fill keeps the brand's colour and the text takes its sibling, and the palette keeps its origin |
 
 ## The rows
 
@@ -118,6 +120,13 @@ of the commit that added it, read from `git log`.
 | [0062](0062-the-published-site-moves-just-enough-without-a-byte-of-script.md) · 4 Nov, sprint 32 | The published site moves just enough, in CSS alone: sections come in as the visitor scrolls, the cover's words come in once, pages fade into each other; the canvas is still; there is no switch, and only the visitor's `prefers-reduced-motion` governs it | Notes of 3 Nov (sprint 32 día 4, below), 4 Nov (sprint 32 día 6: the three engines) and 6 Nov (sprint 34 día 6: the list gains the fixed bar's line, ADR 0068) | **Yes, 4 Nov**, under «Se el mejor experto de UX y diseño gráfico y decide las respuestas sobre las decisiones pendientes para continuar con el dia siguiente del sprint», written with #337 merged: **the reveal rises and never fades** — ADR 0064 §5's open question; ADR 0064 records the same decision |
 | [0064](0064-the-page-has-a-measure-and-a-rhythm.md) · 4 Nov, sprint 32 | The page has a measure of 1200 px, by padding, from 1296 up, and a rhythm — the sections' room, the reading text's line, the headings — with what it moves named | Nothing after it was written; its §5 states the decision taken under delegation and recorded in ADR 0062 | See ADR 0062 |
 | [0068](0068-the-fixed-bar-can-say-how-much-has-been-read.md) · 6 Nov, sprint 34 | A fixed bar can carry a two-pixel line that grows as the page is read — an owner's option, off for every site, reading `scroll(root)`, decorative, on the published page only (schema 1.18.0) | Nothing | Nothing |
+
+### Batch E — the colours
+
+| ADR | What it decides | Added after it was written | Decided by delegation |
+|---|---|---|---|
+| [0074](0074-the-fill-keeps-the-brands-colour-and-the-text-takes-its-sibling.md) · 16 Nov, sprint 38 | The brand's colour keeps its value and changes its role: an optional pair `color.fill` / `color.onFill` — the colour exact wherever something is filled, black or white ink on it — beside a `color.primary` that keeps the text role, a minimally darkened sibling when the colour cannot be read as text; absent, every site draws exactly what it drew (schema 1.20.0, notes in 0054 and 0057) | Nothing | Nothing |
+| [0075](0075-the-palette-keeps-its-origin-and-the-label-is-computed.md) · 16 Nov, sprint 38 | The document keeps where its colours came from — a palette the owner chose, the logo, or their own — and the label is computed; absent means nobody chose, the generator never writes the default, and a «Neutra» chosen before 1.20.0 reads as untouched, a known limit (schema 1.20.0, note in 0041) | Nothing | Nothing |
 
 ## What else waits for you, and is not a signature
 

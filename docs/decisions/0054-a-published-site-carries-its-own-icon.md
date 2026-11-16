@@ -107,3 +107,11 @@ bundle — it names every page whose icon «names no file in the bundle».
   diff must differ from the sprint 27 one by exactly that.
 - A theme change or a renamed business changes `favicon.svg`'s bytes, which is what an icon made of
   them should do; nothing else moves with it.
+
+## Note — sprint 38 día 1: the disc is the fill (ADR 0074)
+
+The icon's pair was «surface on primary», the button's own. Since 1.20.0 a theme may carry a fill of its
+own — a logo's yellow, too light to be read as text — and the button is drawn in it, under the fill's ink;
+**so is the disc, and so is the letter**: `color.fill` under `color.onFill`, each falling back to the
+primary and the surface when the theme carries none, which is every icon published before 1.20.0, byte for
+byte. The pair is `onFill on fill` in `CONTRAST_PAIRS`, proved for every palette as surface on primary was.

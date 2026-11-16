@@ -45,6 +45,16 @@ describe("the icon", () => {
     expect(svg).toContain('font-family="system-ui, sans-serif"');
   });
 
+  // ADR 0074: a theme with a fill of its own — a logo's yellow — draws the disc in the brand's
+  // colour and the letter in its ink, the button's own pair.
+  it("draws the letter in the fill's ink on a disc of the fill, when the theme carries one", () => {
+    const t = { ...theme(), "color.fill": "#FFCD00", "color.onFill": "#000000" };
+    const svg = faviconSvg(t, "Correos de barrio");
+    expect(svg).toContain('<circle cx="16" cy="16" r="16" fill="#FFCD00"/>');
+    expect(svg).toContain('fill="#000000">C</text>');
+    expect(CONTRAST_PAIRS).toContainEqual({ fg: "color.onFill", bg: "color.fill" });
+  });
+
   it("is the disc alone for a name with no letter or digit, never a placeholder glyph", () => {
     const svg = faviconSvg(theme(), "¡!");
     expect(svg).toContain("<circle");

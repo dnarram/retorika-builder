@@ -107,6 +107,27 @@ describe("setTheme", () => {
     expect(() => setTheme(documentWith(before), extra)).toThrow(/not a complete theme/);
   });
 
+  // ADR 0074, sprint 38 día 1: the fill pair is part of the theme. A change to it alone is a change —
+  // the owner moving the button's colour and nothing else — and a pair that goes is one too.
+  it("counts a change to the fill alone, and the fill going, as changes", () => {
+    const yellow = { ...before, "color.fill": "#FFCD00", "color.onFill": "#000000" };
+    const doc = documentWith(yellow);
+    expect(setTheme(doc, yellow)).toBe(doc);
+    const moved = setTheme(doc, { ...yellow, "color.fill": "#FFD700" });
+    expect(moved).not.toBe(doc);
+    expect(moved.theme["color.fill"]).toBe("#FFD700");
+    const gone = setTheme(doc, before);
+    expect(gone).not.toBe(doc);
+    expect(Object.hasOwn(gone.theme, "color.fill")).toBe(false);
+    expect(setTheme(documentWith(before), yellow).theme["color.onFill"]).toBe("#000000");
+  });
+
+  it("refuses half a fill pair, which is a fill with no ink or an ink with nothing under it", () => {
+    expect(() => setTheme(documentWith(before), { ...after, "color.fill": "#FFCD00" })).toThrow(
+      /not a complete theme.*color\.onFill/s,
+    );
+  });
+
   it("does not write anything when it refuses", () => {
     const doc = documentWith(before);
     const { "font.body": _dropped, ...partial } = after;

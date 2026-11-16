@@ -187,6 +187,27 @@ export type ElementStyle = z.infer<typeof elementStyleSchema>;
 export type StyleValue = NonNullable<ElementStyle[StyleProperty]>;
 
 /**
+ * The brand colour as a **fill**, and the ink drawn over it (ADR 0074, sprint 38 día 1).
+ *
+ * `color.primary` used to carry two roles at once: the colour of text on the surface (headings,
+ * links, the brand's name) and the colour of every filled shape (the button, a coloured bar, the
+ * favicon's disc), with `color.surface` as the ink over those shapes. That is why a logo's yellow
+ * could never be a site's primary: one value had to clear 4.5:1 *as text on white* **and** carry white
+ * ink over itself, and a yellow does neither. These two keys split the roles. `color.fill` is the
+ * brand's colour, exact, wherever something is filled; `color.onFill` is the ink drawn on it; and
+ * `color.primary` keeps the text role alone.
+ *
+ * **Optional, in a pair, and outside `TOKEN_KEYS`.** Absent, the fill *is* `color.primary` and the ink
+ * *is* `color.surface` — exactly what every site drew before 1.20.0, byte for byte, which is what
+ * keeps every saved site and the whole golden corpus where they were. Present, the renderer emits two
+ * more custom properties and the filled rules read them. They stay out of `TOKEN_KEYS` because
+ * everything that list drives — the `:root` block, the toolbar's references, the completeness of a
+ * built theme — must keep meaning «the nineteen every theme has».
+ */
+export const FILL_KEYS = ["color.fill", "color.onFill"] as const;
+export type FillKey = (typeof FILL_KEYS)[number];
+
+/**
  * A document's theme is a *complete* map from the namespace to values: an unknown key
  * is an error and a missing key is an error too.
  *
@@ -195,19 +216,59 @@ export type StyleValue = NonNullable<ElementStyle[StyleProperty]>;
  * CSS custom properties in a fixed alphabetical order, which is what the determinism of
  * INV_5 and the golden files rest on.
  *
+ * **Plus one optional pair** (ADR 0074): `color.fill` and `color.onFill`, both or neither. One
+ * without the other would be a fill with no ink to write on it, or an ink with nothing to sit on —
+ * a button drawn in a colour nobody chose for it — so the pair is refused rather than completed.
+ *
  * The Retorika brand palette does not live here. A document's theme is the client's.
  */
-export const themeSchema = z.strictObject(
-  Object.fromEntries(TOKEN_KEYS.map((key) => [key, z.string().min(1)])) as {
-    [K in TokenKey]: z.ZodString;
-  },
-);
+export const themeSchema = z
+  .strictObject({
+    ...(Object.fromEntries(TOKEN_KEYS.map((key) => [key, z.string().min(1)])) as {
+      [K in TokenKey]: z.ZodString;
+    }),
+    "color.fill": z.string().min(1).optional(),
+    "color.onFill": z.string().min(1).optional(),
+  })
+  .refine(
+    (theme) => (theme["color.fill"] === undefined) === (theme["color.onFill"] === undefined),
+    {
+      message: "color.fill and color.onFill come together or not at all",
+      path: ["color.onFill"],
+    },
+  );
 export type Theme = z.infer<typeof themeSchema>;
+
+/**
+ * Where the document's colours came from (ADR 0075, sprint 38 día 1) — **an origin, never a label**.
+ *
+ * - `palette`: the owner chose this predefined palette in «Estilo». The colours may have moved since
+ *   (the panel then says «{nombre}, personalizada»), which is why the label is computed from the
+ *   values and this, and never stored.
+ * - `logo`: the colours were derived from the owner's logo.
+ * - `own`: the owner made the palette themselves.
+ *
+ * **Absent means nobody chose** — the generator's untouched start, and every document written before
+ * 1.20.0. The generator never writes the default here: a site that starts in «Neutra» and one whose
+ * owner picked «Neutra» on purpose must stay distinguishable, because a logo uploaded later repaints
+ * the first and only offers itself to the second.
+ */
+export const paletteOriginSchema = z.discriminatedUnion("kind", [
+  z.strictObject({ kind: z.literal("palette"), id: z.string().min(1).max(64) }),
+  z.strictObject({ kind: z.literal("logo") }),
+  z.strictObject({ kind: z.literal("own") }),
+]);
+export type PaletteOrigin = z.infer<typeof paletteOriginSchema>;
 
 /** Token keys in the fixed order the renderer emits them. Sorted, so output is stable. */
 export const SORTED_TOKEN_KEYS: readonly TokenKey[] = [...TOKEN_KEYS].sort();
 
-/** The CSS custom property a token key maps to, e.g. "color.primary" -> "--color-primary". */
-export function tokenToCssVariable(key: TokenKey): string {
-  return `--${key.replace(/\./g, "-")}`;
+/**
+ * The CSS custom property a token key maps to, e.g. "color.primary" -> "--color-primary" and
+ * "color.onFill" -> "--color-on-fill". The capital is kebab-cased because custom properties are
+ * case-sensitive and every other name the renderer writes is lower case; no key of `TOKEN_KEYS` has
+ * one, so the nineteen names are what they always were.
+ */
+export function tokenToCssVariable(key: TokenKey | FillKey): string {
+  return `--${key.replace(/\./g, "-").replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)}`;
 }

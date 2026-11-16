@@ -1385,6 +1385,12 @@ describe("the header's widths", () => {
         // what the «Menú» panel will tell its owner. The number is the glyphs' sum on this machine's
         // and CI's widest letters, as 801 is.
         expect(widths, entry.name).toEqual({ phone: 1078, rails: 1079, over: 0 });
+      } else if (entry.name === "logo-amarillo") {
+        // The same bar as `cabecera-con-marca` in a fill of its own (ADR 0074, sprint 38 día 1), with
+        // «Correos de barrio» in bold and no logo, and its sections not on a row of their own but in
+        // the bar's line: the words sum past 720, so the bar is the phone's up to 769. The fill
+        // changes no width; the words do.
+        expect(widths, entry.name).toEqual({ phone: 769, rails: 1024, over: 0 });
       } else {
         expect(widths, entry.name).toEqual({ phone: 720, rails: 1024, over: 0 });
       }
