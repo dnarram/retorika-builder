@@ -10011,5 +10011,11 @@ rojas; `themeFor` sin la segunda tinta → roja; la oferta en la voz viva → 2 
 roja; las referencias sobre un relleno sin juzgar → roja; «Estilo» sin escribir el origen → la caminata de
 la paleta elegida roja (el logo repinta la «Neutra» elegida).
 
+**Dos caminatas cambiaron de sentido, y se dice.** La del panel de la marca del sprint 35 sube el disco
+azul a una web sin tocar: los colores llegan ahora como un paso tras la subida, con su propio «Deshacer» en
+la línea, así que la caminata pulsa la flecha de la barra dos veces (colores, luego el logo) y «Rehacer»
+otras dos; lo que prueba —pasar el ratón no deja paso— no cambia. La de las puertas de la descarga en el
+móvil gana el diálogo del tema. El e2e completo: **353 en verde y 1 omitida, en 1 669 s**.
+
 **ADR 0076** (`proposed`), notas en 0010, 0015, 0041, 0054 y 0059; el paquete de firmas, 34 filas.
 
