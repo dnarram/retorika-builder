@@ -155,7 +155,8 @@ function buckets(pixels: Uint8ClampedArray): Bucket[] {
     if (r >= NEAR_WHITE && g >= NEAR_WHITE && b >= NEAR_WHITE) continue;
     if (r <= NEAR_BLACK && g <= NEAR_BLACK && b <= NEAR_BLACK) continue;
 
-    const key = ((r >> 3) << 10) | ((g >> 3) << 5) | (b >> 3);
+    const key =
+      (Math.floor(r / BUCKET) << 10) | (Math.floor(g / BUCKET) << 5) | Math.floor(b / BUCKET);
     const bucket = counts.get(key) ?? { key, count: 0, r: 0, g: 0, b: 0 };
     bucket.count += 1;
     bucket.r += r;
