@@ -2,7 +2,7 @@
 
 import type { ElementAddress, RetorikaDocument } from "@retorika/schema";
 import { useId } from "react";
-import { PANEL_WIDTH, PanelClose, panelCard, panelRow } from "../editor/panelKit.tsx";
+import { Note, PanelHeader, panelFrame, panelRow } from "../editor/panelKit.tsx";
 import {
   countPhotos,
   listPhotos,
@@ -74,29 +74,28 @@ export function PhotosPanel({
   const showsPage = doc.pages.length > 1;
 
   return (
-    <section aria-labelledby={headingId} className={`${PANEL_WIDTH} gap-4 p-5 ${panelCard}`}>
-      <div className="flex items-start justify-between gap-3">
-        <h2 id={headingId} className="text-[13px] font-bold text-ui-ink">
-          {es["editor.photos.title"]}
-        </h2>
-        <PanelClose onClick={onClose} label={es["editor.photos.close"]} />
-      </div>
+    <section aria-labelledby={headingId} className={panelFrame}>
+      <PanelHeader
+        id={headingId}
+        title={es["editor.photos.title"]}
+        close={{ label: es["editor.photos.close"], onClick: onClose }}
+      />
 
       {photos.length === 0 ? (
         // Reachable: a cover can be deleted, and nothing else a generated site carries holds an
         // image. A sentence saying what to do, not a disabled control — the shape `PagesPanel`
         // already uses for "you cannot make a page from here".
-        <p className="text-[12px] leading-snug text-ui-muted">{es["editor.photos.none"]}</p>
+        <Note>{es["editor.photos.none"]}</Note>
       ) : (
         <>
           {/* The panel's whole argument in one line, and the reason the icon is worth having. */}
-          <p className="text-[12px] leading-snug text-ui-muted">
+          <Note>
             {missing === 0
               ? es["editor.photos.allYours"]
               : es["editor.photos.summary"]
                   .replace("{missing}", String(missing))
                   .replace("{total}", String(counts.total))}
-          </p>
+          </Note>
 
           {/* A different question from the one above. That line counts photographs that are not
               the owner's *yet*; this one counts the owner's own that are not in the account, which
@@ -107,14 +106,14 @@ export function PhotosPanel({
               a thing to do, not a thing that went wrong. Adding a token would be a decision about
               the whole chrome (ADR 0015) rather than about this sentence. */}
           {photosMissing !== null && photosMissing > 0 ? (
-            <p className="text-[12px] leading-snug text-[#92400E]">
+            <Note tone="warn">
               {photosMissing === 1
                 ? es["editor.photos.missingFromAccount.one"]
                 : es["editor.photos.missingFromAccount.many"].replace(
                     "{count}",
                     String(photosMissing),
                   )}
-            </p>
+            </Note>
           ) : null}
 
           <ul className="flex flex-col gap-1.5">
@@ -191,6 +190,8 @@ export function PhotosPanel({
 export function StateChip({ state }: { state: PhotoState }) {
   const label = es[`editor.photos.state.${state}` as keyof typeof es];
   const tone =
-    state === "own" ? "bg-ui-bg text-ui-muted" : "bg-[#FEF3C7] text-[#92400E] font-semibold";
+    state === "own"
+      ? "bg-ui-bg text-ui-muted"
+      : "bg-ui-warn-surface text-ui-warn-deep font-semibold";
   return <span className={`shrink-0 rounded-md px-1.5 py-0.5 text-[11px] ${tone}`}>{label}</span>;
 }

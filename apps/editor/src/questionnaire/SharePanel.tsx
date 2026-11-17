@@ -8,7 +8,7 @@ import {
   shareImageOf,
 } from "@retorika/schema";
 import { useEffect, useId, useState } from "react";
-import { PANEL_WIDTH, PanelClose, panelCard } from "../editor/panelKit.tsx";
+import { Note, PanelHeader, panelFrame } from "../editor/panelKit.tsx";
 import es from "../locales/es.json" with { type: "json" };
 
 /**
@@ -86,21 +86,16 @@ export function SharePanel({
       // it painted 316px of itself across the page being edited at every window width measured.
       // Losing `border-l` and the drawer shadow is what that change means: it is a card beside the
       // preview now, like «Estilo» and «Diseño», not an edge pulled over it.
-      className={`${PANEL_WIDTH} gap-4 p-5 ${panelCard}`}
+      className={panelFrame}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex flex-col gap-1">
-          <h2 id={headingId} className="m-0 text-[15px] font-bold text-ui-ink">
-            {es["editor.share.title"]}
-          </h2>
-          <p className="m-0 text-[12px] leading-snug text-ui-muted">{es["editor.share.help"]}</p>
-        </div>
-        {/* `editor.share.close`, not `editor.fields.close` — this button announced «Cerrar los
-            campos» until sprint 21 day 4 found it while extracting the shared close button, which
-            is what reading five near-identical copies side by side is good for. Nobody had heard
-            it: a sighted press never reaches the label. */}
-        <PanelClose onClick={onClose} label={es["editor.share.close"]} />
-      </div>
+      {/* `editor.share.close`, not `editor.fields.close` — this button announced «Cerrar los campos»
+          until sprint 21 day 4 found it while extracting the shared close button. */}
+      <PanelHeader
+        id={headingId}
+        title={es["editor.share.title"]}
+        help={es["editor.share.help"]}
+        close={{ label: es["editor.share.close"], onClick: onClose }}
+      />
 
       <div className="flex flex-col gap-1.5">
         <label htmlFor={descriptionId} className="text-[12px] font-semibold text-ui-ink">
@@ -119,9 +114,9 @@ export function SharePanel({
           className="h-9 w-full rounded-lg border border-ui-border bg-white px-2.5 text-[13px] phone:text-base text-ui-ink"
         />
         {fallback ? (
-          <p className="m-0 text-[12px] leading-snug text-ui-muted">
+          <Note>
             {es["editor.share.description.hint"]} <span className="italic">«{fallback}»</span>
-          </p>
+          </Note>
         ) : null}
       </div>
 
@@ -148,7 +143,7 @@ export function SharePanel({
             urlIssue ? "border-ui-danger" : "border-ui-border"
           }`}
         />
-        <p className="m-0 text-[12px] leading-snug text-ui-muted">{es["editor.share.url.help"]}</p>
+        <Note>{es["editor.share.url.help"]}</Note>
         {urlIssue ? (
           <p className="m-0 text-[12px] leading-snug text-ui-danger-deep">{urlIssue}</p>
         ) : null}
@@ -161,19 +156,11 @@ export function SharePanel({
             entry changes nothing. Hiding it at the moment the owner is confused was the panel
             going quiet exactly when it had something useful to say. */}
         {doc.siteUrl ? (
-          <p className="m-0 text-[12px] leading-snug text-ui-muted">
-            {es["editor.share.url.saved"].replace("{url}", doc.siteUrl)}
-          </p>
+          <Note>{es["editor.share.url.saved"].replace("{url}", doc.siteUrl)}</Note>
         ) : null}
-        {!willShowImage ? (
-          <p className="m-0 text-[12px] leading-snug text-ui-muted">
-            {es["editor.share.url.noPhoto"]}
-          </p>
-        ) : null}
+        {!willShowImage ? <Note>{es["editor.share.url.noPhoto"]}</Note> : null}
         {heavyKb !== undefined ? (
-          <p className="m-0 text-[12px] leading-snug text-ui-muted">
-            {es["editor.share.url.heavy"].replace("{kb}", String(heavyKb))}
-          </p>
+          <Note>{es["editor.share.url.heavy"].replace("{kb}", String(heavyKb))}</Note>
         ) : null}
       </div>
     </aside>

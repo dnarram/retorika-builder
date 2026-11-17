@@ -11,7 +11,7 @@ import {
 } from "@retorika/schema";
 import { useEffect, useId, useRef } from "react";
 import { type MenuState, menuNoteText, sectionsLeftText } from "../editor/menuState.ts";
-import { PANEL_WIDTH, PanelClose, panelCard } from "../editor/panelKit.tsx";
+import { Note, PanelHeader, panelCard, panelFrame } from "../editor/panelKit.tsx";
 import { type FieldRow, fieldCommitFor, groupedFields } from "../editor/sectionFields.ts";
 import { fieldEditFor } from "../editor/textEdits.ts";
 import es from "../locales/es.json" with { type: "json" };
@@ -183,17 +183,14 @@ export function FieldsPanel({
        * On a phone `panelCard` is the sheet from the bottom that ADR 0042 §2 asks for, and it is
        * now the same sheet as the other six rather than a second transcription of its numbers.
        */
-      className={`${PANEL_WIDTH} gap-4 p-5 ${panelCard}`}
+      className={panelFrame}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex flex-col gap-1">
-          <h2 id={headingId} className="m-0 text-[15px] font-bold text-ui-ink">
-            {sectionName}
-          </h2>
-          <p className="m-0 text-[12px] leading-snug text-ui-muted">{es["editor.fields.help"]}</p>
-        </div>
-        <PanelClose onClick={onClose} label={es["editor.fields.close"]} />
-      </div>
+      <PanelHeader
+        id={headingId}
+        title={sectionName}
+        help={es["editor.fields.help"]}
+        close={{ label: es["editor.fields.close"], onClick: onClose }}
+      />
 
       {/**
        * **Whether this section is in the menu** (ADR 0043 §3) — in its own block, above the
@@ -218,9 +215,7 @@ export function FieldsPanel({
               <span className="text-[13px] font-semibold text-ui-ink">
                 {es["editor.menu.toggle"]}
               </span>
-              <span className="text-[12px] leading-snug text-ui-muted">
-                {es["editor.menu.as"].replace("{label}", menuLabel)}
-              </span>
+              <Note as="span">{es["editor.menu.as"].replace("{label}", menuLabel)}</Note>
             </span>
           </label>
 
@@ -236,10 +231,8 @@ export function FieldsPanel({
            * Left in, the name read aloud on focus would be four sentences long and would change
            * every time another section left the menu.
            */}
-          <p className="m-0 text-[12px] leading-snug text-ui-muted">{sectionsLeftText(menu)}</p>
-          {note === undefined ? null : (
-            <p className="m-0 text-[12px] leading-snug text-ui-muted">{note}</p>
-          )}
+          <Note>{sectionsLeftText(menu)}</Note>
+          {note === undefined ? null : <Note>{note}</Note>}
         </div>
       )}
 
@@ -439,7 +432,7 @@ function FieldRowInputs({
             }`}
           />
           {row.dead ? (
-            <p className="m-0 text-[12px] leading-snug text-[#B91C1C]">
+            <p className="m-0 text-[12px] leading-snug text-ui-danger-deep">
               {es["editor.fields.deadDestination"]}
             </p>
           ) : null}

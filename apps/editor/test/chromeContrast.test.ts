@@ -62,6 +62,8 @@ const BRAND_SURFACE = token("brand-surface");
 const BRAND_DEEP = token("brand-deep");
 const DANGER = token("danger");
 const DANGER_DEEP = token("danger-deep");
+const WARN_DEEP = token("warn-deep");
+const WARN_SURFACE = token("warn-surface");
 const BORDER_STRONG = token("border-strong");
 
 /** WCAG 1.4.11: a boundary or a graphic that carries meaning. */
@@ -115,6 +117,10 @@ describe("the chrome's text", () => {
     ["brand-deep on the tinted surface", BRAND_DEEP, BRAND_SURFACE],
     ["danger-deep on a panel", DANGER_DEEP, SURFACE],
     ["danger-deep on the app background", DANGER_DEEP, BG],
+    // The panels' warning (sprint 38 día 5), on the panel, the app's ground and its own chip.
+    ["warn-deep on a panel", WARN_DEEP, SURFACE],
+    ["warn-deep on the app background", WARN_DEEP, BG],
+    ["warn-deep on the warn surface", WARN_DEEP, WARN_SURFACE],
   ];
 
   for (const [what, fg, bg] of readable) {

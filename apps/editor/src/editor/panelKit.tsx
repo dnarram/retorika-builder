@@ -1,5 +1,12 @@
 "use client";
 
+import {
+  type ComponentProps,
+  type PointerEvent,
+  type ReactNode,
+  useLayoutEffect,
+  useRef,
+} from "react";
 import { panelShell } from "./EditorShell.tsx";
 
 /**
@@ -82,6 +89,14 @@ export const PANEL_WIDTH = "w-[340px] phone:w-auto";
 export const panelCard = `ui-enter-right ui-scroll-shade relative z-[11] flex shrink-0 flex-col rounded-ui-lg border border-ui-border bg-ui-surface shadow-ui-1 ${panelShell} phone:fixed phone:inset-x-0 phone:bottom-[calc(56px+env(safe-area-inset-bottom))] phone:z-20 phone:max-h-[70dvh] phone:rounded-b-none phone:border-b-0 phone:shadow-ui-3`;
 
 /**
+ * **The frame of every right-hand panel, whole** (sprint 38 día 5): the width, the card, and the one
+ * padding and gap. Seven panels wrote `PANEL_WIDTH gap-4 p-5 panelCard` and «Estilo» wrote its own
+ * `gap-[18px] p-6`, which put its title four pixels off every other panel's; from today the eight
+ * take their frame from here and cannot drift apart again.
+ */
+export const panelFrame = `${PANEL_WIDTH} gap-4 p-5 ${panelCard}`;
+
+/**
  * The X that closes a panel, which five of the six rail panels and the fields panel all drew by
  * hand — the same 16×16 two-stroke cross, differing only in whether the diagonal paths were
  * written `M6 6l12 12M18 6L6 18` or `M18 6L6 18M6 6l12 12`, which draw the same cross. One
@@ -96,7 +111,11 @@ export function PanelClose({ onClick, label }: { onClick: () => void; label: str
       type="button"
       onClick={onClick}
       aria-label={label}
-      className="shrink-0 cursor-pointer border-0 bg-transparent text-ui-muted"
+      // A round target of 32 px around the 16 px cross (sprint 38 día 5): the cross was its own
+      // hit area, a 16 px square at the panel's corner — the smallest control of the chrome. The
+      // ripple and the hover ground are the vocabulary's; the negative margin keeps the cross where
+      // it always sat beside the title.
+      className="ui-interactive -mt-1.5 -mr-1.5 grid h-8 w-8 shrink-0 cursor-pointer place-items-center rounded-full border-0 bg-transparent text-ui-muted hover:bg-ui-bg hover:text-ui-ink"
     >
       <svg
         width="16"
@@ -127,7 +146,16 @@ export const panelRow =
 /** The same row when it is the chosen one. Brand surface and brand border together, so it does not
  * depend on either alone. */
 export const panelRowSelected =
-  "ui-interactive rounded-ui border border-ui-brand bg-ui-brand-surface";
+  "ui-interactive rounded-ui border border-ui-brand bg-ui-brand-surface ring-[3px] ring-ui-brand-surface";
+
+/**
+ * **A row that is chosen by pressing it** — a palette, a letter, a scale, a segment (sprint 38 día 5):
+ * the row and its selected twin, with the vocabulary's ripple from where the press landed. Apart from
+ * `panelRow` because most rows are not this: a page's row in «Páginas» holds buttons, and a ring
+ * spreading across a whole row that answers no press of its own would say something false.
+ */
+export const panelChoice = `${panelRow} ui-ripple`;
+export const panelChoiceSelected = `${panelRowSelected} ui-ripple`;
 
 /**
  * The small verb that sits inside a row — «Subir», «Quitar esta ficha», «Cambiar el nombre».
@@ -159,5 +187,251 @@ export function SmallButton({
     >
       {label}
     </button>
+  );
+}
+
+/**
+ * **The head of every right-hand panel** (sprint 38 día 5, David's P8: «el rediseño entra por las
+ * piezas compartidas»). The title at one size for all eight — they were 20, 15 and 13 px, three
+ * sizes for one role — a sentence of help under it when the panel has one, and the cross. The `h2`
+ * keeps the id the panel's landmark is labelled by, so no landmark, role or name changes.
+ */
+export function PanelHeader({
+  id,
+  title,
+  help,
+  close,
+}: {
+  id: string;
+  title: ReactNode;
+  help?: ReactNode;
+  close?: { label: string; onClick: () => void };
+}) {
+  return (
+    <div className="flex items-start justify-between gap-3">
+      <div className="flex min-w-0 flex-col gap-1">
+        <h2
+          id={id}
+          className="m-0 text-[20px] font-bold leading-tight tracking-[-0.02em] text-ui-ink"
+        >
+          {title}
+        </h2>
+        {help === undefined ? null : <Note>{help}</Note>}
+      </div>
+      {close ? <PanelClose onClick={close.onClick} label={close.label} /> : null}
+    </div>
+  );
+}
+
+/**
+ * **A group of a panel**: a `fieldset` and its legend in small capitals, ruled off from what is above
+ * it by a hairline (sprint 38 día 5). The legend floats so the rule runs whole above it — a legend in
+ * a bordered fieldset otherwise sits *on* the border and cuts it — which is the trick «Menú» already
+ * used for its boxed blocks. The legend's words are the document's, unchanged: small capitals are
+ * drawn by the stylesheet, so the group's accessible name is what it always was.
+ */
+export function PanelSection({
+  legend,
+  children,
+  className = "",
+  ...rest
+}: { legend: ReactNode } & ComponentProps<"fieldset">) {
+  return (
+    <fieldset
+      {...rest}
+      className={`m-0 flex min-w-0 flex-col gap-[9px] border-0 border-t border-solid border-ui-border p-0 pt-4 ${className}`}
+    >
+      <legend className="float-left mb-1 w-full p-0 text-[11px] font-bold uppercase tracking-[0.09em] text-ui-muted">
+        {legend}
+      </legend>
+      {children}
+    </fieldset>
+  );
+}
+
+/**
+ * **A panel's note**: the sentence beside a control that says what it does or why it cannot (sprint
+ * 38 día 5). One size and one grey, written by hand in four panels before, and one amber for the
+ * notes that warn, which `--ui-warn-deep` now holds instead of a hex in each file.
+ */
+export function Note({
+  tone = "muted",
+  as = "p",
+  className = "",
+  children,
+  ...rest
+}: { tone?: "muted" | "warn"; as?: "p" | "span" } & ComponentProps<"p">) {
+  const colour = tone === "warn" ? "text-ui-warn-deep" : "text-ui-muted";
+  // A `span` for the second line of a label — a checkbox's «Se verá como…» — where a paragraph would
+  // be invalid HTML; drawn as a block so it sits under the first line exactly as a paragraph would.
+  if (as === "span") {
+    return (
+      <span {...rest} className={`block text-[12px] leading-snug ${colour} ${className}`}>
+        {children}
+      </span>
+    );
+  }
+  return (
+    <p {...rest} className={`m-0 text-[12px] leading-snug ${colour} ${className}`}>
+      {children}
+    </p>
+  );
+}
+
+/**
+ * What previews a choice before it is pressed: shown while the pointer is over an option, put back
+ * when it leaves, forgotten when it is pressed (sprint 35 día 7 for the header's bar). Generic here
+ * since the segments moved out of «Menú» (sprint 38 día 5): the header's previewer is one, and the
+ * palette's will be another.
+ */
+export interface Previewer<P> {
+  show(preview: P): void;
+  end(mode: "restore" | "keep"): void;
+}
+
+/**
+ * A closed choice as a row of segments. **With `preview` and a `previewer`, each option under the
+ * mouse shows itself on the canvas's bar before it is pressed** (David's adjustment 3 on sprint 35):
+ * the attribute it is drawn by, written as chrome and put back on leaving; a press forgets the
+ * preview and writes the document. Only for a mouse — a touch has no hover, and a press there is the
+ * choice — and never from the keyboard, where the arrows already choose.
+ */
+export function Segments<T extends string, P = never>({
+  name,
+  label,
+  options,
+  value,
+  labelOf,
+  onSelect,
+  preview,
+  previewer,
+}: {
+  name: string;
+  label: string;
+  options: readonly T[];
+  value: T;
+  labelOf: (option: T) => string;
+  onSelect: (option: T) => void;
+  preview?: (option: T) => P | null;
+  previewer?: Previewer<P> | undefined;
+}) {
+  const grid = useRef<HTMLDivElement>(null);
+  const mark = useRef<HTMLSpanElement>(null);
+  /*
+   * **A mark slides under the chosen option** (sprint 35 día 7), as the page tabs' indicator does:
+   * one bar for the group, placed under the checked segment's box and moved on `ui-slide` when the
+   * choice changes, so the eye follows the choice from where it was. Written on the node rather than
+   * through state, so the first placing happens before the first paint and nothing travels in from
+   * the corner; a resize of the group — the sheet on a phone — places it again. Under reduced motion
+   * the global block flattens `ui-slide`, and the mark is simply there.
+   */
+  useLayoutEffect(() => {
+    const host = grid.current;
+    const bar = mark.current;
+    if (!host || !bar) return;
+    const place = () => {
+      // The segment of the option chosen, by its place among the options: what the mark follows.
+      const chosen = host.querySelectorAll<HTMLElement>(":scope > label")[options.indexOf(value)];
+      if (!chosen) {
+        bar.style.opacity = "0";
+        return;
+      }
+      bar.style.opacity = "1";
+      // Read off the boxes and not `offsetLeft`, which rounds to whole pixels: three columns of a
+      // 300-pixel group are not whole, and the mark sat most of a pixel off its segment.
+      const box = chosen.getBoundingClientRect();
+      const from = host.getBoundingClientRect();
+      bar.style.width = `${box.width - 16}px`;
+      bar.style.transform = `translate(${box.left - from.left + 8}px, ${box.bottom - from.top - 4}px)`;
+    };
+    place();
+    const resized = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(place);
+    resized?.observe(host);
+    return () => resized?.disconnect();
+  }, [value, options]);
+  return (
+    <div role="radiogroup" aria-label={label}>
+      <p className="m-0 mb-1 text-[12px] font-semibold text-ui-ink" aria-hidden="true">
+        {label}
+      </p>
+      <div
+        ref={grid}
+        className={`relative grid gap-1.5 ${options.length === 3 ? "grid-cols-3" : "grid-cols-2"}`}
+      >
+        <span
+          ref={mark}
+          data-testid="segment-mark"
+          aria-hidden="true"
+          className="ui-slide pointer-events-none absolute top-0 left-0 z-[1] h-[2px] rounded-full bg-ui-brand"
+          style={{ opacity: 0 }}
+        />
+        {options.map((option) => (
+          <Segment
+            key={option}
+            name={name}
+            label={labelOf(option)}
+            checked={value === option}
+            onSelect={() => {
+              previewer?.end("keep");
+              onSelect(option);
+            }}
+            {...(previewer && preview
+              ? {
+                  onHover: (on: boolean) => {
+                    const shown = on ? preview(option) : null;
+                    if (shown) previewer.show(shown);
+                    else previewer.end("restore");
+                  },
+                }
+              : {})}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** One option of a short row of radios, drawn as a segment. */
+export function Segment({
+  name,
+  label,
+  checked,
+  onSelect,
+  onHover,
+}: {
+  name: string;
+  label: string;
+  checked: boolean;
+  onSelect: () => void;
+  onHover?: (on: boolean) => void;
+}) {
+  return (
+    <label
+      {...(onHover
+        ? {
+            onPointerEnter: (event: PointerEvent) => {
+              if (event.pointerType === "mouse") onHover(true);
+            },
+            onPointerLeave: (event: PointerEvent) => {
+              if (event.pointerType === "mouse") onHover(false);
+            },
+          }
+        : {})}
+      className={`relative flex min-h-9 cursor-pointer items-center justify-center px-1.5 py-1 text-center text-[12px] leading-tight ${
+        checked
+          ? `${panelChoiceSelected} font-semibold text-ui-brand-deep`
+          : `${panelChoice} text-ui-ink`
+      }`}
+    >
+      {/* Visually hidden rather than `display: none`, so the arrows still move along the group. */}
+      <input
+        type="radio"
+        name={name}
+        checked={checked}
+        onChange={onSelect}
+        className="absolute h-px w-px opacity-0"
+      />
+      {label}
+    </label>
   );
 }

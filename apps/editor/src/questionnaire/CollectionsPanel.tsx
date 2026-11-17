@@ -14,7 +14,7 @@ import {
   usesOfCollection,
 } from "@retorika/schema";
 import { useEffect, useId, useRef, useState } from "react";
-import { PANEL_WIDTH, panelCard, panelRow, SmallButton } from "../editor/panelKit.tsx";
+import { PanelHeader, panelFrame, panelRow, SmallButton } from "../editor/panelKit.tsx";
 import { itemSlotLabel } from "../editor/sectionFields.ts";
 import es from "../locales/es.json" with { type: "json" };
 
@@ -160,10 +160,10 @@ export function CollectionsPanel({
   }
 
   return (
-    <section aria-labelledby={headingId} className={`${PANEL_WIDTH} gap-4 p-5 ${panelCard}`}>
-      <h2 id={headingId} className="text-[13px] font-bold text-ui-ink">
-        {es["editor.collections.title"]}
-      </h2>
+    <section aria-labelledby={headingId} className={panelFrame}>
+      {/* No cross here: «Listas» keeps its «Cerrar» at the foot of the list, a decision of its own
+          (`panelKit.tsx`, `PanelClose`) that the shared header leaves where it is. */}
+      <PanelHeader id={headingId} title={es["editor.collections.title"]} />
 
       {doc.collections.length === 0 ? (
         <p className="text-xs leading-normal text-ui-muted">{es["editor.collections.none"]}</p>

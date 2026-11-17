@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { CHROME_SCALE } from "../src/editor/chromeScale.ts";
@@ -265,6 +265,11 @@ describe("the canvas's copy of the scale", () => {
     // The ripple's radius (sprint 36 día 6), animated from 0 to 240 px on the press: a frame of an
     // animation, not a value of the scale. The ripple is the chrome's buttons', not the preview's.
     "ripple-r",
+    // The panels' warning and its chip (sprint 38 día 5): words in the chrome beside the canvas.
+    // The frame's own amber (the hint inside the preview, `Editor.tsx`'s canvas sheet) is still
+    // written there as a hex; transcribing it is the day it is touched, and this line goes then.
+    "warn-deep",
+    "warn-surface",
     // `stagger` and `blur` were excused here until sprint 36 día 7: the preview had no queue to
     // pace and no popup arriving from a blur. The section's verbs are the first, the popups the
     // second, and both are carried now — in the pairs above.
@@ -280,6 +285,49 @@ describe("the canvas's copy of the scale", () => {
     // And the exceptions have to be real: a stale name here would quietly widen the hole.
     for (const name of EDITOR_ONLY) {
       expect(declared, `${name} is excused but not declared`).toContain(name);
+    }
+  });
+});
+
+/**
+ * **The eight right-hand panels take their head, their notes and their frame from the kit** (sprint 38
+ * día 5, David's P8: «el rediseño entra por las piezas compartidas, no panel a panel»). Each panel
+ * wrote its own: titles at 20, 15 and 13 px, the note's class by hand in four files, the amber as a
+ * hex in two, «Estilo»'s padding four pixels off the rest. One place now; this keeps it one.
+ */
+describe("the panels' shared pieces", () => {
+  const QUESTIONNAIRE = join(EDITOR, "questionnaire");
+  const panels = readdirSync(QUESTIONNAIRE)
+    .filter((file) => file.endsWith("Panel.tsx"))
+    .map((file) => ({ file, source: readFileSync(join(QUESTIONNAIRE, file), "utf8") }));
+
+  it("finds the eight", () => {
+    expect(panels.map((panel) => panel.file).sort()).toEqual([
+      "CollectionsPanel.tsx",
+      "DesignPanel.tsx",
+      "FieldsPanel.tsx",
+      "MenuPanel.tsx",
+      "PagesPanel.tsx",
+      "PhotosPanel.tsx",
+      "SharePanel.tsx",
+      "StylePanel.tsx",
+    ]);
+  });
+
+  it("each draws its head with PanelHeader and its frame with panelFrame, never its own", () => {
+    for (const { file, source } of panels) {
+      expect(source, `${file} declares its own <h2>`).not.toMatch(/<h2[\s>]/);
+      expect(source, `${file} has no PanelHeader`).toMatch(/<PanelHeader\b/);
+      expect(source, `${file} has no panelFrame`).toMatch(/className=\{panelFrame\}/);
+    }
+  });
+
+  it("each writes its notes with Note, and its warning from the token", () => {
+    for (const { file, source } of panels) {
+      expect(source, `${file} writes a note's class by hand`).not.toMatch(
+        /text-\[12px\] leading-snug text-ui-muted/,
+      );
+      expect(source, `${file} writes the amber as a hex`).not.toMatch(/#92400E|#FEF3C7/i);
     }
   });
 });

@@ -3,7 +3,7 @@
 import { type Collection, MAX_PAGES, type RetorikaDocument } from "@retorika/schema";
 import { useEffect, useId, useRef, useState } from "react";
 import { type MenuState, menuNoteText, pagesLeftText } from "../editor/menuState.ts";
-import { PANEL_WIDTH, PanelClose, panelCard, panelRow, SmallButton } from "../editor/panelKit.tsx";
+import { Note, PanelHeader, panelFrame, panelRow, SmallButton } from "../editor/panelKit.tsx";
 import es from "../locales/es.json" with { type: "json" };
 
 /**
@@ -122,13 +122,12 @@ export function PagesPanel({
   }
 
   return (
-    <section aria-labelledby={headingId} className={`${PANEL_WIDTH} gap-4 p-5 ${panelCard}`}>
-      <div className="flex items-start justify-between gap-3">
-        <h2 id={headingId} className="text-[13px] font-bold text-ui-ink">
-          {es["editor.pages.title"]}
-        </h2>
-        <PanelClose onClick={onClose} label={es["editor.pages.close"]} />
-      </div>
+    <section aria-labelledby={headingId} className={panelFrame}>
+      <PanelHeader
+        id={headingId}
+        title={es["editor.pages.title"]}
+        close={{ label: es["editor.pages.close"], onClick: onClose }}
+      />
 
       <ul className="flex flex-col gap-1.5">
         {doc.pages.map((page, index) => {
@@ -266,13 +265,13 @@ export function PagesPanel({
                       the same thing the delete-a-section toast does with anchors (sprint 3 day 2).
                       Afterwards those links are merely dead, and `/api/download` would say so only
                       once somebody pressed Descargar. */}
-                  <p className="text-[12px] leading-snug text-ui-muted">
+                  <Note>
                     {pointing > 0
                       ? pointing === 1
                         ? es["editor.pages.deleteWithLink"]
                         : es["editor.pages.deleteWithLinks"].replace("{n}", String(pointing))
                       : es["editor.pages.deleteConfirm"]}
-                  </p>
+                  </Note>
                   <div className="mt-2 flex gap-1.5">
                     <SmallButton
                       label={es["editor.pages.deleteYes"]}
@@ -297,36 +296,34 @@ export function PagesPanel({
       {/* **What the menu has left, and whether the site shows one at all** (ADR 0043 §5). It sits
           right under the rows whose switches change it, and it is the same sentence «Campos» shows
           under the switch for a section — one object answers both, so they cannot disagree. */}
-      <p className="text-[12px] leading-snug text-ui-muted">{pagesLeftText(menu)}</p>
-      {menuNote === undefined ? null : (
-        <p className="text-[12px] leading-snug text-ui-muted">{menuNote}</p>
-      )}
+      <Note>{pagesLeftText(menu)}</Note>
+      {menuNote === undefined ? null : <Note>{menuNote}</Note>}
 
       {/* **Two counts, never one under the other's label** (David, approving sprint 19). The pages
           the document stores are what the cap of five limits; the files a download writes can be
           more, because a page drawn per entry is one stored page and N files (ADR 0040). */}
-      <p className="text-[12px] leading-snug text-ui-muted">
+      <Note>
         {es["editor.pages.stored"]
           .replace("{n}", String(doc.pages.length))
           .replace("{max}", String(MAX_PAGES))}
-      </p>
+      </Note>
       {doc.pages
         .map((page) => perEntryOf(doc, page))
         .filter((perEntry) => perEntry !== undefined)
         .map((perEntry) => (
-          <p key={perEntry.collection.id} className="text-[12px] leading-snug text-ui-muted">
+          <Note key={perEntry.collection.id}>
             {es["editor.pages.downloaded"]
               .replace("{n}", String(filesWritten(doc)))
               .replace("{list}", perEntry.collection.name)}
-          </p>
+          </Note>
         ))}
       {/* Said rather than shown as a disabled control: there is nothing here to disable, because
           pages are made in the canvas. The number is the download route's and the schema's. */}
-      <p className="text-[12px] leading-snug text-ui-muted">
+      <Note>
         {full
           ? es["editor.pages.full"].replace("{n}", String(MAX_PAGES))
           : es["editor.pages.howToAdd"]}
-      </p>
+      </Note>
     </section>
   );
 }
