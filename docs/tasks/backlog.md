@@ -70,9 +70,17 @@ The record is `docs/design/REVIEW.md`, sprint 37.
    box a scroll container counts as overflow — so on a narrow strip the slide can flash the tabs'
    scrollbar for a frame or two. The same first-placing fix ends both; clipping the mark would hide the
    symptom only. The walk now waits for the mark to sit under its tab.
-7. **From sprints 36, 35 and 34, untouched**, under their own reviews below. The editor, the radial
+8. **Found on sprint 38 día 5: «Fotos» breaks each photograph's name word by word.** Seen in the
+   captures of the eight panels (`docs/design/review/2026-11-los-paneles/fotos-*`), before and after the
+   day alike: «Foto / 1 de / Fotos / de / trabajos», five lines for one label. The row gives the label
+   what is left after the thumbnail, the «Foto de ejemplo» chip and «Cambiar», which is the width of
+   its longest word. The fix is the row's layout — the chip and «Cambiar» stacked at the right, or on a
+   second line — not a shared piece, so it stayed out of a day whose rule was «por las piezas, no panel
+   a panel» (David's P8). Moving the chip into the row's button would change the button's name, which
+   the walks find it by.
+9. **From sprints 36, 35 and 34, untouched**, under their own reviews below. The editor, the radial
    rail included, has still not been seen outside Chromium.
-8. **Sprint 38 unplanned.**
+10. **Sprint 38 unplanned.**
 
 The review before that: 13 November 2026, **closing sprint 36 — «el editor se encadena, y la ayuda tiene su
 línea».** David asked for an editor whose animations and transitions look of their time, taking
