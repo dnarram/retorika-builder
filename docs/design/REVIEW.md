@@ -10233,3 +10233,87 @@ localizaciones por rol y nombre —«Neutra» exacta, «De tu logo», `.check()`
 | `pnpm test:a11y` | 2 378 en 212 s |
 | `pnpm e2e`, con `caffeinate` | la primera entera encontró la guarda de las filas; la segunda, **357 en verde y 1 omitida, en 1 679 s** |
 
+### Día 7 — la paleta es del dueño (PR de `feat/la-paleta-es-del-dueno`)
+
+**Tu P6, «lo inválido no nace», con sus dos condiciones.** Cada color de la paleta elegida con el que
+pinta la página —el relleno cuando lo hay, el principal, el secundario, el gris, el fondo y el texto—
+gana «Cambiar», que abre su campo dentro de la ficha:
+
+- **Dos deslizadores, claridad y matiz**, en OKLCH, que solo se posan en pasos que mantienen a 4,5 cada
+  par del que el color forma parte. **Lo que no alcanzan está rayado en la pista antes de que llegue la
+  mano**, y encima de cada tramo una franja transparente lleva el `title` —«Por aquí deja de leerse sobre
+  el fondo» cuando el color es la letra, su espejo («Por aquí el texto deja de leerse encima») cuando es
+  el suelo— y se queda la pulsación: un clic ahí no mueve nada. Un arrastre que entra en lo rayado se queda
+  en el último paso alcanzable. El pulgar y el anillo de foco son los de la plataforma.
+- **Un arrastre es un paso**: mientras la mano está en el deslizador el lienzo enseña cada paso como cromo
+  (el previsualizador del día 6) y el documento no se mueve; al soltar, una escritura. **Una tanda de
+  flechas es un paso**: cada pulsación escribe, para que el lienzo enseñe dónde está el teclado, y la
+  tanda es una causa enmendable de la historia —la forma del selector de letra, con su propia causa— que
+  se cierra a los 300 ms de quietud o al salir del deslizador. Inicio y Fin van a los extremos legibles;
+  una flecha en el último paso legible no cambia nada.
+- **La rueda y el código se revisan en su `change`**: se escriben si se leen, y si no, no se escribe nada
+  y el campo dice el par y la cifra («Sobre el fondo: 1,3; necesita 4,5»), con «Ajustar», que escribe la
+  claridad legible más cercana al color pedido.
+- **El texto de los botones no se edita**: se recalcula —negro, blanco o el de la paleta, el que se lea
+  sobre el relleno— y la ficha lo dice.
+- **Retocar una predefinida la deja siendo ella**: el origen se queda, la tarjeta se llama «Vino tinto,
+  personalizada» y ofrece «Volver a la original». **«Tu paleta» nace de un color**: el de marca, por la
+  rueda o el código, y `derivePalette` hace los otros cinco con todos los pares probados.
+
+| Token | Sobre la pista | Sobre un panel |
+|---|---|---|
+| `--ui-unreachable` `#64748B` | 4,01 | 4,76 |
+
+**Medido en el navegador antes de escribir la caminata**, sobre el principal de «Vino tinto»: el arrastre
+pintó cinco colores sin mover el serial de edición, escribió uno al soltar y se paró en la claridad 56; Fin
+llegó a 57 sobre el color nuevo y la flecha no pasó de ahí; el rosa `#FFD1D1` en la rueda quedó en «Sobre el
+fondo: 1,3; necesita 4,5».
+
+**Lo que las caminatas encontraron, y se arregló:**
+
+- **El nombre de la tarjeta, calculado de su contenido, salía «Vino tinto , personalizada»**: Chromium pone
+  un espacio por cada bloque apilado. La tarjeta lleva su nombre escrito, que es la etiqueta que calcula el
+  ADR 0075.
+- **Una tarjeta que llega bajo un ratón quieto se previsualizaba.** Al pulsar «Volver a la original» el
+  botón desaparece, las tarjetas suben y «Oliva y arena» queda bajo el puntero: el navegador lo dice con un
+  `pointerenter` sin movimiento, y la web se pintaba de oliva tras pulsar un botón que no es una tarjeta.
+  Algo que se mueve sin que la mano lo pida. La previsualización empieza ahora con un movimiento.
+
+**Un desvío del plan, dicho.** El plan ponía la zona rayada «bajo un `input` de fondo transparente». Pintada
+debajo se ve, pero un `title` debajo del `input` no lo encuentra nunca el ratón. Lo rayado va debajo y una
+franja transparente con el `title` va encima de cada tramo: es además la que impide que un clic en lo rayado
+mueva el deslizador.
+
+**Saboteos, cada uno deshecho por script:**
+
+| Saboteo | Resultado |
+|---|---|
+| El arrastre escribe en cada `input` y no al soltar | «el deslizador no llega» **roja** |
+| `legibleSteps` olvida la barra de cristal | `colourField.test` **roja** (13: la tinta de cada paleta) |
+| La rueda y el código se escriben sin revisar | «la rueda y el código se revisan» **roja** |
+| La previsualización empieza al entrar y no al moverse | «el deslizador no llega» **roja** |
+| Cada flecha es un paso | `documentHistory.test` **roja** |
+
+**ADR 0077** (`proposed`): la paleta es del dueño, propia y retocada, tras la misma aritmética. Notas en la
+entrada de esta revisión sobre el «Avanzado» de la maqueta 13 —el selector libre sigue rechazado; este
+tiene red— y en el ADR 0026, que no cambia: una paleta no es una excepción. El paquete de firmas tiene
+**35 filas**.
+
+**Cuatro capturas** en [`review/2026-11-el-campo-de-color/`](review/2026-11-el-campo-de-color/): el campo del
+principal de «Vino tinto» [abierto](review/2026-11-el-campo-de-color/campo.png) con lo rayado a la derecha del
+pulgar, [a media mano](review/2026-11-el-campo-de-color/arrastre.png) con el lienzo siguiéndola, la rueda
+[rechazando el rosa](review/2026-11-el-campo-de-color/rueda.png) con el par y «Ajustar», y
+[«Tu paleta» desde un amarillo](review/2026-11-el-campo-de-color/tu-paleta.png): el amarillo en los botones, su
+hermano ocre en los titulares.
+
+**Comprobado en local**, cada suite sola:
+
+| Suite | Resultado |
+|---|---|
+| `pnpm typecheck` | limpio |
+| `pnpm lint` | 0 errores, 82 avisos (los de `main`) |
+| `pnpm test` | **4 376** en verde (4 224 tras el día 6; el barrido del campo son 130) |
+| `pnpm test:invariants` / `pnpm test:golden` | 27 / 28; ningún golden se movió |
+| `pnpm test:a11y` | 2 378 en 214 s |
+| `pnpm e2e`, con `caffeinate` | **361 en verde y 1 omitida, en 1 702 s** |
+
