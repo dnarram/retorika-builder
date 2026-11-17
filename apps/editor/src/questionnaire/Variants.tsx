@@ -1818,6 +1818,29 @@ export function Variants({
               palette: { kind: "logo" },
             });
           }}
+          // A colour moved in «Estilo»'s field (sprint 38 día 7, ADR 0077), with the card's origin: a
+          // predefined palette moved stays that palette, «personalizada», and «Tu paleta» is `own`.
+          // The six colours and the fill pair go over the theme's own, fonts and measures untouched.
+          onSetColours={(colors, origin) => {
+            dismissToast();
+            dispatch({
+              type: "setTheme",
+              variant: openIndex,
+              theme: withLogoColours(history.present.document.theme, colors),
+              palette: origin,
+            });
+          }}
+          onAdjustColours={(colors, origin, field) => {
+            dismissToast();
+            dispatch({
+              type: "adjustColour",
+              variant: openIndex,
+              field,
+              theme: withLogoColours(history.present.document.theme, colors),
+              palette: origin,
+            });
+          }}
+          onSettleColours={() => dispatch({ type: "settleColour", variant: openIndex })}
           logoOfferDismissed={logoOfferDismissed}
           onDismissLogoOffer={dismissLogoOffer}
           coloursApplied={coloursApplied}

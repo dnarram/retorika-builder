@@ -65,6 +65,8 @@ const DANGER_DEEP = token("danger-deep");
 const WARN_DEEP = token("warn-deep");
 const WARN_SURFACE = token("warn-surface");
 const BORDER_STRONG = token("border-strong");
+const BORDER = token("border");
+const UNREACHABLE = token("unreachable");
 
 /** WCAG 1.4.11: a boundary or a graphic that carries meaning. */
 const UI_COMPONENT = 3;
@@ -144,6 +146,16 @@ describe("the chrome's text", () => {
     expect(contrastRatio(BRAND, BRAND_SURFACE)).toBeLessThan(AA_NORMAL_TEXT);
     // It is fine for large text and for a graphic, which is all it is ever used for.
     expect(contrastRatio(BRAND, BRAND_SURFACE)).toBeGreaterThanOrEqual(UI_COMPONENT);
+  });
+
+  /**
+   * **The stripes a colour slider cannot reach** (sprint 38 día 7, ADR 0077): a graphic that has to
+   * be seen, so a component's 3:1 — against the track's grey it is striped over, and against the panel
+   * at the stretch's edges.
+   */
+  it("the unreachable stripes show against the track and against the panel", () => {
+    expect(contrastRatio(UNREACHABLE, BORDER)).toBeGreaterThanOrEqual(UI_COMPONENT);
+    expect(contrastRatio(UNREACHABLE, SURFACE)).toBeGreaterThanOrEqual(UI_COMPONENT);
   });
 
   it("brand blue on a white panel is readable, which is where it is allowed", () => {
