@@ -10146,3 +10146,82 @@ igual byte a byte en las dos capturas; ya estaba en el backlog (punto 6).
 | `pnpm test:a11y` | 2 378 en 212 s |
 | `pnpm e2e`, con `caffeinate` | **354 en verde y 1 omitida, en 1 668 s**, sin tocar una caminata |
 
+### Día 6 — las paletas son tarjetas (PR de `feat/las-paletas-son-tarjetas`)
+
+**El modelo del panel «Estilo», con tu condición de P7.** Las paletas dejan de ser filas de 56 px con un
+radio nativo y pasan a ser **tarjetas en dos columnas**: la franja de los cinco colores con los que pinta
+la página —el relleno primero cuando la paleta lo tiene, que es el color exacto de la marca— y el
+nombre. Dieciséis con logo (sus dos primero), catorce sin él, «Tu paleta» siempre la última. La rejilla
+es un `radiogroup` de **botones**, no de `<input type="radio">`: en un grupo nativo cada flecha elige, y
+aquí elegir es un paso de historia. Las flechas y Inicio/Fin mueven el foco (un solo tabulador para el
+grupo, en la tarjeta elegida); Intro o Espacio eligen y abren debajo de **su fila** las fichas de la
+elegida —punto, papel y hex, en lectura; «Cambiar» llega el día 7—; Intro sobre la elegida las pliega.
+«Tu paleta» sin colores abre su única ficha, «Color de marca — Elige un color», y no elige nada. La
+tarjeta elegida se calcula del tema y de su origen (`paletteLabel`, ADR 0075): «{nombre}, personalizada»
+y «Volver a la original» en cuanto un color se mueva, cosa que hoy solo puede hacer un documento editado
+a mano. «Se parece a «{nombre}»» va dentro de la tarjeta «De tu logo» como su descripción, no como su
+nombre: `getByRole("radio", { name: "De tu logo" })` sigue encontrándola.
+
+**Pasar pinta y no escribe.** `themePreviewer`, gemelo del de la cabecera del 35: una tarjeta bajo el
+ratón escribe las variables de color **en línea en la raíz del iframe**, como cromo —nunca un parche,
+nunca historia—; al salir se borran; al pulsar se quedan para que el parche las quite; y **todo parche las
+quita** (`patchNow`, porque `patchCanvas` nunca toca la raíz). Solo el ratón: un dedo que toca una
+tarjeta la pulsa, y las flechas mueven el foco. Dos cosas que solo se vieron midiendo:
+
+- **Ocho variables, no seis, y siempre escritas.** La web del logo amarillo declara `--color-fill` en su
+  propio bloque `:root`; una previsualización de «Vino tinto» que se limitara a *no escribir* el relleno
+  dejaba los botones amarillos bajo titulares vino (la primera captura lo enseñó). El previsualizador
+  escribe el par siempre, resuelto como lo resuelve el renderer: `fill ?? primary`, `onFill ?? surface`.
+- **Pulsar la tarjeta que la web ya lleva no trae parche**: su `setTheme` no es un cambio, y las variables
+  se habrían quedado en la raíz. Esa pulsación repone en vez de guardar. La caminata lo asevera leyendo
+  la variable en línea.
+
+**Cuatro capturas** en [`review/2026-11-las-tarjetas/`](review/2026-11-las-tarjetas/): la web del logo
+amarillo con el panel [en reposo](review/2026-11-las-tarjetas/rest.png), con «Vino tinto»
+[bajo el ratón](review/2026-11-las-tarjetas/hover.png) (la web ya vino, el documento aún amarillo, «De tu
+logo» aún marcada), [elegida](review/2026-11-las-tarjetas/chosen.png) con sus fichas bajo su fila, y
+[«Tu paleta» abierta](review/2026-11-las-tarjetas/own.png) con su ficha vacía.
+
+**Lo que las caminatas enseñaron.**
+
+- **Un texto en escritura no parchea por tecla**: el serial de edición se queda quieto mientras se
+  escribe y se mueve al confirmar con Intro. La caminata «un parche la borra» escribe y confirma con la
+  mano todavía sobre «Azul confianza», y el lienzo enseña el vino del documento.
+- **Bajo «Reducir movimiento» el testigo no es la cuenta de animaciones en marcha**: había veintitrés, todas
+  a 0,01 ms (el aplanado global del presupuesto), «en marcha» el instante en que se leyeron. El testigo es
+  que ninguna dure más que eso.
+- **El `style` de la raíz del lienzo no está vacío**: lleva el zoom y el desbordamiento. El testigo lee
+  la variable, no el atributo.
+
+**Un desvío del plan, medido por una guarda del 36.** El plan decía que las fichas llegarían con
+`data-ui-rows`. La guarda «un panel llega fila a fila» lo rechazó en la suite completa: con «Estilo»
+abierto y una tarjeta ya elegida, sus cinco filas se intercalaban con las del panel (nueve fundidos donde
+la guarda lee cuatro). La propia hoja del 36 día 5 lo tenía escrito: la cola de filas es del panel al
+abrirse, y un bloque que aparece porque se pulsó algo no espera a nada. Las fichas llegan de una vez.
+
+**Una línea de caminata movida, dicha.** La del día 4 leía los nombres de las paletas por su `label`;
+hoy son botones, y lee sus palabras. Es la única línea anterior que el cambio de modelo tocó; las
+localizaciones por rol y nombre —«Neutra» exacta, «De tu logo», `.check()` sobre los radios— no cambian.
+
+**Saboteos, cada uno deshecho por script:**
+
+| Saboteo | Resultado |
+|---|---|
+| Las flechas eligen, como un radio nativo | la caminata del teclado **roja** |
+| El parche no borra la previsualización | «un parche la borra» **roja** |
+| Pulsar la tarjeta que la web lleva guarda la previsualización | la variable en línea **roja** |
+| La franja pinta el primario y no el relleno | `paletteCards.test` **roja** |
+| El origen pierde contra los valores | `paletteCards.test` **roja** |
+| Las fichas se abren bajo la tarjeta y no bajo su fila | `paletteCards.test` **roja** |
+
+**Comprobado en local**, cada suite sola:
+
+| Suite | Resultado |
+|---|---|
+| `pnpm typecheck` | limpio |
+| `pnpm lint` | 0 errores, 82 avisos (los de `main`) |
+| `pnpm test` | **4 224** en verde (4 211 tras el día 5) |
+| `pnpm test:invariants` / `pnpm test:golden` | 27 / 28; ningún golden se movió |
+| `pnpm test:a11y` | 2 378 en 212 s |
+| `pnpm e2e`, con `caffeinate` | la primera entera encontró la guarda de las filas; la segunda, **357 en verde y 1 omitida, en 1 679 s** |
+

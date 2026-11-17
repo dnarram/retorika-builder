@@ -31535,8 +31535,10 @@ describe("sprint 38 día 4 — ocho paletas más", () => {
       await intoTheCanvas(studio);
       await studio.getByRole("button", { name: "Estilo", exact: true }).click();
       const colours = studio.getByRole("group", { name: "COLORES" }).getByRole("radio");
+      // Cards since día 6, each a button whose words are the palette's name (a label until then —
+      // the one line of this walk the model change moved); «Tu paleta» closes the list.
       const names = await colours.evaluateAll((radios) =>
-        radios.map((radio) => radio.closest("label")?.textContent?.trim() ?? ""),
+        radios.map((radio) => radio.textContent?.trim() ?? ""),
       );
       expect(names).toEqual([
         "Neutra",
@@ -31552,6 +31554,7 @@ describe("sprint 38 día 4 — ocho paletas más", () => {
         "Coral y arena",
         "Océano",
         "Mostaza",
+        "Tu paleta",
       ]);
       await studio.getByRole("radio", { name: "Vino tinto" }).check();
       const frame = studio.frameLocator(PREVIEW).first();
@@ -31561,6 +31564,251 @@ describe("sprint 38 día 4 — ocho paletas más", () => {
       await last.scrollIntoViewIfNeeded();
       await last.check();
       await expect(frame.locator("h1").first()).toHaveCSS("color", "rgb(133, 77, 14)");
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
+});
+
+/**
+ * **Sprint 38 día 6 — las paletas son tarjetas** (David's P7, decision 10 of the sprint's plan). The
+ * colours of «Estilo» are a `radiogroup` of buttons, two to a row: the arrows **move** the focus and
+ * choose nothing (a native radio chooses on every arrow, which here is a step of history per key),
+ * Enter chooses a card and opens its swatches under its row, Enter on the chosen card folds them.
+ * And **a card under the mouse paints the canvas before it is pressed**, as chrome — the colour
+ * variables written inline on the canvas's root — never as a patch and never as a step: David's
+ * condition is that passing over three cards without pressing leaves the undo stack as it was.
+ */
+describe("sprint 38 día 6 — las paletas son tarjetas", () => {
+  const rgb = (hex: string) =>
+    `rgb(${[1, 3, 5].map((i) => Number.parseInt(hex.slice(i, i + 2), 16)).join(", ")})`;
+  const NEUTRAL = rgb("#156FE7");
+  const AZUL = rgb("#1D4ED8");
+  const TERRACOTTA = rgb("#9A3412");
+  const WINE = rgb("#7F1D1D");
+
+  const headline = (frame: FrameLocator) => frame.locator("h1").first();
+  /** The edit serial the canvas carries: it moves on every patch, and on nothing else. */
+  const serial = (frame: FrameLocator) =>
+    frame.locator("body").evaluate(() => document.documentElement.dataset["rbEdit"] ?? "0");
+  /** What the preview wrote on the canvas's root, if anything — read by the one variable, because
+   * the root's `style` also carries the canvas's own zoom and overscroll. */
+  const inlineVars = (frame: FrameLocator) =>
+    frame
+      .locator("body")
+      .evaluate(() => document.documentElement.style.getPropertyValue("--color-primary"));
+  const undo = (page: Page) => page.locator('button[aria-label="Deshacer"]');
+  const card = (page: Page, name: string) => page.getByRole("radio", { name, exact: true });
+  /** The mouse over a card's middle — where it is drawn, not `hover()`, which scrolls. */
+  const over = async (page: Page, name: string) => {
+    const box = await card(page, name).boundingBox();
+    if (!box) throw new Error(`no card «${name}» on screen`);
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  };
+  /** The mouse off the panel: the top bar's middle, over nothing that previews. */
+  const away = (page: Page) => page.mouse.move(640, 30);
+  const focusedWords = (page: Page) =>
+    page.evaluate(() => (document.activeElement as HTMLElement | null)?.textContent?.trim() ?? "");
+
+  it("es un radiogroup de botones: las flechas mueven el foco sin cambiar el tema, Intro elige y abre sus colores", async () => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+    const studio = await context.newPage();
+    try {
+      await intoTheCanvas(studio);
+      const frame = studio.frameLocator(PREVIEW).first();
+      await studio.getByRole("button", { name: "Estilo", exact: true }).click();
+      const grid = studio
+        .getByRole("group", { name: "COLORES" })
+        .getByRole("radiogroup", { name: "Paletas" });
+      const radios = grid.getByRole("radio");
+      await expect(radios).toHaveCount(14);
+      await expect(radios.first()).toHaveAccessibleName("Neutra");
+      await expect(radios.last()).toHaveAccessibleName("Tu paleta");
+      await expect(card(studio, "Neutra")).toBeChecked();
+      // One Tab stop for the group, on the chosen card.
+      expect(
+        await radios.evaluateAll((els) => els.map((el) => el.getAttribute("tabindex"))),
+      ).toEqual(["0", ...Array.from({ length: 13 }, () => "-1")]);
+      // The chosen card's swatches are open already, under its row — after «Azul confianza», its
+      // row-mate, and not after «Neutra» itself, which would push «Azul» down a row.
+      const swatches = studio.getByTestId("palette-swatches");
+      await expect(swatches).toHaveAccessibleName("Los colores de «Neutra»");
+      const order = () =>
+        grid.evaluate((el) =>
+          Array.from(el.children).map(
+            (child) => child.getAttribute("data-palette") ?? child.getAttribute("data-testid"),
+          ),
+        );
+      expect((await order()).slice(0, 3)).toEqual(["neutral", "classic-blue", "palette-swatches"]);
+
+      // Tab from the cross lands on the chosen card, and the arrows move from there.
+      await studio.getByRole("button", { name: "Cerrar el estilo" }).focus();
+      await studio.keyboard.press("Tab");
+      expect(await focusedWords(studio)).toBe("Neutra");
+      const before = await serial(frame);
+      await expect(undo(studio)).toBeDisabled();
+      await studio.keyboard.press("ArrowRight");
+      expect(await focusedWords(studio)).toBe("Azul confianza");
+      await studio.keyboard.press("ArrowRight");
+      expect(await focusedWords(studio)).toBe("Terracota cálida");
+      // Up and down move by a row, which is two cards.
+      await studio.keyboard.press("ArrowDown");
+      expect(await focusedWords(studio)).toBe("Pizarra oscura");
+      await studio.keyboard.press("ArrowUp");
+      expect(await focusedWords(studio)).toBe("Terracota cálida");
+      // Moving chose nothing: the tick, the canvas, the serial and the stack are as they were.
+      await expect(card(studio, "Neutra")).toBeChecked();
+      await expect(headline(frame)).toHaveCSS("color", NEUTRAL);
+      expect(await serial(frame)).toBe(before);
+      await expect(undo(studio)).toBeDisabled();
+
+      // Enter chooses: one step, the canvas repainted, the swatches under the new row.
+      await studio.keyboard.press("Enter");
+      await expect(card(studio, "Terracota cálida")).toBeChecked();
+      await expect(headline(frame)).toHaveCSS("color", TERRACOTTA);
+      await expect(undo(studio)).toBeEnabled();
+      await expect(swatches).toHaveAccessibleName("Los colores de «Terracota cálida»");
+      await expect(swatches.getByText("Principal")).toBeVisible();
+      await expect(swatches.getByText("#9A3412")).toBeVisible();
+      expect((await order()).slice(0, 5)).toEqual([
+        "neutral",
+        "classic-blue",
+        "warm-terracotta",
+        "forest-emerald",
+        "palette-swatches",
+      ]);
+      // Enter on the chosen card folds its swatches, and opens them again; neither is a step.
+      const after = await serial(frame);
+      await studio.keyboard.press("Enter");
+      await expect(swatches).toHaveCount(0);
+      await studio.keyboard.press("Enter");
+      await expect(swatches).toHaveAccessibleName("Los colores de «Terracota cálida»");
+      expect(await serial(frame)).toBe(after);
+
+      // Home and End; «Tu paleta» has no colours yet, so Space opens its one swatch and chooses nothing.
+      await studio.keyboard.press("Home");
+      expect(await focusedWords(studio)).toBe("Neutra");
+      await studio.keyboard.press("End");
+      expect(await focusedWords(studio)).toBe("Tu paleta");
+      await studio.keyboard.press("Space");
+      await expect(card(studio, "Tu paleta")).not.toBeChecked();
+      await expect(card(studio, "Terracota cálida")).toBeChecked();
+      await expect(swatches).toHaveAccessibleName("Los colores de «Tu paleta»");
+      await expect(swatches.getByText("Elige un color")).toBeVisible();
+      expect(await serial(frame)).toBe(after);
+
+      await axeSerious(studio, "«Estilo» with the cards and a card's swatches open");
+
+      // One press of «Deshacer» takes the whole palette back, as before the cards.
+      await undo(studio).click();
+      await expect(headline(frame)).toHaveCSS("color", NEUTRAL);
+      await expect(card(studio, "Neutra")).toBeChecked();
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
+
+  it("pasar pinta y no escribe: tres tarjetas dejan la pila igual, pulsar se queda, y un parche la borra", async () => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+    const studio = await context.newPage();
+    try {
+      await intoTheCanvas(studio);
+      const frame = studio.frameLocator(PREVIEW).first();
+      await waitForBankPhoto(frame);
+      await studio.getByRole("button", { name: "Estilo", exact: true }).click();
+      await expect(card(studio, "Neutra")).toBeChecked();
+      const before = await serial(frame);
+
+      // Three cards under the mouse: three colours on the canvas, nothing in the document.
+      for (const [name, colour] of [
+        ["Azul confianza", AZUL],
+        ["Terracota cálida", TERRACOTTA],
+        ["Vino tinto", WINE],
+      ] as const) {
+        await over(studio, name);
+        await expect(headline(frame)).toHaveCSS("color", colour);
+        await expect(card(studio, "Neutra")).toBeChecked();
+      }
+      expect(await serial(frame)).toBe(before);
+      await expect(undo(studio)).toBeDisabled();
+      // Leaving puts the canvas back, and leaves nothing on its root.
+      await away(studio);
+      await expect(headline(frame)).toHaveCSS("color", NEUTRAL);
+      expect(await inlineVars(frame)).toBe("");
+
+      // Pressing keeps it: the colour stays, one step opens, and the patch takes the variables.
+      await over(studio, "Vino tinto");
+      await studio.mouse.down();
+      await studio.mouse.up();
+      await expect(card(studio, "Vino tinto")).toBeChecked();
+      await expect(headline(frame)).toHaveCSS("color", WINE);
+      await expect(undo(studio)).toBeEnabled();
+      await expect.poll(() => serial(frame)).toBe(String(Number(before) + 1));
+      await expect.poll(() => inlineVars(frame)).toBe("");
+      const chosen = await serial(frame);
+
+      // Pressing the card the site already wears brings no patch — so that press puts the preview
+      // back itself, and leaves nothing on the root either.
+      await away(studio);
+      await over(studio, "Vino tinto");
+      await expect.poll(() => inlineVars(frame)).not.toBe("");
+      await studio.mouse.down();
+      await studio.mouse.up();
+      await expect.poll(() => inlineVars(frame)).toBe("");
+      await expect(headline(frame)).toHaveCSS("color", WINE);
+      expect(await serial(frame)).toBe(chosen);
+
+      // A patch while a card is previewing: the caret in the headline, the mouse back over «Azul»,
+      // a word typed and committed with Enter (a text in writing patches when it is committed, not
+      // on every key — measured here: the serial stands still while typing). The patch wins — the
+      // canvas shows the document's wine with the mouse still over the blue card.
+      await intoWriting(headline(frame));
+      await over(studio, "Azul confianza");
+      await expect(headline(frame)).toHaveCSS("color", AZUL);
+      await studio.keyboard.type(" x");
+      await studio.keyboard.press("Enter");
+      // The patch, by its serial, before what it should have taken.
+      await expect.poll(() => serial(frame)).not.toBe(chosen);
+      await expect.poll(() => inlineVars(frame)).toBe("");
+      await expect(headline(frame)).toHaveCSS("color", WINE);
+      await away(studio);
+      await expect(headline(frame)).toHaveCSS("color", WINE);
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
+
+  it("con «Reducir movimiento» las tarjetas llegan sin moverse, y una abierta pasa axe", async () => {
+    const context = await browser.newContext({
+      viewport: { width: 1280, height: 800 },
+      reducedMotion: "reduce",
+    });
+    const studio = await context.newPage();
+    try {
+      await intoTheCanvas(studio);
+      const frame = studio.frameLocator(PREVIEW).first();
+      await studio.getByRole("button", { name: "Estilo", exact: true }).click();
+      await over(studio, "Vino tinto");
+      await studio.mouse.down();
+      await studio.mouse.up();
+      await expect(card(studio, "Vino tinto")).toBeChecked();
+      await expect(headline(frame)).toHaveCSS("color", WINE);
+      const swatches = studio.getByTestId("palette-swatches");
+      await expect(swatches).toHaveAccessibleName("Los colores de «Vino tinto»");
+      await expect(swatches.getByRole("listitem")).toHaveCount(5);
+      // Nothing travels: every animation the page holds is flattened to the budget's 0.01 ms —
+      // «running» at that length is the instant it was read, which is why the count is not the
+      // witness (measured at 23 of them, all at 0.01).
+      const longest = await studio.evaluate(() =>
+        Math.max(
+          0,
+          ...document
+            .getAnimations()
+            .map((animation) => Number(animation.effect?.getTiming().duration ?? 0)),
+        ),
+      );
+      expect(longest).toBeLessThanOrEqual(0.01);
+      await axeSerious(studio, "«Estilo» with a card's swatches open, under reduced motion");
     } finally {
       await context.close();
     }

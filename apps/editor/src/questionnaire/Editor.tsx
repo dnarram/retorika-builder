@@ -244,6 +244,7 @@ import { keepsItsOwnUndo, shortcutFor } from "../editor/shortcuts.ts";
 import { reviewLogo } from "../editor/styleReview.ts";
 import { insertedTextFor, liveFrameOf, offsetFor, textFrameOf } from "../editor/textEdits.ts";
 import { hasAnyControl, toolbarFor } from "../editor/textToolbar.ts";
+import { themePreviewer } from "../editor/themePreviewer.ts";
 import { clickAction, textKeyAction } from "../editor/twoStates.ts";
 import { isPhoneViewport } from "../editor/viewport.ts";
 import es from "../locales/es.json" with { type: "json" };
@@ -1012,6 +1013,9 @@ export function Editor({
   /** The «Menú» panel's preview on the canvas's bar (sprint 35 día 5): one per canvas, reading the
    * live document at each call. */
   const headerPreview = useMemo(() => headerPreviewer(() => frame.current?.contentDocument), []);
+  // Its twin for «Estilo» (sprint 38 día 6): a palette under the mouse, as colour variables on the
+  // canvas's root. Cleared by every patch, below in `patchNow`.
+  const themePreview = useMemo(() => themePreviewer(() => frame.current?.contentDocument), []);
   /**
    * Which element the floating toolbar is on, across what every edit does to the canvas: a patch
    * and the redraw that reopens the bar (`settleToolbar`).
@@ -2155,6 +2159,9 @@ export function Editor({
       throw new Error(`the canvas refused a patch: ${report.reason}`);
     }
     const ms = Math.round((performance.now() - started) * 10) / 10;
+    // A patch wins over a palette previewed under the mouse (sprint 38 día 6): the document now says
+    // what the colours are, and `patchCanvas` never touches the root the preview wrote on.
+    themePreview.clear();
     // The chrome follows the page (día 3): after every patch, structural or not, because a text
     // that grew moved the gap below it and a section that arrived has no verbs yet.
     const redrawMs = redrawChrome(iframeDoc);
@@ -9704,6 +9711,8 @@ export function Editor({
             logoPalettes={logoPalettes}
             logoColours={logoColours}
             {...(onPickLogoPalette ? { onPickLogoPalette } : {})}
+            origin={doc.palette}
+            previewer={themePreview}
             onPickTypePair={onPickTypePair}
             onOpenChooser={setFontChooser}
             onPickScale={onPickScale}

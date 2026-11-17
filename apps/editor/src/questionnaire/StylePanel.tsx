@@ -1,20 +1,19 @@
 "use client";
 
 import type { LogoColours } from "@retorika/generator";
-import type { OwnFont, Theme } from "@retorika/schema";
+import type { OwnFont, PaletteOrigin, Theme } from "@retorika/schema";
 import {
   type FontKey,
-  identifyPalette,
   identifyScale,
   identifyTypePair,
   PALETTES,
   type PaletteColors,
-  RENDERED_COLOR_KEYS,
+  paletteLabel,
   SCALES,
   TYPE_PAIRS,
 } from "@retorika/tokens";
 import tokensEs from "@retorika/tokens/locales/es" with { type: "json" };
-import { useId } from "react";
+import { Fragment, type KeyboardEvent, type PointerEvent, useId, useRef, useState } from "react";
 import {
   familiesHelpText,
   familyRowFor,
@@ -28,6 +27,7 @@ import {
   Note,
   PanelHeader,
   PanelSection,
+  type Previewer,
   panelChoice,
   panelChoiceSelected,
   panelFrame,
@@ -37,11 +37,14 @@ import es from "../locales/es.json" with { type: "json" };
 /**
  * "El estilo de toda la web" — mockup 13, reconciled with what the code can honestly offer.
  *
- * Thirteen palettes since sprint 38 día 4 (and the logo's two before them when there is a logo), and
- * three typefaces, as radio groups. Real `<input type="radio">` inside the
- * `<label>`, visually hidden, which is the pattern the mockup itself draws and the one that gets
- * keyboard arrows, grouping and the announced choice for free. A `<div>` with an `onClick` would
- * have to reimplement all three, worse.
+ * Thirteen palettes since sprint 38 día 4 (the logo's two before them when there is a logo, and «Tu
+ * paleta» after them since día 6), and three typefaces. **The typefaces and the measures are radio
+ * groups**: real `<input type="radio">` inside the `<label>`, visually hidden, which is the pattern the
+ * mockup itself draws and the one that gets keyboard arrows, grouping and the announced choice for
+ * free. **The palettes are cards** (sprint 38 día 6, David's P7): a `radiogroup` of buttons, two to a
+ * row, each a stripe of the five colours the page paints with and the palette's name — because
+ * sixteen rows of 56 px are 900 px of panel, and because the arrows must **move** and not choose: a
+ * native radio chooses on every arrow, which here is a step of history per key. See `PaletteGrid`.
  *
  * **Three deliberate divergences from the mockup, each recorded in `docs/design/REVIEW.md`:**
  *
@@ -60,7 +63,7 @@ import es from "../locales/es.json" with { type: "json" };
  *   it shows is what the owner will get, fallback included.
  * - **Five swatches, but not the mockup's five.** Ours are the five colours the stylesheet
  *   actually paints with; `color.accent` is left out because no rule reads it and its contrast is
- *   asserted nowhere. See `RENDERED_COLOR_KEYS`.
+ *   asserted nowhere. See `stripeOf`.
  *
  * **A third group, `MEDIDAS`, appears only with the design tools on** (sprint 9). That is the
  * advanced dossier §4's own line: apagado the panel offers «Paletas y parejas tipográficas»,
@@ -80,11 +83,12 @@ import es from "../locales/es.json" with { type: "json" };
  * las cosas y las esquinas.
  *
  * Nothing here holds an **answer**. Which palette is ticked is *deduced* from the document's own
- * theme, because a theme keeps values and not identities — see `identifyPalette`. That is why the
- * tick cannot go stale: there is no second copy of the answer to drift. There is no `useState` in
- * this file at all since sprint 29 día 1: the gallery used to unfold here, and whether it was
- * unfolded was the panel's one piece of state. It is a dialog now (`FontChooserDialog`), opened by
- * the two rows below the pairs, and which half it is open for is `Editor.tsx`'s to remember.
+ * theme and its origin, because a theme keeps values and not identities — see `paletteCards` and
+ * `paletteLabel`. That is why the tick cannot go stale: there is no second copy of the answer to
+ * drift. The only state in this file is the cards' own (sprint 38 día 6): which card holds the
+ * keyboard's place, and whether the owner folded the chosen card's swatches — neither of which is
+ * about the site. The letter chooser is a dialog (`FontChooserDialog`), opened by the two rows below
+ * the pairs, and which half it is open for is `Editor.tsx`'s to remember.
  */
 
 export interface StylePanelProps {
@@ -102,6 +106,19 @@ export interface StylePanelProps {
   logoPalettes: LogoPalettes | null;
   logoColours: LogoColours | null;
   onPickLogoPalette?: (colors: PaletteColors) => void;
+  /**
+   * Where the theme's colours came from (ADR 0075), so the chosen card can say «{nombre},
+   * personalizada» and offer «Volver a la original» once a colour has moved (día 7). Absent for a
+   * site saved before 1.20.0, which is read by its values as before.
+   */
+  origin?: PaletteOrigin | undefined;
+  /**
+   * What paints the canvas with a palette under the mouse before it is pressed (día 6, David's P7):
+   * `themePreviewer`, writing the colour variables on the canvas's root as chrome. Only the mouse
+   * previews — a finger that touches a card has pressed it, and the keyboard's arrows move the focus
+   * and nothing else.
+   */
+  previewer?: Previewer<PaletteColors> | undefined;
   onPickTypePair: (typePairId: string) => void;
   /**
    * Open the letter chooser for one of the two font tokens (ADR 0046, sprint 29 día 1).
@@ -162,6 +179,8 @@ export function StylePanel({
   logoPalettes,
   logoColours,
   onPickLogoPalette,
+  origin,
+  previewer,
   onPickTypePair,
   onOpenChooser,
   onPickScale,
@@ -169,37 +188,16 @@ export function StylePanel({
   onClose,
 }: StylePanelProps) {
   const headingId = useId();
-  const paletteGroup = useId();
   const typeGroup = useId();
   const scaleGroup = useId();
-  const logoNote = useId();
-  // Which logo palette the site wears, if any — compared on every colour, the fill pair included, as
-  // `identifyPalette` compares a predefined one.
-  const logoRows =
-    logoPalettes && onPickLogoPalette
-      ? (
-          [
-            ["light", es["editor.style.fromLogo"], logoPalettes.light],
-            ["dark", es["editor.style.fromLogoDark"], logoPalettes.dark],
-          ] as const
-        ).map(([surface, label, colors]) => ({
-          surface,
-          label,
-          colors,
-          selected: sameColours(theme, colors),
-        }))
-      : [];
-  const wearingLogo = logoRows.some((row) => row.selected);
-  const current = wearingLogo ? undefined : identifyPalette(theme);
-  // «Se parece a» is information about a predefined palette, never a choice of one (ADR 0076).
-  const near = logoColours ? nearestPalette(parseHex(logoColours.brand)) : null;
-  const nearName = near
-    ? PALETTES.find((palette) => palette.id === near.paletteId)?.nameKey
-    : undefined;
-  const logoNotes = [
-    ...(logoPalettes?.darkerForText ? [es["editor.style.darkerForText"]] : []),
-    ...(nearName ? [es["editor.style.looksLike"].replace("{palette}", nameOf(nearName))] : []),
-  ];
+  const cards = paletteCards({
+    theme,
+    origin,
+    logoPalettes,
+    logoColours,
+    onPickPalette,
+    onPickLogoPalette,
+  });
   const currentType = identifyTypePair(theme);
   const currentScale = identifyScale(theme);
   const familyRows = FAMILY_CHOICES.map((choice) => ({
@@ -224,97 +222,13 @@ export function StylePanel({
       />
 
       <PanelSection legend={es["editor.style.colors"]}>
-        {current === undefined && !wearingLogo ? (
+        {cards.selectedId === undefined ? (
           // Not an error and not a blank space to wonder about: the honest state for a theme no
-          // palette produced, which a restored document or a hand-edited one can be. Clicking any
-          // palette resolves it.
+          // palette produced, which a restored document or a hand-edited one can be. Pressing any
+          // card resolves it.
           <Note>{es["editor.style.noPalette"]}</Note>
         ) : null}
-        {logoRows.map((row) => (
-          <label
-            key={row.surface}
-            data-logo-palette={row.surface}
-            className={
-              "relative flex h-14 cursor-pointer items-center gap-3.5 px-4 " +
-              (row.selected ? panelChoiceSelected : panelChoice)
-            }
-          >
-            <input
-              type="radio"
-              name={paletteGroup}
-              checked={row.selected}
-              onChange={() => onPickLogoPalette?.(row.colors)}
-              {...(logoNotes.length > 0 ? { "aria-describedby": logoNote } : {})}
-              className="absolute h-px w-px opacity-0"
-            />
-            <span className="flex gap-1.5" aria-hidden="true">
-              {/* The fill first: the brand's own colour, exact, where the predefined palettes show
-                  their primary — which is the same colour for every palette that has no fill. */}
-              {[
-                row.colors["color.fill"] ?? row.colors["color.primary"],
-                ...RENDERED_COLOR_KEYS.slice(1).map((key) => row.colors[key]),
-              ].map((colour, index) => (
-                <span
-                  // The swatches never reorder, so their place is their identity.
-                  // biome-ignore lint/suspicious/noArrayIndexKey: see above
-                  key={index}
-                  className="h-[17px] w-[17px] rounded-full border border-black/10"
-                  style={{ background: colour }}
-                />
-              ))}
-            </span>
-            <span
-              className={
-                "text-[15px] " +
-                (row.selected ? "font-semibold text-ui-ink" : "font-medium text-ui-ink")
-              }
-            >
-              {row.label}
-            </span>
-          </label>
-        ))}
-        {logoRows.length > 0 && logoNotes.length > 0 ? (
-          <Note id={logoNote}>{logoNotes.join(" ")}</Note>
-        ) : null}
-        {PALETTES.map((palette) => {
-          const selected = current?.id === palette.id;
-          return (
-            <label
-              key={palette.id}
-              className={
-                "relative flex h-14 cursor-pointer items-center gap-3.5 px-4 " +
-                (selected ? panelChoiceSelected : panelChoice)
-              }
-            >
-              <input
-                type="radio"
-                name={paletteGroup}
-                checked={selected}
-                onChange={() => onPickPalette(palette.id)}
-                // Visually hidden rather than `display: none`: a hidden input is out of the tab
-                // order and out of the group, so arrow keys would stop working.
-                className="absolute h-px w-px opacity-0"
-              />
-              <span className="flex gap-1.5" aria-hidden="true">
-                {RENDERED_COLOR_KEYS.map((key) => (
-                  <span
-                    key={key}
-                    className="h-[17px] w-[17px] rounded-full border border-black/10"
-                    style={{ background: palette.colors[key] }}
-                  />
-                ))}
-              </span>
-              <span
-                className={
-                  "text-[15px] " +
-                  (selected ? "font-semibold text-ui-ink" : "font-medium text-ui-ink")
-                }
-              >
-                {nameOf(palette.nameKey)}
-              </span>
-            </label>
-          );
-        })}
+        <PaletteGrid cards={cards} previewer={previewer} />
       </PanelSection>
 
       <PanelSection legend={es["editor.style.typography"]}>
@@ -474,5 +388,423 @@ export function StylePanel({
         </PanelSection>
       ) : null}
     </aside>
+  );
+}
+
+/*
+ * ---------------------------------------------------------------------------------------------
+ * The palettes as cards (sprint 38 día 6, decision 10 of the sprint's plan).
+ * ---------------------------------------------------------------------------------------------
+ */
+
+const LOGO_LIGHT = "logo-light";
+const LOGO_DARK = "logo-dark";
+const OWN_ID = "own";
+
+const CARD_COLOUR_KEYS = [
+  "color.primary",
+  "color.secondary",
+  "color.accent",
+  "color.surface",
+  "color.ink",
+  "color.muted",
+  "color.fill",
+  "color.onFill",
+] as const;
+
+/** The five colours a card's stripe paints, in the order the page meets them: the fill first when
+ * the palette has one — the brand's own colour, exact, where a palette without shows its primary. */
+export function stripeOf(colors: PaletteColors): string[] {
+  return [
+    colors["color.fill"] ?? colors["color.primary"],
+    colors["color.secondary"],
+    colors["color.muted"],
+    colors["color.surface"],
+    colors["color.ink"],
+  ];
+}
+
+/** The roles a card's swatches name, in reading order: the fill pair only when the palette has one. */
+const SWATCH_ROLES = [
+  ["color.fill", "editor.style.role.fill"],
+  ["color.onFill", "editor.style.role.onFill"],
+  ["color.primary", "editor.style.role.primary"],
+  ["color.secondary", "editor.style.role.secondary"],
+  ["color.muted", "editor.style.role.muted"],
+  ["color.surface", "editor.style.role.surface"],
+  ["color.ink", "editor.style.role.ink"],
+] as const;
+
+export interface PaletteCard {
+  id: string;
+  name: string;
+  /** The colours the card stands for; `null` for «Tu paleta» before the owner has given it any. */
+  colors: PaletteColors | null;
+  selected: boolean;
+  /** Chosen and then moved by hand: «{nombre}, personalizada», with «Volver a la original». */
+  customised: boolean;
+  /** A short line under the name, read as the card's description and never as its name. */
+  aside?: string;
+  pick?: () => void;
+  restore?: () => void;
+}
+
+export interface PaletteCards {
+  cards: PaletteCard[];
+  /** The card the site wears, or `undefined` for colours no card stands for. */
+  selectedId: string | undefined;
+  /** The sentence under the logo's two cards, when the light one writes its text in a darker tone. */
+  note: string | undefined;
+}
+
+/**
+ * **Which card the site wears is computed, never stored** (ADR 0075): the origin says where the
+ * colours came from and the values say whether they still are that. With an origin the chosen card is
+ * the origin's, «personalizada» when any colour moved; without one the card whose values the theme
+ * holds exactly, the logo's two included, or none. «Tu paleta» is last and stands for the owner's own
+ * colours once the origin is `own`; before that it is a card with no colours, which opens its one
+ * swatch («Elige un color», alive on día 7) and chooses nothing.
+ */
+export function paletteCards({
+  theme,
+  origin,
+  logoPalettes,
+  logoColours,
+  onPickPalette,
+  onPickLogoPalette,
+}: {
+  theme: Theme;
+  origin: PaletteOrigin | undefined;
+  logoPalettes: LogoPalettes | null;
+  logoColours: LogoColours | null;
+  onPickPalette: (paletteId: string) => void;
+  onPickLogoPalette?: ((colors: PaletteColors) => void) | undefined;
+}): PaletteCards {
+  const label = paletteLabel(theme, origin, logoPalettes?.light ?? null);
+  let selectedId: string | undefined;
+  let customised = false;
+  if (label.kind === "logo") {
+    if (logoPalettes) {
+      selectedId = sameColours(theme, logoPalettes.dark) ? LOGO_DARK : LOGO_LIGHT;
+      customised =
+        !sameColours(theme, logoPalettes.light) && !sameColours(theme, logoPalettes.dark);
+    }
+  } else if (label.kind === "palette") {
+    selectedId = label.palette.id;
+    customised = label.customised;
+  } else if (label.kind === "own") {
+    selectedId = OWN_ID;
+  } else if (logoPalettes) {
+    // No origin and no predefined palette: a site that wears its logo's colours from before the
+    // origin existed is still wearing them.
+    if (sameColours(theme, logoPalettes.light)) selectedId = LOGO_LIGHT;
+    else if (sameColours(theme, logoPalettes.dark)) selectedId = LOGO_DARK;
+  }
+  // «Se parece a» is information about a predefined palette, never a choice of one (ADR 0076).
+  const near = logoColours ? nearestPalette(parseHex(logoColours.brand)) : null;
+  const nearName = near
+    ? PALETTES.find((palette) => palette.id === near.paletteId)?.nameKey
+    : undefined;
+  const looksLike = nearName
+    ? es["editor.style.looksLike"].replace("{palette}", nameOf(nearName))
+    : undefined;
+  const own: PaletteColors | null =
+    selectedId === OWN_ID
+      ? (Object.fromEntries(
+          CARD_COLOUR_KEYS.flatMap((key) => (theme[key] === undefined ? [] : [[key, theme[key]]])),
+        ) as PaletteColors)
+      : null;
+  const logoCards: PaletteCard[] =
+    logoPalettes && onPickLogoPalette
+      ? [
+          {
+            id: LOGO_LIGHT,
+            name: es["editor.style.fromLogo"],
+            colors: logoPalettes.light,
+            selected: selectedId === LOGO_LIGHT,
+            customised: selectedId === LOGO_LIGHT && customised,
+            ...(looksLike ? { aside: looksLike } : {}),
+            pick: () => onPickLogoPalette(logoPalettes.light),
+            restore: () => onPickLogoPalette(logoPalettes.light),
+          },
+          {
+            id: LOGO_DARK,
+            name: es["editor.style.fromLogoDark"],
+            colors: logoPalettes.dark,
+            selected: selectedId === LOGO_DARK,
+            customised: selectedId === LOGO_DARK && customised,
+            pick: () => onPickLogoPalette(logoPalettes.dark),
+            restore: () => onPickLogoPalette(logoPalettes.dark),
+          },
+        ]
+      : [];
+  return {
+    cards: [
+      ...logoCards,
+      ...PALETTES.map((palette) => ({
+        id: palette.id,
+        name: nameOf(palette.nameKey),
+        colors: palette.colors as PaletteColors,
+        selected: selectedId === palette.id,
+        customised: selectedId === palette.id && customised,
+        pick: () => onPickPalette(palette.id),
+        restore: () => onPickPalette(palette.id),
+      })),
+      {
+        id: OWN_ID,
+        name: es["editor.style.own"],
+        colors: own,
+        selected: selectedId === OWN_ID,
+        customised: false,
+      },
+    ],
+    selectedId,
+    note:
+      logoCards.length > 0 && logoPalettes?.darkerForText
+        ? es["editor.style.darkerForText"]
+        : undefined,
+  };
+}
+
+/**
+ * **A `radiogroup` of buttons, two to a row** (decision 10). Not `<input type="radio">`: in a native
+ * group the arrows *choose*, which here would write the document on every key. Here the arrows and
+ * Home/End move the focus (one Tab stop for the group, the roving `tabindex` on the card that holds
+ * it), Enter or Space choose a card and open its swatches under its row, and Enter on the chosen card
+ * folds them or opens them again. **Under the mouse a card paints the canvas before it is pressed**
+ * (`previewer`); leaving puts the colours back, pressing keeps them for the patch — unless the card
+ * is the one the site already wears, whose press changes nothing and brings no patch.
+ *
+ * The chosen card's swatches open **under its row**, which is why they are rendered after the row's
+ * last card and span both columns: a block after the chosen card alone would push its row-mate down a
+ * row and leave a hole. One open at a time; the height is never animated, the rows arrive.
+ */
+function PaletteGrid({
+  cards: { cards, selectedId, note },
+  previewer,
+}: {
+  cards: PaletteCards;
+  previewer: Previewer<PaletteColors> | undefined;
+}) {
+  const grid = useRef<HTMLDivElement>(null);
+  // The card last focused, so Tab comes back to it; the chosen one until then.
+  const [holderId, setHolderId] = useState<string | null>(null);
+  // A fold the owner asked for, remembered only for the card they asked it of: the chosen card is
+  // open unless they folded it, «Tu paleta» without colours is closed unless they opened it.
+  const [fold, setFold] = useState<{ id: string; open: boolean } | null>(null);
+  const openId =
+    fold && (fold.id === selectedId || fold.id === OWN_ID)
+      ? fold.open
+        ? fold.id
+        : null
+      : (selectedId ?? null);
+  const holder =
+    holderId !== null && cards.some((card) => card.id === holderId)
+      ? holderId
+      : (selectedId ?? cards[0]?.id);
+  const openIndex = cards.findIndex((card) => card.id === openId);
+  const rowEnd = openIndex < 0 ? -1 : Math.min(openIndex | 1, cards.length - 1);
+  const open = openIndex < 0 ? undefined : cards[openIndex];
+
+  const press = (card: PaletteCard) => {
+    if (card.selected || !card.pick) {
+      // Nothing to write: a press on the chosen card, or on «Tu paleta» before it has colours, folds
+      // or opens its swatches — and brings no patch, so the preview is put back here.
+      previewer?.end("restore");
+      setFold({ id: card.id, open: openId !== card.id });
+      return;
+    }
+    previewer?.end("keep");
+    setFold(null);
+    card.pick();
+  };
+  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    const buttons = Array.from(
+      grid.current?.querySelectorAll<HTMLButtonElement>('[role="radio"]') ?? [],
+    );
+    const at = buttons.indexOf(
+      event.currentTarget.ownerDocument.activeElement as HTMLButtonElement,
+    );
+    if (at < 0) return;
+    const steps: Record<string, number> = {
+      ArrowRight: 1,
+      ArrowLeft: -1,
+      ArrowDown: 2,
+      ArrowUp: -2,
+    };
+    const step = steps[event.key];
+    const to =
+      step !== undefined
+        ? Math.min(Math.max(at + step, 0), buttons.length - 1)
+        : event.key === "Home"
+          ? 0
+          : event.key === "End"
+            ? buttons.length - 1
+            : undefined;
+    if (to === undefined) return;
+    event.preventDefault();
+    buttons[to]?.focus();
+  };
+
+  return (
+    <div
+      ref={grid}
+      role="radiogroup"
+      aria-label={es["editor.style.palettes"]}
+      onKeyDown={onKeyDown}
+      className="grid grid-cols-2 gap-2"
+    >
+      {cards.map((card, index) => (
+        <Fragment key={card.id}>
+          <PaletteCardButton
+            card={card}
+            holder={card.id === holder}
+            onPress={() => press(card)}
+            onFocus={() => setHolderId(card.id)}
+            onHover={
+              previewer && card.colors
+                ? (on) => {
+                    if (on && card.colors) previewer.show(card.colors);
+                    else previewer.end("restore");
+                  }
+                : undefined
+            }
+          />
+          {index === 1 && note ? <Note className="col-span-2">{note}</Note> : null}
+          {index === rowEnd && open ? <Swatches card={open} /> : null}
+        </Fragment>
+      ))}
+    </div>
+  );
+}
+
+function PaletteCardButton({
+  card,
+  holder,
+  onPress,
+  onFocus,
+  onHover,
+}: {
+  card: PaletteCard;
+  holder: boolean;
+  onPress: () => void;
+  onFocus: () => void;
+  onHover: ((on: boolean) => void) | undefined;
+}) {
+  const asideId = useId();
+  return (
+    // biome-ignore lint/a11y/useSemanticElements: not an <input type="radio">, on purpose (decision 10 of sprint 38): in a native group every arrow chooses, and here a choice is a step of history — the arrows move the focus and Enter chooses
+    <button
+      type="button"
+      role="radio"
+      aria-checked={card.selected}
+      tabIndex={holder ? 0 : -1}
+      data-palette={card.id}
+      {...(card.aside ? { "aria-describedby": asideId } : {})}
+      onClick={onPress}
+      onFocus={onFocus}
+      {...(onHover
+        ? {
+            onPointerEnter: (event: PointerEvent) => {
+              if (event.pointerType === "mouse") onHover(true);
+            },
+            onPointerLeave: (event: PointerEvent) => {
+              if (event.pointerType === "mouse") onHover(false);
+            },
+          }
+        : {})}
+      className={`flex min-h-[72px] cursor-pointer flex-col items-stretch gap-2 p-3 text-left ${
+        card.selected ? panelChoiceSelected : panelChoice
+      }`}
+    >
+      {card.colors ? (
+        <span
+          aria-hidden="true"
+          className="flex h-6 overflow-hidden rounded-ui-sm border border-black/10"
+        >
+          {stripeOf(card.colors).map((colour, index) => (
+            <span
+              // The stripe never reorders, so a block's place is its identity.
+              // biome-ignore lint/suspicious/noArrayIndexKey: see above
+              key={index}
+              className="flex-1"
+              style={{ background: colour }}
+            />
+          ))}
+        </span>
+      ) : (
+        <span
+          aria-hidden="true"
+          className="h-6 rounded-ui-sm border border-ui-border-strong border-dashed bg-ui-surface"
+        />
+      )}
+      <span className="text-[13px] font-semibold leading-tight text-ui-ink">{card.name}</span>
+      {card.customised ? (
+        <span className="text-[11px] leading-tight text-ui-muted">
+          {es["editor.style.customised"]}
+        </span>
+      ) : null}
+      {card.aside ? (
+        // Hidden from the name and read as the description: «De tu logo» stays «De tu logo».
+        <span id={asideId} aria-hidden="true" className="text-[11px] leading-tight text-ui-muted">
+          {card.aside}
+        </span>
+      ) : null}
+    </button>
+  );
+}
+
+/**
+ * The chosen card's colours, one swatch per role the page paints with, **in reading** on día 6 — the
+ * dot, the role's name and the hex; «Cambiar» arrives on día 7 with the colour field. «Tu paleta»
+ * before it has colours shows its one swatch, the brand's colour, with nothing to read yet.
+ */
+function Swatches({ card }: { card: PaletteCard }) {
+  const rows = card.colors
+    ? SWATCH_ROLES.flatMap(([key, roleKey]) => {
+        const colour = card.colors?.[key];
+        return colour === undefined ? [] : [{ key, role: es[roleKey], colour }];
+      })
+    : [{ key: "brand", role: es["editor.style.role.brand"], colour: undefined }];
+  return (
+    <fieldset
+      aria-label={es["editor.style.coloursOf"].replace("{palette}", card.name)}
+      data-testid="palette-swatches"
+      className="col-span-2 m-0 flex min-w-0 flex-col gap-2 rounded-ui border border-ui-border bg-ui-bg p-3"
+    >
+      {/* Not `data-ui-rows`: that queue is the panel's own on opening (sprint 36 día 5), and a block
+          that appears because a card was pressed waits for nothing — measured by the rows guard,
+          which found the swatches' five rows interleaved with the panel's when both open together. */}
+      <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
+        {rows.map((row) => (
+          <li key={row.key} className="flex items-center gap-2.5 text-[12px] leading-snug">
+            <span
+              aria-hidden="true"
+              className={`h-[17px] w-[17px] shrink-0 rounded-full border ${
+                row.colour === undefined
+                  ? "border-ui-border-strong border-dashed bg-ui-surface"
+                  : "border-black/10"
+              }`}
+              style={row.colour === undefined ? undefined : { background: row.colour }}
+            />
+            <span className="flex-1 font-semibold text-ui-ink">{row.role}</span>
+            {row.colour === undefined ? (
+              <span className="text-ui-muted">{es["editor.style.ownEmpty"]}</span>
+            ) : (
+              <code className="font-mono text-ui-muted">{row.colour}</code>
+            )}
+          </li>
+        ))}
+      </ul>
+      {card.customised && card.restore ? (
+        <button
+          type="button"
+          onClick={card.restore}
+          className="ui-interactive h-8 cursor-pointer self-start rounded-ui-sm border border-ui-border bg-ui-surface px-3 text-[13px] font-semibold text-ui-ink hover:border-ui-border-strong"
+        >
+          {es["editor.style.restore"]}
+        </button>
+      ) : null}
+    </fieldset>
   );
 }
