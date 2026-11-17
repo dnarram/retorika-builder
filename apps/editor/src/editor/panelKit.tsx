@@ -105,7 +105,15 @@ export const panelFrame = `${PANEL_WIDTH} gap-4 p-5 ${panelCard}`;
  * keeps its own text «Cerrar» at the foot of the list, which is a different decision about where
  * the exit belongs and not an omission this component fixes.
  */
-export function PanelClose({ onClick, label }: { onClick: () => void; label: string }) {
+export function PanelClose({
+  onClick,
+  label,
+  className = "",
+}: {
+  onClick: () => void;
+  label: string;
+  className?: string;
+}) {
   return (
     <button
       type="button"
@@ -115,7 +123,7 @@ export function PanelClose({ onClick, label }: { onClick: () => void; label: str
       // hit area, a 16 px square at the panel's corner — the smallest control of the chrome. The
       // ripple and the hover ground are the vocabulary's; the negative margin keeps the cross where
       // it always sat beside the title.
-      className="ui-interactive -mt-1.5 -mr-1.5 grid h-8 w-8 shrink-0 cursor-pointer place-items-center rounded-full border-0 bg-transparent text-ui-muted hover:bg-ui-bg hover:text-ui-ink"
+      className={`ui-interactive -mt-1.5 -mr-1.5 grid h-8 w-8 shrink-0 cursor-pointer place-items-center rounded-full border-0 bg-transparent text-ui-muted hover:bg-ui-bg hover:text-ui-ink ${className}`}
     >
       <svg
         width="16"
@@ -207,18 +215,26 @@ export function PanelHeader({
   help?: ReactNode;
   close?: { label: string; onClick: () => void };
 }) {
+  // A grid rather than a row with a column inside it: the help runs the panel's whole width under
+  // the title instead of beside the cross, which took a third of a line from every sentence of help
+  // once the cross became a 32 px target. Placed by the grid, not moved in the markup: the title, the
+  // help and the cross are read in the order they always were.
   return (
-    <div className="flex items-start justify-between gap-3">
-      <div className="flex min-w-0 flex-col gap-1">
-        <h2
-          id={id}
-          className="m-0 text-[20px] font-bold leading-tight tracking-[-0.02em] text-ui-ink"
-        >
-          {title}
-        </h2>
-        {help === undefined ? null : <Note>{help}</Note>}
-      </div>
-      {close ? <PanelClose onClick={close.onClick} label={close.label} /> : null}
+    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 gap-y-1">
+      <h2
+        id={id}
+        className="col-start-1 row-start-1 m-0 text-[20px] font-bold leading-tight tracking-[-0.02em] text-ui-ink"
+      >
+        {title}
+      </h2>
+      {help === undefined ? null : <Note className="col-span-2 row-start-2">{help}</Note>}
+      {close ? (
+        <PanelClose
+          onClick={close.onClick}
+          label={close.label}
+          className="col-start-2 row-start-1"
+        />
+      ) : null}
     </div>
   );
 }

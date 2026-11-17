@@ -18,9 +18,7 @@ describe("PanelHeader", () => {
     // An h3 here would skip a level under the editor's title for every panel at once; axe does not
     // fail on it in this suite, so this is what holds it (the sabotage of día 5 found that).
     const html = head({ id: "panel-title", title: "El estilo de toda la web" });
-    expect(html).toMatch(
-      /^<div[^>]*><div[^>]*><h2 id="panel-title"[^>]*>El estilo de toda la web<\/h2>/,
-    );
+    expect(html).toMatch(/^<div[^>]*><h2 id="panel-title"[^>]*>El estilo de toda la web<\/h2>/);
     expect(html).not.toMatch(/<h[13456]/);
   });
 
@@ -31,10 +29,11 @@ describe("PanelHeader", () => {
       help: "Una frase de ayuda.",
       close: { label: "Cerrar las páginas", onClick: () => {} },
     });
-    expect(html).toContain(
-      '<p class="m-0 text-[12px] leading-snug text-ui-muted ">Una frase de ayuda.</p>',
+    // In this order in the markup — title, help, cross — whatever the grid draws where: it is the
+    // order a screen reader reads them in, and the one they had before the header was shared.
+    expect(html).toMatch(
+      /<\/h2><p class="m-0 text-\[12px\] leading-snug text-ui-muted col-span-2 [^"]*">Una frase de ayuda\.<\/p><button type="button" aria-label="Cerrar las páginas"/,
     );
-    expect(html).toMatch(/<button type="button" aria-label="Cerrar las páginas"[^>]*>/);
   });
 
   it("draws no cross when the panel closes elsewhere, as «Listas» does", () => {
