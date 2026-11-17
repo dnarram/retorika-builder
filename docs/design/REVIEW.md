@@ -10019,3 +10019,31 @@ móvil gana el diálogo del tema. El e2e completo: **353 en verde y 1 omitida, e
 
 **ADR 0076** (`proposed`), notas en 0010, 0015, 0041, 0054 y 0059; el paquete de firmas, 34 filas.
 
+### Día 4 — ocho paletas más (PR de `feat/ocho-paletas-mas`)
+
+**Trece paletas, medidas antes de escribirse.** Tras «Pizarra oscura»: «Vino tinto», «Oliva y arena»,
+«Medianoche y oro», «Grafito», «Lavanda», «Coral y arena», «Océano» y «Mostaza» (los nombres son la
+propuesta del plan; renombrarlas es tuyo). Cada una pasó por `validateTheme` del motor antes de entrar: los
+ocho pares a 4,5 (el más justo, el oliva sobre su arena, 4,70) y los cuatro del cristal sobre negro y sobre
+blanco (el más justo, «Océano», 6,41). Dos son oscuras, como «Pizarra». Ninguna lleva relleno propio:
+todos sus primarios se leen como texto sobre su superficie. A «Grafito» se le dio un secundario propio
+(`#D4D4D8`) en vez de repetir su gris. `contrast.test`, `glass.test` y la matriz de axe recorren las trece
+sin cambiar una línea: ya leían `PALETTES` entero. Lighthouse no cambia de sujeto (se dice): mide webs
+generadas, que empiezan en «Neutra».
+
+**El coste de la matriz, medido y no como se estimó.** La suite de accesibilidad pasa de 1 754 pruebas en
+125 s a **2 378 en 213 s**. El plan estimaba unos 16 s más: contó las combinaciones de axe y no cada prueba
+por anchura y aserción que lleva cada una. En la CI el trabajo tardó 4 min 25 s con la suite de antes; con
+esta rondará los 7 u 8 de sus 20.
+
+**«Se parece a», medido otra vez.** Con doce paletas a las que parecerse (todas menos el arranque neutro), el
+morado se parece a «Lavanda» (6,2) y no a «Azul confianza»; el amarillo, a «Medianoche y oro»; el rosa y el
+rojo, a «Coral y arena»; el lima, a «Oliva y arena» (39,0). El hueco que justificaba el umbral de 40 se
+estrecha de 32,5–52,4 a 39,7–43,1, porque ocho paletas más dejan menos colores lejos de todas. Se queda en
+40 y queda escrito: desde el día 3 esa frase solo informa, y cada parecido bajo el umbral es uno que una
+persona concedería.
+
+**El saboteo**: el gris medio de «Vino tinto» a `#8A8A8A` sobre su `#FFF8F6` (3,29, el plan estimaba 3,4)
+→ `contrast.test` y `derive.test` rojas antes de llegar a axe. Una caminata lista las trece en su orden y
+pinta la web con «Vino tinto» y con la última, «Mostaza», al pie del panel.
+
