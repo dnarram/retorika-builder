@@ -772,8 +772,10 @@ function Swatches({ card }: { card: PaletteCard }) {
       data-testid="palette-swatches"
       className="col-span-2 m-0 flex min-w-0 flex-col gap-2 rounded-ui border border-ui-border bg-ui-bg p-3"
     >
-      {/* The rows arrive one after another (`data-ui-rows`): opacity only, nothing moves. */}
-      <ul data-ui-rows className="m-0 flex list-none flex-col gap-1.5 p-0">
+      {/* Not `data-ui-rows`: that queue is the panel's own on opening (sprint 36 día 5), and a block
+          that appears because a card was pressed waits for nothing — measured by the rows guard,
+          which found the swatches' five rows interleaved with the panel's when both open together. */}
+      <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
         {rows.map((row) => (
           <li key={row.key} className="flex items-center gap-2.5 text-[12px] leading-snug">
             <span
