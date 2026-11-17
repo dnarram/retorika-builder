@@ -10047,3 +10047,13 @@ persona concedería.
 → `contrast.test` y `derive.test` rojas antes de llegar a axe. Una caminata lista las trece en su orden y
 pinta la web con «Vino tinto» y con la última, «Mostaza», al pie del panel.
 
+**Un hueco de la guarda «nada sobresale», destapado por la lista que creció.** La CI de esta PR marcó en la
+tableta (768 × 1024) treinta y ocho elementos de «Estilo» como «cortados por el área de edición». Medido: el
+panel mide 901 px dentro de un área de 925, con 1 412 de contenido y `overflow-y: auto` —se desplaza, y todo
+lo que enseña está entero—. La guarda estrechaba la caja visible al cruzar un contenedor que desplaza, pero
+luego comparaba la caja **entera** del elemento con el `overflow: hidden` de más arriba, que recorta el
+panel y no lo que el panel desplaza. Con cinco paletas el contenido cabía y el hueco no se veía. Ahora la
+guarda compara solo la parte que el contenedor deja ver, y un elemento desplazado del todo fuera de la vista
+es alcanzable, no está cortado. **Saboteo**: el panel sin desplazarse (`overflow-y: visible`) → la guarda
+vuelve a ver «Mostaza» cortada. El producto no cambia.
+

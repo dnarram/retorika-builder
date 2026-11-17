@@ -15683,6 +15683,9 @@ describe("nada sobresale en un móvil", () => {
 
           let left = own.left;
           let right = own.right;
+          // And its top and bottom, narrowed the same way: what a scrolling box shows of it.
+          let top = own.top;
+          let bottom = own.bottom;
           /**
            * **A `position: fixed` box — itself, or an ancestor between it and here — escapes the
            * ordinary clipping chain, and sprint 21 day 4 is why this matters now.** `overflow:
@@ -15712,11 +15715,19 @@ describe("nada sobresale en un móvil", () => {
               // Reachable by scrolling: only the visible part is held to the screen's edges.
               left = Math.max(left, box.left);
               right = Math.min(right, box.right);
+              top = Math.max(top, box.top);
+              bottom = Math.min(bottom, box.bottom);
+              // **Scrolled wholly out of view, it is reachable and not cut** (sprint 38 día 4). The
+              // «Estilo» panel grew to thirteen palettes and scrolls inside itself; this walk then
+              // held a row scrolled below the panel to the `overflow: hidden` of the area around
+              // it — which clips the panel, not what the panel scrolls. The panel's own box is
+              // still held to that area, as the element it is.
+              if (right - left <= 0 || bottom - top <= 0) break;
             } else if (
-              own.left < box.left - 0.5 ||
-              own.right > box.right + 0.5 ||
-              own.top < box.top - 0.5 ||
-              own.bottom > box.bottom + 0.5
+              left < box.left - 0.5 ||
+              right > box.right + 0.5 ||
+              top < box.top - 0.5 ||
+              bottom > box.bottom + 0.5
             ) {
               // `hidden` or `clip`, with no scrollbar to reach the rest: whatever is past the box
               // is gone for good. That is «cortado».
