@@ -153,3 +153,78 @@ describe("the grid, rendered", () => {
     expect(group).toBeGreaterThan(azul);
   });
 });
+
+describe("the chosen card, once its colours can move (día 7)", () => {
+  const wine = withPalette(neutral, "deep-wine");
+  const moved = { ...wine, "color.primary": "#B9534D" };
+
+  it("shows the colours the site wears, not the catalog's, and carries its origin", () => {
+    const { cards } = cardsOf({ theme: moved, origin: { kind: "palette", id: "deep-wine" } });
+    const card = cards.find((c) => c.id === "deep-wine");
+    expect(card?.colors?.["color.primary"]).toBe("#B9534D");
+    expect(card?.origin).toEqual({ kind: "palette", id: "deep-wine" });
+    // A card the site does not wear still shows the catalog's.
+    expect(cards.find((c) => c.id === "classic-blue")?.colors?.["color.primary"]).toBe("#1D4ED8");
+    expect(cards.at(-1)?.origin).toEqual({ kind: "own" });
+  });
+
+  it("is named «Vino tinto, personalizada», the label ADR 0075 computes", () => {
+    const html = renderToStaticMarkup(
+      createElement(StylePanel, {
+        theme: moved,
+        origin: { kind: "palette", id: "deep-wine" },
+        fonts: [],
+        fontUrls: new Map(),
+        onPickPalette: noop,
+        logoPalettes: null,
+        logoColours: null,
+        onPickTypePair: noop,
+        onOpenChooser: noop,
+        onPickScale: noop,
+        designTools: false,
+        onClose: noop,
+        onSetColours: noop,
+        onAdjustColours: noop,
+        onSettleColours: noop,
+      }),
+    );
+    const card =
+      html.match(/<button[^>]*data-palette="deep-wine"[^>]*>[\s\S]*?<\/button>/)?.[0] ?? "";
+    expect(card).toContain('aria-label="Vino tinto, personalizada"');
+    // «Volver a la original» and a «Cambiar» per colour that can move — five, no fill, no accent.
+    expect(html).toContain(">Volver a la original<");
+    expect(html.match(/aria-label="Cambiar «[^»]+»"/g)).toHaveLength(5);
+  });
+
+  it("offers no «Cambiar» without the handlers, and none on a card the site does not wear", () => {
+    const html = renderToStaticMarkup(
+      createElement(StylePanel, {
+        theme: neutral,
+        fonts: [],
+        fontUrls: new Map(),
+        onPickPalette: noop,
+        logoPalettes: null,
+        logoColours: null,
+        onPickTypePair: noop,
+        onOpenChooser: noop,
+        onPickScale: noop,
+        designTools: false,
+        onClose: noop,
+      }),
+    );
+    expect(html).not.toContain("Cambiar «");
+  });
+
+  it("a logo palette moved by hand stays the dark card when its ground is dark", () => {
+    const dark = { ...neutral, ...yellow.dark, "color.secondary": "#FFE680" };
+    const chosen = cardsOf({
+      theme: dark,
+      origin: { kind: "logo" },
+      logoPalettes: yellow,
+      logoColours: { brand: "#FFCD00", second: null },
+      onPickLogoPalette: noop,
+    });
+    expect(chosen.selectedId).toBe("logo-dark");
+    expect(chosen.cards.find((c) => c.id === "logo-dark")?.customised).toBe(true);
+  });
+});

@@ -42,6 +42,7 @@ import {
   marksAfterTrim,
   marksFor,
   type OwnFont,
+  type PaletteOrigin,
   type Placement,
   type PlacementEdit,
   type PresetShape,
@@ -680,6 +681,9 @@ export function Editor({
   logoOfferDismissed = true,
   onDismissLogoOffer,
   onPickLogoPalette,
+  onSetColours,
+  onAdjustColours,
+  onSettleColours,
   coloursApplied = false,
   onEscalateSection,
   placementWasMoved,
@@ -806,6 +810,14 @@ export function Editor({
   /** «De tu logo» or «De tu logo, oscura» chosen in «Estilo»: the colours, derived here from the
    * logo's bytes; assembling the theme and writing it is `Variants`' business. */
   onPickLogoPalette?: (colors: PaletteColors) => void;
+  /**
+   * The colour field in «Estilo» (sprint 38 día 7, ADR 0077): one colour moved and written as one step
+   * with the card's origin, one press of a run of arrows, and the run's end. Assembling the theme is
+   * `Variants`' business, as for the palettes.
+   */
+  onSetColours?: (colors: PaletteColors, origin: PaletteOrigin) => void;
+  onAdjustColours?: (colors: PaletteColors, origin: PaletteOrigin, field: string) => void;
+  onSettleColours?: () => void;
   /** A late logo's colours were just applied to an untouched site: the line says so with «Deshacer». */
   coloursApplied?: boolean;
   /** This section starts being designed by hand, and goes back to the catalog's layout. One
@@ -9713,6 +9725,9 @@ export function Editor({
             {...(onPickLogoPalette ? { onPickLogoPalette } : {})}
             origin={doc.palette}
             previewer={themePreview}
+            onSetColours={onSetColours}
+            onAdjustColours={onAdjustColours}
+            onSettleColours={onSettleColours}
             onPickTypePair={onPickTypePair}
             onOpenChooser={setFontChooser}
             onPickScale={onPickScale}

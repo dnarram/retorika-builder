@@ -270,6 +270,9 @@ describe("the canvas's copy of the scale", () => {
     // written there as a hex; transcribing it is the day it is touched, and this line goes then.
     "warn-deep",
     "warn-surface",
+    // The colour slider's unreachable stripes (sprint 38 día 7): the field is the panel's, never the
+    // preview's.
+    "unreachable",
     // `stagger` and `blur` were excused here until sprint 36 día 7: the preview had no queue to
     // pace and no popup arriving from a blur. The section's verbs are the first, the popups the
     // second, and both are carried now — in the pairs above.

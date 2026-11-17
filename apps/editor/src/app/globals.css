@@ -181,6 +181,13 @@
    */
   --ui-warn-deep: #92400e;
   --ui-warn-surface: #fef3c7;
+  /**
+   * **What a colour slider cannot reach** (sprint 38 día 7, ADR 0077, David's P6: «la pista del
+   * deslizador pinta la zona que no se alcanza»): the stripes laid under the native track where a step
+   * would break a pair. A component colour, held to 3:1 — **4.01:1** on the track's grey
+   * (`--ui-border`) and **4.76:1** on a panel; `test/chromeContrast.test.ts` measures both.
+   */
+  --ui-unreachable: #64748b;
 }
 
 /**
@@ -204,6 +211,7 @@
   --color-ui-danger-deep: var(--ui-danger-deep);
   --color-ui-warn-deep: var(--ui-warn-deep);
   --color-ui-warn-surface: var(--ui-warn-surface);
+  --color-ui-unreachable: var(--ui-unreachable);
   --color-ui-border-strong: var(--ui-border-strong);
   --radius-ui-sm: var(--ui-radius-sm);
   --radius-ui: var(--ui-radius);
@@ -323,6 +331,19 @@
  * Painted under the panel's children, as a background is: over the words and the gaps, under a
  * control with its own fill. `background-color` stays the panel's own utility's.
  */
+/**
+ * The unreachable stretch of a colour slider's track (sprint 38 día 7): stripes, not a fade, so the
+ * stretch reads as «no» and not as «lighter» on a track that is itself about lightness. Static — a
+ * state, not a movement.
+ */
+@utility ui-unreachable {
+  background: repeating-linear-gradient(
+    135deg,
+    var(--ui-unreachable) 0 2px,
+    var(--ui-border) 2px 5px
+  );
+}
+
 @utility ui-scroll-shade {
   background-image:
     linear-gradient(var(--ui-surface) 40%, transparent),

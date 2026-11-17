@@ -3,17 +3,21 @@
 import type { LogoColours } from "@retorika/generator";
 import type { OwnFont, PaletteOrigin, Theme } from "@retorika/schema";
 import {
+  derivePalette,
   type FontKey,
   identifyScale,
   identifyTypePair,
   PALETTES,
   type PaletteColors,
   paletteLabel,
+  relativeLuminance,
   SCALES,
   TYPE_PAIRS,
 } from "@retorika/tokens";
 import tokensEs from "@retorika/tokens/locales/es" with { type: "json" };
 import { Fragment, type KeyboardEvent, type PointerEvent, useId, useRef, useState } from "react";
+import { BrandField, ColourField } from "../editor/ColourField.tsx";
+import { EDITABLE_KEYS, type EditableKey } from "../editor/colourField.ts";
 import {
   familiesHelpText,
   familyRowFor,
@@ -119,6 +123,17 @@ export interface StylePanelProps {
    * and nothing else.
    */
   previewer?: Previewer<PaletteColors> | undefined;
+  /**
+   * One colour of the chosen palette moved in its field (sprint 38 día 7, ADR 0077): a drag released,
+   * the wheel or the hex accepted, «Ajustar» — one step each — or the palette «Tu paleta» derives from
+   * one colour. `origin` is the card's, so a palette moved is still that palette, «personalizada».
+   */
+  onSetColours?: ((colors: PaletteColors, origin: PaletteOrigin) => void) | undefined;
+  /** One press of a run of arrows in a field, and the run's end: one step for the whole run. */
+  onAdjustColours?:
+    | ((colors: PaletteColors, origin: PaletteOrigin, field: string) => void)
+    | undefined;
+  onSettleColours?: (() => void) | undefined;
   onPickTypePair: (typePairId: string) => void;
   /**
    * Open the letter chooser for one of the two font tokens (ADR 0046, sprint 29 día 1).
@@ -181,6 +196,9 @@ export function StylePanel({
   onPickLogoPalette,
   origin,
   previewer,
+  onSetColours,
+  onAdjustColours,
+  onSettleColours,
   onPickTypePair,
   onOpenChooser,
   onPickScale,
@@ -228,7 +246,15 @@ export function StylePanel({
           // card resolves it.
           <Note>{es["editor.style.noPalette"]}</Note>
         ) : null}
-        <PaletteGrid cards={cards} previewer={previewer} />
+        <PaletteGrid
+          cards={cards}
+          previewer={previewer}
+          edit={
+            onSetColours && onAdjustColours && onSettleColours
+              ? { set: onSetColours, adjust: onAdjustColours, settle: onSettleColours }
+              : undefined
+          }
+        />
       </PanelSection>
 
       <PanelSection legend={es["editor.style.typography"]}>
@@ -445,6 +471,8 @@ export interface PaletteCard {
   customised: boolean;
   /** A short line under the name, read as the card's description and never as its name. */
   aside?: string;
+  /** What a colour moved on this card writes as the theme's origin (ADR 0075). */
+  origin: PaletteOrigin;
   pick?: () => void;
   restore?: () => void;
 }
@@ -485,9 +513,14 @@ export function paletteCards({
   let customised = false;
   if (label.kind === "logo") {
     if (logoPalettes) {
-      selectedId = sameColours(theme, logoPalettes.dark) ? LOGO_DARK : LOGO_LIGHT;
       customised =
         !sameColours(theme, logoPalettes.light) && !sameColours(theme, logoPalettes.dark);
+      // Moved by hand, the origin says «logo» and not which of the two: the dark one is the one whose
+      // ground is dark, which a colour field cannot turn light without breaking every pair on it.
+      const dark = customised
+        ? relativeLuminance(theme["color.surface"]) < 0.5
+        : sameColours(theme, logoPalettes.dark);
+      selectedId = dark ? LOGO_DARK : LOGO_LIGHT;
     }
   } else if (label.kind === "palette") {
     selectedId = label.palette.id;
@@ -508,19 +541,21 @@ export function paletteCards({
   const looksLike = nearName
     ? es["editor.style.looksLike"].replace("{palette}", nameOf(nearName))
     : undefined;
-  const own: PaletteColors | null =
-    selectedId === OWN_ID
-      ? (Object.fromEntries(
-          CARD_COLOUR_KEYS.flatMap((key) => (theme[key] === undefined ? [] : [[key, theme[key]]])),
-        ) as PaletteColors)
-      : null;
+  // The colours the site wears: what the chosen card shows and what its fields move — the catalog's
+  // own colours only for the cards the site does not wear, or a palette moved by hand would show the
+  // colours it no longer has.
+  const worn = Object.fromEntries(
+    CARD_COLOUR_KEYS.flatMap((key) => (theme[key] === undefined ? [] : [[key, theme[key]]])),
+  ) as PaletteColors;
+  const own: PaletteColors | null = selectedId === OWN_ID ? worn : null;
   const logoCards: PaletteCard[] =
     logoPalettes && onPickLogoPalette
       ? [
           {
             id: LOGO_LIGHT,
             name: es["editor.style.fromLogo"],
-            colors: logoPalettes.light,
+            colors: selectedId === LOGO_LIGHT ? worn : logoPalettes.light,
+            origin: { kind: "logo" },
             selected: selectedId === LOGO_LIGHT,
             customised: selectedId === LOGO_LIGHT && customised,
             ...(looksLike ? { aside: looksLike } : {}),
@@ -530,7 +565,8 @@ export function paletteCards({
           {
             id: LOGO_DARK,
             name: es["editor.style.fromLogoDark"],
-            colors: logoPalettes.dark,
+            colors: selectedId === LOGO_DARK ? worn : logoPalettes.dark,
+            origin: { kind: "logo" },
             selected: selectedId === LOGO_DARK,
             customised: selectedId === LOGO_DARK && customised,
             pick: () => onPickLogoPalette(logoPalettes.dark),
@@ -544,7 +580,8 @@ export function paletteCards({
       ...PALETTES.map((palette) => ({
         id: palette.id,
         name: nameOf(palette.nameKey),
-        colors: palette.colors as PaletteColors,
+        colors: selectedId === palette.id ? worn : (palette.colors as PaletteColors),
+        origin: { kind: "palette", id: palette.id } as PaletteOrigin,
         selected: selectedId === palette.id,
         customised: selectedId === palette.id && customised,
         pick: () => onPickPalette(palette.id),
@@ -554,6 +591,7 @@ export function paletteCards({
         id: OWN_ID,
         name: es["editor.style.own"],
         colors: own,
+        origin: { kind: "own" },
         selected: selectedId === OWN_ID,
         customised: false,
       },
@@ -579,12 +617,20 @@ export function paletteCards({
  * last card and span both columns: a block after the chosen card alone would push its row-mate down a
  * row and leave a hole. One open at a time; the height is never animated, the rows arrive.
  */
+interface ColourEdits {
+  set: (colors: PaletteColors, origin: PaletteOrigin) => void;
+  adjust: (colors: PaletteColors, origin: PaletteOrigin, field: string) => void;
+  settle: () => void;
+}
+
 function PaletteGrid({
   cards: { cards, selectedId, note },
   previewer,
+  edit,
 }: {
   cards: PaletteCards;
   previewer: Previewer<PaletteColors> | undefined;
+  edit: ColourEdits | undefined;
 }) {
   const grid = useRef<HTMLDivElement>(null);
   // The card last focused, so Tab comes back to it; the chosen one until then.
@@ -671,7 +717,9 @@ function PaletteGrid({
             }
           />
           {index === 1 && note ? <Note className="col-span-2">{note}</Note> : null}
-          {index === rowEnd && open ? <Swatches card={open} /> : null}
+          {index === rowEnd && open ? (
+            <Swatches card={open} previewer={previewer} edit={edit} />
+          ) : null}
         </Fragment>
       ))}
     </div>
@@ -692,6 +740,9 @@ function PaletteCardButton({
   onHover: ((on: boolean) => void) | undefined;
 }) {
   const asideId = useId();
+  // Whether this card is the one previewing: the preview starts on the first move of the mouse over
+  // it, and a move after that is the same preview.
+  const previewing = useRef(false);
   return (
     // biome-ignore lint/a11y/useSemanticElements: not an <input type="radio">, on purpose (decision 10 of sprint 38): in a native group every arrow chooses, and here a choice is a step of history — the arrows move the focus and Enter chooses
     <button
@@ -699,17 +750,30 @@ function PaletteCardButton({
       role="radio"
       aria-checked={card.selected}
       tabIndex={holder ? 0 : -1}
+      // The name a screen reader hears is the label ADR 0075 computes — «Vino tinto, personalizada» —
+      // written out: computed from the content it came out as «Vino tinto , personalizada», a space
+      // for each block the card stacks, measured in Chromium on día 7.
+      aria-label={card.customised ? `${card.name}, ${es["editor.style.customised"]}` : card.name}
       data-palette={card.id}
       {...(card.aside ? { "aria-describedby": asideId } : {})}
       onClick={onPress}
       onFocus={onFocus}
       {...(onHover
         ? {
-            onPointerEnter: (event: PointerEvent) => {
-              if (event.pointerType === "mouse") onHover(true);
+            // **A move, not an entry** (sprint 38 día 7). A card can arrive under a mouse that has not
+            // moved — «Volver a la original» goes, the cards below rise, and «Oliva y arena» lands
+            // under the pointer — and the browser says so with an entry and no move. Measured: the
+            // site turned olive after a press on a button that is not a card. Something moving that no
+            // hand asked for, so the preview waits for the hand.
+            onPointerMove: (event: PointerEvent) => {
+              if (event.pointerType !== "mouse" || previewing.current) return;
+              previewing.current = true;
+              onHover(true);
             },
             onPointerLeave: (event: PointerEvent) => {
-              if (event.pointerType === "mouse") onHover(false);
+              if (event.pointerType !== "mouse" || !previewing.current) return;
+              previewing.current = false;
+              onHover(false);
             },
           }
         : {})}
@@ -759,13 +823,26 @@ function PaletteCardButton({
  * dot, the role's name and the hex; «Cambiar» arrives on día 7 with the colour field. «Tu paleta»
  * before it has colours shows its one swatch, the brand's colour, with nothing to read yet.
  */
-function Swatches({ card }: { card: PaletteCard }) {
-  const rows = card.colors
+function Swatches({
+  card,
+  previewer,
+  edit,
+}: {
+  card: PaletteCard;
+  previewer: Previewer<PaletteColors> | undefined;
+  edit: ColourEdits | undefined;
+}) {
+  // One field open at a time, as one card is.
+  const [openKey, setOpenKey] = useState<EditableKey | null>(null);
+  const colors = card.colors;
+  // The chosen card's colours can be moved; nothing else's, since nothing the site wears would move.
+  const editable = Boolean(edit && colors && card.selected);
+  const rows = colors
     ? SWATCH_ROLES.flatMap(([key, roleKey]) => {
-        const colour = card.colors?.[key];
+        const colour = colors[key];
         return colour === undefined ? [] : [{ key, role: es[roleKey], colour }];
       })
-    : [{ key: "brand", role: es["editor.style.role.brand"], colour: undefined }];
+    : [];
   return (
     <fieldset
       aria-label={es["editor.style.coloursOf"].replace("{palette}", card.name)}
@@ -775,27 +852,78 @@ function Swatches({ card }: { card: PaletteCard }) {
       {/* Not `data-ui-rows`: that queue is the panel's own on opening (sprint 36 día 5), and a block
           that appears because a card was pressed waits for nothing — measured by the rows guard,
           which found the swatches' five rows interleaved with the panel's when both open together. */}
-      <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
-        {rows.map((row) => (
-          <li key={row.key} className="flex items-center gap-2.5 text-[12px] leading-snug">
+      {colors ? (
+        <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
+          {rows.map((row) => {
+            const key = row.key as EditableKey;
+            const canEdit = editable && EDITABLE_KEYS.includes(key);
+            const fieldId = `${card.id}-${row.key}`;
+            return (
+              <li key={row.key} className="flex flex-col gap-1">
+                <div className="flex items-center gap-2.5 text-[12px] leading-snug">
+                  <span
+                    aria-hidden="true"
+                    className="h-[17px] w-[17px] shrink-0 rounded-full border border-black/10"
+                    style={{ background: row.colour }}
+                  />
+                  <span className="flex-1 font-semibold text-ui-ink">{row.role}</span>
+                  <code className="font-mono text-ui-muted">{row.colour}</code>
+                  {canEdit ? (
+                    <button
+                      type="button"
+                      aria-expanded={openKey === key}
+                      aria-controls={fieldId}
+                      aria-label={es["editor.style.field.changeLabel"].replace("{role}", row.role)}
+                      onClick={() => setOpenKey(openKey === key ? null : key)}
+                      className="ui-interactive h-7 shrink-0 cursor-pointer rounded-ui-sm border border-ui-border bg-ui-surface px-2.5 text-[12px] font-semibold text-ui-ink hover:border-ui-border-strong"
+                    >
+                      {es["editor.style.field.change"]}
+                    </button>
+                  ) : null}
+                </div>
+                {row.key === "color.onFill" && editable ? (
+                  <Note className="pl-[27px]">{es["editor.style.field.onFillNote"]}</Note>
+                ) : null}
+                {canEdit && openKey === key && edit && colors ? (
+                  <div
+                    id={fieldId}
+                    className="rounded-ui-sm border border-ui-border bg-ui-surface p-3"
+                  >
+                    <ColourField
+                      colors={colors}
+                      colourKey={key}
+                      role={row.role}
+                      previewer={previewer}
+                      onCommit={(next) => edit.set(next, card.origin)}
+                      onAdjust={(next, field) => edit.adjust(next, card.origin, field)}
+                      onSettle={edit.settle}
+                    />
+                  </div>
+                ) : null}
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        // «Tu paleta» before it has colours: the brand's colour, and the rest derived from it.
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-2.5 text-[12px] leading-snug">
             <span
               aria-hidden="true"
-              className={`h-[17px] w-[17px] shrink-0 rounded-full border ${
-                row.colour === undefined
-                  ? "border-ui-border-strong border-dashed bg-ui-surface"
-                  : "border-black/10"
-              }`}
-              style={row.colour === undefined ? undefined : { background: row.colour }}
+              className="h-[17px] w-[17px] shrink-0 rounded-full border border-ui-border-strong border-dashed bg-ui-surface"
             />
-            <span className="flex-1 font-semibold text-ui-ink">{row.role}</span>
-            {row.colour === undefined ? (
-              <span className="text-ui-muted">{es["editor.style.ownEmpty"]}</span>
-            ) : (
-              <code className="font-mono text-ui-muted">{row.colour}</code>
-            )}
-          </li>
-        ))}
-      </ul>
+            <span className="flex-1 font-semibold text-ui-ink">
+              {es["editor.style.role.brand"]}
+            </span>
+            <span className="text-ui-muted">{es["editor.style.ownEmpty"]}</span>
+          </div>
+          {edit ? (
+            <BrandField
+              onAccept={(brand) => edit.set(derivePalette({ brand }).colors, card.origin)}
+            />
+          ) : null}
+        </div>
+      )}
       {card.customised && card.restore ? (
         <button
           type="button"
