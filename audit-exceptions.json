@@ -1,4 +1,9 @@
 {
   "$comment": "Advisories pnpm audit is told to ignore, each with the date it was added and why. Read by scripts/security-audit.ts, which turns them into --ignore flags, and validated by scripts/audit-exceptions.ts. Empty is the healthy state.",
-  "ignored": {}
+  "ignored": {
+    "GHSA-fc5q-39xc-vjpf": {
+      "added": "2026-11-17",
+      "why": "picomatch <=4.0.7, ReDoS through single-branch repeated extglobs, with no patched version published (4.0.7 of 24 August 2026 is the latest). Reached only at development and build time: vitest and vite at the root, and @sentry/nextjs's rollup commonjs plugin in apps/editor. Every glob pattern it is given is the repository's own, never a visitor's or an owner's, and nothing under packages/renderer imports it, so no published site carries it. Revisit when picomatch publishes a fix: remove this entry and let the audit prove it."
+    }
+  }
 }
