@@ -65,7 +65,11 @@ The record is `docs/design/REVIEW.md`, sprint 37.
    transition from nothing rather than an arrival in place. Something moving that no hand asked for.
    The walk that read the strip inside that slide went red once on CI and now waits for the strip to
    be still; the product is untouched, for David to decide (the natural fix is a first placing
-   without transition, as `Segments` does for its mark).
+   without transition, as `Segments` does for its mark). **Measured again on CI the same evening (PR
+   #385):** mid-slide, the mark's box was at [205..385] in a strip of 377 px — an absolute, `transform`ed
+   box a scroll container counts as overflow — so on a narrow strip the slide can flash the tabs'
+   scrollbar for a frame or two. The same first-placing fix ends both; clipping the mark would hide the
+   symptom only. The walk now waits for the mark to sit under its tab.
 7. **From sprints 36, 35 and 34, untouched**, under their own reviews below. The editor, the radial
    rail included, has still not been seen outside Chromium.
 8. **Sprint 38 unplanned.**

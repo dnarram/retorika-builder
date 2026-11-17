@@ -10162,18 +10162,25 @@ describe("la barra superior reparte su ancho entre el logo y las pestañas", () 
    * direction's to decide rather than quietly asserted away here.
    */
   async function strip(page: Page) {
-    // **Measured once the strip is still** (sprint 38 día 1). The mark under the current tab arrives
-    // late: measured on 16 November, it starts its 180 ms slide from the strip's left edge seconds
-    // after the editor opens — when the bank's photograph lands and the bar is measured again — and
-    // this walk used to read the strip 17 ms into that slide. That is a reading of a bar in motion,
-    // and it went red once on CI (PR #382) while never here; the walk now waits for every animation
-    // and transition inside the strip to finish, which is what it means by «the bar».
+    // **Measured once the mark has landed under its tab** (sprint 38 día 1, corrected the same day).
+    // The mark under the current tab arrives late: measured on 16 November, it starts its 180 ms
+    // slide from the strip's left edge seconds after the editor opens — when the bank's photograph
+    // lands and the bar is measured again — and a mark mid-slide is an absolute, `transform`ed box
+    // that a scroll container counts as overflow. The first wait (no animation running) was not
+    // enough: it can hold in the quiet moment *before* the slide starts, and CI caught it on PR #385
+    // with the mark's box at [205..385] while its style already said 128 px and 121 wide, 8 px past a
+    // strip of 377. So the walk waits for what it means by a still bar: the mark sitting under the
+    // current tab, to the pixel, with nothing running inside the strip.
     await page.waitForFunction(() => {
       const tabs = document.querySelector('[data-testid="page-tabs"]');
-      return (
-        tabs !== null &&
-        tabs.getAnimations({ subtree: true }).every((a) => a.playState !== "running")
-      );
+      const mark = tabs?.querySelector(":scope > span");
+      const current = tabs?.querySelector('[aria-current="page"]');
+      if (!tabs || !mark || !current) return false;
+      if (tabs.getAnimations({ subtree: true }).some((a) => a.playState === "running"))
+        return false;
+      const at = mark.getBoundingClientRect();
+      const under = current.getBoundingClientRect();
+      return Math.abs(at.left - under.left) <= 1 && Math.abs(at.width - under.width) <= 1;
     });
     return page.evaluate(() => {
       const tabs = document.querySelector('[data-testid="page-tabs"]');
