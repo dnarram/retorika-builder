@@ -29806,15 +29806,19 @@ describe("sprint 36 día 7 — el lienzo responde", () => {
       await expect(frame.locator('[data-section="sec-cover"]')).toBeVisible();
       await motionSettled(page);
 
-      // Nothing seen through a blur: the arrival lasts 0.01 ms, so at most the frame it is created
-      // in shows its first keyframe — at opacity 0, which nobody sees.
+      // Nothing seen through a blur: the arrival lasts 0.01 ms, so only the frames before it starts
+      // show its first keyframe — at opacity 0, which nobody sees.
       const menu = await menuArrival(page);
       expect(menu.length).toBeGreaterThan(1);
       expect(
         menu.filter((m) => m.filter !== "none" && m.opacity > 0),
         "a menu seen through a blur with reduced motion",
       ).toEqual([]);
-      expect(menu.filter((m) => m.filter !== "none").length).toBeLessThanOrEqual(1);
+      // **Two frames, not one** (sprint 38 día 8): the frame the animation is created in and, on a
+      // slow machine, the frame its start time resolves in — CI read two on PR #389, both at opacity
+      // 0. The bound still tells a 0.01 ms arrival from one that lasts; and a blur that plays out under
+      // reduced motion is caught by the assertion above, seen — sabotaged on día 8, red there.
+      expect(menu.filter((m) => m.filter !== "none").length).toBeLessThanOrEqual(2);
       await page.keyboard.press("Escape");
       await motionSettled(page);
 
