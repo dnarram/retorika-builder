@@ -1,4 +1,5 @@
-import { dominantColours, meanLuminance, paletteForLogo, toHex } from "./logoPalette.ts";
+import type { LogoColours } from "@retorika/generator";
+import { dominantColours, meanLuminance, toHex } from "./logoPalette.ts";
 
 /**
  * Decoding a logo far enough to read its colours, and no further.
@@ -7,12 +8,12 @@ import { dominantColours, meanLuminance, paletteForLogo, toHex } from "./logoPal
  * a canvas: `vitest.config.ts` gives `apps/editor` a node project with no DOM, so everything worth
  * asserting lives there and the dozen lines that cannot be tested there live here.
  *
- * Two questions are asked of the same 64×64 sample: which palette the logo's colour chooses
- * (question 1, since sprint 6), and how light the logo is on average (ADR 0059, David's adjustment
- * 4 of the sprint 30 plan) — the number the «Menú» panel and the download review compare with the
- * bar the logo sits on, so a white mark on a light bar is said before it is published. Neither
- * number is stored: the palette id travels as an answer, and the luminance lives in the editor's
- * session beside the photographs' object URLs, recomputed from the bytes whenever a site opens.
+ * Two questions are asked of the same 64×64 sample: which colours the logo has (question 1 and a
+ * logo uploaded later, sprint 38 día 3, ADR 0076), and how light the logo is on average (ADR 0059,
+ * David's adjustment 4 of the sprint 30 plan) — the number the «Menú» panel and the download review
+ * compare with the bar the logo sits on. The colours travel as an answer; the luminance lives in the
+ * editor's session beside the photographs' object URLs, recomputed from the bytes whenever a site
+ * opens.
  */
 
 /** The logo is scaled into a square this size before its pixels are read. Small on purpose: the
@@ -55,20 +56,6 @@ async function samplePixels(source: Blob): Promise<Uint8ClampedArray | null> {
 }
 
 /**
- * The palette a logo file chooses, or `null` — for a logo with no colour in it (a black wordmark
- * on white), for one whose colour no palette is near, and for a file the browser cannot decode.
- *
- * All three answer the same way on purpose: the sector's palette stands, and nothing tells the
- * owner their logo chose it. An undecodable file is not worth an error of its own here — the logo
- * is optional, question 1 continues either way, and a message about a corrupt PNG at the moment
- * someone is typing their business name would be an interruption in exchange for nothing.
- */
-export async function paletteFromLogoFile(file: File): Promise<string | null> {
-  const pixels = await samplePixels(file);
-  return pixels === null ? null : paletteForLogo(pixels);
-}
-
-/**
  * How light the logo is, as the mean WCAG relative luminance of its visible pixels (0 black, 1
  * white), or `null` for a file the browser cannot decode or a logo that is wholly transparent.
  * `meanLuminance` holds the arithmetic and its test; this is the canvas in front of it.
@@ -76,12 +63,6 @@ export async function paletteFromLogoFile(file: File): Promise<string | null> {
 export async function logoLuminanceOf(source: Blob): Promise<number | null> {
   const pixels = await samplePixels(source);
   return pixels === null ? null : meanLuminance(pixels);
-}
-
-/** The colours a logo brings: its brand tint and, when it really has one, a second. */
-export interface LogoColours {
-  brand: string;
-  second: string | null;
 }
 
 /**

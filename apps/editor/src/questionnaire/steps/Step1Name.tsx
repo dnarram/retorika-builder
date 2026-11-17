@@ -1,11 +1,12 @@
 "use client";
 
 import { type Answers, VARIANTS } from "@retorika/generator";
-import { PALETTES } from "@retorika/tokens";
+import { derivePalette, PALETTES } from "@retorika/tokens";
 import tokensEs from "@retorika/tokens/locales/es" with { type: "json" };
 import { useState } from "react";
 import { ACCEPTED_IMAGE_ACCEPT } from "../../editor/imageBytes.ts";
-import { paletteFromLogoFile } from "../../editor/logoImage.ts";
+import { logoColoursOf } from "../../editor/logoImage.ts";
+import { nearestPalette, parseHex } from "../../editor/logoPalette.ts";
 import { logoSrcFor, mintLogoId, prepareLogo, savePhoto } from "../../editor/photos.ts";
 import es from "../../locales/es.json" with { type: "json" };
 import {
@@ -59,16 +60,16 @@ export function Step1Name({
   async function chooseLogo(file: File | null) {
     setRejection(null);
     if (!file) {
-      update({ logo: null, keptLogo: null, logoPaletteId: null });
+      update({ logo: null, keptLogo: null, logoColours: null });
       return;
     }
-    update({ logo: file, keptLogo: null, logoPaletteId: null });
+    update({ logo: file, keptLogo: null, logoColours: null });
     setReading(true);
     try {
       const prepared = await prepareLogo(file);
       if (!prepared.ok) {
         setRejection(es[`editor.logo.${prepared.error.reason}` as keyof typeof es]);
-        update({ logo: null, keptLogo: null, logoPaletteId: null });
+        update({ logo: null, keptLogo: null, logoColours: null });
         return;
       }
       const src = logoSrcFor(mintLogoId());
@@ -79,33 +80,46 @@ export function Step1Name({
           ),
         )
       ).every(Boolean);
-      const logoPaletteId = await paletteFromLogoFile(file);
+      const logoColours = await logoColoursOf(file);
       const { width, height } = prepared.logo;
-      update({ keptLogo: kept ? { src, width, height } : null, logoPaletteId });
+      update({ keptLogo: kept ? { src, width, height } : null, logoColours });
     } finally {
       setReading(false);
     }
   }
 
-  /** What actually happened, in the owner's own terms — and never a claim the logo chose the
-   * colours when it did not. A logo with no colour the palettes share leaves the sector deciding,
-   * exactly as no logo at all does, and says so. */
+  /**
+   * What actually happened, in the owner's own terms (sprint 38 día 3, ADR 0076): the logo's colours
+   * are the site's, and the line says so — and, when the brand's colour is too light to be read as
+   * text, that the words take a darker tone of it while buttons and bands carry it as it is. A logo
+   * with no colour in it says that too, rather than pretending it chose anything. «Se parece a» is
+   * information about a predefined palette, never a choice of one.
+   */
   function logoHelp(): string {
     if (!answers.logo) return es["questionnaire.step1.logo.help"];
     if (reading) return es["questionnaire.step1.logo.help.reading"];
-    const chosen = PALETTES.find((palette) => palette.id === answers.logoPaletteId);
-    const colours = chosen
-      ? es["questionnaire.step1.logo.help.palette"].replace(
-          "{palette}",
-          tokensEs[chosen.nameKey as keyof typeof tokensEs] ?? chosen.id,
-        )
-      : es["questionnaire.step1.logo.help.noPalette"];
+    const colours = answers.logoColours;
+    const parts: string[] = [];
+    if (colours) {
+      parts.push(es["questionnaire.step1.logo.help.colours"]);
+      if (derivePalette({ brand: colours.brand, second: colours.second }).siblings.primary) {
+        parts.push(es["questionnaire.step1.logo.help.darker"]);
+      }
+      const near = nearestPalette(parseHex(colours.brand));
+      const nameKey = PALETTES.find((palette) => palette.id === near?.paletteId)?.nameKey;
+      const named = nameKey ? tokensEs[nameKey as keyof typeof tokensEs] : undefined;
+      if (named)
+        parts.push(es["questionnaire.step1.logo.help.looksLike"].replace("{palette}", named));
+    } else {
+      parts.push(es["questionnaire.step1.logo.help.noColour"]);
+    }
     // And whether the mark itself will be on the site: kept, or not kept and why (ADR 0059).
-    return `${colours} ${
+    parts.push(
       answers.keptLogo === null
         ? es["questionnaire.step1.logo.notKept"]
-        : es["questionnaire.step1.logo.kept"]
-    }`;
+        : es["questionnaire.step1.logo.kept"],
+    );
+    return parts.join(" ");
   }
 
   return (

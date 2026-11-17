@@ -6,7 +6,6 @@ import {
   dominantColours,
   meanLuminance,
   nearestPalette,
-  paletteForLogo,
   parseHex,
   type Rgb,
   toHex,
@@ -250,26 +249,14 @@ describe("nearestPalette", () => {
   });
 });
 
-describe("paletteForLogo, the two halves together", () => {
-  it("turns a green logo's pixels into «Verde natural»", () => {
-    expect(paletteForLogo(solid("#059669"))).toBe("forest-emerald");
-  });
-
-  it("answers null for a yellow logo, for a black-and-white one, and for an empty one", () => {
-    // Three different reasons, one answer on purpose: the sector's palette stands and nothing
-    // tells the owner their logo chose it.
-    expect(paletteForLogo(solid("#EAB308"))).toBeNull();
-    expect(paletteForLogo(mixed("#FFFFFF", 32, "#101010", 64))).toBeNull();
-    expect(paletteForLogo(new Uint8ClampedArray(64 * 4))).toBeNull();
-  });
-
+describe("dominantColour over a transparent field", () => {
   it("ignores a transparent field around a coloured mark, even a brightly coloured field", () => {
     const invisibleBlue = solid("#2563EB", 236, 0);
     const visibleRust = solid("#9A3412", 20, 255);
     const logo = new Uint8ClampedArray(256 * 4);
     logo.set(invisibleBlue, 0);
     logo.set(visibleRust, invisibleBlue.length);
-    expect(paletteForLogo(logo)).toBe("warm-terracotta");
+    expect(dominantColour(logo)).toEqual(parseHex("#9A3412"));
   });
 });
 
@@ -295,7 +282,6 @@ describe("colourDistance", () => {
 describe("the neutral start is not a colour a logo chooses (ADR 0041)", () => {
   it("sends a logo in Retorika's own blue to classic-blue, never to the neutral palette", () => {
     expect(nearestPalette(parseHex("#156FE7"))?.paletteId).toBe("classic-blue");
-    expect(paletteForLogo(solid("#156FE7", 16))).toBe("classic-blue");
   });
 });
 

@@ -40,6 +40,13 @@ export interface HelpNotice {
 export interface HelpLineState {
   /** The delete notice (ADR 0014), alive while `Variants` keeps it. */
   notice: HelpNotice | null;
+  /**
+   * A logo uploaded to an untouched site has just repainted it in the logo's colours (sprint 38 día 3,
+   * ADR 0076) — news the owner did not ask for in so many words, so the live voice, with «Deshacer»
+   * beside it like the delete notice: one press takes the colours back and leaves the logo. Alive
+   * while `Variants` keeps it, cleared by any other edit, as the delete notice is.
+   */
+  coloursApplied: boolean;
   /** The last `announce()`, with the moment it was said; stale after `ANNOUNCEMENT_MS`. */
   announcement: { text: string; at: number } | null;
   download: "idle" | "preparing" | "downloading" | "error" | "busy";
@@ -57,8 +64,9 @@ export interface HelpLineState {
   /** A screen that is touched and never hovered: no keys are said, there are none. */
   touch: boolean;
   platform: "mac" | "other";
-  /** The radial menu offered once, at rest (sprint 37 día 6, ADR 0072): the line's lowest voice. */
-  offer: "radial" | null;
+  /** Something offered once, at rest: the radial menu (sprint 37 día 6, ADR 0072), or the logo's
+   * colours a site does not wear yet (sprint 38 día 3, ADR 0076). The line's lowest voice. */
+  offer: "radial" | "logoColours" | null;
 }
 
 export interface HelpLineSays {
@@ -67,7 +75,7 @@ export interface HelpLineSays {
   tone: "info" | "warn" | "error";
   /** Drawn beside the text only for the delete notice: «Deshacer», and the cross if it stays. */
   notice?: { dismiss: boolean };
-  /** Drawn beside the quiet text only for the radial menu's offer: a cross that answers it. */
+  /** Drawn beside the quiet text only for an offer: a cross that answers it. */
   offer?: true;
 }
 
@@ -146,6 +154,16 @@ export function liveSays(state: HelpLineState, now: number): HelpLineSays {
       notice: { dismiss: state.notice.persistent },
     };
   }
+  // The colours a late logo applied: the same shape as the delete notice — a sentence and «Deshacer»,
+  // no cross, since it goes by itself and any other edit takes it away.
+  if (state.coloursApplied) {
+    return {
+      child: "live",
+      text: es["editor.logo.coloursApplied"],
+      tone: "info",
+      notice: { dismiss: false },
+    };
+  }
   if (state.download === "error")
     return { child: "live", text: es["editor.downloadError"], tone: "error" };
   if (state.download === "busy")
@@ -187,6 +205,7 @@ export function quietSays(state: HelpLineState): HelpLineSays {
   // anything to say, in place of the idle hint, and never through the live child — it is a
   // suggestion that waits to be read, not news.
   if (state.offer === "radial") return { ...quiet(es["editor.rail.try.offer"]), offer: true };
+  if (state.offer === "logoColours") return { ...quiet(es["editor.logo.offer"]), offer: true };
   return quiet(es["editor.editHint"]);
 }
 
@@ -202,6 +221,7 @@ export function helpLineFor(
 /** The state before anything has happened, for the editor's first render and the tests. */
 export const HELP_AT_REST: HelpLineState = {
   notice: null,
+  coloursApplied: false,
   announcement: null,
   download: "idle",
   photoError: null,

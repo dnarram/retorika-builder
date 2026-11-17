@@ -115,3 +115,10 @@ own — a logo's yellow, too light to be read as text — and the button is draw
 **so is the disc, and so is the letter**: `color.fill` under `color.onFill`, each falling back to the
 primary and the surface when the theme carries none, which is every icon published before 1.20.0, byte for
 byte. The pair is `onFill on fill` in `CONTRAST_PAIRS`, proved for every palette as surface on primary was.
+
+## Note — sprint 38 día 3: a logo no longer only chooses (ADR 0076)
+
+«A logo chooses among those palettes and never invents one» is no longer true: since 16 November 2026 a
+logo's colours derive a palette of their own, every pair proved as every predefined palette's is. The
+icon's claim is unchanged — the disc is the fill and the letter its ink (the note above), a pair proved for
+every palette, derived ones included.

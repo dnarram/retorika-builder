@@ -17,7 +17,7 @@ import {
 import { themeFor } from "./theme.ts";
 import { VARIANTS, type VariantChoice } from "./variants.ts";
 
-export type { Answers, MainAction, SectorId } from "./answers.ts";
+export type { Answers, LogoColours, MainAction, SectorId } from "./answers.ts";
 export { EMPTY_ANSWERS, SECTOR_IDS } from "./answers.ts";
 export { hasLocationSection, LOCATION_SECTION_ID, visitAnchor } from "./destination.ts";
 export { sectorMenuLabel, withSectorMenuLabel } from "./menuLabels.ts";
@@ -82,7 +82,11 @@ export function generate(
     schemaVersion: SCHEMA_VERSION,
     id: `doc-${slugify(answers.businessName)}`,
     siteName: answers.businessName,
-    theme: themeFor(sector, answers.logoPaletteId),
+    theme: themeFor(sector, answers.logoColours),
+    // Where the colours came from, written **only** when they came from the logo (ADR 0075): the
+    // neutral start is nobody's choice, and absent is what says so — a logo uploaded later repaints a
+    // site that is still in it and only offers itself to one whose owner chose (David's adjustment 1).
+    ...(answers.logoColours ? { palette: { kind: "logo" as const } } : {}),
     pages: [
       {
         id: "home",

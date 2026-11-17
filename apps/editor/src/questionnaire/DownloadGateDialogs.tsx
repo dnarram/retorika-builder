@@ -6,6 +6,7 @@ import type {
   RetorikaDocument,
   StyleException,
 } from "@retorika/schema";
+import type { PairKey, UnreadablePair } from "@retorika/tokens";
 import { useId } from "react";
 import type { DownloadGate } from "../editor/downloadGate.ts";
 import { HEAVY_FONT_BYTES } from "../editor/fontBytes.ts";
@@ -152,6 +153,89 @@ export function TooManyPhotosDialog({
             className="h-10 cursor-pointer rounded-[10px] border-0 bg-ui-brand px-5 text-[14px] font-semibold text-white"
           >
             {es["editor.download.tooManyPhotos.close"]}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** A sentence starts with a capital, whichever role came first in it. */
+function sentence(text: string): string {
+  return text.charAt(0).toLocaleUpperCase("es") + text.slice(1);
+}
+
+/** What each colour of a pair is, in the owner's words, lower case: either can open the sentence. */
+const PAIR_ROLE: Record<PairKey, keyof typeof es> = {
+  "color.ink": "editor.download.theme.role.ink",
+  "color.surface": "editor.download.theme.role.surface",
+  "color.primary": "editor.download.theme.role.primary",
+  "color.secondary": "editor.download.theme.role.secondary",
+  "color.muted": "editor.download.theme.role.muted",
+  "color.accent": "editor.download.theme.role.accent",
+  "color.fill": "editor.download.theme.role.fill",
+  "color.onFill": "editor.download.theme.role.onFill",
+};
+
+/**
+ * **The site's own colours do not read** (sprint 38 día 3): a block, said pair by pair in the owner's
+ * words with the measure beside it — «Los botones y su texto: 1,2 de contraste» — and one way out,
+ * choosing a palette in «Estilo», whose every one is proved. Reachable only by a document edited by
+ * hand or a defect; said plainly when it happens rather than published.
+ */
+export function ThemeDialog({
+  pairs,
+  onClose,
+}: {
+  pairs: readonly UnreadablePair[];
+  onClose: () => void;
+}) {
+  const titleId = useId();
+  const container = useFocusTrap(true, onClose);
+  return (
+    <div className="fixed inset-0 z-20 flex items-center justify-center bg-[#0F172A]/45 p-5">
+      <div
+        ref={container}
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        className="max-h-full w-full max-w-[460px] overflow-y-auto rounded-2xl bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.28)]"
+      >
+        <h2 id={titleId} className="m-0 text-[17px] font-bold text-ui-ink">
+          {es["editor.download.theme.title"]}
+        </h2>
+        <p className="mt-2 mb-0 text-[14px] leading-snug text-ui-muted">
+          {es["editor.download.theme.body"]}
+        </p>
+        <ul className="mt-3 mb-0 flex list-none flex-col gap-1.5 p-0">
+          {pairs.map((pair) => (
+            <li
+              key={`${pair.fg}-${pair.bg}-${pair.under ?? ""}`}
+              className="text-[13px] leading-snug text-ui-ink"
+            >
+              {sentence(
+                (pair.under
+                  ? es["editor.download.theme.pairGlass"]
+                  : es["editor.download.theme.pair"]
+                )
+                  .replace("{fg}", es[PAIR_ROLE[pair.fg]])
+                  .replace("{bg}", es[PAIR_ROLE[pair.bg]])
+                  .replace("{ratio}", formatRatio(pair.ratio)),
+              )}
+            </li>
+          ))}
+        </ul>
+        <p className="mt-3 mb-0 text-[13px] leading-snug text-ui-muted">
+          {es["editor.download.theme.foot"]}
+        </p>
+        <div className="mt-5 flex justify-end">
+          <button
+            type="button"
+            onClick={onClose}
+            className="h-10 cursor-pointer rounded-[10px] border-0 bg-ui-brand px-5 text-[14px] font-semibold text-white"
+          >
+            {es["editor.download.theme.close"]}
           </button>
         </div>
       </div>

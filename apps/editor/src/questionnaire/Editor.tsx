@@ -10,6 +10,7 @@ import {
   variantsFor,
 } from "@retorika/catalog";
 import catalogEs from "@retorika/catalog/locales/es" with { type: "json" };
+import type { LogoColours } from "@retorika/generator";
 import { buildCss, ownFontsFor, render, sectionMenuEntries } from "@retorika/renderer";
 import {
   bindList,
@@ -62,7 +63,7 @@ import {
   type TextEdit,
   usesOfCollection,
 } from "@retorika/schema";
-import type { FontKey } from "@retorika/tokens";
+import type { FontKey, PaletteColors } from "@retorika/tokens";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { type ArrowRun, accumulate, moves, RUN_IDLE_MS } from "../editor/arrowRun.ts";
@@ -167,7 +168,8 @@ import {
 import { ACCEPTED_IMAGE_ACCEPT } from "../editor/imageBytes.ts";
 import { leave } from "../editor/leaving.ts";
 import { toolbarFamilyLabel } from "../editor/letterGallery.ts";
-import { logoLuminanceOf } from "../editor/logoImage.ts";
+import { logoOfferFor, logoPalettesFor } from "../editor/logoColours.ts";
+import { logoColoursOf, logoLuminanceOf } from "../editor/logoImage.ts";
 import { LOOK_AHEAD_DEADLINE_MS, lookAheadStep } from "../editor/lookAhead.ts";
 import {
   dropOutcome,
@@ -254,6 +256,7 @@ import {
   OverflowDialog,
   PhotosFailedDialog,
   StackedTextDialog,
+  ThemeDialog,
   TooManyPhotosDialog,
 } from "./DownloadGateDialogs.tsx";
 import { FieldsPanel } from "./FieldsPanel.tsx";
@@ -673,6 +676,10 @@ export function Editor({
   onRailLayoutChange,
   railOffer,
   onDismissRailOffer,
+  logoOfferDismissed = true,
+  onDismissLogoOffer,
+  onPickLogoPalette,
+  coloursApplied = false,
   onEscalateSection,
   placementWasMoved,
   onRevertSection,
@@ -788,6 +795,18 @@ export function Editor({
    * The offer is made only with somewhere to send the answer. */
   railOffer?: boolean;
   onDismissRailOffer?: () => void;
+  /**
+   * Whether the logo's colours have been offered and answered in this browser (sprint 38 día 3, ADR
+   * 0076), and the answer: the cross in the line. The offer itself is derived here, where the logo's
+   * colours are read from its bytes; `Variants` keeps the answer, as it keeps the rail's.
+   */
+  logoOfferDismissed?: boolean;
+  onDismissLogoOffer?: () => void;
+  /** «De tu logo» or «De tu logo, oscura» chosen in «Estilo»: the colours, derived here from the
+   * logo's bytes; assembling the theme and writing it is `Variants`' business. */
+  onPickLogoPalette?: (colors: PaletteColors) => void;
+  /** A late logo's colours were just applied to an untouched site: the line says so with «Deshacer». */
+  coloursApplied?: boolean;
   /** This section starts being designed by hand, and goes back to the catalog's layout. One
    * history step each, so Ctrl+Z covers the first minutes — which is what the advanced dossier §5
    * asks for and the reason day 4's dialog is about the durable case rather than this one.
@@ -1374,11 +1393,23 @@ export function Editor({
    * is no logo or its bytes have not arrived, in which case nothing is said about it.
    */
   const [logoLuminance, setLogoLuminance] = useState<number | null>(null);
+  /**
+   * The logo's colours, read from the same bytes by the same effect (sprint 38 día 3, ADR 0076), and
+   * never stored: «De tu logo» in «Estilo» and the line's offer are derived from them, the way the
+   * faint-logo warning is derived from the luminance. `null` while there is no logo, while its bytes
+   * have not arrived, and for a logo with no colour in it.
+   */
+  const [logoColours, setLogoColours] = useState<LogoColours | null>(null);
+  const logoPalettes = useMemo(
+    () => (logoColours ? logoPalettesFor(logoColours) : null),
+    [logoColours],
+  );
   const logoSrc = doc.header?.brand?.logo?.src;
   const logoUrl = logoSrc === undefined ? undefined : photoUrls.get(logoSrc);
   useEffect(() => {
     if (logoUrl === undefined) {
       setLogoLuminance(null);
+      setLogoColours(null);
       return;
     }
     let cancelled = false;
@@ -1386,10 +1417,17 @@ export function Editor({
       try {
         const blob = await (await fetch(logoUrl)).blob();
         const luminance = await logoLuminanceOf(blob);
-        if (!cancelled) setLogoLuminance(luminance);
+        const colours = await logoColoursOf(blob);
+        if (!cancelled) {
+          setLogoLuminance(luminance);
+          setLogoColours(colours);
+        }
       } catch {
         // A revoked object URL: the next render brings a live one or no logo at all.
-        if (!cancelled) setLogoLuminance(null);
+        if (!cancelled) {
+          setLogoLuminance(null);
+          setLogoColours(null);
+        }
       }
     })();
     return () => {
@@ -2580,6 +2618,7 @@ export function Editor({
     id: section.id,
     name: sectionDisplayName(doc, section.id),
   }));
+  const logoOffer = logoOfferFor(doc, logoColours, logoOfferDismissed);
   const helpSays = helpLineFor(
     {
       ...HELP_AT_REST,
@@ -2597,7 +2636,15 @@ export function Editor({
       download: state,
       photoError,
       placeholders,
-      offer: railOffer === true && onDismissRailOffer ? "radial" : null,
+      coloursApplied,
+      // The logo's colours before the radial menu: one is about the owner's site, the other about the
+      // editor. Each needs somewhere to send its answer.
+      offer:
+        logoOffer && onDismissLogoOffer
+          ? "logoColours"
+          : railOffer === true && onDismissRailOffer
+            ? "radial"
+            : null,
     },
     Date.now(),
   );
@@ -9349,6 +9396,9 @@ export function Editor({
               onCancel={() => setDownloadDialog(null)}
             />
           ) : null}
+          {downloadDialog?.kind === "theme" ? (
+            <ThemeDialog pairs={downloadDialog.pairs} onClose={() => setDownloadDialog(null)} />
+          ) : null}
           {downloadDialog?.kind === "tooManyPhotos" ? (
             <TooManyPhotosDialog
               count={downloadDialog.count}
@@ -9494,7 +9544,17 @@ export function Editor({
         ...helpSays,
         onUndo: undoFromHistory,
         onDismiss: onDismissToast,
-        ...(onDismissRailOffer ? { onDismissOffer: onDismissRailOffer } : {}),
+        // The cross answers whichever offer the line is making.
+        ...(helpSays.quiet.offer
+          ? {
+              onDismissOffer:
+                logoOffer && onDismissLogoOffer
+                  ? onDismissLogoOffer
+                  : (onDismissRailOffer ?? (() => {})),
+            }
+          : onDismissRailOffer
+            ? { onDismissOffer: onDismissRailOffer }
+            : {}),
       }}
       device={device}
       onDeviceChange={setDevice}
@@ -9641,6 +9701,9 @@ export function Editor({
             fonts={doc.fonts ?? []}
             fontUrls={fontUrls}
             onPickPalette={onPickPalette}
+            logoPalettes={logoPalettes}
+            logoColours={logoColours}
+            {...(onPickLogoPalette ? { onPickLogoPalette } : {})}
             onPickTypePair={onPickTypePair}
             onOpenChooser={setFontChooser}
             onPickScale={onPickScale}

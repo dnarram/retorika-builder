@@ -62,3 +62,9 @@ presentation.
 - **The editor's shell — the bar heights, the rail width, the toolbar's contents — is not decided
   here.** It is drawn in the mockups and written down in `docs/design/REVIEW.md`, where it can
   change as the editor is built without amending an ADR.
+
+## Note — sprint 38 día 3: the client's colours do come from their logo now (ADR 0076)
+
+«Whose values come from the client's own logo» was, until sprint 38, a predefined palette the logo chose.
+Since 16 November 2026 a site with a logo carries a palette derived from the logo's own colours, every pair
+proved by the same arithmetic as the predefined palettes. The editor's own tokens are untouched.

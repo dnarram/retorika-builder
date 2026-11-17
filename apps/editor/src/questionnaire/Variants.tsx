@@ -62,6 +62,14 @@ import {
   wasSectionEverEdited,
 } from "../editor/documentHistory.ts";
 import { logoPatch, logoRemovedPatch } from "../editor/headerState.ts";
+import {
+  isUntouchedStart,
+  loadLogoOfferDismissed,
+  logoPalettesFor,
+  saveLogoOfferDismissed,
+  withLogoColours,
+} from "../editor/logoColours.ts";
+import { logoColoursOf } from "../editor/logoImage.ts";
 import { PHONE_BREAKPOINT } from "../editor/overflowCheck.ts";
 import {
   clearFontFiles,
@@ -428,6 +436,15 @@ export function Variants({
   const [histories, dispatch] = useReducer(historiesReducer, answers, (initial) =>
     initHistories(initialDocuments ?? generateVariants(initial).map((site) => site.document)),
   );
+  /**
+   * **The histories as of the last render, for what lands after an `await`** (sprint 38 día 3). A logo
+   * uploaded later repaints the site only if it is still the untouched start — and that has to be
+   * asked of the document *now*, after the file was prepared and its colours read, not of the one
+   * the press saw: an owner who chose a palette in between has answered the question. Read and
+   * dispatched in one synchronous stretch, so nothing can land between the two.
+   */
+  const historiesNow = useRef(histories);
+  historiesNow.current = histories;
   const [openIndex, setOpenIndex] = useState<number | null>(initialOpenIndex);
   /**
    * **The proposal becomes the canvas, and the canvas becomes its proposal** (sprint 36 día 4, the
@@ -859,6 +876,14 @@ export function Variants({
     setRailOfferDismissed(true);
     saveRailOfferDismissed();
   };
+  /** The same, for the logo's colours offered in the line (sprint 38 día 3, ADR 0076): `true` until the
+   * browser is read, then the stored answer; the cross answers it for this session whatever the
+   * browser does with the write. */
+  const [logoOfferDismissed, setLogoOfferDismissed] = useState(true);
+  const dismissLogoOffer = () => {
+    setLogoOfferDismissed(true);
+    saveLogoOfferDismissed();
+  };
 
   /**
    * Who the switch belongs to, once there is somebody for it to belong to.
@@ -872,6 +897,7 @@ export function Variants({
     setDesignTools(loadDesignTools());
     setRailLayout(loadRailLayout());
     setRailOfferDismissed(loadRailOfferDismissed());
+    setLogoOfferDismissed(loadLogoOfferDismissed());
     const measure = () => setViewportWidth(window.innerWidth);
     measure();
     window.addEventListener("resize", measure);
@@ -1362,6 +1388,26 @@ export function Variants({
     if (!(await savePhoto(photoScope(variant), src, result.logo.bytes))) {
       setSaveStatus("unsaved");
     }
+
+    // **The logo's colours** (sprint 38 día 3, ADR 0076, David's P2): a site still in its untouched
+    // start takes them, as a second step after the logo's own, so «Deshacer» takes the colours back
+    // and leaves the logo; any other site keeps the palette its owner chose, and the line offers the
+    // logo's colours once instead (derived in the editor from the same bytes). Asked of the document
+    // as it is *now* — after the file was prepared, kept and read — never of the one the press saw.
+    const colours = await logoColoursOf(file);
+    if (turn !== logoTurn.current || colours === null) return;
+    const now = historiesNow.current[variant]?.present.document;
+    if (!now || !isUntouchedStart(now)) return;
+    dispatch({
+      type: "setTheme",
+      variant,
+      theme: withLogoColours(now.theme, logoPalettesFor(colours).light),
+      palette: { kind: "logo" },
+    });
+    clearTimeout(toastTimer.current);
+    setToast(null);
+    setColoursApplied(true);
+    toastTimer.current = setTimeout(dismissToast, TOAST_DURATION_MS);
   }
 
   /** «Quitar»: the header forgets the logo. The bytes stay in this browser's store, harmless and
@@ -1414,10 +1460,17 @@ export function Variants({
 
   const [toast, setToast] = useState<DeleteToast | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  /**
+   * A late logo's colours were just applied (sprint 38 día 3): the line says so with «Deshacer», for
+   * as long as a delete's notice for a section nobody touched, and goes with it on any other edit —
+   * after which «Deshacer» would no longer undo the colours.
+   */
+  const [coloursApplied, setColoursApplied] = useState(false);
 
   function dismissToast() {
     clearTimeout(toastTimer.current);
     setToast(null);
+    setColoursApplied(false);
   }
 
   /**
@@ -1745,12 +1798,29 @@ export function Variants({
           // recolouring one has no more business touching the others than editing its text does.
           onPickPalette={(paletteId) => {
             dismissToast();
+            // Chosen, so the origin says so (ADR 0075): «Neutra» chosen here is the owner's choice and
+            // no longer the untouched start a late logo would repaint (David's adjustment 1).
             dispatch({
               type: "setTheme",
               variant: openIndex,
               theme: withPalette(history.present.document.theme, paletteId),
+              palette: { kind: "palette", id: paletteId },
             });
           }}
+          // «De tu logo» or «De tu logo, oscura» (ADR 0076): the colours the editor derived from the
+          // logo's bytes, written over the theme's own with the fonts and the measures left alone.
+          onPickLogoPalette={(colors) => {
+            dismissToast();
+            dispatch({
+              type: "setTheme",
+              variant: openIndex,
+              theme: withLogoColours(history.present.document.theme, colors),
+              palette: { kind: "logo" },
+            });
+          }}
+          logoOfferDismissed={logoOfferDismissed}
+          onDismissLogoOffer={dismissLogoOffer}
+          coloursApplied={coloursApplied}
           onPickTypePair={(typePairId) => {
             dismissToast();
             dispatch({

@@ -298,3 +298,9 @@ Consequences of the note: `packages/schema` (`headerLogoSchema`, `LOGO_MAX_EDGE`
 edge from the schema and never a side of 0; `Step1Name`, `Variants`), the `cabecera-con-marca` fixture
 at 1.16.0 with its 96×96, and the walk «sprint 30 día 5», which now reads both sides off the PNG in the
 ZIP for each of the two writers. Day by day in `docs/design/REVIEW.md`, sprint 30 día 7.
+
+## Note — sprint 38 día 3: the logo's colours, not a palette it chooses (ADR 0076)
+
+«The palette the logo chooses… still an answer rather than a colour» is superseded: the logo's colours are
+read from the same sample and travel as two hex strings, the site's palette derived from them. A logo
+uploaded later gives its colours to a site still in its untouched start, and offers them to any other.
