@@ -273,3 +273,12 @@ sprints as though it were new.
   justification and it **stops being true the day somebody writes styles against 1.1.0**.
 - The audit cannot be called `audit-exceptions`: `scripts/audit-exceptions.ts` and
   `pnpm audit:exceptions` already exist and are about pnpm security advisories.
+
+## Note — sprint 38 día 7: the palette's own colours are movable, and this ADR is unchanged (ADR 0077)
+
+[ADR 0077](0077-the-palette-is-the-owners-behind-the-same-arithmetic.md) lets the owner move the
+colours of the palette itself — not an element's — from «Estilo», with the design tools on or off.
+It produces no exception: every colour it can write is proved to 4.5 against every colour it is paired
+with before it is written, so it is a palette and not `{exact, exception: true}`. What this ADR decides —
+an exact value on one element, behind the switch, behind the 3 / 4.5 review — is unchanged, and so is
+REVIEW's refusal of a picker with nothing in front of it.

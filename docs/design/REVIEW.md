@@ -410,6 +410,14 @@ nobody inside can supply.
   **Accepted by David on 1 October 2026, not by direction** — see the ADR's own header for what
   that does and does not mean. This entry is amended by a decision direction has not looked at.
 
+  **Amended again by [ADR 0077](../decisions/0077-the-palette-is-the-owners-behind-the-same-arithmetic.md),
+  sprint 38 día 7 (`proposed`) — and the free picker stays refused.** What enters is a picker **with a
+  net**: every colour the owner can move in «Estilo» is proved before it is written by the arithmetic
+  the predefined palettes are proved by, the sliders cannot reach what breaks a pair and paint where
+  they stop, the wheel and the hex are judged on their change and refused with the pair and its figure,
+  and the gate judges the theme again at the download. The sentence this entry rests on — a palette
+  that is not contrast-tested cannot ship — is what the field enforces.
+
 - **Five swatches per palette, but not the mockup's five.** The mockup draws five circles; our
   palettes hold six colours. The one left out is `color.accent`, and that is a fact about the code
   rather than a preference: **no rule the renderer emits reads `var(--color-accent)`**, and it is
