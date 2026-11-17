@@ -42,7 +42,7 @@ export const TEASER_ID = "teaser";
  *
  * `role: "link"` rather than `"button"`: this is navigation inside the site, not the call to
  * action the business is asking for. The stylesheet draws it underlined in `color.primary`, a
- * pairing `packages/tokens/test/contrast.test.ts` proves for all four palettes, and it will not
+ * pairing `packages/tokens/test/contrast.test.ts` proves for every palette, and it will not
  * compete with the cover's real button on the same page.
  */
 export const TEASER_SLOTS: readonly PresetSlot[] = [{ slot: "link", role: "link", min: 1, max: 1 }];

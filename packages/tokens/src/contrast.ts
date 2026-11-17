@@ -125,7 +125,7 @@ export const CONTRAST_PAIRS: readonly ContrastPair[] = [
   { fg: "color.muted", bg: "color.surface" },
   { fg: "color.surface", bg: "color.primary" },
   // The header's two other backgrounds (ADR 0057, sprint 30 día 2): the bar on `color.secondary`
-  // or on `color.ink` writes its entries in `color.surface`. Measured over the five palettes on 29
+  // or on `color.ink` writes its entries in `color.surface`. Measured over the five palettes of 29
   // October 2026 before being written here: surface on secondary 5.47 at its lowest (classic-blue),
   // surface on ink 9.28 (forest-emerald). `color.ink` on `color.secondary` — the plan's first
   // thought — measured 1.23 in dark-slate and was refused; the schemes read these two instead.

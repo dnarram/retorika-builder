@@ -43,7 +43,7 @@ export const GALLERY_SLOTS: readonly PresetSlot[] = [
  * section of the page that does not exist — which is precisely the correction issue #19 made for the
  * cover's tagline, and the same reasoning applies with more force here, because a gallery has more
  * captions than a page has sections. `.rb-item p` is `color.muted` on `color.surface`, a pair
- * `packages/tokens/test/contrast.test.ts` already proves for all four palettes.
+ * `packages/tokens/test/contrast.test.ts` already proves for every palette.
  *
  * **It is `1..1` for the reason `prices.ts` makes its price `1..1`**: required in the structure so
  * that a new photograph is born with somewhere to type, optional on the page because an empty text

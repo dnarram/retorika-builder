@@ -36,7 +36,8 @@ import es from "../locales/es.json" with { type: "json" };
 /**
  * "El estilo de toda la web" — mockup 13, reconciled with what the code can honestly offer.
  *
- * Four palettes and three typefaces, as radio groups. Real `<input type="radio">` inside the
+ * Thirteen palettes since sprint 38 día 4 (and the logo's two before them when there is a logo), and
+ * three typefaces, as radio groups. Real `<input type="radio">` inside the
  * `<label>`, visually hidden, which is the pattern the mockup itself draws and the one that gets
  * keyboard arrows, grouping and the announced choice for free. A `<div>` with an `onClick` would
  * have to reimplement all three, worse.

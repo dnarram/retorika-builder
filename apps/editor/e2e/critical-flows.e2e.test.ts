@@ -31510,3 +31510,48 @@ describe("sprint 38 día 3 — los colores del logo son los de la web", () => {
     }
   }, 240_000);
 });
+
+/**
+ * **Sprint 38 día 4 — ocho paletas más** (David's P4: «ocho → trece»). «Estilo» lists the thirteen in
+ * their order — «Neutra» first, the four of sprint 6, the eight of today — each proved by the same
+ * arithmetic, and one of the new ones paints the site.
+ */
+describe("sprint 38 día 4 — ocho paletas más", () => {
+  it("ofrece trece paletas en «Estilo», y «Vino tinto» pinta la web", async () => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+    const studio = await context.newPage();
+    try {
+      await intoTheCanvas(studio);
+      await studio.getByRole("button", { name: "Estilo", exact: true }).click();
+      const colours = studio.getByRole("group", { name: "COLORES" }).getByRole("radio");
+      const names = await colours.evaluateAll((radios) =>
+        radios.map((radio) => radio.closest("label")?.textContent?.trim() ?? ""),
+      );
+      expect(names).toEqual([
+        "Neutra",
+        "Azul confianza",
+        "Terracota cálida",
+        "Verde natural",
+        "Pizarra oscura",
+        "Vino tinto",
+        "Oliva y arena",
+        "Medianoche y oro",
+        "Grafito",
+        "Lavanda",
+        "Coral y arena",
+        "Océano",
+        "Mostaza",
+      ]);
+      await studio.getByRole("radio", { name: "Vino tinto" }).check();
+      const frame = studio.frameLocator(PREVIEW).first();
+      await expect(frame.locator("h1").first()).toHaveCSS("color", "rgb(127, 29, 29)");
+      // The last of them is reachable at the panel's foot, which is the guard of a list that grew.
+      const last = studio.getByRole("radio", { name: "Mostaza" });
+      await last.scrollIntoViewIfNeeded();
+      await last.check();
+      await expect(frame.locator("h1").first()).toHaveCSS("color", "rgb(133, 77, 14)");
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
+});
