@@ -13,8 +13,10 @@ import type { Previewer } from "./panelKit.tsx";
  *
  * Eight variables, not six: a palette with a fill of its own (ADR 0074) paints its buttons from
  * `--color-fill` and writes on them in `--color-on-fill`, so a preview of one has to carry the pair —
- * and a preview of one without has to **remove** the pair, or the document's fill would stay
- * underneath a palette that fills with its primary.
+ * and a preview of one **without** has to write the pair too, as what the renderer resolves it to
+ * (`fill ?? primary`, `onFill ?? surface`), because the page's own `:root` block may declare the
+ * document's fill and an inline property that is merely absent leaves it in force: measured on the
+ * yellow logo's site, whose buttons stayed yellow under a wine palette until this was written.
  *
  * Three things keep it honest, as the bar's:
  *
@@ -65,12 +67,12 @@ export function themePreviewer(documentOf: () => Document | null | undefined): T
       const root = documentOf()?.documentElement;
       if (!root) return;
       active = root;
-      for (const key of KEYS) {
-        const value = colors[key];
-        const variable = tokenToCssVariable(key);
-        if (value === undefined) root.style.removeProperty(variable);
-        else root.style.setProperty(variable, value);
-      }
+      const resolved: Record<(typeof KEYS)[number], string> = {
+        ...colors,
+        "color.fill": colors["color.fill"] ?? colors["color.primary"],
+        "color.onFill": colors["color.onFill"] ?? colors["color.surface"],
+      };
+      for (const key of KEYS) root.style.setProperty(tokenToCssVariable(key), resolved[key]);
     },
     end,
     clear() {

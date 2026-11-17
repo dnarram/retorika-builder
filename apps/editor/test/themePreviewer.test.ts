@@ -30,23 +30,26 @@ describe("the theme's preview on the canvas", () => {
     preview.show(wine);
     expect(read(doc, "--color-primary")).toBe(wine["color.primary"]);
     expect(read(doc, "--color-surface")).toBe(wine["color.surface"]);
-    expect(read(doc, "--color-fill")).toBe("");
+    // No fill of its own: the pair as the renderer resolves it, so a fill the page's own sheet
+    // declares does not stay in force under the preview.
+    expect(read(doc, "--color-fill")).toBe(wine["color.primary"]);
+    expect(read(doc, "--color-on-fill")).toBe(wine["color.surface"]);
     preview.end("restore");
     expect(read(doc, "--color-primary")).toBe("");
     expect(doc.documentElement.getAttribute("style") ?? "").toBe("");
   });
 
-  it("carries the fill pair for a palette that has one, and removes it for one that has not", () => {
+  it("carries the fill pair for a palette that has one, and resolves it for one that has not", () => {
     const doc = canvas();
     const preview = themePreviewer(() => doc);
     preview.show(yellow);
     expect(read(doc, "--color-fill")).toBe("#FFCD00");
     expect(read(doc, "--color-on-fill")).toBe("#201A09");
-    // The second preview takes the first away before it writes: no fill left under the blue.
+    // The second preview takes the first away before it writes: no yellow left under the blue.
     preview.show(blue);
     expect(read(doc, "--color-primary")).toBe(blue["color.primary"]);
-    expect(read(doc, "--color-fill")).toBe("");
-    expect(read(doc, "--color-on-fill")).toBe("");
+    expect(read(doc, "--color-fill")).toBe(blue["color.primary"]);
+    expect(read(doc, "--color-on-fill")).toBe(blue["color.surface"]);
   });
 
   it("keeps the colours on a press, for the patch to take, and clear takes them", () => {
