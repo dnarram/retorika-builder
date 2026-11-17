@@ -26,6 +26,7 @@ import {
   parseDocument,
   ROW_STEP_PX,
 } from "@retorika/schema";
+import { contrastRatio } from "@retorika/tokens";
 import type { NodeResult } from "axe-core";
 import { afterAll, beforeAll, describe, it } from "vitest";
 import { headerSnapshot } from "../../../packages/renderer/test/menu-checks.ts";
@@ -31809,6 +31810,262 @@ describe("sprint 38 día 6 — las paletas son tarjetas", () => {
       );
       expect(longest).toBeLessThanOrEqual(0.01);
       await axeSerious(studio, "«Estilo» with a card's swatches open, under reduced motion");
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
+});
+
+/**
+ * **Sprint 38 día 7 — la paleta es del dueño** (David's P6, ADR 0077: «lo inválido no nace»). A colour
+ * of the chosen palette moves by two sliders that cannot reach what breaks a pair — the unreachable
+ * painted on the track with its sentence — or is asked for outright with the wheel or the hex and
+ * judged before it is written. A drag is one step, written on release; a run of arrows is one step.
+ * And «Tu paleta» is a whole palette from one colour.
+ */
+describe("sprint 38 día 7 — la paleta es del dueño", () => {
+  const rgb = (hex: string) =>
+    `rgb(${[1, 3, 5].map((i) => Number.parseInt(hex.slice(i, i + 2), 16)).join(", ")})`;
+  const WINE = rgb("#7F1D1D");
+  const toHex = (colour: string) =>
+    `#${(colour.match(/\d+/g) ?? [])
+      .slice(0, 3)
+      .map((n) => Number(n).toString(16).padStart(2, "0"))
+      .join("")}`;
+
+  const headline = (frame: FrameLocator) => frame.locator("h1").first();
+  const headlineColour = (frame: FrameLocator) =>
+    headline(frame).evaluate((el) => getComputedStyle(el).color);
+  /** The page's own ground, as the canvas paints it. */
+  const surface = (frame: FrameLocator) =>
+    frame
+      .locator("body")
+      .evaluate(() =>
+        getComputedStyle(document.documentElement).getPropertyValue("--color-surface").trim(),
+      );
+  /** The headline's contrast on the page's ground, read off the canvas. */
+  const headlineReads = async (frame: FrameLocator) =>
+    contrastRatio(toHex(await headlineColour(frame)), await surface(frame));
+  const serial = (frame: FrameLocator) =>
+    frame.locator("body").evaluate(() => document.documentElement.dataset["rbEdit"] ?? "0");
+  const undo = (page: Page) => page.locator('button[aria-label="Deshacer"]');
+  const redo = (page: Page) => page.locator('button[aria-label="Rehacer"]');
+  const card = (page: Page, name: string) => page.getByRole("radio", { name, exact: true });
+  /** A press where the thing is drawn: never `click()`, which scrolls and lands elsewhere. */
+  const pressAt = async (page: Page, target: Locator) => {
+    await target.scrollIntoViewIfNeeded();
+    const box = await target.boundingBox();
+    if (!box) throw new Error("nothing to press");
+    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  };
+  /** «Estilo» open on «Vino tinto», and the field of its primary open. */
+  async function wineField(page: Page): Promise<FrameLocator> {
+    await intoTheCanvas(page);
+    const frame = page.frameLocator(PREVIEW).first();
+    await waitForBankPhoto(frame);
+    await page.getByRole("button", { name: "Estilo", exact: true }).click();
+    await pressAt(page, card(page, "Vino tinto"));
+    await expect(headline(frame)).toHaveCSS("color", WINE);
+    await page.getByRole("button", { name: "Cambiar «Principal»" }).click();
+    return frame;
+  }
+  const lightness = (page: Page) => page.getByRole("slider", { name: "Claridad", exact: true });
+  /** Where on screen a slider's thumb stands for a value, the platform thumb being 16 px wide. */
+  const thumbAt = async (slider: Locator, value: number, max: number) => {
+    const box = await slider.boundingBox();
+    if (!box) throw new Error("no slider");
+    return { x: box.x + 8 + ((box.width - 16) * value) / max, y: box.y + box.height / 2, box };
+  };
+
+  it("el deslizador no llega: el lienzo sigue a la mano, el documento espera a soltar, y es un solo paso", async () => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+    const page = await context.newPage();
+    try {
+      const frame = await wineField(page);
+      const slider = lightness(page);
+      await slider.scrollIntoViewIfNeeded();
+      const start = Number(await slider.inputValue());
+      await expect(slider).toHaveAttribute("aria-valuetext", `claridad ${start} %`);
+
+      // The unreachable is painted before the hand gets there, with David's sentence, to the right of
+      // where the thumb stands.
+      const zone = page.locator(
+        '[data-unreachable-title="Por aquí deja de leerse sobre el fondo"]',
+      );
+      await expect(zone).toHaveCount(1);
+      await expect(zone).toHaveAttribute("title", "Por aquí deja de leerse sobre el fondo");
+      const { x: x0, y, box } = await thumbAt(slider, start, 100);
+      const zoneBox = await zone.boundingBox();
+      expect(zoneBox?.x ?? 0).toBeGreaterThan(x0);
+      // A press on the painted stretch moves nothing.
+      const before = await serial(frame);
+      await page.mouse.click((zoneBox?.x ?? 0) + (zoneBox?.width ?? 0) / 2, y);
+      expect(await slider.inputValue()).toBe(String(start));
+      expect(await serial(frame)).toBe(before);
+
+      // The drag: the thumb taken from where it stands to the far right, at a person's pace.
+      await page.mouse.move(x0, y);
+      await page.mouse.down();
+      const seen = new Set<string>();
+      for (let i = 1; i <= 16; i += 1) {
+        await page.mouse.move(x0 + ((box.x + box.width - x0) * i) / 16, y);
+        await page.waitForTimeout(40);
+        seen.add(await headlineColour(frame));
+        // The document has not moved: the canvas is showing chrome.
+        expect(await serial(frame)).toBe(before);
+      }
+      expect(seen.size, "the canvas did not follow the hand").toBeGreaterThan(2);
+      await page.mouse.up();
+      await expect.poll(() => serial(frame)).toBe(String(Number(before) + 1));
+      const reached = Number(await slider.inputValue());
+      expect(reached).toBeGreaterThan(start);
+      expect(reached, "the slider reached the top").toBeLessThan(100);
+      expect(await headlineReads(frame)).toBeGreaterThanOrEqual(4.5);
+      const dragged = await headlineColour(frame);
+      expect(dragged).not.toBe(WINE);
+      await expect(card(page, "Vino tinto, personalizada")).toBeChecked();
+
+      // One step: one «Deshacer» brings the wine back, and the palette is still «Vino tinto».
+      await undo(page).click();
+      await expect(headline(frame)).toHaveCSS("color", WINE);
+      await expect(card(page, "Vino tinto")).toBeChecked();
+      await redo(page).click();
+      await expect(headline(frame)).toHaveCSS("color", dragged);
+
+      // «Volver a la original».
+      await page.getByRole("button", { name: "Volver a la original" }).click();
+      await expect(headline(frame)).toHaveCSS("color", WINE);
+      await expect(card(page, "Vino tinto")).toBeChecked();
+
+      // The field stayed open through all of it: the card was chosen the whole time.
+      await expect(page.getByRole("button", { name: "Cambiar «Principal»" })).toHaveAttribute(
+        "aria-expanded",
+        "true",
+      );
+      // The keyboard: End is the legible extreme, an arrow past it changes nothing, and the run is
+      // one step.
+      await lightness(page).focus();
+      const runStart = await serial(frame);
+      await page.keyboard.press("End");
+      const end = Number(await lightness(page).inputValue());
+      expect(end).toBeLessThan(100);
+      expect(await headlineReads(frame)).toBeGreaterThanOrEqual(4.5);
+      const atEnd = await serial(frame);
+      expect(atEnd).not.toBe(runStart);
+      await page.keyboard.press("ArrowRight");
+      expect(Number(await lightness(page).inputValue())).toBe(end);
+      expect(await serial(frame)).toBe(atEnd);
+      await page.keyboard.press("ArrowLeft");
+      await page.keyboard.press("ArrowLeft");
+      expect(Number(await lightness(page).inputValue())).toBe(end - 2);
+      // Quiet settles the run; one «Deshacer» takes the whole run back.
+      await page.waitForTimeout(450);
+      await undo(page).click();
+      await expect(headline(frame)).toHaveCSS("color", WINE);
+
+      await axeSerious(page, "«Estilo» with a colour field open");
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
+
+  it("la rueda y el código se revisan: un rosa pálido no se escribe, se dice el par, y «Ajustar» escribe uno que se lee", async () => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+    const page = await context.newPage();
+    try {
+      const frame = await wineField(page);
+      const before = await serial(frame);
+      await page.getByLabel("Elegir en la rueda: Principal").fill("#ffd1d1");
+      const refused = page.getByTestId("colour-refused");
+      await expect(refused.getByRole("status")).toHaveText(/^Sobre el fondo: \d,\d; necesita 4,5$/);
+      // Not written: the canvas and the document are the wine's.
+      expect(await serial(frame)).toBe(before);
+      await expect(headline(frame)).toHaveCSS("color", WINE);
+
+      await refused.getByRole("button", { name: "Ajustar la claridad para que se lea" }).click();
+      await expect.poll(() => serial(frame)).toBe(String(Number(before) + 1));
+      await expect(refused).toHaveCount(0);
+      expect(await headlineColour(frame)).not.toBe(WINE);
+      expect(await headlineReads(frame)).toBeGreaterThanOrEqual(4.5);
+
+      // The hex: something that is not a colour is said, and a pale one refused the same way.
+      const hex = page.getByLabel("Código del color: Principal");
+      await hex.fill("rojo");
+      await hex.press("Enter");
+      await expect(page.getByText("Escribe un color así: #7F1D1D.")).toBeVisible();
+      const adjusted = await serial(frame);
+      await hex.fill("#FFE0E0");
+      await hex.press("Enter");
+      await expect(refused.getByRole("status")).toHaveText(/^Sobre el fondo: /);
+      expect(await serial(frame)).toBe(adjusted);
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
+
+  it("tu paleta de un color: un amarillo da la web entera, el amarillo en los botones y su hermano en los titulares", async () => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+    const page = await context.newPage();
+    try {
+      await intoTheCanvas(page);
+      const frame = page.frameLocator(PREVIEW).first();
+      await waitForBankPhoto(frame);
+      await page.getByRole("button", { name: "Estilo", exact: true }).click();
+      await pressAt(page, card(page, "Tu paleta"));
+      const brand = page.getByLabel("Código del color: Color de marca");
+      await brand.fill("#FFCD00");
+      await brand.press("Enter");
+      await expect(card(page, "Tu paleta")).toBeChecked();
+      // The yellow fills the buttons as it is, and the headline takes its darker sibling — día 2's
+      // arithmetic, the same as a yellow logo's.
+      await expect(headline(frame)).toHaveCSS("color", rgb("#8D7000"));
+      await expect(frame.locator('.rb-section [role="button"]').first()).toHaveCSS(
+        "background-color",
+        rgb("#FFCD00"),
+      );
+      expect(await headlineReads(frame)).toBeGreaterThanOrEqual(4.5);
+      // Its colours are now the card's, each with its field.
+      await expect(page.getByRole("button", { name: "Cambiar «Relleno»" })).toBeVisible();
+      // The origin is written: the session holds `own`.
+      await expect
+        .poll(() =>
+          page.evaluate(() => {
+            const session = JSON.parse(localStorage.getItem("retorika.session.v1") ?? "{}") as {
+              openIndex?: number;
+              documents?: { palette?: { kind?: string } }[];
+            };
+            return session.documents?.[session.openIndex ?? 0]?.palette?.kind ?? null;
+          }),
+        )
+        .toBe("own");
+      // And the gate does not block on the theme: the photographs' warning, not the colours'.
+      await page.getByRole("button", { name: "Descargar" }).click();
+      await expect(page.getByRole("button", { name: "Descargar igualmente" })).toBeVisible();
+      await expect(page.getByText("Los colores de tu web no se leen bien")).toHaveCount(0);
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
+
+  it("con «Reducir movimiento» el campo llega sin moverse, y pasa axe", async () => {
+    const context = await browser.newContext({
+      viewport: { width: 1280, height: 800 },
+      reducedMotion: "reduce",
+    });
+    const page = await context.newPage();
+    try {
+      await wineField(page);
+      await expect(lightness(page)).toBeVisible();
+      const longest = await page.evaluate(() =>
+        Math.max(
+          0,
+          ...document
+            .getAnimations()
+            .map((animation) => Number(animation.effect?.getTiming().duration ?? 0)),
+        ),
+      );
+      expect(longest).toBeLessThanOrEqual(0.01);
+      await axeSerious(page, "a colour field open, under reduced motion");
     } finally {
       await context.close();
     }

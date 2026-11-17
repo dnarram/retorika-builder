@@ -740,6 +740,9 @@ function PaletteCardButton({
   onHover: ((on: boolean) => void) | undefined;
 }) {
   const asideId = useId();
+  // Whether this card is the one previewing: the preview starts on the first move of the mouse over
+  // it, and a move after that is the same preview.
+  const previewing = useRef(false);
   return (
     // biome-ignore lint/a11y/useSemanticElements: not an <input type="radio">, on purpose (decision 10 of sprint 38): in a native group every arrow chooses, and here a choice is a step of history — the arrows move the focus and Enter chooses
     <button
@@ -747,17 +750,30 @@ function PaletteCardButton({
       role="radio"
       aria-checked={card.selected}
       tabIndex={holder ? 0 : -1}
+      // The name a screen reader hears is the label ADR 0075 computes — «Vino tinto, personalizada» —
+      // written out: computed from the content it came out as «Vino tinto , personalizada», a space
+      // for each block the card stacks, measured in Chromium on día 7.
+      aria-label={card.customised ? `${card.name}, ${es["editor.style.customised"]}` : card.name}
       data-palette={card.id}
       {...(card.aside ? { "aria-describedby": asideId } : {})}
       onClick={onPress}
       onFocus={onFocus}
       {...(onHover
         ? {
-            onPointerEnter: (event: PointerEvent) => {
-              if (event.pointerType === "mouse") onHover(true);
+            // **A move, not an entry** (sprint 38 día 7). A card can arrive under a mouse that has not
+            // moved — «Volver a la original» goes, the cards below rise, and «Oliva y arena» lands
+            // under the pointer — and the browser says so with an entry and no move. Measured: the
+            // site turned olive after a press on a button that is not a card. Something moving that no
+            // hand asked for, so the preview waits for the hand.
+            onPointerMove: (event: PointerEvent) => {
+              if (event.pointerType !== "mouse" || previewing.current) return;
+              previewing.current = true;
+              onHover(true);
             },
             onPointerLeave: (event: PointerEvent) => {
-              if (event.pointerType === "mouse") onHover(false);
+              if (event.pointerType !== "mouse" || !previewing.current) return;
+              previewing.current = false;
+              onHover(false);
             },
           }
         : {})}
@@ -789,9 +805,6 @@ function PaletteCardButton({
       <span className="text-[13px] font-semibold leading-tight text-ui-ink">{card.name}</span>
       {card.customised ? (
         <span className="text-[11px] leading-tight text-ui-muted">
-          {/* The name a screen reader hears is «Vino tinto, personalizada», the label ADR 0075
-              computes; the comma is for the ear only, the eye has the line break. */}
-          <span className="sr-only">, </span>
           {es["editor.style.customised"]}
         </span>
       ) : null}

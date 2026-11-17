@@ -168,7 +168,7 @@ describe("the chosen card, once its colours can move (día 7)", () => {
     expect(cards.at(-1)?.origin).toEqual({ kind: "own" });
   });
 
-  it("is named «Vino tinto, personalizada» to the ear, the comma for the ear only", () => {
+  it("is named «Vino tinto, personalizada», the label ADR 0075 computes", () => {
     const html = renderToStaticMarkup(
       createElement(StylePanel, {
         theme: moved,
@@ -190,7 +190,7 @@ describe("the chosen card, once its colours can move (día 7)", () => {
     );
     const card =
       html.match(/<button[^>]*data-palette="deep-wine"[^>]*>[\s\S]*?<\/button>/)?.[0] ?? "";
-    expect(card).toContain('<span class="sr-only">, </span>personalizada');
+    expect(card).toContain('aria-label="Vino tinto, personalizada"');
     // «Volver a la original» and a «Cambiar» per colour that can move — five, no fill, no accent.
     expect(html).toContain(">Volver a la original<");
     expect(html.match(/aria-label="Cambiar «[^»]+»"/g)).toHaveLength(5);
