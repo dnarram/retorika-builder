@@ -164,16 +164,19 @@ describe("the measured table the threshold was set from", () => {
    */
   const measured: [string, string, number][] = [
     ["#38BDF8", "dark-slate", 0.0],
+    ["#7C3AED", "lavender", 6.2],
+    ["#FDE047", "midnight-gold", 9.1],
     ["#2563EB", "classic-blue", 9.2],
     ["#059669", "forest-emerald", 13.7],
+    ["#EAB308", "midnight-gold", 15.1],
     ["#B45309", "warm-terracotta", 16.8],
     ["#0D9488", "forest-emerald", 17.1],
-    ["#7C3AED", "classic-blue", 28.7],
-    ["#DC2626", "warm-terracotta", 28.7],
+    ["#DC2626", "coral-sand", 23.7],
+    ["#DB2777", "coral-sand", 26.5],
     ["#EA580C", "warm-terracotta", 32.5],
-    ["#DB2777", "warm-terracotta", 52.4],
-    ["#EAB308", "warm-terracotta", 62.8],
-    ["#FDE047", "warm-terracotta", 77.5],
+    ["#84CC16", "olive-sand", 39.0],
+    ["#E60000", "coral-sand", 39.7],
+    ["#FF7900", "warm-terracotta", 43.1],
   ];
 
   it.each(measured)("%s is nearest %s at ΔE %s", (hex, paletteId, distance) => {
@@ -189,11 +192,12 @@ describe("the measured table the threshold was set from", () => {
     expect(nearest?.d).toBeCloseTo(distance, 1);
   });
 
-  it("has a real gap where the threshold sits: nothing between 32.5 and 52.4", () => {
-    // This is what makes 40 a number rather than a taste. If a palette's primary ever moves into
-    // that gap, the threshold stops being defensible and this fails rather than drifting.
+  it("puts the threshold between the farthest resemblance and the nearest refusal, 39.7 and 43.1", () => {
+    // Narrower than sprint 6's 32.5–52.4, said in `logoPalette.ts`: eight more palettes leave fewer
+    // colours far from all of them, and the sentence it gates is information, not a choice.
     const distances = measured.map(([, , d]) => d);
-    expect(distances.filter((d) => d > 32.5 && d < 52.4)).toEqual([]);
+    expect(Math.max(...distances.filter((d) => d <= 40))).toBe(39.7);
+    expect(Math.min(...distances.filter((d) => d > 40))).toBe(43.1);
   });
 });
 
@@ -210,22 +214,15 @@ describe("nearestPalette", () => {
     expect(nearestPalette(parseHex("#059669"))?.paletteId).toBe("forest-emerald");
   });
 
-  it("refuses a yellow logo — the case the CEO asked to be checked", () => {
-    // Nothing in the four palettes is yellow, and at ΔE 62.8 the nearest is not close enough to
-    // tell an owner their logo chose it.
-    expect(nearestPalette(parseHex("#EAB308"))).toBeNull();
-  });
-
-  it("accepts a purple logo as blue — the other case, and it did not come out as expected", () => {
-    // Purple was expected to fall outside alongside yellow. It does not: at ΔE 28.7 it is exactly
-    // as close to classic-blue as red is to warm-terracotta, which is a match nobody would argue
-    // with. Putting it outside would need a threshold under 28.7, which would throw out red and
-    // orange too. The threshold was not bent to match the expectation.
-    expect(nearestPalette(parseHex("#7C3AED"))?.paletteId).toBe("classic-blue");
-  });
-
-  it("refuses a pink logo, which is the nearest thing to the line on the wrong side", () => {
-    expect(nearestPalette(parseHex("#DB2777"))).toBeNull();
+  // Sprint 38 día 4: with thirteen palettes the cases sprint 6 asked about came out differently, and
+  // the sentence they gate is information now (ADR 0076). Yellow resembles «Medianoche y oro», purple
+  // resembles «Lavanda» rather than blue, pink resembles «Coral y arena»; a postal orange resembles
+  // nothing near enough to say.
+  it("names the resemblances the new palettes brought, and still refuses a postal orange", () => {
+    expect(nearestPalette(parseHex("#EAB308"))?.paletteId).toBe("midnight-gold");
+    expect(nearestPalette(parseHex("#7C3AED"))?.paletteId).toBe("lavender");
+    expect(nearestPalette(parseHex("#DB2777"))?.paletteId).toBe("coral-sand");
+    expect(nearestPalette(parseHex("#FF7900"))).toBeNull();
   });
 
   it("gives back how close it was, so «close» is never just a claim", () => {

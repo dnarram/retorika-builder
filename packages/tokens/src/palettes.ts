@@ -89,4 +89,108 @@ export const PALETTES: readonly Palette[] = [
       "color.muted": "#94A3B8",
     },
   },
+  /*
+   * **Eight more, sprint 38 día 4** (David's P4 of 16 November 2026: «ocho → trece»; the names are the
+   * plan's proposals, his to change). Each was measured before it was written, with the engine's own
+   * `validateTheme`: the seven pairs and the fill's at 4.5:1 and the glass bar's four over black and
+   * over white — the lowest pair is olive's primary on its sand, 4.70; the lowest glass is ocean's,
+   * 6.41. Two are dark, as «Pizarra oscura» is: a dark palette is another palette (protocol §8). None
+   * carries a fill of its own: every primary here reads as text on its surface, so it fills with itself.
+   */
+  {
+    id: "deep-wine",
+    nameKey: "palette.deepWine",
+    colors: {
+      "color.primary": "#7F1D1D",
+      "color.secondary": "#5C1A1A",
+      "color.accent": "#B45309",
+      "color.surface": "#FFF8F6",
+      "color.ink": "#1C1917",
+      "color.muted": "#57534E",
+    },
+  },
+  {
+    id: "olive-sand",
+    nameKey: "palette.oliveSand",
+    colors: {
+      "color.primary": "#4D7C0F",
+      "color.secondary": "#3F6212",
+      "color.accent": "#A16207",
+      "color.surface": "#FAF8F1",
+      "color.ink": "#1A2E05",
+      "color.muted": "#4B5563",
+    },
+  },
+  {
+    id: "midnight-gold",
+    nameKey: "palette.midnightGold",
+    colors: {
+      "color.primary": "#FCD34D",
+      "color.secondary": "#FDE68A",
+      "color.accent": "#F472B6",
+      "color.surface": "#111827",
+      "color.ink": "#F9FAFB",
+      "color.muted": "#9CA3AF",
+    },
+  },
+  {
+    id: "graphite",
+    nameKey: "palette.graphite",
+    colors: {
+      "color.primary": "#E4E4E7",
+      "color.secondary": "#D4D4D8",
+      "color.accent": "#F59E0B",
+      "color.surface": "#18181B",
+      "color.ink": "#FAFAFA",
+      "color.muted": "#A1A1AA",
+    },
+  },
+  {
+    id: "lavender",
+    nameKey: "palette.lavender",
+    colors: {
+      "color.primary": "#6D28D9",
+      "color.secondary": "#4C1D95",
+      "color.accent": "#DB2777",
+      "color.surface": "#FAF5FF",
+      "color.ink": "#1E1B4B",
+      "color.muted": "#4C4F69",
+    },
+  },
+  {
+    id: "coral-sand",
+    nameKey: "palette.coralSand",
+    colors: {
+      "color.primary": "#BE123C",
+      "color.secondary": "#9F1239",
+      "color.accent": "#F97316",
+      "color.surface": "#FFF7ED",
+      "color.ink": "#1C1917",
+      "color.muted": "#57534E",
+    },
+  },
+  {
+    id: "ocean",
+    nameKey: "palette.ocean",
+    colors: {
+      "color.primary": "#0E7490",
+      "color.secondary": "#155E75",
+      "color.accent": "#F59E0B",
+      "color.surface": "#F0F9FF",
+      "color.ink": "#0C4A6E",
+      "color.muted": "#475569",
+    },
+  },
+  {
+    id: "mustard",
+    nameKey: "palette.mustard",
+    colors: {
+      "color.primary": "#854D0E",
+      "color.secondary": "#713F12",
+      "color.accent": "#CA8A04",
+      "color.surface": "#FEFCE8",
+      "color.ink": "#1C1917",
+      "color.muted": "#57534E",
+    },
+  },
 ];

@@ -853,7 +853,8 @@ export function geometryCombinations(): Combination[] {
  * — but that is an argument, and this is a browser: axe measures what Chromium actually composited,
  * including text over a photograph, which no arithmetic covers.
  *
- * Rough size: 4 palettes x 3 type pairs x 3 scales x 1 section/variant ≈ 36 documents.
+ * Rough size: 13 palettes x 3 type pairs x 3 scales x 1 section/variant = 117 documents (45 before
+ * sprint 38 día 4 added eight palettes).
  */
 export function contrastCombinations(): Combination[] {
   return allWithFilters((catalogId) => catalogId === COVER_ID, PALETTES, TYPE_PAIRS, SCALES)

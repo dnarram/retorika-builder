@@ -4,7 +4,7 @@ import { PALETTES } from "@retorika/tokens";
  * The colours of a logo, read from its pixels — and which predefined palette they resemble.
  *
  * **What it used to be, and why it changed.** Since sprint 6 this module picked a palette: the logo's
- * dominant colour was compared with the four palettes' primaries and the nearest within ΔE 40 became
+ * dominant colour was compared with the palettes' primaries and the nearest within ΔE 40 became
  * the site's palette, or the site started neutral. David, 16 November 2026: «los colores del logo SON
  * los colores de marca del usuario, y la web generada tiene que llevarlos siempre que haya un logo».
  * So from sprint 38 día 3 (ADR 0076) this reads the logo's tints (`dominantColours`) and
@@ -54,33 +54,34 @@ const NEAR_BLACK = 32;
  * is not «is this the same colour» but «is this recognisably the same family», because what the
  * owner gets is a whole site in that palette, not a swatch held up beside their logo.
  *
- * **40, and it was measured rather than chosen.** Every distance below was computed against the
- * four palettes' primaries before the number was picked:
+ * **40, measured twice.** It was chosen in sprint 6 against the four palettes then, when it decided
+ * the site's palette, from a table where the convincing matches stopped at 32.5 and the stretches
+ * started at 52.4 — a real gap. Since sprint 38 día 3 (ADR 0076) it decides nothing: it only gates
+ * «Se parece a «{nombre}»», information beside the logo's own colours. **Measured again on sprint 38
+ * día 4 against the twelve palettes a logo can resemble** (all but the neutral start):
  *
  * | logo | nearest | ΔE |
  * | --- | --- | --- |
  * | sky blue `#38BDF8` | dark-slate | 0.0 |
+ * | purple `#7C3AED` | lavender | 6.2 |
+ * | pale yellow `#FDE047` | midnight-gold | 9.1 |
  * | blue `#2563EB` | classic-blue | 9.2 |
  * | green `#059669` | forest-emerald | 13.7 |
+ * | yellow `#EAB308` | midnight-gold | 15.1 |
  * | rust `#B45309` | warm-terracotta | 16.8 |
  * | teal `#0D9488` | forest-emerald | 17.1 |
- * | purple `#7C3AED` | classic-blue | 28.7 |
- * | red `#DC2626` | warm-terracotta | 28.7 |
+ * | red `#DC2626` | coral-sand | 23.7 |
+ * | pink `#DB2777` | coral-sand | 26.5 |
  * | orange `#EA580C` | warm-terracotta | 32.5 |
+ * | lime `#84CC16` | olive-sand | 39.0 |
+ * | Vodafone red `#E60000` | coral-sand | 39.7 |
  * | — threshold — | | **40** |
- * | pink `#DB2777` | warm-terracotta | 52.4 |
- * | yellow `#EAB308` | warm-terracotta | 62.8 |
- * | pale yellow `#FDE047` | warm-terracotta | 77.5 |
+ * | postal orange `#FF7900` | warm-terracotta | 43.1 |
  *
- * The convincing matches stop at 32.5 and the stretches start at 52.4, so 40 sits in a real gap
- * rather than in the middle of a crowd. That is what makes it a number instead of a taste.
- *
- * **The purple case did not come out the way it was expected to, and the threshold was not bent to
- * make it.** It was set to check that a purple logo and a yellow one both fall outside; yellow
- * does, and purple does not — it lands on classic-blue at exactly the distance red lands on
- * warm-terracotta, which is a match nobody would argue with. Putting purple outside would mean a
- * threshold under 28.7, which would throw out red and orange too. Purple is near blue, and the
- * measurement says so.
+ * **The gap narrowed and that is said, not hidden**: from 32.5–52.4 to 39.7–43.1, because eight more
+ * palettes leave fewer colours far from all of them. It is kept at 40 because the sentence it gates is
+ * information, and every row under it is a resemblance a person would grant — purple to lavender,
+ * yellow to gold, lime to olive.
  *
  * `test/logoPalette.test.ts` pins every row of that table, so moving this number has to be a
  * decision rather than a drift.
