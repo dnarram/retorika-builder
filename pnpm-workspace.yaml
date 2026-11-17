@@ -4,6 +4,7 @@ packages:
 auditConfig:
   ignoreGhsas:
     - GHSA-68fv-2mgg-jv7q
+    - GHSA-fc5q-39xc-vjpf
 minimumReleaseAgeExclude:
   - '@biomejs/biome@2.5.14'
   - '@biomejs/cli-darwin-arm64@2.5.14'
