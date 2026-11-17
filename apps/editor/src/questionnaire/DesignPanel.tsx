@@ -21,7 +21,7 @@ import {
   selectedRowId,
   stepTo,
 } from "../editor/designTree.ts";
-import { PANEL_WIDTH, PanelClose, panelCard } from "../editor/panelKit.tsx";
+import { Note, PanelHeader, panelFrame } from "../editor/panelKit.tsx";
 import { headerPartName } from "../editor/styleReview.ts";
 import es from "../locales/es.json" with { type: "json" };
 
@@ -327,35 +327,26 @@ export function DesignPanel({
       aria-labelledby={headingId}
       // Beside the canvas like the style panel, not fixed over it: the grid the canvas draws is
       // the thing being worked against, and a panel covering it would hide the answer.
-      className={`${PANEL_WIDTH} gap-4 p-5 ${panelCard}`}
+      className={panelFrame}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 flex-col gap-1">
-          <h2 id={headingId} className="m-0 text-[13px] font-bold text-ui-ink">
-            {es["editor.design.title"]}
-          </h2>
-          {sectionName ? (
-            <p className="m-0 truncate text-[12px] text-ui-muted">{sectionName}</p>
-          ) : null}
-        </div>
-        <PanelClose onClick={onClose} label={es["editor.design.close"]} />
-      </div>
+      <PanelHeader
+        id={headingId}
+        title={es["editor.design.title"]}
+        {...(sectionName ? { help: <span className="block truncate">{sectionName}</span> } : {})}
+        close={{ label: es["editor.design.close"], onClick: onClose }}
+      />
 
       {state === "noSection" ? (
         // A sentence saying what to do, not a disabled tree — the shape `PagesPanel` and
         // `PhotosPanel` both use for "you cannot do this from here yet".
-        <p className="m-0 text-[12px] leading-snug text-ui-muted">
-          {es["editor.design.noSection"]}
-        </p>
+        <Note>{es["editor.design.noSection"]}</Note>
       ) : state === "offerEscalate" ? (
         // The paragraph says what it costs and promises the return in the same breath, which is what
         // ADR 0025 §7 asks of the offer wherever it appears — and then the door is right here,
         // instead of naming a place to go and find it. See `designPanelState` for why this is a
         // state and not a row count.
         <div className="flex flex-col items-start gap-2.5">
-          <p className="m-0 text-[12px] leading-snug text-ui-muted">
-            {es["editor.design.notFree"]}
-          </p>
+          <Note>{es["editor.design.notFree"]}</Note>
           <button
             type="button"
             onClick={onEscalate}
@@ -365,9 +356,7 @@ export function DesignPanel({
           </button>
         </div>
       ) : state === "noPlaceable" ? (
-        <p className="m-0 text-[12px] leading-snug text-ui-muted">
-          {es["editor.design.noPlaceable"]}
-        </p>
+        <Note>{es["editor.design.noPlaceable"]}</Note>
       ) : (
         <>
           <div className="flex flex-col gap-[3px]">
@@ -461,9 +450,7 @@ export function DesignPanel({
                 if (next) onPreviewMobile();
               }}
             >
-              <p className="m-0 text-[12px] leading-snug text-ui-muted">
-                {es["editor.design.mobileHelp"]}
-              </p>
+              <Note>{es["editor.design.mobileHelp"]}</Note>
               <div className="flex gap-2">
                 <MobileButton
                   label={
@@ -514,14 +501,10 @@ export function DesignPanel({
         {exceptionCount === 0 ? (
           // Not an empty box. The sentence says what being empty *means*, which is the promise
           // rule 6 makes and the reason somebody would want it to stay empty.
-          <p className="m-0 text-[12px] leading-snug text-ui-muted">
-            {es["editor.design.exceptionsEmpty"]}
-          </p>
+          <Note>{es["editor.design.exceptionsEmpty"]}</Note>
         ) : (
           <>
-            <p className="m-0 text-[12px] leading-snug text-ui-muted">
-              {es["editor.design.exceptionsHelp"]}
-            </p>
+            <Note>{es["editor.design.exceptionsHelp"]}</Note>
             {exceptions.map((exception) => (
               <div
                 key={`${exception.sectionId}/${exception.elementId}/${exception.property}`}

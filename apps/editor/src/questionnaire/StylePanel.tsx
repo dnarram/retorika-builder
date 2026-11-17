@@ -25,11 +25,12 @@ import {
 import { type LogoPalettes, sameColours } from "../editor/logoColours.ts";
 import { nearestPalette, parseHex } from "../editor/logoPalette.ts";
 import {
-  PANEL_WIDTH,
-  PanelClose,
-  panelCard,
-  panelRow,
-  panelRowSelected,
+  Note,
+  PanelHeader,
+  PanelSection,
+  panelChoice,
+  panelChoiceSelected,
+  panelFrame,
 } from "../editor/panelKit.tsx";
 import es from "../locales/es.json" with { type: "json" };
 
@@ -213,29 +214,21 @@ export function StylePanel({
       // it: the preview narrows and stays fully visible while the choice is being made. The
       // fields panel is fixed instead, because that one docks over a card that can itself be
       // 400px wide in the mobile view.
-      className={`${PANEL_WIDTH} gap-[18px] p-6 ${panelCard}`}
+      className={panelFrame}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex flex-col gap-1">
-          <h2 id={headingId} className="m-0 text-[20px] font-bold tracking-[-0.02em] text-ui-ink">
-            {es["editor.style.title"]}
-          </h2>
-          <p className="m-0 text-[12px] leading-snug text-ui-muted">{es["editor.style.help"]}</p>
-        </div>
-        <PanelClose onClick={onClose} label={es["editor.style.close"]} />
-      </div>
+      <PanelHeader
+        id={headingId}
+        title={es["editor.style.title"]}
+        help={es["editor.style.help"]}
+        close={{ label: es["editor.style.close"], onClick: onClose }}
+      />
 
-      <fieldset className="m-0 flex flex-col gap-[9px] border-0 p-0">
-        <legend className="mb-1 p-0 text-[11px] font-bold tracking-[0.09em] text-ui-muted">
-          {es["editor.style.colors"]}
-        </legend>
+      <PanelSection legend={es["editor.style.colors"]}>
         {current === undefined && !wearingLogo ? (
           // Not an error and not a blank space to wonder about: the honest state for a theme no
           // palette produced, which a restored document or a hand-edited one can be. Clicking any
           // palette resolves it.
-          <p className="m-0 text-[12px] leading-snug text-ui-muted">
-            {es["editor.style.noPalette"]}
-          </p>
+          <Note>{es["editor.style.noPalette"]}</Note>
         ) : null}
         {logoRows.map((row) => (
           <label
@@ -243,7 +236,7 @@ export function StylePanel({
             data-logo-palette={row.surface}
             className={
               "relative flex h-14 cursor-pointer items-center gap-3.5 px-4 " +
-              (row.selected ? panelRowSelected : panelRow)
+              (row.selected ? panelChoiceSelected : panelChoice)
             }
           >
             <input
@@ -281,9 +274,7 @@ export function StylePanel({
           </label>
         ))}
         {logoRows.length > 0 && logoNotes.length > 0 ? (
-          <p id={logoNote} className="m-0 text-[12px] leading-snug text-ui-muted">
-            {logoNotes.join(" ")}
-          </p>
+          <Note id={logoNote}>{logoNotes.join(" ")}</Note>
         ) : null}
         {PALETTES.map((palette) => {
           const selected = current?.id === palette.id;
@@ -292,7 +283,7 @@ export function StylePanel({
               key={palette.id}
               className={
                 "relative flex h-14 cursor-pointer items-center gap-3.5 px-4 " +
-                (selected ? panelRowSelected : panelRow)
+                (selected ? panelChoiceSelected : panelChoice)
               }
             >
               <input
@@ -324,17 +315,10 @@ export function StylePanel({
             </label>
           );
         })}
-      </fieldset>
+      </PanelSection>
 
-      <fieldset className="m-0 flex flex-col gap-[9px] border-0 p-0">
-        <legend className="mb-1 p-0 text-[11px] font-bold tracking-[0.09em] text-ui-muted">
-          {es["editor.style.typography"]}
-        </legend>
-        {currentType === undefined ? (
-          <p className="m-0 text-[12px] leading-snug text-ui-muted">
-            {typePairNoteText(theme, fonts)}
-          </p>
-        ) : null}
+      <PanelSection legend={es["editor.style.typography"]}>
+        {currentType === undefined ? <Note>{typePairNoteText(theme, fonts)}</Note> : null}
         {TYPE_PAIRS.map((pair) => {
           const selected = currentType?.id === pair.id;
           return (
@@ -342,7 +326,7 @@ export function StylePanel({
               key={pair.id}
               className={
                 "relative flex h-14 cursor-pointer items-center gap-3.5 px-4 " +
-                (selected ? panelRowSelected : panelRow)
+                (selected ? panelChoiceSelected : panelChoice)
               }
             >
               <input
@@ -373,7 +357,7 @@ export function StylePanel({
             </label>
           );
         })}
-      </fieldset>
+      </PanelSection>
 
       {/**
        * The two halves of the letter (ADR 0046, sprint 29 día 1): what the headings and the text are
@@ -426,24 +410,15 @@ export function StylePanel({
             </button>
           </div>
         ))}
-        <p className="m-0 text-[12px] leading-snug text-ui-muted">{familiesHelpText()}</p>
+        <Note>{familiesHelpText()}</Note>
       </div>
 
       {designTools ? (
-        <fieldset className="m-0 flex flex-col gap-[9px] border-0 p-0">
-          <legend className="p-0 text-[11px] font-bold tracking-[0.09em] text-ui-muted">
-            {es["editor.style.system"]}
-          </legend>
+        <PanelSection legend={es["editor.style.system"]}>
           {/* The one group of the three that needs saying out loud what it changes: a palette and a
               typeface announce themselves in their own swatches, and "medidas" does not. */}
-          <p className="m-0 mb-1 text-[12px] leading-snug text-ui-muted">
-            {es["editor.style.systemHelp"]}
-          </p>
-          {currentScale === undefined ? (
-            <p className="m-0 text-[12px] leading-snug text-ui-muted">
-              {es["editor.style.noScale"]}
-            </p>
-          ) : null}
+          <Note className="mb-1">{es["editor.style.systemHelp"]}</Note>
+          {currentScale === undefined ? <Note>{es["editor.style.noScale"]}</Note> : null}
           {SCALES.map((scale) => {
             const selected = currentScale?.id === scale.id;
             return (
@@ -451,7 +426,7 @@ export function StylePanel({
                 key={scale.id}
                 className={
                   "relative flex h-14 cursor-pointer items-center gap-3.5 px-4 " +
-                  (selected ? panelRowSelected : panelRow)
+                  (selected ? panelChoiceSelected : panelChoice)
                 }
               >
                 <input
@@ -496,7 +471,7 @@ export function StylePanel({
               </label>
             );
           })}
-        </fieldset>
+        </PanelSection>
       ) : null}
     </aside>
   );

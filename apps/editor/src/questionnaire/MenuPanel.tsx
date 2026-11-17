@@ -23,7 +23,7 @@ import {
   SECTIONS_POSITIONS,
   type SectionsPosition,
 } from "@retorika/schema";
-import { type PointerEvent, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { HeaderPreview, HeaderPreviewer } from "../editor/headerPreview.ts";
 import {
   brandNamePatch,
@@ -56,11 +56,14 @@ import {
   stickyPatch,
 } from "../editor/headerState.ts";
 import {
-  PANEL_WIDTH,
-  PanelClose,
-  panelCard,
+  Note,
+  PanelHeader,
+  PanelSection,
+  panelFrame,
   panelRow,
   panelRowSelected,
+  Segment,
+  Segments,
   SmallButton,
 } from "../editor/panelKit.tsx";
 import es from "../locales/es.json" with { type: "json" };
@@ -132,9 +135,6 @@ const SIZED_PARTS: ReadonlySet<HeaderPart> = new Set([
   "action",
 ]);
 
-const blockClass = "m-0 flex min-w-0 flex-col gap-2 rounded-ui border border-ui-border p-3";
-const legendClass = "float-left mb-1 w-full p-0 text-[13px] font-bold text-ui-ink";
-const noteClass = "m-0 text-[12px] leading-snug text-ui-muted";
 const checkboxClass = "h-[16px] w-[16px] shrink-0 accent-[var(--ui-brand)]";
 
 export function MenuPanel({
@@ -204,8 +204,7 @@ export function MenuPanel({
   const chosenAction = state.actionChoices.find((choice) => choice.key === state.actionKey);
   // The cards' twin on the canvas (ADR 0066): said once, under the first «Dónde va» drawn, and only
   // in the desktop view — the phone's canvas has no zones and its place is «En el móvil».
-  const dragNote =
-    device === "desktop" ? <p className={noteClass}>{es["editor.menuPanel.whereDrag"]}</p> : null;
+  const dragNote = device === "desktop" ? <Note>{es["editor.menuPanel.whereDrag"]}</Note> : null;
   // **Why the bar folds, under «Dónde va»** (sprint 34 día 4, ADR 0067): by its weight — tablets, or
   // the desktop site carrying the phone's menu — and, where the canvas lays the page out at or under
   // the fold, that the canvas shows «Menú» too and from which width it is seen whole.
@@ -217,15 +216,7 @@ export function MenuPanel({
     foldedCanvas !== null && state.pagesMenu.drawn
       ? es["editor.menuPanel.notes.foldedCanvasDrag"]
       : null,
-  ].flatMap((note) =>
-    note === null
-      ? []
-      : [
-          <p key={note} className={noteClass}>
-            {note}
-          </p>,
-        ],
-  );
+  ].flatMap((note) => (note === null ? [] : [<Note key={note}>{note}</Note>]));
   // A column card says when the fold keeps its column away: the pages' column from the rails'
   // width; the sections', from 1248 too when the pages stand in the column opposite.
   const pagesCardNote = (position: PagesPosition) =>
@@ -241,20 +232,13 @@ export function MenuPanel({
         );
 
   return (
-    <aside
-      ref={panel}
-      aria-labelledby={headingId}
-      className={`${PANEL_WIDTH} gap-4 p-5 ${panelCard}`}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex flex-col gap-1">
-          <h2 id={headingId} className="m-0 text-[15px] font-bold text-ui-ink">
-            {es["editor.menuPanel.title"]}
-          </h2>
-          <p className={noteClass}>{es["editor.menuPanel.help"]}</p>
-        </div>
-        <PanelClose onClick={onClose} label={es["editor.menuPanel.close"]} />
-      </div>
+    <aside ref={panel} aria-labelledby={headingId} className={panelFrame}>
+      <PanelHeader
+        id={headingId}
+        title={es["editor.menuPanel.title"]}
+        help={es["editor.menuPanel.help"]}
+        close={{ label: es["editor.menuPanel.close"], onClick: onClose }}
+      />
 
       {state.drawn ? null : (
         <p className="m-0 text-[13px] leading-snug text-ui-ink">
@@ -262,8 +246,7 @@ export function MenuPanel({
         </p>
       )}
       {/* 0. The brand: the business name, and the logo on the bar it will sit on (ADR 0059). */}
-      <fieldset className={blockClass} data-menu-block="brand">
-        <legend className={legendClass}>{es["editor.menuPanel.brandBlock"]}</legend>
+      <PanelSection legend={es["editor.menuPanel.brandBlock"]} data-menu-block="brand">
         <Check
           label={es["editor.menuPanel.brand"]}
           checked={state.brandName}
@@ -310,11 +293,11 @@ export function MenuPanel({
             </div>
           </div>
         </div>
-        <p className={noteClass}>
+        <Note>
           {state.logoSrc === undefined
             ? es["editor.menuPanel.logoNone"]
             : es["editor.menuPanel.logoShown"].replace("{px}", String(state.brand.logoPx))}
-        </p>
+        </Note>
         {/* The logo's size (ADR 0069), offered with a logo: the sentence above says the pixels the
             page draws, and on a phone the large one is what the bar has room for. */}
         {state.logoSrc === undefined ? null : (
@@ -333,22 +316,18 @@ export function MenuPanel({
               previewer={preview}
             />
             {state.brand.logoPhonePx < state.brand.logoPx ? (
-              <p className={noteClass}>
+              <Note>
                 {es["editor.menuPanel.logoShownPhone"]
                   .replace("{px}", String(state.brand.logoPhonePx))
                   .replace("{max}", String(PHONE_BAR_MAX))}
-              </p>
+              </Note>
             ) : null}
             {state.brand.logoSize === "lg" && state.brand.logoWide ? (
-              <p className={noteClass}>{es["editor.menuPanel.logoWide"]}</p>
+              <Note>{es["editor.menuPanel.logoWide"]}</Note>
             ) : null}
           </>
         )}
-        {logoFaint ? (
-          <p className="m-0 text-[12px] leading-snug text-[#92400E]">
-            {es["editor.menuPanel.logoFaint"]}
-          </p>
-        ) : null}
+        {logoFaint ? <Note tone="warn">{es["editor.menuPanel.logoFaint"]}</Note> : null}
         {/* The name's size (ADR 0069), offered with the name: the scale's own three sizes. */}
         {state.brandName ? (
           <>
@@ -366,12 +345,12 @@ export function MenuPanel({
               previewer={preview}
             />
             {state.brand.nameSize === "heading" ? (
-              <p className={noteClass}>
+              <Note>
                 {es["editor.menuPanel.nameSizePhone"].replace("{max}", String(PHONE_BAR_MAX))}
-              </p>
+              </Note>
             ) : null}
             {state.brand.nameSize !== "body" && state.look.size === "small" ? (
-              <p className={noteClass}>{es["editor.menuPanel.nameSizeSmall"]}</p>
+              <Note>{es["editor.menuPanel.nameSizeSmall"]}</Note>
             ) : null}
           </>
         ) : null}
@@ -388,25 +367,24 @@ export function MenuPanel({
               preview={placePreview}
               previewer={preview}
             />
-            {placeNote === null ? null : <p className={noteClass}>{placeNote}</p>}
+            {placeNote === null ? null : <Note>{placeNote}</Note>}
             {/* The gesture's twin (ADR 0070 §5): said where the segments are, in the desktop view
                 only — the phone's canvas has no zones and no edge to pull. */}
             {device === "desktop" && !state.brand.inRail ? (
-              <p className={noteClass}>{es["editor.menuPanel.brandGesture"]}</p>
+              <Note>{es["editor.menuPanel.brandGesture"]}</Note>
             ) : null}
           </>
         ) : null}
-        <p className={noteClass}>
+        <Note>
           {state.brand.shown
             ? es["editor.menuPanel.brandNote"]
             : es["editor.menuPanel.brandNothing"]}
-        </p>
-      </fieldset>
+        </Note>
+      </PanelSection>
 
       {/* 1. The pages menu — its switch, then every page in the order of «Páginas», which is the
           order the menu publishes (ADR 0057, David's decision 2). */}
-      <fieldset className={blockClass}>
-        <legend className={legendClass}>{es["editor.menuPanel.pages"]}</legend>
+      <PanelSection legend={es["editor.menuPanel.pages"]}>
         <ModeSwitch
           name={`${groupId}-pages`}
           label={es["editor.menuPanel.pages"]}
@@ -432,9 +410,9 @@ export function MenuPanel({
             {/* The sliding rule is the published page's alone (ADR 0063): in the canvas the
                 current page's entry keeps the rule's colour, still. A rail marks it by its edge. */}
             {state.pagesPosition === "bar" ? (
-              <p className={noteClass}>{es["editor.menuPanel.notes.indicator"]}</p>
+              <Note>{es["editor.menuPanel.notes.indicator"]}</Note>
             ) : (
-              <p className={noteClass}>{columnNote(state.pagesFoldWidth, layoutWidth, device)}</p>
+              <Note>{columnNote(state.pagesFoldWidth, layoutWidth, device)}</Note>
             )}
             {state.brandWithPagesOffered ? (
               <Check
@@ -461,12 +439,11 @@ export function MenuPanel({
             />
           ))}
         </ul>
-      </fieldset>
+      </PanelSection>
 
       {/* 2. The sections menu of the page being edited — the same switch, its sections, and what
           becomes of it on a phone. */}
-      <fieldset className={blockClass}>
-        <legend className={legendClass}>{es["editor.menuPanel.sections"]}</legend>
+      <PanelSection legend={es["editor.menuPanel.sections"]}>
         <ModeSwitch
           name={`${groupId}-sections`}
           label={es["editor.menuPanel.sections"]}
@@ -487,11 +464,9 @@ export function MenuPanel({
             {state.pagesMenu.drawn ? null : dragNote}
             {state.pagesMenu.drawn ? null : foldNotes}
             {sectionsPlaceNotes(state, layoutWidth, device).map((note) => (
-              <p key={note} className={noteClass}>
-                {note}
-              </p>
+              <Note key={note}>{note}</Note>
             ))}
-            <p className={noteClass}>{es["editor.menuPanel.notes.sectionsMarked"]}</p>
+            <Note>{es["editor.menuPanel.notes.sectionsMarked"]}</Note>
           </>
         ) : null}
         <p className="m-0 text-[12px] font-semibold text-ui-ink">
@@ -523,11 +498,10 @@ export function MenuPanel({
             ))}
           </div>
         </div>
-      </fieldset>
+      </PanelSection>
 
       {/* 3. The button: none, or one destination among the pages and the sections of this page. */}
-      <fieldset className={blockClass}>
-        <legend className={legendClass}>{es["editor.menuPanel.action"]}</legend>
+      <PanelSection legend={es["editor.menuPanel.action"]}>
         <div className="flex flex-col gap-1.5">
           <Choice
             name={`${groupId}-action`}
@@ -565,22 +539,19 @@ export function MenuPanel({
           })}
         </div>
         {chosenAction === undefined ? null : (
-          <p className={noteClass}>
+          <Note>
             {(state.actionLeavesMenu
               ? es["editor.menuPanel.actionNote"]
               : es["editor.menuPanel.actionNoteAlone"]
             ).replace("{label}", chosenAction.label)}
-          </p>
+          </Note>
         )}
-      </fieldset>
+      </PanelSection>
 
       {/* 4. How the bar sits: three layouts drawn as what they are, fixed or not, a line or not. */}
-      <fieldset className={blockClass}>
-        <legend className={legendClass}>{es["editor.menuPanel.layout"]}</legend>
-        {state.barEmpty ? (
-          <p className={noteClass}>{es["editor.menuPanel.notes.barEmpty"]}</p>
-        ) : null}
-        <p className={noteClass}>{es["editor.menuPanel.notes.motion"]}</p>
+      <PanelSection legend={es["editor.menuPanel.layout"]}>
+        {state.barEmpty ? <Note>{es["editor.menuPanel.notes.barEmpty"]}</Note> : null}
+        <Note>{es["editor.menuPanel.notes.motion"]}</Note>
         <div className="grid grid-cols-3 gap-1.5">
           {LAYOUTS.map((layout) => (
             <label
@@ -635,13 +606,12 @@ export function MenuPanel({
             ...(state.transparent ? [es["editor.menuPanel.hairlineTransparent"]] : []),
           ]}
         />
-      </fieldset>
+      </PanelSection>
 
       {/* 5. The look (día 6): the bar's colour from the palette, where the links go, how far apart,
           in capitals or not, underlined on hover, and the size of the letter. Every option a token,
           every pair one the palettes are proved against — except a bar over a photograph. */}
-      <fieldset className={blockClass}>
-        <legend className={legendClass}>{es["editor.menuPanel.look"]}</legend>
+      <PanelSection legend={es["editor.menuPanel.look"]}>
         <div role="radiogroup" aria-label={es["editor.menuPanel.background"]}>
           <p className="m-0 mb-1 text-[12px] font-semibold text-ui-ink" aria-hidden="true">
             {es["editor.menuPanel.background"]}
@@ -690,12 +660,10 @@ export function MenuPanel({
             })}
           </div>
           {state.transparent ? (
-            <p className={`${noteClass} mt-1.5`}>{es["editor.menuPanel.backgroundTransparent"]}</p>
+            <Note className="mt-1.5">{es["editor.menuPanel.backgroundTransparent"]}</Note>
           ) : null}
           {state.transparent && state.rails.length > 0 ? (
-            <p className={`${noteClass} mt-1.5`}>
-              {es["editor.menuPanel.notes.transparentColumn"]}
-            </p>
+            <Note className="mt-1.5">{es["editor.menuPanel.notes.transparentColumn"]}</Note>
           ) : null}
         </div>
         <Segments
@@ -708,7 +676,7 @@ export function MenuPanel({
           preview={(align) => ({ attribute: "data-align", value: align })}
           previewer={preview}
         />
-        {alignBesideBrand === null ? null : <p className={noteClass}>{alignBesideBrand}</p>}
+        {alignBesideBrand === null ? null : <Note>{alignBesideBrand}</Note>}
         <Segments
           name={`${groupId}-gap`}
           label={es["editor.menuPanel.gap"]}
@@ -747,7 +715,7 @@ export function MenuPanel({
             <legend className="float-left mb-1 w-full p-0 text-[12px] font-semibold text-ui-ink">
               {es["editor.menuPanel.exact"]}
             </legend>
-            <p className={noteClass}>{es["editor.menuPanel.exactHelp"]}</p>
+            <Note>{es["editor.menuPanel.exactHelp"]}</Note>
             {state.parts.map((part) => (
               <ExactPart
                 key={part}
@@ -763,7 +731,7 @@ export function MenuPanel({
             ))}
           </fieldset>
         ) : null}
-      </fieldset>
+      </PanelSection>
     </aside>
   );
 }
@@ -960,114 +928,12 @@ function ModeSwitch({
           />
         ))}
       </div>
-      <p className={noteClass}>{menuStatusText(block, menu)}</p>
+      <Note>{menuStatusText(block, menu)}</Note>
     </div>
   );
 }
 
 /** A short row of radios with its name above it — alignment, gap, size. */
-/**
- * A closed choice as a row of segments. **With `preview` and a `previewer`, each option under the
- * mouse shows itself on the canvas's bar before it is pressed** (David's adjustment 3 on sprint 35):
- * the attribute it is drawn by, written as chrome and put back on leaving; a press forgets the
- * preview and writes the document. Only for a mouse — a touch has no hover, and a press there is the
- * choice — and never from the keyboard, where the arrows already choose.
- */
-function Segments<T extends string>({
-  name,
-  label,
-  options,
-  value,
-  labelOf,
-  onSelect,
-  preview,
-  previewer,
-}: {
-  name: string;
-  label: string;
-  options: readonly T[];
-  value: T;
-  labelOf: (option: T) => string;
-  onSelect: (option: T) => void;
-  preview?: (option: T) => HeaderPreview | null;
-  previewer?: HeaderPreviewer | undefined;
-}) {
-  const grid = useRef<HTMLDivElement>(null);
-  const mark = useRef<HTMLSpanElement>(null);
-  /*
-   * **A mark slides under the chosen option** (sprint 35 día 7), as the page tabs' indicator does:
-   * one bar for the group, placed under the checked segment's box and moved on `ui-slide` when the
-   * choice changes, so the eye follows the choice from where it was. Written on the node rather than
-   * through state, so the first placing happens before the first paint and nothing travels in from
-   * the corner; a resize of the group — the sheet on a phone — places it again. Under reduced motion
-   * the global block flattens `ui-slide`, and the mark is simply there.
-   */
-  useLayoutEffect(() => {
-    const host = grid.current;
-    const bar = mark.current;
-    if (!host || !bar) return;
-    const place = () => {
-      // The segment of the option chosen, by its place among the options: what the mark follows.
-      const chosen = host.querySelectorAll<HTMLElement>(":scope > label")[options.indexOf(value)];
-      if (!chosen) {
-        bar.style.opacity = "0";
-        return;
-      }
-      bar.style.opacity = "1";
-      // Read off the boxes and not `offsetLeft`, which rounds to whole pixels: three columns of a
-      // 300-pixel group are not whole, and the mark sat most of a pixel off its segment.
-      const box = chosen.getBoundingClientRect();
-      const from = host.getBoundingClientRect();
-      bar.style.width = `${box.width - 16}px`;
-      bar.style.transform = `translate(${box.left - from.left + 8}px, ${box.bottom - from.top - 4}px)`;
-    };
-    place();
-    const resized = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(place);
-    resized?.observe(host);
-    return () => resized?.disconnect();
-  }, [value, options]);
-  return (
-    <div role="radiogroup" aria-label={label}>
-      <p className="m-0 mb-1 text-[12px] font-semibold text-ui-ink" aria-hidden="true">
-        {label}
-      </p>
-      <div
-        ref={grid}
-        className={`relative grid gap-1.5 ${options.length === 3 ? "grid-cols-3" : "grid-cols-2"}`}
-      >
-        <span
-          ref={mark}
-          data-testid="segment-mark"
-          aria-hidden="true"
-          className="ui-slide pointer-events-none absolute top-0 left-0 z-[1] h-[2px] rounded-full bg-ui-brand"
-          style={{ opacity: 0 }}
-        />
-        {options.map((option) => (
-          <Segment
-            key={option}
-            name={name}
-            label={labelOf(option)}
-            checked={value === option}
-            onSelect={() => {
-              previewer?.end("keep");
-              onSelect(option);
-            }}
-            {...(previewer && preview
-              ? {
-                  onHover: (on: boolean) => {
-                    const shown = on ? preview(option) : null;
-                    if (shown) previewer.show(shown);
-                    else previewer.end("restore");
-                  },
-                }
-              : {})}
-          />
-        ))}
-      </div>
-    </div>
-  );
-}
-
 /**
  * One part's exact colour and size — the text toolbar's two exact controls, the same platform
  * `<input type="color">` (it can only produce `#rrggbb`, which is what the schema admits) and the
@@ -1173,49 +1039,6 @@ function ExactPart({
   );
 }
 
-/** One option of a short row of radios, drawn as a segment. */
-function Segment({
-  name,
-  label,
-  checked,
-  onSelect,
-  onHover,
-}: {
-  name: string;
-  label: string;
-  checked: boolean;
-  onSelect: () => void;
-  onHover?: (on: boolean) => void;
-}) {
-  return (
-    <label
-      {...(onHover
-        ? {
-            onPointerEnter: (event: PointerEvent) => {
-              if (event.pointerType === "mouse") onHover(true);
-            },
-            onPointerLeave: (event: PointerEvent) => {
-              if (event.pointerType === "mouse") onHover(false);
-            },
-          }
-        : {})}
-      className={`relative flex min-h-9 cursor-pointer items-center justify-center px-1.5 py-1 text-center text-[12px] leading-tight ${
-        checked ? `${panelRowSelected} font-semibold text-ui-brand-deep` : `${panelRow} text-ui-ink`
-      }`}
-    >
-      {/* Visually hidden rather than `display: none`, so the arrows still move along the group. */}
-      <input
-        type="radio"
-        name={name}
-        checked={checked}
-        onChange={onSelect}
-        className="absolute h-px w-px opacity-0"
-      />
-      {label}
-    </label>
-  );
-}
-
 /** One option of a list of radios: the button's destinations. */
 function Choice({
   name,
@@ -1271,9 +1094,9 @@ function Check({
       {/* Outside the label, like every note in these panels: they are about the site, and a
           checkbox's accessible name should not be three sentences long. */}
       {notes.map((note) => (
-        <p key={note} className={`${noteClass} pl-6`}>
+        <Note key={note} className="pl-6">
           {note}
-        </p>
+        </Note>
       ))}
     </div>
   );
@@ -1385,17 +1208,17 @@ function EntryRow({
           <span className="min-w-0 truncate">{name}</span>
         </label>
       )}
-      {reason === undefined ? null : <p className={noteClass}>{reason}</p>}
-      {inButton ? <p className={noteClass}>{es["editor.menuPanel.inButton"]}</p> : null}
+      {reason === undefined ? null : <Note>{reason}</Note>}
+      {inButton ? <Note>{es["editor.menuPanel.inButton"]}</Note> : null}
       {label === undefined ? null : (
         <LabelField name={name} derived={label.derived} own={label.own} onCommit={label.onCommit} />
       )}
       {/* The button's words are this entry's: past what the phone's bar holds, said where they are
           written (sprint 33 día 6). The download review says it again, as a warning. */}
       {inButton && label !== undefined && (label.own ?? label.derived).length > PHONE_BUTTON_MAX ? (
-        <p className={noteClass}>
+        <Note>
           {es["editor.menuPanel.notes.longButton"].replace("{max}", String(PHONE_BUTTON_MAX))}
-        </p>
+        </Note>
       ) : null}
     </li>
   );

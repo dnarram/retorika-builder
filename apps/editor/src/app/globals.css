@@ -171,6 +171,16 @@
    * property the bright two lack; `test/chromeContrast.test.ts` measures it.
    */
   --ui-danger-deep: #b91c1c;
+
+  /**
+   * **The chrome's warning, as a token** (sprint 38 día 5). The amber `#92400E` was written by hand
+   * in four places — the faint-logo note in «Menú», the photographs' note and chip in «Fotos», the
+   * frame's own warning and the help line's warn tone — and the panels' shared `Note` takes it from
+   * here now. Tailwind's amber-800, **7.09:1** on a panel; `--ui-warn-surface` is amber-100, the
+   * chip's ground, on which it measures **6.37:1**. `test/chromeContrast.test.ts` measures both.
+   */
+  --ui-warn-deep: #92400e;
+  --ui-warn-surface: #fef3c7;
 }
 
 /**
@@ -192,6 +202,8 @@
   --color-ui-ok: var(--ui-ok);
   --color-ui-danger: var(--ui-danger);
   --color-ui-danger-deep: var(--ui-danger-deep);
+  --color-ui-warn-deep: var(--ui-warn-deep);
+  --color-ui-warn-surface: var(--ui-warn-surface);
   --color-ui-border-strong: var(--ui-border-strong);
   --radius-ui-sm: var(--ui-radius-sm);
   --radius-ui: var(--ui-radius);

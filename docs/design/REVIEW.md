@@ -10057,3 +10057,92 @@ guarda compara solo la parte que el contenedor deja ver, y un elemento desplazad
 es alcanzable, no está cortado. **Saboteo**: el panel sin desplazarse (`overflow-y: visible`) → la guarda
 vuelve a ver «Mostaza» cortada. El producto no cambia.
 
+### Día 5 — los paneles comparten piezas (PR de `feat/los-paneles-comparten-piezas`)
+
+**El rediseño entra por las piezas, como pediste en P8, y no panel a panel.** Los ocho paneles derechos
+compartían el ancho, la tarjeta, la cruz y una fila; todo lo demás lo escribía cada uno a mano. Ahora
+`panelKit.tsx` tiene:
+
+- **`PanelHeader`**: el título a 20 px en los ocho, cuando eran 20, 15 y 13 px, tres tamaños para un
+  mismo papel. La ayuda va debajo, a todo el ancho. La cruz pasa a ser un blanco redondo de 32 px con la
+  onda; antes era su propio cuadrado de 16 px, el control más pequeño del cromo. Título, ayuda y cruz se
+  colocan con una rejilla, sin mover el marcado: un lector de pantalla los lee en el orden de siempre.
+- **`PanelSection`**: un `fieldset` con una línea fina encima y la leyenda en versalitas de 11 px. Las
+  mayúsculas las pone la hoja de estilo, así que el nombre del grupo es el texto de siempre.
+- **`Note`**: una sola nota, gris o ámbar. El ámbar, que dos paneles escribían como `#92400E`, es ahora
+  el token `--ui-warn-deep`, y su fondo `--ui-warn-surface`. Puede ser también la segunda línea de una
+  etiqueta, donde un párrafo sería HTML inválido.
+- **`panelChoice`**: las filas que se eligen pulsándolas llevan la onda, y la elegida un anillo de marca.
+- **`panelFrame`**: el ancho, la tarjeta, el relleno y el hueco de los ocho salen de un sitio. «Estilo»
+  tenía los suyos y su título quedaba cuatro píxeles desplazado respecto al de los demás.
+- **`Segments` y `Segment`**, mudados de «Menú» con su marca que desliza. Su previsualizador es ahora
+  genérico: el de la cabecera es uno, y el de las paletas del día 6 será otro.
+
+| Token | Sobre el panel | Sobre su fondo |
+|---|---|---|
+| `--ui-warn-deep` `#92400E` | 7,09 | 6,37 |
+
+**Lo que se ve distinto.** El cambio más visible es «Menú»: sus bloques dejan de ser cajas con borde y
+título negro de 13 px y pasan a secciones separadas por una línea fina, con la leyenda en versalitas que
+ya tenía «Estilo». En los ocho,
+el título crece a 20 px y la ayuda ocupa todo el ancho. Nada cambia de sitio ni de nombre: ningún
+landmark, rol, nombre accesible, `data-testid`, ancho ni orden de bloques. Las caminatas no han cambiado
+ni un localizador.
+
+**Las capturas**, con el mismo script en `main` (`977ac57`) y en la rama: Chromium, «Reducir movimiento»,
+la misma web generada (un restaurante), cada panel abierto desde el raíl. «Campos» se abre desde la
+portada; «Diseño» y «Listas», con las herramientas encendidas y «Qué hago» elegida. Están en
+[`review/2026-11-los-paneles/`](review/2026-11-los-paneles/), cuantizadas a paleta (2,5 MB las 32).
+
+| Panel | 1280 | 1024 |
+|---|---|---|
+| Estilo | [antes](review/2026-11-los-paneles/estilo-1280-antes.png) · [después](review/2026-11-los-paneles/estilo-1280-despues.png) | [antes](review/2026-11-los-paneles/estilo-1024-antes.png) · [después](review/2026-11-los-paneles/estilo-1024-despues.png) |
+| Páginas | [antes](review/2026-11-los-paneles/paginas-1280-antes.png) · [después](review/2026-11-los-paneles/paginas-1280-despues.png) | [antes](review/2026-11-los-paneles/paginas-1024-antes.png) · [después](review/2026-11-los-paneles/paginas-1024-despues.png) |
+| Menú | [antes](review/2026-11-los-paneles/menu-1280-antes.png) · [después](review/2026-11-los-paneles/menu-1280-despues.png) | [antes](review/2026-11-los-paneles/menu-1024-antes.png) · [después](review/2026-11-los-paneles/menu-1024-despues.png) |
+| Compartir | [antes](review/2026-11-los-paneles/compartir-1280-antes.png) · [después](review/2026-11-los-paneles/compartir-1280-despues.png) | [antes](review/2026-11-los-paneles/compartir-1024-antes.png) · [después](review/2026-11-los-paneles/compartir-1024-despues.png) |
+| Fotos | [antes](review/2026-11-los-paneles/fotos-1280-antes.png) · [después](review/2026-11-los-paneles/fotos-1280-despues.png) | [antes](review/2026-11-los-paneles/fotos-1024-antes.png) · [después](review/2026-11-los-paneles/fotos-1024-despues.png) |
+| Campos | [antes](review/2026-11-los-paneles/campos-1280-antes.png) · [después](review/2026-11-los-paneles/campos-1280-despues.png) | [antes](review/2026-11-los-paneles/campos-1024-antes.png) · [después](review/2026-11-los-paneles/campos-1024-despues.png) |
+| Diseño | [antes](review/2026-11-los-paneles/diseno-1280-antes.png) · [después](review/2026-11-los-paneles/diseno-1280-despues.png) | [antes](review/2026-11-los-paneles/diseno-1024-antes.png) · [después](review/2026-11-los-paneles/diseno-1024-despues.png) |
+| Listas | [antes](review/2026-11-los-paneles/listas-1280-antes.png) · [después](review/2026-11-los-paneles/listas-1280-despues.png) | [antes](review/2026-11-los-paneles/listas-1024-antes.png) · [después](review/2026-11-los-paneles/listas-1024-despues.png) |
+
+**Tres desvíos del plan, dichos.**
+
+1. **`Chip` no entra hoy.** Hoy hay una sola pastilla, la de «Fotos», que el aviso de descarga ya
+   reutiliza como el mismo componente. La regla de la casa es no abstraer a dos usos. Entra con las fichas
+   del día 6 si esas fichas son el segundo.
+2. **`Choice` y `Check` se quedan en «Menú»**: tienen un solo consumidor.
+3. **La guarda nueva vive en `chromeScale.test`, no en `motionBudget`.** Lo que guarda es escala y piezas:
+   ningún panel declara su propio `h2`, escribe una nota a mano o pone el ámbar en hexadecimal, y los ocho
+   usan `panelFrame`. `chromeScale` ya miraba los ocho paneles.
+
+**Lo que enseñó el saboteo.** Con `PanelHeader` dibujando un `h3`, las caminatas de axe siguieron en
+verde. Su listón es «grave o crítico», y `heading-order` es una regla moderada; el `aria-labelledby` del
+panel sigue funcionando con un `h3`. Por eso hay una prueba nueva, `panelKit.test.ts`, que dibuja las
+piezas a marcado y sujeta el nivel del título. Cada saboteo, deshecho por script:
+
+| Saboteo | Resultado |
+|---|---|
+| `PanelHeader` con `h3` | axe **verde**; `panelKit.test` **roja** |
+| La cruz antes de la ayuda en el marcado | `panelKit.test` **roja** |
+| `Note` ámbar con el hexadecimal | `panelKit.test` **roja** |
+| El marco con el relleno de «Estilo» | `panelKit.test` **roja** |
+| «Fotos» con el ámbar en hexadecimal | `chromeScale.test` **roja** |
+| «Compartir» con una nota escrita a mano | `chromeScale.test` **roja** |
+
+**Encontrado y no arreglado.** «Fotos» parte el nombre de cada foto palabra a palabra («Foto / 1 de /
+Fotos / de / trabajos»), antes y después de hoy: la pastilla y «Cambiar» dejan a la etiqueta el ancho de
+su palabra más larga. El arreglo es la maquetación de esa fila, no una pieza compartida, así que va al
+backlog (punto 8 de lo que deja el 37). La pestaña de página a 1024, que enseña solo su elipsis, sale
+igual byte a byte en las dos capturas; ya estaba en el backlog (punto 6).
+
+**Comprobado en local**, cada suite sola:
+
+| Suite | Resultado |
+|---|---|
+| `pnpm typecheck` | limpio |
+| `pnpm lint` | 0 errores, 82 avisos (los de `main`) |
+| `pnpm test` | **4 211** en verde (4 198 tras el día 4) |
+| `pnpm test:invariants` / `pnpm test:golden` | 27 / 28; ningún golden se movió |
+| `pnpm test:a11y` | 2 378 en 212 s |
+| `pnpm e2e`, con `caffeinate` | **354 en verde y 1 omitida, en 1 668 s**, sin tocar una caminata |
+
