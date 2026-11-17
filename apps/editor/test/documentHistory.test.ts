@@ -940,6 +940,74 @@ describe("a letter chooser session, as one step", () => {
   });
 });
 
+describe("a run of arrows in the colour field, as one step", () => {
+  /**
+   * The colour field's keyboard (sprint 38 día 7, ADR 0077): every press writes the document so the
+   * canvas shows the colour reached, and the run is one step — the chooser's shape, under its own
+   * cause, so a run in the colour field never amends a letter chooser's step or the other way round.
+   */
+  const colours = (s: Histories) => s[0]?.present.document.theme["color.primary"];
+  const press = (s: Histories, primary: string, field = "color.primary:lightness"): Histories => {
+    const theme = s[0]?.present.document.theme;
+    if (!theme) throw new Error("no theme");
+    return run(s, {
+      type: "adjustColour",
+      variant: 0,
+      field,
+      theme: { ...theme, "color.primary": primary },
+      palette: { kind: "palette", id: STARTING_PALETTE_ID },
+    });
+  };
+
+  it("five presses are one step, and one undo takes them all back", () => {
+    let state = start();
+    const before = colours(state);
+    for (const hex of ["#1166DD", "#1160D0", "#1059C2", "#0F52B4", "#0E4BA6"])
+      state = press(state, hex);
+    expect(colours(state)).toBe("#0E4BA6");
+    expect(state[0]?.past).toHaveLength(1);
+    expect(state[0]?.amendable).toBe(true);
+    // The card's origin is written with the colour, so the label can say «personalizada».
+    expect(state[0]?.present.document.palette).toEqual({
+      kind: "palette",
+      id: STARTING_PALETTE_ID,
+    });
+    state = run(state, { type: "undo", variant: 0 });
+    expect(colours(state)).toBe(before);
+  });
+
+  it("settling closes the step: the next press opens another", () => {
+    let state = press(start(), "#1166DD");
+    state = run(state, { type: "settleColour", variant: 0 });
+    expect(state[0]?.amendable).toBe(false);
+    state = press(state, "#1160D0");
+    expect(state[0]?.past).toHaveLength(2);
+  });
+
+  it("another colour or another axis is another step", () => {
+    let state = press(start(), "#1166DD");
+    state = press(state, "#1160D0", "color.primary:hue");
+    expect(state[0]?.past).toHaveLength(2);
+  });
+
+  it("a press that lands where the colour is changes nothing, and settling nothing is nothing", () => {
+    // The first press writes the card's origin, which a generated site does not carry: a change.
+    const state = press(start(), "#1166DD");
+    expect(press(state, "#1166DD")).toBe(state);
+    const fresh = start();
+    expect(run(fresh, { type: "settleColour", variant: 0 })).toBe(fresh);
+  });
+
+  it("an undo in the middle of a run closes it: the next press is a fresh step", () => {
+    let state = press(start(), "#1166DD");
+    state = press(state, "#1160D0");
+    state = run(state, { type: "undo", variant: 0 });
+    state = run(state, { type: "redo", variant: 0 });
+    state = press(state, "#1059C2");
+    expect(state[0]?.past).toHaveLength(2);
+  });
+});
+
 describe("setVariant", () => {
   /** The cover ships `image-right`; `image-background` is the other composition the catalog has. */
   const compose = (variantId: string, sectionId = "sec-cover", variant = 0): HistoryAction => ({

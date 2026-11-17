@@ -178,6 +178,15 @@ export type SnapshotCause =
    */
   | { type: "chooseFamily"; key: FontKey }
   /**
+   * One colour of the palette moved by the colour field's arrows (sprint 38 día 7, ADR 0077). Names
+   * no section, like `setTheme`, and names the colour and the axis — because **a run of arrows is one
+   * step**: every press writes the document (the canvas has to show the colour the keyboard reached),
+   * and the run amends the step it opened, as a letter chooser session does, until `settleColour`
+   * closes it — 300 ms of quiet, or the field losing the focus. A drag is not this: it writes once,
+   * on release, with `setTheme`.
+   */
+  | { type: "adjustColour"; field: string }
+  /**
    * A font the owner brought, added and chosen for one half in one step (sprint 29 día 5): «Añadir»
    * in the import dialog writes the record and the stack together, so one «Deshacer» takes back
    * both and never leaves a record nobody chose or a stack naming a record that is gone.
@@ -273,6 +282,10 @@ export type HistoryAction =
   | { type: "chooseFamily"; variant: number; key: FontKey; theme: Theme }
   | { type: "settleChooser"; variant: number }
   | { type: "discardChooser"; variant: number }
+  /** The colour field's run of arrows — see the `adjustColour` cause. `field` tells one run from the
+   * next (the colour and the axis); `palette` is the card's origin, as `setTheme`'s. */
+  | { type: "adjustColour"; variant: number; field: string; theme: Theme; palette?: PaletteOrigin }
+  | { type: "settleColour"; variant: number }
   /** `theme` is composed by `Variants` with `withOwnFont`, the way `chooseFamily`'s is with
    * `withFamily`. */
   | { type: "addOwnFont"; variant: number; font: OwnFont; theme: Theme }
@@ -737,6 +750,44 @@ function chooseFamily(history: History, key: FontKey, theme: Theme): History {
     future: [],
     amendable: true,
   };
+}
+
+/**
+ * One press of an arrow in the colour field (sprint 38 día 7, ADR 0077): the same document change as
+ * `setTheme`, and the same life in the stack as `chooseFamily` — the first press of a run opens a step
+ * and every further press on the same field amends it, so a colour walked forty steps up its lightness
+ * is one press of «Deshacer». A press that lands where the colour already is changes nothing, caught by
+ * identity like `setTheme`. An undo or a redo turns `amendable` off, so a run interrupted by one opens
+ * a fresh step rather than amending the restored snapshot.
+ */
+function adjustColour(
+  history: History,
+  field: string,
+  theme: Theme,
+  palette: PaletteOrigin | undefined,
+): History {
+  const document = setThemeInDoc(history.present.document, theme, palette);
+  if (document === history.present.document) return history;
+  const present: Snapshot = { document, cause: { type: "adjustColour", field } };
+  if (
+    history.amendable &&
+    history.present.cause?.type === "adjustColour" &&
+    history.present.cause.field === field
+  ) {
+    return { ...history, present, future: [], amendable: true };
+  }
+  return {
+    past: [...history.past, history.present].slice(-LIMIT),
+    present,
+    future: [],
+    amendable: true,
+  };
+}
+
+/** The run of arrows is over — quiet, or the field left — and its step is closed to amendment. */
+function settleColour(history: History): History {
+  if (!history.amendable || history.present.cause?.type !== "adjustColour") return history;
+  return { ...history, amendable: false };
 }
 
 /**
@@ -1443,6 +1494,10 @@ function apply(history: History, action: HistoryAction): History {
       return settleChooser(history);
     case "discardChooser":
       return discardChooser(history);
+    case "adjustColour":
+      return adjustColour(history, action.field, action.theme, action.palette);
+    case "settleColour":
+      return settleColour(history);
     case "addOwnFont":
       return addOwnFont(history, action.font, action.theme);
     case "removeOwnFont":
