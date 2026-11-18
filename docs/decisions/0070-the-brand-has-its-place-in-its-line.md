@@ -123,3 +123,12 @@ click opens «Menú» at the brand's block only with the panel already open.** W
 click chooses the header and opens the panel, the canvas re-lays out under the second click, and the
 browser fires no `dblclick` on the brand. That first click opens the panel at its first block, which
 is the brand's; the walk double-clicks with the panel open and says so. Recorded by development.
+
+## Note — sprint 39 día 3: §5's twin moves to the help line, and the place to «Disposición»
+
+§5's «said where the segments are» — the sentence naming the drag, the stretch and the double click —
+is the help line's since 18 November 2026 (ADR 0071, David's answer C1 to sprint 39's inventory): the
+quiet voice while «Dónde va la marca» has the focus or the mouse, in the desktop view, never where the
+brand stands in a column. And since the day before (his answer B) the segments stand under the three
+layouts in «Disposición», with «Dónde van los enlaces», as the bar's horizontal choices; the key, the
+patch and the preview are unchanged. Recorded by development at his instruction.

@@ -31,6 +31,20 @@ export type HelpChild = "live" | "quiet";
  * own document rather than the frame — the same line says its keys. */
 export type KeyboardPlace = "section" | "bar" | "grip" | "writing" | "hub" | null;
 
+/**
+ * **A gesture the canvas offers for the control the hand or the keyboard is on** (sprint 39 día 3,
+ * ADR 0071 as David's answer C1 applies it): the menu dragged to its zone («Dónde va», ADR 0066), the
+ * brand dragged and the logo stretched («Dónde va la marca», ADR 0070 §5), and the folded bar's
+ * «Menú» as the pages' grip. Said in the quiet voice while the control has the focus or the mouse —
+ * an instruction, which lives in the line and never in a panel's note — and never in the live one:
+ * the person reached for the control, nothing arrived unasked.
+ */
+export type GestureHint = "menu" | "foldedMenu" | "brand";
+
+/** A panel whose one instruction the line says while it is open: how a page is made («Páginas», when
+ * there is room for one), and what to fill in («Campos»). Names and states stay in the panel. */
+export type PanelHint = "pages" | "fields";
+
 export interface HelpNotice {
   sectionName: string;
   brokenAnchors: number;
@@ -67,6 +81,12 @@ export interface HelpLineState {
   /** Something offered once, at rest: the radial menu (sprint 37 día 6, ADR 0072), or the logo's
    * colours a site does not wear yet (sprint 38 día 3, ADR 0076). The line's lowest voice. */
   offer: "radial" | "logoColours" | null;
+  /** The gesture of the control under the hand or the keyboard in «Menú», or none. */
+  gesture: GestureHint | null;
+  /** The open panel with an instruction to say, or none. */
+  panel: PanelHint | null;
+  /** The site has every page it may have: «Páginas» then has no instruction to give. */
+  pagesFull: boolean;
 }
 
 export interface HelpLineSays {
@@ -83,6 +103,14 @@ export interface HelpLineSays {
 export const ANNOUNCEMENT_MS = 4000;
 
 const EMPTY_LIVE: HelpLineSays = { child: "live", text: "", tone: "info" };
+
+/** The gestures' sentences, each key written out: the guard that no instruction is read outside
+ * this module finds them by name. */
+const GESTURE_TEXT: Record<GestureHint, string> = {
+  menu: es["editor.help.gesture.menu"],
+  foldedMenu: es["editor.help.gesture.foldedMenu"],
+  brand: es["editor.help.gesture.brand"],
+};
 
 /** The keys of a place, in the words the person's own machine needs (ADR 0052 §3, David's note 8:
  * without Fn a MacBook's F10 mutes the audio and never arrives). */
@@ -190,6 +218,11 @@ export function quietSays(state: HelpLineState): HelpLineSays {
   if (state.menuNote === "escalate") return quiet(es["editor.section.escalate.body"]);
   if (state.bound) return quiet(boundSentence(state.bound.places, state.bound.list));
   if (keys) return quiet(keys);
+  // The gesture of the control the hand is on, then the open panel's one instruction: what a person
+  // reached for, before what they merely have chosen on the canvas.
+  if (state.gesture) return quiet(GESTURE_TEXT[state.gesture]);
+  if (state.panel === "pages" && !state.pagesFull) return quiet(es["editor.help.panel.pages"]);
+  if (state.panel === "fields") return quiet(es["editor.help.panel.fields"]);
   if (state.chosen) {
     const hint = chosenHint(state.chosen);
     if (hint !== "") return quiet(hint);
@@ -234,4 +267,7 @@ export const HELP_AT_REST: HelpLineState = {
   touch: false,
   platform: "other",
   offer: null,
+  gesture: null,
+  panel: null,
+  pagesFull: false,
 };

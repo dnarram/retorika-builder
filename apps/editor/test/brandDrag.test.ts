@@ -171,8 +171,9 @@ describe("the words", () => {
     expect(brandDropText("end")).toBe("Marca: al final");
     expect(logoDropText("lg")).toBe("Logo: grande");
     expect(es["editor.brandDrag.name"]).toBe("Marca");
-    // The panel names the gesture and the double click, in the desktop view only.
-    expect(es["editor.menuPanel.brandGesture"]).toMatch(/arrastrar la marca/);
-    expect(es["editor.menuPanel.brandGesture"]).toMatch(/doble clic/);
+    // The help line names the gesture and the double click while the hand is on «Dónde va la
+    // marca» (sprint 39 día 3, ADR 0071), in the desktop view only.
+    expect(es["editor.help.gesture.brand"]).toMatch(/arrastrar la marca/);
+    expect(es["editor.help.gesture.brand"]).toMatch(/doble clic/);
   });
 });

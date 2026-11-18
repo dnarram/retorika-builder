@@ -517,6 +517,75 @@ export function rowReasonText(row: PageRow | SectionRow): string | undefined {
 }
 
 /**
+ * **What only the published page does, said once, composed from what applies** (sprint 39 día 3,
+ * David's answer C1 with his two conditions). Until this day «Menú» carried six sentences about what
+ * the canvas does not animate — the rule that slides under the current page, the section the menu
+ * marks while scrolling, the sections that rise, the fixed bar that condenses, the line of what has
+ * been read, «Ir a…» hung from an estimated bar — each beside its control and each saying «en el
+ * lienzo» in its own words. Now one note at the foot of the panel says them together, **and only the
+ * ones this site has**: no fixed bar, no «se estrecha»; no line of progress, no mention of it; nothing
+ * applying, no note. Each piece has a condition read off the same state the panel is drawn from, so
+ * the note cannot promise the canvas a difference the published page does not have — which is what
+ * the test of these sentences has demanded since sprint 32 and still does.
+ *
+ * The conditions are the renderer's: every page with a section rises (`motionCss` reveals every
+ * section after the first and the cover's own words), so that piece is true of every site the
+ * generator makes, and the note is never empty in practice; the fade between pages needs a second
+ * page; the mark on the sections menu needs that menu drawn (the script marks `sections.length`);
+ * the sliding rule is the bar's (a column marks its page by its edge, ADR 0063); «Ir a…» hangs from
+ * the measured bar only once published.
+ */
+export const PUBLISHED_PIECES: readonly {
+  key:
+    | "rise"
+    | "fade"
+    | "sectionsMarked"
+    | "indicator"
+    | "sticky"
+    | "stickyGlass"
+    | "progress"
+    | "fold";
+  applies: (state: HeaderState, doc: RetorikaDocument, pageId: string | undefined) => boolean;
+}[] = [
+  {
+    key: "rise",
+    applies: (_state, doc, pageId) =>
+      (doc.pages.find((page) => page.id === pageId) ?? doc.pages[0])?.sections.length !== 0,
+  },
+  { key: "fade", applies: (_state, doc) => doc.pages.length > 1 },
+  { key: "sectionsMarked", applies: (state) => state.sectionsMenu.drawn },
+  { key: "indicator", applies: (state) => state.pagesMenu.drawn && state.pagesPosition === "bar" },
+  { key: "sticky", applies: (state) => state.sticky && state.scrolledLook === "solid" },
+  { key: "stickyGlass", applies: (state) => state.sticky && state.scrolledLook === "glass" },
+  { key: "progress", applies: (state) => state.sticky && state.progress },
+  {
+    key: "fold",
+    applies: (state) => state.sectionsMenu.drawn && state.sectionsPosition === "fold",
+  },
+];
+
+/** The pieces that move something, which somebody who asked for less movement sees still. */
+const MOVING_PIECES = new Set(["rise", "fade"]);
+
+export function publishedOnlyNote(
+  state: HeaderState,
+  doc: RetorikaDocument,
+  pageId: string | undefined,
+): string | null {
+  const pieces = PUBLISHED_PIECES.filter((piece) => piece.applies(state, doc, pageId));
+  if (pieces.length === 0) return null;
+  const said = pieces.map((piece) => es[`editor.menuPanel.published.${piece.key}`]);
+  const list =
+    said.length === 1
+      ? said[0]
+      : `${said.slice(0, -1).join(", ")} ${es["editor.menuPanel.published.and"]} ${said.at(-1)}`;
+  const reduced = pieces.some((piece) => MOVING_PIECES.has(piece.key))
+    ? ` ${es["editor.menuPanel.published.reduced"]}`
+    : "";
+  return `${es["editor.menuPanel.published.intro"]} ${list}.${reduced}`;
+}
+
+/**
  * **What the switch says, read from where it is not** (sprint 39 día 1, ADR 0078). Since the one
  * switch of a page or a section lives in «Menú», «Páginas» and «Campos» read its state in a line and
  * open «Menú» at the row with a door. The line: the reason, for a row with no switch; «Está en el

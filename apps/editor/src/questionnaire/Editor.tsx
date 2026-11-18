@@ -161,6 +161,7 @@ import {
   boundBadge,
   boundSentence,
   chosenHint,
+  type GestureHint,
   HELP_AT_REST,
   type HelpLineState,
   helpLineFor,
@@ -1060,6 +1061,8 @@ export function Editor({
   /** The keyboard on the radial rail's hub or a pill (sprint 37 día 3): the line says their keys,
    * which are the editor's own document's and not the frame's, so the frame's focus cannot tell. */
   const [railKeys, setRailKeys] = useState(false);
+  /** The gesture of the control under the hand in «Menú» (sprint 39 día 3): the line says it. */
+  const [gesture, setGesture] = useState<GestureHint | null>(null);
   const [help, setHelp] = useState<
     Pick<HelpLineState, "keyboard" | "menuNote" | "bound" | "chosen" | "dragRefused">
   >({ keyboard: null, menuNote: null, bound: null, chosen: null, dragRefused: false });
@@ -2633,6 +2636,16 @@ export function Editor({
       photoError,
       placeholders,
       coloursApplied,
+      gesture,
+      // The open panel with an instruction to say (sprint 39 día 3): «Campos» whatever section it
+      // shows, «Páginas» while a page can still be made.
+      panel:
+        fieldsFor && findSection(doc, fieldsFor)
+          ? "fields"
+          : effectiveRail === "pages"
+            ? "pages"
+            : null,
+      pagesFull: doc.pages.length >= MAX_PAGES,
       // The logo's colours before the radial menu: one is about the owner's site, the other about the
       // editor. Each needs somewhere to send its answer.
       offer:
@@ -9644,6 +9657,7 @@ export function Editor({
             onSetSectionInMenu={onSetSectionInMenu}
             preview={headerPreview}
             focusBlock={menuPanelFocus}
+            onGesture={setGesture}
             onClose={() => showRail("sections")}
           />
         ) : effectiveRail === "share" ? (

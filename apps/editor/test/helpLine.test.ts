@@ -130,6 +130,49 @@ describe("the quiet child, which goes with the focus", () => {
  * the idle hint's place and nothing else's, it is never news, and it is the one quiet sentence that
  * carries a cross.
  */
+/**
+ * **The gesture under the hand, and the open panel's one instruction** (sprint 39 día 3, ADR 0071 as
+ * David's answer C1 applies it): each a sentence that used to sit in a panel's note, said now in the
+ * quiet voice — a person reached for the control — and never in the live one.
+ */
+describe("the gesture of the control under the hand, and the panel's instruction", () => {
+  it("says the gesture of «Dónde va», of the folded bar's «Menú», and of the brand's place", () => {
+    expect(quietSays(at({ gesture: "menu" })).text).toBe(es["editor.help.gesture.menu"]);
+    expect(quietSays(at({ gesture: "foldedMenu" })).text).toBe(
+      es["editor.help.gesture.foldedMenu"],
+    );
+    expect(quietSays(at({ gesture: "brand" })).text).toBe(es["editor.help.gesture.brand"]);
+    for (const gesture of ["menu", "foldedMenu", "brand"] as const) {
+      expect(quietSays(at({ gesture })).child).toBe("quiet");
+      expect(liveSays(at({ gesture }), 0).text).toBe("");
+    }
+  });
+
+  it("says how a page is made while «Páginas» is open and there is room for one, and what to fill in «Campos»", () => {
+    expect(quietSays(at({ panel: "pages" })).text).toBe(es["editor.help.panel.pages"]);
+    expect(quietSays(at({ panel: "pages", pagesFull: true })).text).toBe(es["editor.editHint"]);
+    expect(quietSays(at({ panel: "fields" })).text).toBe(es["editor.help.panel.fields"]);
+    expect(quietSays(at({ panel: "fields" })).child).toBe("quiet");
+  });
+
+  it("ranks the keys over the gesture, the gesture over the panel, the panel over the chosen hint", () => {
+    const all = at({
+      keyboard: "section",
+      gesture: "menu",
+      panel: "fields",
+      chosen: { text: true, movable: false },
+    });
+    expect(quietSays(all).text).toBe(keysFor("section", "other"));
+    expect(quietSays({ ...all, keyboard: null }).text).toBe(es["editor.help.gesture.menu"]);
+    expect(quietSays({ ...all, keyboard: null, gesture: null }).text).toBe(
+      es["editor.help.panel.fields"],
+    );
+    expect(quietSays({ ...all, keyboard: null, gesture: null, panel: null }).text).toBe(
+      chosenHint({ text: true, movable: false }),
+    );
+  });
+});
+
 describe("the offer of the radial menu", () => {
   it("is said quietly at rest, in place of the idle hint, with its cross", () => {
     const says = helpLineFor(at({ offer: "radial" }), 0);
@@ -266,21 +309,28 @@ describe("no instruction text is read outside the help line", () => {
     "editor.downloadError",
     "editor.downloadBusy",
     "editor.rail.try.offer",
+    // Sprint 39 día 3: the gestures «Menú» used to say beside its cards, and the one instruction of
+    // «Páginas» and of «Campos».
+    "editor.help.gesture.",
+    "editor.help.panel.",
   ];
   const read = (file: string) =>
     readFileSync(fileURLToPath(new URL(`../src/${file}`, import.meta.url)), "utf8");
 
-  it.each(["questionnaire/Editor.tsx", "editor/EditorShell.tsx"])(
-    "%s reads none of them",
-    (file) => {
-      const source = read(file);
-      const found = INSTRUCTION_KEYS.filter((key) => source.includes(`"${key}`));
-      expect(
-        found,
-        `an instruction read outside the help line is one that can be drawn over the page again`,
-      ).toEqual([]);
-    },
-  );
+  it.each([
+    "questionnaire/Editor.tsx",
+    "editor/EditorShell.tsx",
+    "questionnaire/MenuPanel.tsx",
+    "questionnaire/PagesPanel.tsx",
+    "questionnaire/FieldsPanel.tsx",
+  ])("%s reads none of them", (file) => {
+    const source = read(file);
+    const found = INSTRUCTION_KEYS.filter((key) => source.includes(`"${key}`));
+    expect(
+      found,
+      `an instruction read outside the help line is one that can be drawn over the page again`,
+    ).toEqual([]);
+  });
 
   it("and the editor draws neither the legend nor the hint in the frame any more", () => {
     const source = read("questionnaire/Editor.tsx");

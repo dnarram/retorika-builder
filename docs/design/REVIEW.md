@@ -10609,3 +10609,71 @@ ofrecen, ni antes ni después. En las de 390 se ve el orden nuevo en la barra in
 **Lo que no cambia**: esquema, renderer, web publicada (golden sin regenerar), el nombre de ningún landmark,
 el orden del teclado dentro de cada panel salvo en «Menú», donde los dos controles ahora llegan tras los
 bocetos.
+
+### Día 3 — una nota al pie, compuesta; los gestos en la línea (PR de `feat/una-nota-al-pie-compuesta`)
+
+**Seis frases y tres gestos salen del panel «Menú», y ninguna palabra que buscan las caminatas cambia.**
+
+- **La nota compuesta** (tu respuesta C1, con sus dos condiciones). «Menú» decía en seis sitios, cada uno con
+  sus palabras, lo que la vista previa no anima: la raya que se desliza bajo la página, el menú que marca
+  la sección al bajar, las secciones que suben, la barra fija que se estrecha, la línea de lo leído, «Ir
+  a…» colgado de una barra estimada. Ahora hay **una nota al pie del panel** que las dice juntas, y **solo
+  las que esta web tiene**: `publishedOnlyNote` en `headerState.ts` compone la frase desde una lista de
+  piezas con condición (`PUBLISHED_PIECES`), leídas del mismo estado del que se dibuja el panel. Sin barra
+  fija no habla de estrecharse; sin línea de progreso no la nombra; «Ir a…» solo detrás del pliegue; la
+  raya solo con el menú de páginas en la barra (una columna marca su página por el borde, ADR 0063); el
+  menú marca su sección solo si se dibuja; la web funde entre páginas solo con dos páginas. Si nada
+  aplica, no hay nota. En la práctica nunca está vacía: el renderer levanta las secciones de toda página que
+  tiene alguna, así que esa pieza es verdad en todas las webs del generador, y la prueba lo dice así.
+  La frase de «menos movimiento» va solo tras las piezas que mueven algo.
+- **La prueba de las divergencias sigue exigiendo que cada una esté dicha**, pieza a pieza: cada divergencia
+  es una pieza con condición; cada condición es verdadera en algún documento y falsa en otro (ninguna es
+  una frase fija); ninguna pieza dice «lienzo» ni «publicar»; la nota de la web de dos páginas con los
+  menús en la barra es, palabra por palabra, las cuatro piezas que tiene; la de la portada sola es una.
+  Las dos notas sobre esta ventana —el lienzo plegado bajo el pliegue, la columna más ancha que el
+  lienzo— se quedan junto a sus tarjetas y siguen sujetas a decir «lienzo».
+- **Las frases de los controles se quedan en lo que el control hace**: «Al bajar, la barra se estrecha y se
+  vuelve translúcida, con la página difuminada detrás.» (sin «En el lienzo se ve en reposo»), «Una línea en
+  el borde de la barra crece a medida que se baja.» (sin «Al publicar» ni «En el lienzo no se ve»), «"Ir
+  a…" flota debajo de la barra y sigue a mano al bajar por la página.» (sin la estimación).
+- **Los gestos, en la línea** (ADR 0071): `HelpLineState` gana `gesture` («menu» | «foldedMenu» | «brand»),
+  que «Menú» emite con el foco o el ratón sobre «Dónde va» (las dos) y «Dónde va la marca», solo en la vista
+  de escritorio y nunca con la marca en una columna; la línea lo dice en el **hijo silencioso**, bajo las
+  teclas y sobre el elemento elegido, y nunca en el vivo. Cerrar el panel con la mano encima deja la línea
+  en silencio. Las tres frases pasan a `editor.help.gesture.*`, a la lista de claves de instrucción que solo
+  lee `helpLine.ts`, y los tres paneles (Menú, Páginas, Campos) entran en la lista de ficheros que no leen
+  ninguna. «lienzo» → «la vista previa» en las tres.
+- **Las instrucciones de «Páginas» y «Campos», en la línea**: `panel` («pages» | «fields») con `pagesFull`.
+  «Para crear una página, abre una sección y usa «Convertir esta sección en página».» mientras «Páginas»
+  está abierto y cabe una; «Rellena lo que quieras que salga.» mientras «Campos» está abierto; «Lo que
+  dejes vacío no aparece en tu web.» se queda en la cabecera del cajón, que no es una instrucción.
+
+**Localizadores**: 0. Las aserciones de cinco caminatas (sprints 32 día 5, 33 días 3 y 5, 34 días 5 y 6)
+leían las frases movidas y leen ahora la nota compuesta (`data-testid="published-note"`) o la línea; ninguna
+busca por rol y nombre.
+
+**Pruebas**: `headerState.test` (5 nuevas, la vieja «notes of what only the published page does» reescrita
+en su sitio); `helpLine.test` (3 nuevas: los tres gestos en el hijo silencioso, las dos instrucciones y la
+prioridad teclas > gesto > panel > elegido; la guarda de la 0071 con las dos familias de claves y los tres
+paneles). Una caminata nueva, «sprint 39 día 3 — la línea dice el gesto», a 1280: Tab hasta «Dónde va la
+marca» → la línea dice el gesto de la marca con `aria-live="off"` y el hijo vivo calla; Tab fuera → calla; el
+ratón sobre «Dónde va el menú de páginas» → el gesto del menú; fuera → calla; cerrar el panel con el ratón
+encima → calla; «Páginas» abierto → cómo se hace una página, en la línea y no en el panel; «Campos»
+abierto → qué rellenar en la línea y qué significa vacío en el cajón; axe.
+
+**Saboteos, cada uno deshecho por script**: la pieza «funde» sin condición (siempre verdadera) → «para cada
+pieza, un documento en que aplica y otro en que no» y «nada aplica, no hay nota» rojas; el gesto por el hijo
+vivo → `helpLine.test` roja; una pieza que dice «lienzo» → la prueba de las divergencias roja; «Menú» leyendo
+una clave de gesto → la guarda de la 0071 roja (el panel está ahora en su lista); el panel cerrado sin apagar
+el gesto → la caminata roja en «cerrar con el ratón encima → calla».
+
+**Capturas** antes (`694504f`) y después de «Menú» desplazado a su pie, a 1280, 1024 con panel y 390 × 844, y
+de la línea con el ratón sobre «Dónde va» (a 1280 y 1024; a 390 no hay gesto que decir):
+
+| Qué | 1280 | 1024 | 390 |
+|---|---|---|---|
+| Menú, al pie | [antes](review/2026-11-los-paneles-ordenados/dia3-menu-1280-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia3-menu-1280-despues.png) | [antes](review/2026-11-los-paneles-ordenados/dia3-menu-1024-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia3-menu-1024-despues.png) | [antes](review/2026-11-los-paneles-ordenados/dia3-menu-390-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia3-menu-390-despues.png) |
+| La línea con el ratón sobre «Dónde va» | [antes](review/2026-11-los-paneles-ordenados/dia3-gesto-1280-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia3-gesto-1280-despues.png) | [antes](review/2026-11-los-paneles-ordenados/dia3-gesto-1024-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia3-gesto-1024-despues.png) | — |
+
+**Lo que no cambia**: esquema, renderer, web publicada (golden sin regenerar), ningún landmark, la frase del
+gesto de la marca con doble clic (la dice la línea). Notas en las ADR 0066, 0070 (§5) y 0071.

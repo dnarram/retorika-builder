@@ -257,3 +257,12 @@ line as a menu is dragged to its place, and gives the logo's edge a stretch thro
 The rest of this record — the threshold and the two states, the zones lit under the hand, Escape and
 the drop outside writing nothing, one step of history — is what the brand's gesture inherits. Recorded
 by development at his instruction.
+
+## Note — sprint 39 día 3: the gesture's sentence is the help line's (ADR 0071)
+
+«Said where the cards are» — the sentence under «Dónde va» that named the drag — was an instruction,
+and ADR 0071 puts those in the help line and nowhere over or beside the page. Since 18 November 2026
+(David's answer C1 to sprint 39's inventory) the line says it in its quiet voice while «Dónde va» has
+the focus or the mouse, and says the folded bar's «Menú» as the grip where the canvas lays out under
+the fold; the cards keep only their names and the notes about this window. Nothing of the gesture
+itself moves. Recorded by development at his instruction.

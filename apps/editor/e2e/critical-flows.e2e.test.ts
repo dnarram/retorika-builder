@@ -8492,6 +8492,90 @@ describe("sprint 23 día 4 — las páginas en el menú y el umbral curado", () 
 });
 
 /**
+ * **Sprint 39 día 3 — una nota al pie, compuesta; los gestos en la línea** (ADR 0071, respuesta C1).
+ *
+ * Seis frases de «Menú» sobre lo que la vista previa no anima se funden en una nota al pie que se
+ * compone solo con lo que esta web tiene (eso lo miden las caminatas de los sprints 32 a 34, arriba).
+ * Aquí lo que la línea de ayuda gana: el gesto de «Dónde va» y de «Dónde va la marca» en el hijo
+ * silencioso, con el foco o el ratón sobre el control, nunca en el vivo; y la instrucción de
+ * «Páginas» (cómo se hace una página, mientras quepa una) y de «Campos» (qué rellenar).
+ */
+describe("sprint 39 día 3 — la línea dice el gesto", () => {
+  it("dice el gesto con el foco y con el ratón, en el hijo silencioso, y la instrucción del panel abierto", async () => {
+    const visitor = await (
+      await browser.newContext({ viewport: { width: 1280, height: 900 } })
+    ).newPage();
+    try {
+      await intoTheCanvas(visitor);
+      const quiet = visitor.getByTestId("help-line-quiet");
+      const live = visitor.getByTestId("help-line-live");
+
+      // «Menú»: Tab until «Dónde va la marca» — the line says the brand's gesture; the live child
+      // says nothing of it. Leaving the group, the line falls back.
+      await visitor.getByRole("button", { name: "Menú", exact: true }).click();
+      const panel = visitor.getByRole("complementary", { name: "La cabecera de tu web" });
+      await expect(panel).toBeVisible();
+      await panel.getByRole("button", { name: "Cerrar la cabecera" }).focus();
+      await tabUntil(
+        visitor,
+        (at) => at.tag === "INPUT" && at.type === "radio" && at.name.endsWith("-brand-place"),
+        "the «Dónde va la marca» radios",
+        120,
+      );
+      await expect(quiet).toContainText("arrastrar la marca a su sitio y estirar el logo");
+      await expect(quiet).toHaveAttribute("aria-live", "off");
+      await expect(live).not.toContainText("arrastrar");
+      await visitor.keyboard.press("Tab");
+      await expect(quiet).not.toContainText("arrastrar la marca");
+
+      // The mouse over «Dónde va el navegador de secciones» (a generated site has one page, so
+      // the pages' «Dónde va» is not drawn): the menu's gesture; off it, nothing.
+      const pagesPlace = panel.getByRole("radiogroup", {
+        name: "Dónde va el navegador de secciones",
+      });
+      await pagesPlace.hover();
+      await expect(quiet).toContainText("También puedes arrastrar el menú");
+      await panel.getByRole("heading", { name: "La cabecera de tu web" }).hover();
+      await expect(quiet).not.toContainText("arrastrar el menú");
+      // Closing with the mouse still on the cards — the cross pressed from the keyboard, so the
+      // mouse never leaves them: the line falls quiet with the panel, which is the unmount's doing
+      // and not a pointer's leaving (sabotaged: the panel's cleanup removed, and the line kept the
+      // gesture after the panel was gone).
+      await pagesPlace.hover();
+      await expect(quiet).toContainText("arrastrar el menú");
+      await panel.getByRole("button", { name: "Cerrar la cabecera" }).focus();
+      await visitor.keyboard.press("Enter");
+      await expect(panel).toHaveCount(0);
+      await expect(quiet).not.toContainText("arrastrar el menú");
+
+      // «Páginas» open: how a page is made, in the line and not in the panel.
+      await visitor.getByRole("button", { name: "Páginas", exact: true }).click();
+      const pages = visitor.getByRole("region", { name: "Páginas de tu web" });
+      await expect(pages).toBeVisible();
+      await expect(quiet).toContainText("Para crear una página, abre una sección");
+      await expect(pages).not.toContainText("Para crear una página");
+      await visitor.getByRole("button", { name: "Cerrar las páginas" }).click();
+      await expect(quiet).not.toContainText("Para crear una página");
+
+      // «Campos» open: what to fill in, in the line; the panel keeps what empty means.
+      const frame = visitor.frameLocator(PREVIEW).first();
+      await frame.locator('[data-section="sec-location"]').click();
+      await frame.getByRole("button", { name: /Campos de esta sección/ }).click();
+      const drawer = visitor.getByRole("complementary", { name: "Horario y ubicación" });
+      await expect(drawer).toBeVisible();
+      await expect(quiet).toContainText("Rellena lo que quieras que salga.");
+      await expect(drawer).toContainText("Lo que dejes vacío no aparece en tu web.");
+      await expect(drawer).not.toContainText("Rellena lo que quieras");
+      await visitor.getByRole("button", { name: "Cerrar los campos" }).click();
+      await expect(quiet).not.toContainText("Rellena lo que quieras");
+      await axeSerious(visitor, "la línea tras el gesto y las instrucciones");
+    } finally {
+      await visitor.context().close();
+    }
+  }, 240_000);
+});
+
+/**
  * **Sprint 39 día 2 — lo horizontal, junto; el raíl, en su orden; «Listas», con su cruz.**
  *
  * Tres sitios que cambian y ningún nombre: el raíl fijo pone «Fotos» tras «Estilo» (la respuesta E de
@@ -24777,21 +24861,27 @@ describe("sprint 32 día 5 — el editor dice lo que se mueve", () => {
       expect(canvas.animation).toBe("none");
       expect(canvas.moving).toBe(0);
 
-      // **The panel says what only the published page does.**
+      // **The panel says what only the published page does** — in one note at its foot since
+      // sprint 39 día 3, composed from what this site has: the sections rising, the menu marking
+      // its section; and, once the bar is fixed, that it condenses, which the note gains.
       await page.getByRole("button", { name: "Menú", exact: true }).click();
       const panel = page.getByRole("complementary", { name: "La cabecera de tu web" });
       await expect(panel).toBeVisible();
-      await expect(
-        panel.getByText("En el lienzo no se mueve nada", { exact: false }),
-      ).toBeVisible();
-      await expect(
-        panel.getByText("marca la sección que se está viendo mientras se baja", { exact: false }),
-      ).toBeVisible();
+      const published = panel.getByTestId("published-note");
+      await expect(published).toContainText("En la vista previa nada se mueve");
+      await expect(published).toContainText("las secciones aparecen suavemente");
+      await expect(published).toContainText(
+        "el menú de secciones marca la sección que se está viendo",
+      );
+      await expect(published).not.toContainText("se estrecha");
       await expect(panel.getByText("Una línea muy fina", { exact: false })).toBeVisible();
       await panel.getByRole("checkbox", { name: "Se queda arriba al bajar" }).check();
       await expect(
         panel.getByText("se vuelve translúcida, con la página difuminada detrás", { exact: false }),
       ).toBeVisible();
+      await expect(published).toContainText(
+        "la barra se estrecha al bajar y se vuelve translúcida",
+      );
       await expect(frame.locator("header.rb-header")).toHaveAttribute("data-sticky", "");
 
       await sessionHolds(page, (raw) => raw.includes('"sticky":true'), "guardó la barra fija");
@@ -25460,19 +25550,19 @@ describe("sprint 33 día 3 — el editor real dibuja la cabecera como su documen
         .getByRole("radiogroup", { name: "Dónde va el menú de páginas" })
         .getByText("En la barra", { exact: true })
         .click();
-      await expect(
-        panel.getByText("la raya bajo la página en la que se está no se desliza", { exact: false }),
-      ).toBeVisible();
+      // Both said in the one note at the foot since sprint 39 día 3, each only while it applies.
+      const published = panel.getByTestId("published-note");
+      await expect(published).toContainText(
+        "la línea bajo la página en la que se está se desliza de una a otra",
+      );
+      await expect(published).not.toContainText("«Ir a…» cuelga");
       await panel
         .getByRole("radiogroup", { name: "Dónde va el navegador de secciones" })
         .getByText("Desplegable «Ir a…»", { exact: true })
         .click();
-      const byForm = panel.getByText("según la altura que la barra tiene por su forma", {
-        exact: false,
-      });
-      await expect(byForm).toBeVisible();
+      await expect(published).toContainText("«Ir a…» cuelga de la barra entera");
       await panel.getByText("Marca arriba", { exact: true }).click();
-      await expect(byForm).toBeVisible();
+      await expect(published).toContainText("«Ir a…» cuelga de la barra entera");
       await expect(panel.getByText("encima de la segunda línea", { exact: false })).toHaveCount(0);
     } finally {
       await context.close();
@@ -26090,13 +26180,16 @@ describe("sprint 33 día 5 — el arrastre completo", () => {
     const page = await context.newPage();
     try {
       const frame = await placedSite(page, {});
-      // In the desktop view the panel says the menus can be dragged.
+      // In the desktop view the help line says the menus can be dragged while the hand is on
+      // «Dónde va» (sprint 39 día 3, ADR 0071); the panel itself carries no such sentence.
       await page.getByRole("button", { name: "Menú", exact: true }).click();
       const panel = page.getByRole("complementary", { name: "La cabecera de tu web" });
-      const sentence = panel.getByText("También puedes arrastrar el menú en el lienzo", {
-        exact: false,
-      });
-      await expect(sentence).toHaveCount(1);
+      const line = page.getByTestId("help-line-quiet");
+      await expect(panel.getByText("arrastrar el menú", { exact: false })).toHaveCount(0);
+      await panel.getByRole("radiogroup", { name: "Dónde va el menú de páginas" }).hover();
+      await expect(line).toContainText("También puedes arrastrar el menú");
+      await panel.getByRole("heading", { name: "La cabecera de tu web" }).hover();
+      await expect(line).not.toContainText("arrastrar el menú");
       await panel.getByRole("button", { name: "Cerrar la cabecera" }).click();
       await page.getByRole("button", { name: "Ver en móvil" }).click();
       await deviceArrived(page, NARROWEST_WIDTH);
@@ -26114,10 +26207,12 @@ describe("sprint 33 día 5 — el arrastre completo", () => {
       await expect(frame.locator(".rb-zone, .rb-menu-ghost")).toHaveCount(0);
       await page.mouse.up();
       expect(await positionOf(page, "sections")).toBe(before);
-      // And the panel, opened in the phone view, does not offer what the phone cannot do.
+      // And in the phone view the line does not offer what the phone cannot do: the hand on the
+      // cards says nothing.
       await page.getByRole("button", { name: "Menú", exact: true }).click();
       await expect(panel).toBeVisible();
-      await expect(sentence).toHaveCount(0);
+      await panel.getByRole("radiogroup", { name: "Dónde va el menú de páginas" }).hover();
+      await expect(line).not.toContainText("arrastrar el menú");
     } finally {
       await context.close();
     }
@@ -26493,11 +26588,11 @@ describe("sprint 34 día 5 — «Menú» es agarre", () => {
       const summary = frame.locator("details.rb-nav-narrow > summary");
       await expect(frame.locator(".rb-nav-wide")).toBeHidden();
       await expect(summary).toBeVisible();
-      await expect(
-        panel.getByText(
-          "Así, el menú de páginas se arrastra cogiéndolo por «Menú»; pulsado sin mover, abre la hoja.",
-        ),
-      ).toBeVisible();
+      // The line says «Menú» is the pages' grip while the hand is on «Dónde va» (sprint 39 día 3).
+      await panel.getByRole("radiogroup", { name: "Dónde va el menú de páginas" }).hover();
+      await expect(page.getByTestId("help-line-quiet")).toContainText(
+        "el menú de páginas se arrastra cogiéndolo por «Menú»; pulsado sin mover, abre la hoja.",
+      );
       expect(await summary.evaluate((el) => getComputedStyle(el).cursor)).toBe("grab");
 
       // 3. Held on «Menú» and carried over the left side: the pages' three zones, the left one lit,
@@ -26571,11 +26666,12 @@ describe("sprint 34 día 6 — la línea de progreso", () => {
       await expect(progress).toBeVisible();
       await expect(progress).not.toBeChecked();
       await expect(
-        panel.getByText(
-          "Al publicar, una línea en el borde de la barra crece a medida que se baja. En el lienzo no se ve.",
-        ),
+        panel.getByText("Una línea en el borde de la barra crece a medida que se baja."),
       ).toBeVisible();
+      // What the canvas does not draw is the composed note's to say, once the line is on.
+      await expect(panel.getByTestId("published-note")).not.toContainText("lo leído");
       await progress.check();
+      await expect(panel.getByTestId("published-note")).toContainText("la línea de lo leído crece");
       await expect(frame.locator("header.rb-header[data-progress]")).toHaveCount(1);
       // The canvas draws no line: no content on the bar's `::after`.
       expect(

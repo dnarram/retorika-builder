@@ -23,7 +23,7 @@ import {
   SECTIONS_POSITIONS,
   type SectionsPosition,
 } from "@retorika/schema";
-import { useEffect, useId, useRef, useState } from "react";
+import { type ComponentProps, type PointerEvent, useEffect, useId, useRef, useState } from "react";
 import type { HeaderPreview, HeaderPreviewer } from "../editor/headerPreview.ts";
 import {
   brandNamePatch,
@@ -49,6 +49,7 @@ import {
   pagesPositionPatch,
   phoneSpan,
   progressPatch,
+  publishedOnlyNote,
   rowReasonText,
   type SectionRow,
   schemeSwatch,
@@ -56,6 +57,7 @@ import {
   sectionsPositionPatch,
   stickyPatch,
 } from "../editor/headerState.ts";
+import type { GestureHint } from "../editor/helpLine.ts";
 import {
   Note,
   PanelHeader,
@@ -137,6 +139,13 @@ export interface MenuPanelProps {
    * for whoever does not know the gesture exists — or a page's or a section's row, from the door in
    * «Páginas» or «Campos» (sprint 39 día 1). */
   focusBlock?: MenuFocus | undefined;
+  /**
+   * The gesture of the control under the hand or the keyboard, for the help line (sprint 39 día 3,
+   * ADR 0071): «Dónde va» and «Dónde va la marca» have a twin on the canvas, and the sentence that
+   * names it is an instruction, which the line says in its quiet voice while the control has the
+   * focus or the mouse — never a note beside the control. `null` when the hand leaves.
+   */
+  onGesture?: ((gesture: GestureHint | null) => void) | undefined;
   onClose: () => void;
 }
 
@@ -172,6 +181,7 @@ export function MenuPanel({
   onSetSectionInMenu,
   preview,
   focusBlock,
+  onGesture,
   onClose,
 }: MenuPanelProps) {
   const headingId = useId();
@@ -179,6 +189,27 @@ export function MenuPanel({
   const state = headerStateFor(doc, pageId);
   // A panel closed with the mouse still on a segment never sees the pointer leave: put the bar back.
   useEffect(() => () => preview?.end("restore"), [preview]);
+  // And a panel closed with the hand on «Dónde va» never sees it leave either: the line falls quiet.
+  useEffect(() => () => onGesture?.(null), [onGesture]);
+  /**
+   * The wrapper that tells the line which gesture the control under the hand has (sprint 39 día 3).
+   * Focus and blur bubble through React, so a radio inside the group reports for the group; the
+   * mouse only on a mouse — a finger has no hover and a phone's canvas has no zones. Nothing in the
+   * phone view, where the canvas offers no zones and no edge to pull, as the notes it replaces said.
+   */
+  const gestureHost = (gesture: GestureHint | null): ComponentProps<"div"> =>
+    gesture === null || !onGesture || device !== "desktop"
+      ? {}
+      : {
+          onFocus: () => onGesture(gesture),
+          onBlur: () => onGesture(null),
+          onPointerEnter: (event: PointerEvent) => {
+            if (event.pointerType === "mouse") onGesture(gesture);
+          },
+          onPointerLeave: (event: PointerEvent) => {
+            if (event.pointerType === "mouse") onGesture(null);
+          },
+        };
   const panel = useRef<HTMLElement>(null);
   // The block or row asked for, scrolled into the panel's view and given the keyboard. Nothing
   // without a token.
@@ -236,21 +267,18 @@ export function MenuPanel({
         : es["editor.menuPanel.alignBesideBrand"]
       : null;
   const chosenAction = state.actionChoices.find((choice) => choice.key === state.actionKey);
-  // The cards' twin on the canvas (ADR 0066): said once, under the first «Dónde va» drawn, and only
-  // in the desktop view — the phone's canvas has no zones and its place is «En el móvil».
-  const dragNote = device === "desktop" ? <Note>{es["editor.menuPanel.whereDrag"]}</Note> : null;
   // **Why the bar folds, under «Dónde va»** (sprint 34 día 4, ADR 0067): by its weight — tablets, or
   // the desktop site carrying the phone's menu — and, where the canvas lays the page out at or under
-  // the fold, that the canvas shows «Menú» too and from which width it is seen whole.
-  // And, with the canvas folded and a «Menú» drawn, that «Menú» is the pages' grip (sprint 34 día 5).
+  // the fold, that the canvas shows «Menú» too and from which width it is seen whole. The cards' twin
+  // on the canvas (ADR 0066) and, with the canvas folded, «Menú» as the pages' grip (sprint 34 día 5)
+  // are gestures: the help line says them while the hand is on the cards (sprint 39 día 3).
   const foldedCanvas = foldedCanvasNote(state.fold, layoutWidth, device);
   const foldNotes = [
     state.fold === undefined ? null : foldNoteText(state.fold),
     foldedCanvas,
-    foldedCanvas !== null && state.pagesMenu.drawn
-      ? es["editor.menuPanel.notes.foldedCanvasDrag"]
-      : null,
   ].flatMap((note) => (note === null ? [] : [<Note key={note}>{note}</Note>]));
+  const pagesGesture: GestureHint =
+    foldedCanvas !== null && state.pagesMenu.drawn ? "foldedMenu" : "menu";
   // A column card says when the fold keeps its column away: the pages' column from the rails'
   // width; the sections', from 1248 too when the pages stand in the column opposite.
   const pagesCardNote = (position: PagesPosition) =>
@@ -388,13 +416,6 @@ export function MenuPanel({
             ) : null}
           </>
         ) : null}
-        {/* The gestures' twin (ADR 0070 §5), in the desktop view only — the phone's canvas has no
-            zones and no edge to pull. It stays in this block when the brand's place moves to
-            «Disposición» (sprint 39 día 2): it names the stretch of the logo, whose size is here, and
-            the double click, which opens this block. */}
-        {state.brand.shown && device === "desktop" && !state.brand.inRail ? (
-          <Note>{es["editor.menuPanel.brandGesture"]}</Note>
-        ) : null}
         <Note>
           {state.brand.shown
             ? es["editor.menuPanel.brandNote"]
@@ -417,21 +438,20 @@ export function MenuPanel({
             where that does something — drawn and in a column, with a brand or a button to send. */}
         {state.pagesMenu.drawn ? (
           <>
-            <Places
-              name={`${groupId}-pages-place`}
-              label={es["editor.menuPanel.wherePages"]}
-              options={PAGES_POSITIONS}
-              value={state.pagesPosition}
-              onSelect={(position) => onSetHeader(pagesPositionPatch(doc, position))}
-              cardNote={pagesCardNote}
-            />
-            {dragNote}
+            <div {...gestureHost(pagesGesture)}>
+              <Places
+                name={`${groupId}-pages-place`}
+                label={es["editor.menuPanel.wherePages"]}
+                options={PAGES_POSITIONS}
+                value={state.pagesPosition}
+                onSelect={(position) => onSetHeader(pagesPositionPatch(doc, position))}
+                cardNote={pagesCardNote}
+              />
+            </div>
             {foldNotes}
-            {/* The sliding rule is the published page's alone (ADR 0063): in the canvas the
-                current page's entry keeps the rule's colour, still. A rail marks it by its edge. */}
-            {state.pagesPosition === "bar" ? (
-              <Note>{es["editor.menuPanel.notes.indicator"]}</Note>
-            ) : (
+            {/* The sliding rule is the published page's alone (ADR 0063), said in the note at the
+                foot; a column's card says what the canvas shows of it at this width. */}
+            {state.pagesPosition === "bar" ? null : (
               <Note>{columnNote(state.pagesFoldWidth, layoutWidth, device)}</Note>
             )}
             {state.brandWithPagesOffered ? (
@@ -473,20 +493,20 @@ export function MenuPanel({
         />
         {state.sectionsMenu.drawn ? (
           <>
-            <Places
-              name={`${groupId}-sections-place`}
-              label={es["editor.menuPanel.whereSections"]}
-              options={SECTIONS_POSITIONS}
-              value={state.sectionsPosition}
-              onSelect={(position) => onSetHeader(sectionsPositionPatch(doc, position))}
-              cardNote={sectionsCardNote}
-            />
-            {state.pagesMenu.drawn ? null : dragNote}
+            <div {...gestureHost("menu")}>
+              <Places
+                name={`${groupId}-sections-place`}
+                label={es["editor.menuPanel.whereSections"]}
+                options={SECTIONS_POSITIONS}
+                value={state.sectionsPosition}
+                onSelect={(position) => onSetHeader(sectionsPositionPatch(doc, position))}
+                cardNote={sectionsCardNote}
+              />
+            </div>
             {state.pagesMenu.drawn ? null : foldNotes}
             {sectionsPlaceNotes(state, layoutWidth, device).map((note) => (
               <Note key={note}>{note}</Note>
             ))}
-            <Note>{es["editor.menuPanel.notes.sectionsMarked"]}</Note>
           </>
         ) : null}
         <p className="m-0 text-[12px] font-semibold text-ui-ink">
@@ -571,7 +591,6 @@ export function MenuPanel({
       {/* 4. How the bar sits: three layouts drawn as what they are, fixed or not, a line or not. */}
       <PanelSection legend={es["editor.menuPanel.layout"]}>
         {state.barEmpty ? <Note>{es["editor.menuPanel.notes.barEmpty"]}</Note> : null}
-        <Note>{es["editor.menuPanel.notes.motion"]}</Note>
         <div className="grid grid-cols-3 gap-1.5">
           {LAYOUTS.map((layout) => (
             <label
@@ -604,16 +623,20 @@ export function MenuPanel({
         {/* Where the brand sits in its line (ADR 0070), offered while there is a brand to place. */}
         {state.brand.shown ? (
           <>
-            <Segments
-              name={`${groupId}-brand-place`}
-              label={es["editor.menuPanel.place"]}
-              options={PLACES}
-              value={state.brand.place}
-              labelOf={(place) => es[`editor.menuPanel.place.${place}`]}
-              onSelect={(place) => onSetHeader(brandPlacePatch(doc, place))}
-              preview={placePreview}
-              previewer={preview}
-            />
+            {/* The gesture's twin (ADR 0070 §5) is the line's while the hand is here — not where
+                the brand is in a column, which has no zones and no edge to pull. */}
+            <div {...gestureHost(state.brand.inRail ? null : "brand")}>
+              <Segments
+                name={`${groupId}-brand-place`}
+                label={es["editor.menuPanel.place"]}
+                options={PLACES}
+                value={state.brand.place}
+                labelOf={(place) => es[`editor.menuPanel.place.${place}`]}
+                onSelect={(place) => onSetHeader(brandPlacePatch(doc, place))}
+                preview={placePreview}
+                previewer={preview}
+              />
+            </div>
             {placeNote === null ? null : <Note>{placeNote}</Note>}
           </>
         ) : null}
@@ -775,6 +798,16 @@ export function MenuPanel({
           </fieldset>
         ) : null}
       </PanelSection>
+
+      {/* **What only the published page does, once and composed** (sprint 39 día 3, David's answer
+          C1): the pieces this site has — the sections rising, the fade between pages, the menu
+          marking its section, the rule sliding, the bar condensing, the line of what has been read,
+          «Ir a…» hung from the measured bar — in one note at the foot, instead of six beside their
+          controls. None applying, no note. */}
+      {(() => {
+        const published = publishedOnlyNote(state, doc, pageId);
+        return published === null ? null : <Note data-testid="published-note">{published}</Note>;
+      })()}
     </aside>
   );
 }
@@ -801,9 +834,7 @@ function sectionsPlaceNotes(
   // bar (sprint 33 día 3), which had a note of its own until the estimate learnt the bar's form
   // (día 6): within a pixel of the bar for every form, it differs only where the bar's words do
   // not fit on their line — and that is what the note says.
-  if (position === "fold") {
-    return [es["editor.menuPanel.notes.fold"], es["editor.menuPanel.notes.foldEstimate"]];
-  }
+  if (position === "fold") return [es["editor.menuPanel.notes.fold"]];
   if (position !== "left" && position !== "right") return [];
   const width = state.sectionsFoldWidth;
   return [

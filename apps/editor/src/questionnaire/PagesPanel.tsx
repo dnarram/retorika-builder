@@ -324,12 +324,10 @@ export function PagesPanel({
           </Note>
         ))}
       {/* Said rather than shown as a disabled control: there is nothing here to disable, because
-          pages are made in the canvas. The number is the download route's and the schema's. */}
-      <Note>
-        {full
-          ? es["editor.pages.full"].replace("{n}", String(MAX_PAGES))
-          : es["editor.pages.howToAdd"]}
-      </Note>
+          pages are made in the canvas. The number is the download route's and the schema's. How a
+          page is made is an instruction, and the help line says it while this panel is open and has
+          room for one (sprint 39 día 3, ADR 0071). */}
+      {full ? <Note>{es["editor.pages.full"].replace("{n}", String(MAX_PAGES))}</Note> : null}
     </section>
   );
 }

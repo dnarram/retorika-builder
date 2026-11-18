@@ -135,3 +135,16 @@ note of 15 November) is said by this line, which is why it is not a popover. In 
 sentence, and never in the live one. It is the first sentence of the quiet child with a button beside
 it — a cross that answers it, drawn only while that sentence is the one shown. The line is still 32 px
 with it, and the walk measures it whole and clear of the card at 768 and 1440.
+
+## Note — five more sentences join the line (18 November 2026, sprint 39 día 3)
+
+The inventory of sprint 39 found instructions still drawn as notes in three panels: the three
+gestures «Menú» said beside «Dónde va» and «Dónde va la marca» (the drag of a menu, ADR 0066; the drag
+and stretch of the brand, ADR 0070 §5; the folded bar's «Menú» as the grip), and the one instruction
+each of «Páginas» (how a page is made) and «Campos» (what to fill in). David's answer C1: the gestures
+are said in the quiet child while the control has the focus or the mouse, never in the live one — a
+person reached for the control — and the panels' instructions while the panel is open. In §3's priority
+they sit under the keys and over the chosen element's hint: `gesture`, then `panel`. The five keys
+(`editor.help.gesture.*`, `editor.help.panel.*`) join the list the guard holds to this module, and the
+three panels join the files held to reading none. What stayed in the panels is not an instruction: the
+names of the zones, the states, and the one composed note of what only the published page does.
