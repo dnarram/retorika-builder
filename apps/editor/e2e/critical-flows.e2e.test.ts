@@ -8260,20 +8260,24 @@ describe("sprint 23 día 3 — quitar una sección del menú", () => {
       // sección como botón de la cabecera («Reservar»), y un destino está en un solo sitio.
       await expect(sections).toHaveText(["Servicios", "Galería", "Dónde estamos"]);
 
-      // Abrir los campos de «Dónde estamos», que es donde vive el interruptor.
+      // Abrir los campos de «Dónde estamos». Desde el sprint 39 día 1 (ADR 0078) el interruptor no
+      // vive aquí: el cajón lee lo que el menú dice de la sección y abre «Menú» en su fila.
       await frame.locator('[data-section="sec-location"]').click();
       await frame.getByRole("button", { name: /Campos de esta sección/ }).click();
-      const toggle = visitor
-        .locator("aside label", { hasText: "Aparece en el menú" })
-        .locator("input");
-      await expect(toggle).toBeChecked();
-      // El panel dice las palabras que el menú usaría, que es lo único que el dueño no puede ver
+      const drawer = visitor.getByRole("complementary", { name: "Horario y ubicación" });
+      // El cajón dice las palabras que el menú usaría, que es lo único que el dueño no puede ver
       // de un menú que se escribe solo.
-      await expect(visitor.locator("aside label", { hasText: "Aparece en el menú" })).toContainText(
-        "«Dónde estamos»",
-      );
-
-      await toggle.uncheck();
+      await expect(drawer).toContainText("En el menú se lee «Dónde estamos».");
+      await drawer
+        .getByRole("button", { name: "Cambiar si «Horario y ubicación» aparece en el menú" })
+        .click();
+      // La puerta aterriza en la casilla de esa sección, en «Menú»: Espacio la desmarca, sin ratón.
+      const menu = visitor.getByRole("complementary", { name: "La cabecera de tu web" });
+      const toggle = menu.getByRole("checkbox", { name: "Horario y ubicación" });
+      await expect(toggle).toBeFocused();
+      await expect(toggle).toBeChecked();
+      await visitor.keyboard.press("Space");
+      await expect(toggle).not.toBeChecked();
       await expect(sections).toHaveText(["Servicios", "Galería"]);
 
       /**
@@ -8338,15 +8342,26 @@ describe("sprint 23 día 4 — las páginas en el menú y el umbral curado", () 
       const sections = frame.locator('.rb-nav-wide nav[aria-label="Secciones"] a');
       await expect(pages).toHaveText(["Qué ponemos"]);
 
-      // **El interruptor de la fila**, en «Páginas» — el otro lado del que vive en los campos de
-      // una sección. La primera fila no lo tiene: es «Inicio», y esconder el camino a casa es una
-      // trampa, no una decisión.
+      // **La línea de la fila**, en «Páginas» (sprint 39 día 1, ADR 0078): el interruptor vive en
+      // «Menú», y la fila lo lee y abre la puerta. La primera fila es «Inicio», sin interruptor —
+      // esconder el camino a casa es una trampa, no una decisión —: su línea dice por qué y su
+      // puerta solo promete ver.
       await visitor.getByRole("button", { name: "Páginas", exact: true }).click();
       const panel = visitor.getByRole("region", { name: "Páginas de tu web" });
       const rows = panel.locator("li");
       await expect(rows).toHaveCount(2);
-      await expect(rows.first().locator('input[type="checkbox"]')).toHaveCount(0);
-      const pageToggle = rows.nth(1).locator('input[type="checkbox"]');
+      await expect(rows.first()).toContainText("Inicio aparece cuando no estás en ella.");
+      await expect(rows.first().getByRole("button", { name: /^Ver «.+» en «Menú»$/ })).toHaveCount(
+        1,
+      );
+      await expect(rows.nth(1)).toContainText("En el menú");
+      await rows
+        .nth(1)
+        .getByRole("button", { name: "Cambiar si «Qué ponemos» aparece en el menú" })
+        .click();
+      const menu = visitor.getByRole("complementary", { name: "La cabecera de tu web" });
+      const pageToggle = menu.getByRole("checkbox", { name: "Qué ponemos" });
+      await expect(pageToggle).toBeFocused();
       await expect(pageToggle).toBeChecked();
       await pageToggle.uncheck();
 
@@ -8357,71 +8372,63 @@ describe("sprint 23 día 4 — las páginas en el menú y el umbral curado", () 
        */
       await expect(frame.locator('.rb-nav-wide nav[aria-label="Páginas"]')).toHaveCount(0);
       await expect(frame.locator('[data-preset="teaser"]')).toContainText("Qué ponemos");
-      await expect(panel).toContainText("En el menú no queda ninguna página.");
+      await expect(menu).toContainText(
+        "No hay nada que mostrar: no queda ninguna página en el menú, así que no se dibuja.",
+      );
       // Tres secciones siguen en el menú, así que la web sigue por encima del umbral y no hay nada
       // que decirle al dueño sobre ello.
       await expect(sections).toHaveCount(3);
-      await expect(panel).not.toContainText("lo has decidido tú");
+      await expect(menu).not.toContainText("lo has decidido tú");
+      // Y de vuelta en «Páginas», la fila lo lee.
+      await visitor.getByRole("button", { name: "Páginas", exact: true }).click();
+      await expect(rows.nth(1)).toContainText("Fuera del menú");
 
       /**
-       * Y ahora las secciones, de una en una. **El panel de campos se cierra entre cada una**: es
-       * un `aside` fijo de 340 px sobre el borde derecho, y con él abierto el clic en la sección
-       * siguiente del lienzo aterriza en el panel. Un «subtree intercepts pointer events» que, con
-       * el bucle que lo ignoraba, tardaba treinta y seis segundos en reintentar hasta rendirse.
-       *
-       * **Y desde el sprint 24 día 3 el panel ya no tapa el lienzo**, así que el baile se ha
-       * quitado: se pasa de una sección a la siguiente con el cajón abierto. Que esto funcione
-       * **es** la demostración de lo que David pidió — «no ocultar elementos que van a ser
-       * editados» —, medida por el camino más corto que hay: antes el clic no llegaba.
+       * Y ahora las secciones, de una en una, **en «Menú»**, donde desde el sprint 39 día 1 vive
+       * el único interruptor de cada una; el estado bajo «Automático» cuenta lo que queda, que es
+       * la frase que el cajón de campos decía junto a su interruptor hasta entonces.
        */
-      const sectionToggle = visitor
-        .locator("aside label", { hasText: "Aparece en el menú" })
-        .locator("input");
-      const openFields = async (id: string) => {
-        await frame.locator(`[data-section="${id}"]`).click();
-        await frame.getByRole("button", { name: /Campos de esta sección/ }).click();
-      };
-      const closeFields = () => visitor.getByRole("button", { name: "Cerrar los campos" }).click();
+      await visitor.getByRole("button", { name: "Menú", exact: true }).click();
+      const sectionToggle = (name: string) => menu.getByRole("checkbox", { name });
 
-      await openFields("sec-gallery");
-      await sectionToggle.uncheck();
-      // La cuenta, viva, donde se toma la decisión.
-      await expect(visitor.locator("aside")).toContainText("quedan 2 secciones");
-
+      await sectionToggle("Fotos de trabajos").uncheck();
       /**
-       * **El umbral se aparta, y la interfaz dice de quién es la decisión.** Un destino está por
+       * **El umbral se aparta, y la interfaz dice de quién es la decisión.** Dos destinos están por
        * debajo de los tres del ADR 0023, y el menú se dibuja igual porque el dueño lo ha tocado —
        * su propia regla: «se queda si el dueño lo ha tocado». Callarlo dejaría una web que se
-       * comporta distinto de todas las demás sin explicar por qué.
+       * comporta distinto de todas las demás sin explicar por qué (ADR 0043 §5).
        */
-      // Sin cerrar nada: el cajón sigue abierto y el clic en la sección siguiente llega.
-      await openFields("sec-location");
-      await sectionToggle.uncheck();
+      await expect(menu).toContainText(
+        /Automático: se dibuja con 2 destinos, menos de los \d+ con los que aparece solo\. Aparece porque lo has decidido tú\./,
+      );
+
+      await sectionToggle("Horario y ubicación").uncheck();
       // «Reservar»: the word the generator gave the contact section as its own entry (ADR 0059),
       // which came back to the strip with it when the button was set to «Ninguno» above.
       await expect(sections).toHaveText(["Reservar"]);
-      await expect(visitor.locator("aside")).toContainText("lo has decidido tú");
+      await expect(menu).toContainText(/se dibuja con 1 destino, menos de los \d+/);
 
       /**
        * **Y con nada, nada** — la cláusula que David añadió al aprobar el sprint. Ni `<nav>`, ni
        * `<details>`, ni un desplegable que se abre sobre el vacío.
        */
-      await openFields("sec-contact");
-      await sectionToggle.uncheck();
+      await sectionToggle("Contacto y reservas").uncheck();
       await expect(frame.locator(".rb-nav-wide")).toHaveCount(0);
       await expect(frame.locator("details.rb-nav-narrow")).toHaveCount(0);
-      await expect(visitor.locator("aside")).toContainText("Sin ningún enlace no hay menú");
+      await expect(menu).toContainText(
+        "No hay nada que mostrar: en esta página no queda ninguna sección en el menú",
+      );
 
       // Un paso del historial como cualquier otro: el menú vuelve con su único destino.
       await visitor.getByRole("button", { name: "Deshacer" }).click();
       await expect(sections).toHaveText(["Reservar"]);
 
       /**
-       * **axe a 390 sobre las dos palancas que el sprint añadió** (día 5, y una laguna que el
-       * cierre encontró). El recorrido móvil general audita el editor y la hoja de «Estilo» a 390,
-       * pero **nunca abre estos dos**: la portada no presta entrada al menú, así que su cajón de
-       * campos no dibuja el interruptor, y en un documento de una sola página la fila de «Páginas»
-       * no tiene casilla. Aquí existen las dos, porque esta caminata ha convertido una sección.
+       * **axe a 390 sobre el interruptor y sus dos líneas de lectura** (día 5 del 23, y una laguna
+       * que su cierre encontró; desde el sprint 39 día 1 el interruptor está en «Menú» y las líneas
+       * en «Páginas» y en el cajón de campos). El recorrido móvil general audita el editor y la hoja
+       * de «Estilo» a 390, pero **nunca abre estos tres** con una segunda página: aquí existen,
+       * porque esta caminata ha convertido una sección.
        *
        * Se abren a 1440 —donde el lienzo es cómodo de pulsar— y se mide tras estrechar la
        * ventana: un panel abierto es estado, no maquetación, así que sigue abierto y a 390 es una
@@ -8458,19 +8465,128 @@ describe("sprint 23 día 4 — las páginas en el menú y el umbral curado", () 
           .toBe(true);
       };
 
-      // El cajón de «Te esperamos» sigue abierto desde el paso anterior — deshacer no cierra un
-      // panel — así que no hay que volver a pulsar nada para medirlo.
-      await expect(sectionToggle).toBeChecked();
+      // «Menú» sigue abierto desde el paso anterior — deshacer no cierra un panel — así que no hay
+      // que volver a pulsar nada para medirlo.
+      await expect(sectionToggle("Contacto y reservas")).toBeChecked();
       await visitor.setViewportSize({ width: 390, height: 844 });
-      await panelReady(visitor.locator("aside"));
-      await axeSerious(visitor, "el interruptor del menú en los campos, a 390");
+      await panelReady(menu);
+      await axeSerious(visitor, "las filas del interruptor en «Menú», a 390");
       await visitor.setViewportSize({ width: 1440, height: 950 });
-      await closeFields();
 
       await visitor.getByRole("button", { name: "Páginas", exact: true }).click();
       await visitor.setViewportSize({ width: 390, height: 844 });
       await panelReady(panel);
-      await axeSerious(visitor, "la casilla «En el menú» de una fila de «Páginas», a 390");
+      await axeSerious(visitor, "la línea «Fuera del menú» de una fila de «Páginas», a 390");
+      await visitor.setViewportSize({ width: 1440, height: 950 });
+
+      await frame.locator('[data-section="sec-location"]').click();
+      await frame.getByRole("button", { name: /Campos de esta sección/ }).click();
+      await visitor.setViewportSize({ width: 390, height: 844 });
+      await panelReady(visitor.locator("aside"));
+      await axeSerious(visitor, "la línea del menú en los campos, a 390");
+    } finally {
+      await visitor.context().close();
+    }
+  }, 240_000);
+});
+
+/**
+ * **Sprint 39 día 1 — el interruptor vive en «Menú», y la puerta siempre aterriza en algo** (ADR
+ * 0078).
+ *
+ * Hasta hoy una página tenía una casilla «En el menú» en «Páginas» y otra en «Menú», y una sección
+ * una en «Campos» y otra en «Menú»: tres controles visibles para dos claves. Ahora escribe uno;
+ * «Páginas» y «Campos» leen el estado en una línea y abren «Menú» en la fila con una puerta. Lo que
+ * esta caminata mide, sin ratón donde cuenta: que «Cambiar» deja el foco en la casilla de esa página;
+ * que la página del botón destacado conserva su casilla y su nota; que Inicio, sin casilla, recibe el
+ * foco en su fila y no en el vacío (David, ajuste 1 al aprobar el sprint); que desde «Campos» la
+ * portada hace lo mismo; y lo que «Cerrar la cabecera» hace hoy con el foco, medido y escrito tal
+ * cual, sin cambiarlo.
+ */
+describe("sprint 39 día 1 — la puerta del interruptor", () => {
+  it("aterriza en la casilla, o en la fila cuando no hay casilla, y nunca en el vacío", async () => {
+    const visitor = await (
+      await browser.newContext({ viewport: { width: 1280, height: 900 } })
+    ).newPage();
+    try {
+      await intoTheCanvas(visitor);
+      const frame = visitor.frameLocator(PREVIEW).first();
+      // Una segunda página, para que «Páginas» tenga una fila con interruptor.
+      await frame.locator('[data-section="sec-services"]').click();
+      await frame
+        .locator(
+          '[data-section="sec-services"] .rb-action[aria-label="Convertir esta sección en página"]',
+        )
+        .click();
+      await expect(frame.locator('.rb-nav-wide nav[aria-label="Páginas"] a')).toHaveText([
+        "Qué ponemos",
+      ]);
+      const menu = visitor.getByRole("complementary", { name: "La cabecera de tu web" });
+
+      // 1. La página al botón destacado: conserva su casilla, y su nota dice que el menú la deja
+      //    fuera mientras el botón esté.
+      await visitor.getByRole("button", { name: "Menú", exact: true }).click();
+      await menu
+        .getByRole("group", { name: "Botón destacado" })
+        .getByText("Qué ponemos", { exact: true })
+        .click();
+      await expect(frame.locator(".rb-header .rb-nav-action")).toHaveText("Qué ponemos");
+      await visitor.getByRole("button", { name: "Cerrar la cabecera" }).click();
+      /**
+       * **Lo que «Cerrar» hace hoy con el foco, medido**: el botón se va con el panel y el foco cae
+       * en el documento; el raíl fijo no lo recoge (fila del backlog, sprint 37). Se escribe tal
+       * cual, sin cambiarlo hoy — el día 1 es solo el interruptor —, para que el día que cambie se
+       * vea aquí.
+       */
+      expect((await here(visitor)).tag).toBe("BODY");
+
+      // 2. Desde «Páginas», con el teclado: la fila dice la nota del botón, y «Cambiar» deja el foco
+      //    en la casilla de esa página en «Menú».
+      await visitor.getByRole("button", { name: "Páginas", exact: true }).click();
+      const pages = visitor.getByRole("region", { name: "Páginas de tu web" });
+      const row = pages.locator("li").nth(1);
+      await expect(row).toContainText("Está en el botón, así que no se repite en el menú.");
+      await row
+        .getByRole("button", { name: "Cambiar si «Qué ponemos» aparece en el menú" })
+        .focus();
+      await visitor.keyboard.press("Enter");
+      const toggle = menu.getByRole("checkbox", { name: "Qué ponemos" });
+      await expect(toggle).toBeFocused();
+      await expect(toggle).toBeChecked();
+      // The row around the switch, read from the switch's own node (a chained locator only looks
+      // down): the button's note sits beside the switch the row keeps.
+      expect(await toggle.evaluate((el) => el.closest("li")?.textContent ?? "")).toContain(
+        "Está en el botón, así que no se repite en el menú.",
+      );
+
+      // 3. Inicio: sin casilla. La puerta solo promete ver, y el foco cae en la fila, con su razón
+      //    al lado — nunca en el vacío.
+      await visitor.getByRole("button", { name: "Páginas", exact: true }).click();
+      const home = pages.locator("li").first();
+      await expect(home).toContainText("Inicio aparece cuando no estás en ella.");
+      await expect(home.locator('input[type="checkbox"]')).toHaveCount(0);
+      await home.getByRole("button", { name: "Ver «Taberna Santo Domingo» en «Menú»" }).focus();
+      await visitor.keyboard.press("Enter");
+      const homeRow = menu.locator('li[data-menu-row^="page:"][tabindex="-1"]').first();
+      await expect(homeRow).toBeFocused();
+      await expect(homeRow).toContainText("Inicio aparece cuando no estás en ella.");
+      await expect(homeRow.locator('input[type="checkbox"]')).toHaveCount(0);
+      // Y la fila no es una parada del teclado: Tab sigue por los controles.
+      await visitor.keyboard.press("Tab");
+      expect((await here(visitor)).tag).not.toBe("LI");
+
+      // 4. Desde «Campos», la portada, que no presta entrada: la línea dice «Es la portada.» y la
+      //    puerta deja el foco en su fila de «Menú».
+      await frame.locator('[data-section="sec-cover"]').click();
+      await frame.getByRole("button", { name: /Campos de esta sección/ }).click();
+      const drawer = visitor.getByRole("complementary", { name: "Portada" });
+      await expect(drawer).toContainText("Es la portada.");
+      await expect(drawer.locator('input[type="checkbox"]')).toHaveCount(0);
+      await drawer.getByRole("button", { name: "Ver «Portada» en «Menú»" }).click();
+      const coverRow = menu.locator('li[data-menu-row="section:sec-cover"]');
+      await expect(coverRow).toBeFocused();
+      await expect(coverRow).toContainText("Es la portada.");
+      await axeSerious(visitor, "«Menú» con el foco en una fila sin casilla");
     } finally {
       await visitor.context().close();
     }
