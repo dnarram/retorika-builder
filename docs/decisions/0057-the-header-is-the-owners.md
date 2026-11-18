@@ -279,3 +279,13 @@ and its words, its indicator and its line are the fill's ink, while its button i
 words in the fill. The secondary and ink bars write in the surface as before — the shared rules are
 followed by primary-bar twins rather than rewritten — and a theme without a fill draws the bar it always
 drew, byte for byte. The review judges the bar's words against the fill.
+
+## Note — sprint 39 día 1: the switch lives here and nowhere else (ADR 0078)
+
+«Two places, one verb, one state» described the panel's rows and the switches «Páginas» and «Campos»
+still drew; since [ADR 0078](0078-the-menu-switch-lives-in-menu-and-the-other-two-panels-read-it-with-a-door.md)
+the rows here are the one place a page's or a section's `inMenu` is switched, beside «Se lee como…».
+Each row is named for the door the two other panels open (`data-menu-row`), and a row without a switch
+can take the focus itself, with its reason. Under «Automático», a menu drawn below the threshold because
+the owner curated says «Aparece porque lo has decidido tú» — ADR 0043 §5's sentence, which the two
+other panels used to say beside their switches.

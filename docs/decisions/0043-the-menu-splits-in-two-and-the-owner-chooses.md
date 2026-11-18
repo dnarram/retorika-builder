@@ -218,3 +218,14 @@ reasons». Both are now decided the other way, in ADR 0057 and not here.
 «It still costs no JavaScript» (What is preserved) is read as ADR 0023's amendment of the same day
 reads it: true of the menu, no longer true of a page that draws a header, which carries the one
 constant script [ADR 0058](0058-a-published-page-carries-one-script-and-it-is-constant.md) decides.
+
+## Amendment — one switch, in «Menú» (18 November 2026, ADR 0078)
+
+§3's switch «where the section's fields are, and one per row in «Páginas»» — and the «Consequences»
+line that names it with `menuState.ts` — is withdrawn by [ADR 0078](0078-the-menu-switch-lives-in-menu-and-the-other-two-panels-read-it-with-a-door.md),
+David's answer to the inventory of sprint 39: three visible controls wrote these two keys once the
+«Menú» panel drew the switch too (ADR 0057). The switch lives in «Menú» now; «Páginas» and «Campos»
+read its state in a line — in, out, the words the menu uses, or why there is no switch — and open «Menú»
+at the row with a door that always lands on something. What §3 decides — visibility only, absent means
+in, converting carries the answer — stands; §5's promise that a short menu is named as the owner's is
+kept where the switch is.

@@ -1,6 +1,6 @@
 # Signing pack — November 2026
 
-> **For David.** Thirty-five ADRs are `proposed`: 0042, 0043 and 0045 to 0077. Each one records a
+> **For David.** Thirty-six ADRs are `proposed`: 0042, 0043 and 0045 to 0078. Each one records a
 > decision of yours, and none of them is accepted until you say so in writing. This file is the
 > one place to read them from: what each decides in a sentence, what was added to it after it was
 > written and when, what development decided under your delegation rather than you, and what
@@ -9,13 +9,14 @@
 > 13 November 2026, with nothing to add; brought up to date on sprint 37 día 2, 13 November 2026,
 > días 3 and 4, 14 November 2026, and día 6, 15 November 2026; checked closing sprint 37, 16 November
 > 2026, with nothing to add; brought up to date on sprint 38 día 1 and día 3, 16 November 2026, and día
-> 7, 17 November 2026; checked closing sprint 38, 18 November 2026, with nothing to add.
+> 7, 17 November 2026; checked closing sprint 38, 18 November 2026, with nothing to add; brought up to date
+> on sprint 39 día 1, 18 November 2026.
 > **Development does not sign.**
 
 The sprint 34 plan counted 24 (0042, 0043, 0045–0066). ADR 0067 and ADR 0068 were written during
 sprint 34, ADR 0069 and ADR 0070 during sprint 35 (its día 4), ADR 0071 on sprint 36 día 1, ADR 0072
 on sprint 37 día 2 and ADR 0073 on its día 4, ADR 0074 and ADR 0075 on sprint 38 día 1, ADR 0076 on its
-día 3 and ADR 0077 on its día 7, so the pack has 35 rows.
+día 3 and ADR 0077 on its día 7, and ADR 0078 on sprint 39 día 1, so the pack has 36 rows.
 
 ## What signing changes, and what it does not
 
@@ -62,7 +63,7 @@ A suggestion, so that each chain of amendments is signed together. Any other gro
 |---|---|---|
 | **A** | 0042, 0047, 0048, 0049, 0050, 0051, 0052, 0053, 0061, 0066, 0071, 0072, 0073 | The editor: the phone, choosing and writing, the drag and the keys, the canvas that patches, the chrome, the canvas at 1280, a menu dragged to its zone, the help line, the rail's two layouts and its second level |
 | **B** | 0045, 0046, 0055, 0056 | The letter: no reserved names, the gallery, forty families, an owner's own font |
-| **C** | 0043, 0057, 0058, 0059, 0060, 0063, 0065, 0067, 0069, 0070 | The header: two menus, the owner's header, its script, the logo, the places, the bar of 2026, the sheet, the fold, the brand's size and its place |
+| **C** | 0043, 0057, 0058, 0059, 0060, 0063, 0065, 0067, 0069, 0070, 0078 | The header: two menus, the owner's header, its script, the logo, the places, the bar of 2026, the sheet, the fold, the brand's size and its place, and the one switch of the menu |
 | **D** | 0054, 0062, 0064, 0068 | The published page: its icon, its motion and the progress line that amends it, its measure and rhythm |
 | **E** | 0074, 0075, 0076, 0077 | The colours: the fill keeps the brand's colour and the text takes its sibling, the palette keeps its origin, the logo's colours are the site's, and the palette is the owner's behind the same arithmetic |
 
@@ -111,6 +112,7 @@ of the commit that added it, read from `git log`.
 | [0065](0065-the-phones-sheet-holds-the-page-still-without-a-byte-of-script.md) · 4 Nov, sprint 33 | While a phone's sheet is open the page does not scroll under it — by the stylesheet, without a byte of script — and keeps its width as the lock comes and goes; the iPhone goes first on its list | Nothing | Nothing |
 | [0069](0069-the-brand-has-a-size-in-the-systems-words.md) · 10 Nov, sprint 35 | The logo has three named sizes (28, 40, 56 px, «normal» today's) and the name three of the scale's tokens; a size needs the thing it sizes; the phone derives the large logo and the heading-sized name by the token; the estimates count them with the stylesheet's own expressions; the rules travel in every sheet so the editor can preview by attribute (schema 1.19.0) | Nothing | Nothing |
 | [0070](0070-the-brand-has-its-place-in-its-line.md) · 10 Nov, sprint 35 | The brand has a place in its own line — start, middle or end —, «en medio» on a one-line bar being the pages' menu drawn before it in the document; the phone keeps «al final» and derives «en medio» to the start; the brand is a grip and the button is not (amends 0060 and 0066) | Notes of 10 Nov (sprint 35 día 5: the panel writes the word pressed even when it is the layout's own; the alignment still moves the sections' row; «en medio» is not previewed on hover) and 11 Nov (día 6: the gesture, and the double click opening «Menú» at the brand only with the panel already open) | Nothing |
+| [0078](0078-the-menu-switch-lives-in-menu-and-the-other-two-panels-read-it-with-a-door.md) · 18 Nov, sprint 39 | The menu's switch — a page's or a section's `inMenu` — lives in «Menú» and nowhere else, beside «Se lee como…»; «Páginas» and «Campos» read its state in a line (in, out, the words the menu uses, or why there is no switch) and open «Menú» at the row with a door whose verb promises only what the row can keep («Cambiar» / «Ver en «Menú»»); the door always lands on something, a row without a switch taking the focus itself with its reason; the sentences that counted what the menu had left go, and a menu drawn under the threshold says «lo has decidido tú» under the switch (amends 0043 §3; note in 0057) | Nothing | Nothing |
 | [0067](0067-the-bar-folds-where-its-words-do-not-fit.md) · 5 Nov, sprint 34 | A bar whose words would not fit one line folds into the phone's header below a width estimated from the advance of every glyph it draws, conservatively, with no upper bound — «always» where it never fits | Notes of 6 Nov: día 3 (your decisions of that day — the table holds the maximum measured on macOS and on CI's Linux; the gate is that the bar never wraps, bound 60 px; kerning margins 3 % lower case and 1.5 % capitals, derived by a test); día 4 (who is told, and from which width); día 5 (the canvas under the fold has its grip) | Nothing |
 
 ### Batch D — the published page

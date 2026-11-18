@@ -10464,4 +10464,93 @@ movido en «Estilo» cambia el sistema, no crea una excepción.
      sube bajo el ratón.
 8. **De los sprints 37 a 34, sin tocar**: lo que dicen sus listas. **Y el editor sigue sin verse fuera de
    Chromium**; la web publicada sí, en los tres motores.
-9. **El sprint 39, sin planificar.**
+9. ~~**El sprint 39, sin planificar.**~~ Planificado y aprobado el 18 de noviembre de 2026: siete días, abajo.
+
+## Sprint 39 — «Los paneles, ordenados» (desde el 18 de noviembre de 2026)
+
+No añade funciones: ordena las que hay en los ocho paneles derechos. El encargo de David, en cuatro
+puntos: el inventario control a control sin tocar código, el veredicto por control, que se entienda
+(las palabras de oficio en lenguaje llano), y vanguardia de 2026 sobre las piezas compartidas del 38.
+El inventario se entregó en la sesión del 18 de noviembre con cita de fichero y línea; lo que de él
+cambia está en el plan y, resumido, en la memoria del proyecto. Sus respuestas y los cuatro ajustes al
+aprobar están en [ADR 0078](../decisions/0078-the-menu-switch-lives-in-menu-and-the-other-two-panels-read-it-with-a-door.md)
+y en el plan. Criterios de todo el sprint: ninguna web guardada cambia de aspecto; la web publicada no
+cambia un byte (el renderer no se toca); axe y teclado en verde en los ocho paneles; `prefers-reduced-motion`
+manda; ningún texto de instrucción sobre la página; los localizadores por rol y nombre cambian solo donde
+un control se mueve o se renombra, y cada PR los cuenta; capturas antes y después de cada panel tocado, a
+1280, a 1024 con panel y con la ventana a 390 × 844 (el panel como hoja inferior).
+
+### Día 1, primero y solo — el interruptor vive en «Menú» (PR de `feat/el-interruptor-vive-en-menu`)
+
+**Un cambio de modelo, solo y primero** (la regla del 35): dónde vive un verbo. El inventario contó el único
+duplicado de verdad de los ocho paneles: la casilla «En el menú» de cada fila de «Páginas» y la casilla de
+cada página en «Menú» escribían `page.inMenu` por el mismo `setPageInMenu`; «Aparece en el menú» en «Campos» y
+la casilla de cada sección en «Menú» escribían `section.inMenu` por el mismo `setSectionInMenu`. **Tres
+controles visibles, dos claves.** Y junto a los dos que no estaban en «Menú», tres frases que contaban lo que
+quedaba en el menú (`menuState.ts`), un segundo módulo preguntándole al renderer lo que `headerState.ts` ya
+le preguntaba.
+
+**Lo que hay ahora** (ADR 0078, la respuesta A1 de David con su condición):
+
+- **El interruptor vive en «Menú»**, en la fila que ya tiene «Se lee como…», y en ningún otro sitio.
+- **«Páginas» y «Campos» lo leen en una línea y abren la puerta.** La línea dice lo que «Menú» tiene de esa
+  página o sección —«En el menú», «Fuera del menú», para una sección «En el menú se lee «Carta».»; para el
+  destino del botón, «Está en el botón, así que no se repite en el menú»; y para una fila sin interruptor,
+  **por qué**: «Inicio aparece cuando no estás en ella», «Es la portada»…—. El verbo de la puerta promete
+  solo lo que la fila puede cumplir: **«Cambiar»** donde espera una casilla, **«Ver en «Menú»»** donde solo hay
+  una razón. Las dos leen `headerStateFor`, el objeto del que «Menú» dibuja sus filas, así que la línea y la
+  fila no pueden discrepar (`menuLineFor`, `rowReasonText`).
+- **La puerta siempre aterriza en algo** (su ajuste 1): `focusBlock` de «Menú», que desde el 35 llevaba al
+  bloque de la marca, acepta una página o una sección; la fila lleva `data-menu-row` y el efecto da el
+  teclado a su casilla —o a la propia fila (`tabindex="-1"`, nunca una parada de Tab) cuando no la tiene,
+  con su razón al lado—. Un foco que cayera en el documento tras una pulsación que prometía un sitio sería un
+  usuario de teclado perdido.
+- **Las frases «quedan {n}» se van con las casillas.** Lo que decían lo dice el estado bajo
+  Automático/Siempre/Nunca, y la promesa del ADR 0043 §5 —un menú por debajo del umbral, dibujado porque el
+  dueño lo tocó, se nombra como suyo— se cumple donde está el interruptor: «Automático: se dibuja con 2
+  destinos, menos de los 3 con los que aparece solo. Aparece porque lo has decidido tú.» (`belowThreshold`,
+  calculado con la cuenta del renderer en la portada, como contaba `menuState.ts`).
+- `menuState.ts` y su prueba se borran; **quince claves** de `es.json` se van y **ocho** entran (las dos
+  líneas, los cuatro verbos con su nombre accesible, las dos frases del umbral).
+
+**Lo que «Cerrar la cabecera» hace hoy con el foco, medido**: el botón se va con el panel y el foco cae en el
+documento (`body`); el raíl fijo no lo recoge (fila del backlog desde el sprint 37). La caminata lo escribe
+tal cual, sin cambiarlo —el día 1 es solo el interruptor—, para que el día que cambie se vea allí.
+
+**Una guarda nueva, y lo que encontró de antes**: `test/localeKeys.test.ts` sujeta cada clave de `es.json` a un
+lector en `src/` —el nombre entero entre comillas, un prefijo escrito en una plantilla, o un ancestro entre
+comillas completado por una plantilla, que es la forma del aviso de contraste—. Encontró **tres** que nadie
+lee (`auth.error.emailRequired`, `auth.error.passwordRequired`, `auth.newPassword.noSession`) y, por tu ajuste
+1, las lista en `KNOWN_ORPHANS` con su cuenta y las manda al backlog en vez de limpiarlas: la lista puede
+encoger y no puede crecer.
+
+**Pruebas**: `menuDoor.test.ts` (17): la línea de cada fila desde el mismo objeto que «Menú», «decidido tú»
+bajo el umbral y callado con «Siempre», «Páginas» y «Campos» sin ninguna casilla y con la puerta nombrada por
+su página o sección, «Menú» con cada fila nombrada y las filas sin casilla focalizables por script y nunca por
+Tab. Las dos caminatas del sprint 23 (días 3 y 4) pasan por «Menú»: la del día 3 cruza la puerta desde el
+cajón de campos y desmarca con Espacio, sin ratón; la del día 4 cuenta el umbral en el estado de «Menú» y mide
+axe a 390 sobre las filas del interruptor y las dos líneas de lectura. **Una caminata nueva, «la puerta»**, a
+1280 y con el teclado donde cuenta: la página del botón destacado conserva su casilla y su nota; «Cambiar»
+desde «Páginas» deja el foco en la casilla de esa página; Inicio, sin casilla, recibe el foco en su fila con
+su razón, y Tab sigue por los controles; desde «Campos», la portada igual; axe con el foco en una fila sin
+casilla. **Localizadores**: los 5 de «En el menú» y «Aparece en el menú» reescritos; ningún otro cambia.
+
+**Saboteos, cada uno deshecho por script**: el efecto buscando solo `brand` → «la puerta» roja; una fila sin
+casilla sin `tabindex` → la pulsación de Inicio deja el foco en `body` y la caminata lo coge; `PagesPanel`
+recibiendo aún `onSetPageInMenu` → `typecheck` rojo; `editor.menu.toggle` viva en `es.json` → `localeKeys`
+roja; `belowThreshold` siempre `false` → la unidad «decidido tú» roja.
+
+**Capturas** antes (`b4c08b6`) y después, los tres paneles tocados, a 1280, a 1024 con panel y a 390 × 844 con el
+panel como hoja (ajuste 4): [`review/2026-11-los-paneles-ordenados/`](review/2026-11-los-paneles-ordenados/).
+
+| Panel | 1280 | 1024 | 390 |
+|---|---|---|---|
+| Páginas | [antes](review/2026-11-los-paneles-ordenados/paginas-1280-antes.png) · [después](review/2026-11-los-paneles-ordenados/paginas-1280-despues.png) | [antes](review/2026-11-los-paneles-ordenados/paginas-1024-antes.png) · [después](review/2026-11-los-paneles-ordenados/paginas-1024-despues.png) | [antes](review/2026-11-los-paneles-ordenados/paginas-390-antes.png) · [después](review/2026-11-los-paneles-ordenados/paginas-390-despues.png) |
+| Menú | [antes](review/2026-11-los-paneles-ordenados/menu-1280-antes.png) · [después](review/2026-11-los-paneles-ordenados/menu-1280-despues.png) | [antes](review/2026-11-los-paneles-ordenados/menu-1024-antes.png) · [después](review/2026-11-los-paneles-ordenados/menu-1024-despues.png) | [antes](review/2026-11-los-paneles-ordenados/menu-390-antes.png) · [después](review/2026-11-los-paneles-ordenados/menu-390-despues.png) |
+| Campos | [antes](review/2026-11-los-paneles-ordenados/campos-1280-antes.png) · [después](review/2026-11-los-paneles-ordenados/campos-1280-despues.png) | [antes](review/2026-11-los-paneles-ordenados/campos-1024-antes.png) · [después](review/2026-11-los-paneles-ordenados/campos-1024-despues.png) | [antes](review/2026-11-los-paneles-ordenados/campos-390-antes.png) · [después](review/2026-11-los-paneles-ordenados/campos-390-despues.png) |
+
+**Lo que no cambia**: el esquema, el renderer y la web publicada (el golden sin regenerar); el nombre de
+ningún landmark; el gesto en el lienzo. **Encontrado y no arreglado**: la página del botón destacado sí tiene
+casilla hoy (el inventario la listaba con nota *y* control), así que las filas sin casilla son Inicio, la
+página por ficha, la portada, el pie, el avance y la sección que abre su página; la caminata cubre la del
+botón y la de Inicio.
