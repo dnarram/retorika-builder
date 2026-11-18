@@ -42,8 +42,10 @@ export type KeyboardPlace = "section" | "bar" | "grip" | "writing" | "hub" | nul
 export type GestureHint = "menu" | "foldedMenu" | "brand";
 
 /** A panel whose one instruction the line says while it is open: how a page is made («Páginas», when
- * there is room for one), and what to fill in («Campos»). Names and states stay in the panel. */
-export type PanelHint = "pages" | "fields";
+ * there is room for one), what to fill in («Campos»), and that a link of the menu in the preview takes
+ * you to its section or page («Menú», since sprint 39 día 4 made its head one sentence of what it
+ * holds). Names and states stay in the panel. */
+export type PanelHint = "pages" | "fields" | "menu";
 
 export interface HelpNotice {
   sectionName: string;
@@ -223,6 +225,7 @@ export function quietSays(state: HelpLineState): HelpLineSays {
   if (state.gesture) return quiet(GESTURE_TEXT[state.gesture]);
   if (state.panel === "pages" && !state.pagesFull) return quiet(es["editor.help.panel.pages"]);
   if (state.panel === "fields") return quiet(es["editor.help.panel.fields"]);
+  if (state.panel === "menu") return quiet(es["editor.help.panel.menu"]);
   if (state.chosen) {
     const hint = chosenHint(state.chosen);
     if (hint !== "") return quiet(hint);

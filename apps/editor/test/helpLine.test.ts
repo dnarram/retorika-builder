@@ -153,6 +153,10 @@ describe("the gesture of the control under the hand, and the panel's instruction
     expect(quietSays(at({ panel: "pages", pagesFull: true })).text).toBe(es["editor.editHint"]);
     expect(quietSays(at({ panel: "fields" })).text).toBe(es["editor.help.panel.fields"]);
     expect(quietSays(at({ panel: "fields" })).child).toBe("quiet");
+    // «Menú»'s head is one sentence of what it holds since sprint 39 día 4; how its links behave in
+    // the preview is an instruction, and the line says it.
+    expect(quietSays(at({ panel: "menu" })).text).toBe(es["editor.help.panel.menu"]);
+    expect(es["editor.menuPanel.help"]).toBe("Tu marca, el menú y el botón de la barra de arriba.");
   });
 
   it("ranks the keys over the gesture, the gesture over the panel, the panel over the chosen hint", () => {

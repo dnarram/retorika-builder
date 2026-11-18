@@ -757,23 +757,53 @@ export function brandWithPagesPatch(on: boolean): Partial<Header> {
  * la ventana» is true — the note says the column is seen from that width and not in the canvas; and a
  * bar that never fits has no column at any width (`foldWidth` infinite), which is said as such.
  */
+/**
+ * **«{w} px» says the truth by the width** (sprint 39 día 4, David's adjustment 3 approving the
+ * sprint): «pantallas de ordenador de {w} px o más» is false at 805, which is where a third of
+ * generated bars fold. The word comes from the weight ADR 0067 already decided — a tablet under 1024
+ * (`RAIL_FOLD_WIDTH`), a desktop from 1024 — and one function says it for every sentence that names a
+ * width, so no two sentences can disagree about which screens a number covers.
+ *
+ * Three sides, because the sentences need three: `from` (that width and wider: «tabletas y pantallas
+ * de 805 px o más», «pantallas de ordenador de 1290 px o más»); `upTo` (that width and narrower, the
+ * phone named by the sentence itself: «tabletas de hasta 805 px», «pantallas de hasta 1290 px,
+ * ordenadores pequeños incluidos»); `below` (narrower than that width: «tabletas de menos de 1024 px»,
+ * «pantallas de menos de 1290 px, ordenadores pequeños incluidos»). A width that is not a number is a
+ * caller's bug — «Infinity px» would be published as a sentence — and throws.
+ */
+export type WidthSide = "from" | "upTo" | "below";
+
+export function widthPhrase(width: number, side: WidthSide): string {
+  if (!Number.isFinite(width)) throw new Error(`widthPhrase: no screens for a width of ${width}`);
+  // `upTo` and `from` include the width itself, so 1024 is a desktop; `below` excludes it, so the
+  // screens under 1024 are tablets only.
+  const desktop = side === "below" ? width > RAIL_FOLD_WIDTH : width >= RAIL_FOLD_WIDTH;
+  return es[`editor.screens.${side}.${desktop ? "desktop" : "tablet"}`].replace(
+    "{w}",
+    String(width),
+  );
+}
+
 export function columnNote(
   foldWidth: number,
   layoutWidth: number,
   device: "desktop" | "mobile",
 ): string {
   if (!Number.isFinite(foldWidth)) return es["editor.menuPanel.notes.columnNever"];
-  const width = String(foldWidth);
-  if (device === "mobile")
-    return es["editor.menuPanel.notes.columnPhone"].replace("{width}", width);
+  if (device === "mobile") {
+    return es["editor.menuPanel.notes.columnPhone"].replace(
+      "{screens}",
+      widthPhrase(foldWidth, "below"),
+    );
+  }
   if (foldWidth > DESKTOP_LAYOUT_WIDTH) {
     return es["editor.menuPanel.notes.columnBeyondCanvas"]
-      .replace("{width}", width)
+      .replace("{screens}", widthPhrase(foldWidth, "from"))
       .replace("{canvas}", String(DESKTOP_LAYOUT_WIDTH));
   }
   if (layoutWidth >= DESKTOP_LAYOUT_WIDTH) {
     return es["editor.menuPanel.notes.column"]
-      .replace("{width}", width)
+      .replace("{screens}", widthPhrase(foldWidth, "from"))
       .replace("{canvas}", String(DESKTOP_LAYOUT_WIDTH));
   }
   const n = String(Math.round(layoutWidth));
@@ -846,7 +876,10 @@ function brandFromText(fold: FoldWarning): string {
   return ` ${
     fold.brandFrom <= PHONE_BREAKPOINT + 1
       ? es["editor.menuPanel.notes.foldsBrandFits"]
-      : es["editor.menuPanel.notes.foldsBrandFrom"].replace("{width}", String(fold.brandFrom))
+      : es["editor.menuPanel.notes.foldsBrandFrom"].replace(
+          "{screens}",
+          widthPhrase(fold.brandFrom, "from"),
+        )
   }`;
 }
 
@@ -863,10 +896,16 @@ export function foldNoteText(fold: FoldWarning): string {
 
 function foldNoteOwn(fold: FoldWarning): string {
   if (fold.weight === "tablet") {
-    return es["editor.menuPanel.notes.foldsTablet"].replace("{width}", String(fold.width));
+    return es["editor.menuPanel.notes.foldsTablet"].replace(
+      "{screens}",
+      widthPhrase(fold.width, "upTo"),
+    );
   }
   if (fold.weight === "desktop") {
-    return es["editor.menuPanel.notes.foldsDesktop"].replace("{width}", String(fold.width));
+    return es["editor.menuPanel.notes.foldsDesktop"].replace(
+      "{screens}",
+      widthPhrase(fold.width, "upTo"),
+    );
   }
   return fold.nearly
     ? counted(
@@ -901,8 +940,8 @@ export function foldReviewText(fold: LoudFold): { row: string; why: string } {
             )) + brandFromText(fold),
     };
   }
-  const width = String(fold.width);
-  const row = es["editor.download.fold.row.desktop"].replace("{width}", width);
+  const screens = widthPhrase(fold.width, "upTo");
+  const row = es["editor.download.fold.row.desktop"].replace("{screens}", screens);
   const why =
     fold.over === 0
       ? es["editor.download.fold.why"]
@@ -910,8 +949,9 @@ export function foldReviewText(fold: LoudFold): { row: string; why: string } {
   return {
     row,
     why:
-      why.replace("{width}", width).replace("{from}", String(TWO_RAILS_FOLD_WIDTH)) +
-      brandFromText(fold),
+      why
+        .replace("{screens}", screens)
+        .replace("{from}", widthPhrase(TWO_RAILS_FOLD_WIDTH, "from")) + brandFromText(fold),
   };
 }
 
@@ -930,7 +970,10 @@ export function foldedCanvasNote(
 ): string | null {
   if (fold === undefined || fold.weight === "always" || device === "mobile") return null;
   if (layoutWidth > fold.width) return null;
-  return es["editor.menuPanel.notes.foldedCanvas"].replace("{width}", String(fold.width + 1));
+  return es["editor.menuPanel.notes.foldedCanvas"].replace(
+    "{screens}",
+    widthPhrase(fold.width + 1, "from"),
+  );
 }
 
 /** «En el móvil», and the fixed bar's notes on the phone, with the widths they really cover: up to
@@ -941,7 +984,7 @@ export function phoneSpan<K extends "sectionsMobile" | "stickyPhone" | "stickyPh
 ): string {
   if (phoneWidth === "always") return es[`editor.menuPanel.${key}Always`];
   if (phoneWidth <= PHONE_BREAKPOINT) return es[`editor.menuPanel.${key}`];
-  return es[`editor.menuPanel.${key}UpTo`].replace("{width}", String(phoneWidth));
+  return es[`editor.menuPanel.${key}UpTo`].replace("{screens}", widthPhrase(phoneWidth, "upTo"));
 }
 
 /** Under a column card in «Dónde va», where the fold keeps that column away (sprint 34 día 4; David's
@@ -951,7 +994,10 @@ export function phoneSpan<K extends "sectionsMobile" | "stickyPhone" | "stickyPh
 export function columnCardNote(fold: FoldWarning | undefined, columnWidth: number): string | null {
   if (fold === undefined || fold.weight === "tablet") return null;
   if (fold.weight === "always") return es["editor.menuPanel.position.columnNever"];
-  return es["editor.menuPanel.position.columnFrom"].replace("{width}", String(columnWidth));
+  return es["editor.menuPanel.position.columnFrom"].replace(
+    "{screens}",
+    widthPhrase(columnWidth, "from"),
+  );
 }
 
 /**

@@ -450,7 +450,6 @@ export function DesignPanel({
                 if (next) onPreviewMobile();
               }}
             >
-              <Note>{es["editor.design.mobileHelp"]}</Note>
               <div className="flex gap-2">
                 <MobileButton
                   label={
@@ -484,8 +483,6 @@ export function DesignPanel({
               </p>
             </Family>
           ) : null}
-
-          <p className="m-0 text-[11px] leading-normal text-ui-muted">{es["editor.design.note"]}</p>
         </>
       )}
 

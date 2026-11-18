@@ -52,7 +52,7 @@ function block(html: string, legend: string): string {
   throw new Error(`block «${legend}» never closes`);
 }
 
-describe("«Disposición» holds the bar's horizontal choices (David's answer B)", () => {
+describe("«Cómo se coloca» holds the bar's horizontal choices (David's answer B)", () => {
   const html = renderToStaticMarkup(
     createElement(MenuPanel, {
       doc: fixture("cabecera-con-marca"),

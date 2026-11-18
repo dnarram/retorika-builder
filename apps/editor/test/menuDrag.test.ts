@@ -215,8 +215,8 @@ describe("the words", () => {
   it("names the menu and its new place in the panel's own words, in Spanish", () => {
     expect(menuName("pages")).toBe("Menú de páginas");
     expect(dropText("pages", "left")).toBe("Menú de páginas: columna izquierda");
-    expect(dropText("sections", "fold")).toBe("Navegador de secciones: desplegable «Ir a…»");
+    expect(dropText("sections", "fold")).toBe("Menú de secciones: desplegable «Ir a…»");
     expect(stackedText("pages")).toBe("Se apila bajo el menú de páginas");
-    expect(stackedText("sections")).toBe("Se apila bajo el navegador de secciones");
+    expect(stackedText("sections")).toBe("Se apila bajo el menú de secciones");
   });
 });

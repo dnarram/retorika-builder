@@ -144,9 +144,9 @@ describe("the grid, rendered", () => {
     )?.[0];
     expect(swatches).toBeDefined();
     expect(swatches).toContain(neutral["color.primary"]);
-    expect(swatches).toContain(">Principal<");
+    expect(swatches).toContain(">Titulares y enlaces<");
     expect(swatches).toContain(">Fondo<");
-    expect(swatches).not.toContain(">Relleno<");
+    expect(swatches).not.toContain(">Botones y franjas<");
     // After «Azul confianza», the row-mate of «Neutra», not after «Neutra» itself.
     const azul = html.indexOf('data-palette="classic-blue"');
     const group = html.indexOf('aria-label="Los colores de «Neutra»"');
