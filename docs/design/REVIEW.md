@@ -10317,3 +10317,151 @@ hermano ocre en los titulares.
 | `pnpm test:a11y` | 2 378 en 214 s |
 | `pnpm e2e`, con `caffeinate` | **361 en verde y 1 omitida, en 1 702 s** |
 
+### Día 8 — lo que quedó corto y el cierre (PR de `test/el-cierre-del-sprint-38`)
+
+**Lo que quedó corto, primero: una caminata del sprint 36 que parpadeó en la CI.** En la #389, la caminata
+de «Reducir movimiento» que muestrea la llegada del menú leyó dos fotogramas con su desenfoque donde
+admitía uno, los dos a opacidad cero. Son el fotograma en que la animación nace pendiente y, en un
+ejecutor lento, el fotograma en que se resuelve su inicio. La aserción que importa, que nada se vea a
+través de un desenfoque, pasó. El tope pasa a dos fotogramas; saboteado (la llegada conserva su duración
+bajo movimiento reducido), la caminata se pone roja por la aserción que importa.
+
+**El sprint, en una frase por día.** El color de marca conserva su valor y cambia de papel: relleno exacto
+con tinta negra o blanca, y un hermano oscurecido solo para el texto, sin cambiar un byte de ninguna web
+existente (día 1, ADR 0074 y 0075, esquema 1.20.0). El motor que deriva una paleta de uno o dos colores,
+puro y probado en toda la rueda (día 2). Los colores del logo son los de la web, desde la pregunta 1 y desde
+«Menú» sobre un arranque intacto (día 3, ADR 0076). Trece paletas (día 4). Los ocho paneles comparten sus
+piezas (día 5). Las paletas son tarjetas, y pasar por una pinta la web sin escribir (día 6). Y la paleta es
+del dueño: cada color se mueve en un campo que no alcanza lo ilegible, y «Tu paleta» nace de un color (día
+7, ADR 0077).
+
+**La web publicada: las 23 de siempre no cambian un byte, como pediste en P1.** El corpus se construyó con
+el publicador de cada árbol (`build-corpus.mts`) contra el arranque del sprint (`2f74743`): **132 ficheros en
+23 webs, cero diferencias**; la 24ª, `logo-amarillo`, es nueva y lleva 8 ficheros. El script de la cabecera
+tiene el mismo hash (`7fd756d0ec6a914c`) a los dos lados. El renderer **sí** cambió (las dos formas del día
+1, con el relleno o sin él), así que **la auditoría de menús corre**: **306 combinaciones por motor, 918 en total, ningún estado en rojo**, 6 210 s,
+de una vez. Las únicas notas, las permitidas de siempre: la `y` de «Ir a…» en el lienzo a 1280, 0,5 px (504) o
+1 px (212), las mismas cuentas que en los cierres del 34 y del 35. El relleno de la barra de color no mueve un
+píxel de ningún menú.
+
+**Los tres motores**, la web real abierta desde `file://` en Chromium, Firefox y WebKit (`engines.browser.test`,
+con la prueba de color del día 1 dentro): en los tres, la prueba de color del día 1 —rellena con el color de marca, escribe en su
+tinta, y solo sobre la barra principal— en verde, dentro de las 2 378 de accesibilidad; y la web abierta
+desde `file://` siguiendo un enlace sin fallos, con movimiento y sin él, 18 de 18. Chromium 153, Firefox 155,
+WebKit 26.6.
+
+**Lighthouse**, los sujetos en el perfil móvil, contra el cierre del 37:
+
+| Sujeto | Rendimiento | Accesibilidad | Buenas prácticas | SEO | LCP | CLS |
+|---|---|---|---|---|---|---|
+| v1 image-right | 99 | 100 | 100 | 100 | 1,80 s (1,80) | 0,003 (0,003) |
+| v2 image-background | 98 | 100 | 100 | 100 | 2,33 s (2,40) | 0,003 (0,003) |
+| v3 image-left | 98 | 100 | 100 | 100 | 2,33 s (2,33) | 0,003 (0,003) |
+| letra propia `.ttf` | 99 | 100 | 100 | 100 | 1,80 s (1,80) | 0,000 (0,000) |
+| cabecera fija con logo, con la línea | 100 | 100 | 100 | 100 | 1,35 s (1,35) | 0,002 (0,002) |
+| marca grande | 100 | 100 | 100 | 100 | 1,35 s (1,35) | 0,001 (0,001) |
+| cabecera en columnas | 100 | 100 | 100 | 100 | 1,35 s (1,35) | 0,004 (0,004) |
+| página por ficha | 100 | 100 | 100 | 100 | 0,90 s (0,90) | 0,000 (0,000) |
+
+Las mismas puntuaciones que al cierre del 37. El LCP de v2 baja de 2,40 a 2,33 s sobre bytes idénticos: el
+ruido de la pasada, de cada lado. Lighthouse no cambia de sujeto (se dijo el día 4): mide webs generadas,
+que empiezan en «Neutra».
+
+**Suites del cierre**, una tras otra y nada en paralelo:
+
+| Suite | Resultado |
+|---|---|
+| `pnpm test` | 4 376 en verde, 196 ficheros (4 002 y 189 al cierre del 37) |
+| `typecheck`, `lint` | en verde; 82 avisos, ningún error, como al cierre del 37 |
+| invariantes, golden, `renderer:deps` | en verde; golden 28 (la 24ª, `logo-amarillo`, nueva), ninguna de las 23 regenerada en todo el sprint; 2 dependencias permitidas |
+| `schema:guard 2f74743..HEAD` | «la forma cambió y lleva su migración, su prueba y su versión»: la 0021, 1.20.0 |
+| `secrets:scope` | 144 módulos, 34 de cliente, 2 solo de servidor, ninguno cruza (140 y 33 al cierre del 37) |
+| `size` | las 29 dentro (28 y la web nueva); el script en 0,8 KB de 2 |
+| `test:a11y` local | **2 378 en verde, 214 s** (1 750 y 124 s al cierre del 37: trece paletas desde el día 4) |
+| `pnpm lighthouse` | 27 de 27, los números de arriba, con los tres motores dentro |
+| `pnpm audit:menus` | **918 combinaciones, ninguna en rojo**, 6 210 s (arriba) |
+| e2e completa | una pasada, **361 verdes y 1 omitida en 1 699 s** (350 al cierre del 37) |
+
+**El e2e en la CI, contra su límite.** El día 1 subió el tope del paso de 40 a 45 minutos y el del trabajo de
+50 a 55. Cada PR del sprint, con sus pasadas:
+
+| PR | Rama | Minutos del paso |
+|---|---|---|
+| cierre del 37 (#381) | `test/el-cierre-del-sprint-37` | 35,2 |
+| día 1 (#382) | `feat/el-relleno-y-su-tinta` | 32,2 (roja: la carrera de la barra de pestañas) · 32,7 |
+| día 2 (#383) | `feat/la-paleta-se-deriva` | 34,9 |
+| día 3 (#384) | `feat/los-colores-del-logo-son-los-de-la-web` | 34,0 · 32,4 (tras traer `main`) |
+| aviso de Next (#385) | `fix/next-16-4-5-por-un-aviso` | 32,1 (roja: la misma carrera) · 34,3 |
+| día 4 (#386) | `feat/ocho-paletas-mas` | 32,8 (roja: la guarda de «nada sobresale») · 32,6 |
+| día 5 (#387) | `feat/los-paneles-comparten-piezas` | 32,8 |
+| día 6 (#388) | `feat/las-paletas-son-tarjetas` | 35,7 · 35,2 (tras traer `main`) |
+| aviso de picomatch (#389) | `fix/excepcion-picomatch` | 32,6 (roja: el desenfoque de arriba) · 34,8 |
+| día 7 (#390) | `feat/la-paleta-es-del-dueno` | 33,4 |
+
+Entre 32 y 36 minutos de 45: nueve de margen, con el sprint entero dentro. Las dos salidas siguen siendo
+tuyas: partir las caminatas en dos trabajos o subir el tope otra vez, el día que el margen se acabe.
+
+**En el navegador real**, Chromium, a 1024, 1280 y 1440, y en un iPad emulado por toque: sin ratón, con el teclado, en la web del logo amarillo: los tres logos en la pregunta 1
+dan el azul exacto (`#2563EB`), el amarillo en los botones con su hermano `#8D7000` en los titulares, y el
+blanco y negro en «Neutra»; Tab entra en las tarjetas por la elegida, siete flechas llegan a «Vino tinto»,
+Intro la elige, Tab llega a «Cambiar «Principal»» y al deslizador, Fin se para en la claridad 57 con el
+titular a 4,54 y una flecha más no mueve nada; Fin en las tarjetas llega a «Tu paleta», dos Tab al código,
+y un verde la hace entera y legible. Ningún ancho tiene desplazamiento horizontal, y a 1280 con «Reducir
+movimiento» ninguna animación pasa de 0,01 ms. **En el iPad, por toque**, un toque en «Vino tinto» la elige
+sin dejar previsualización, y un toque en lo rayado no mueve el deslizador. **48 comprobaciones, todas en
+verde.**
+
+**`document-rules.md` no cambia.** El esquema sí (1.20.0: el par del relleno y el origen de la paleta), pero
+ninguna de las siete reglas: el tema sigue siendo el sistema al que apuntan las referencias, y un color
+movido en «Estilo» cambia el sistema, no crea una excepción.
+
+**Lo que el sprint encontró sin buscarlo**, por día:
+
+1. **La barra de pestañas tiene una carrera de medio segundo** (día 1, y otra vez en la #385): la marca bajo
+   la pestaña actual llega deslizándose desde la izquierda, segundos tarde, y puede asomar la barra de
+   desplazamiento de la tira. La caminata espera a que la marca esté bajo su pestaña; el producto no se tocó
+   y está en el backlog.
+2. **Un tope de gama de 1e-3 era demasiado flojo cerca del negro** (día 2): tres hermanos se movieron una
+   unidad al bajarlo a 1e-6.
+3. **El detector de secretos tomó una constante por una clave** (día 3): renombrada, no silenciada. Y tres
+   páginas en un contexto comparten `localStorage`: una web generada por contexto.
+4. **La guarda de «nada sobresale» tenía un hueco** que destapó la lista que creció (día 4): comparaba la
+   caja entera de una fila desplazada fuera de un panel que desplaza.
+5. **axe no sujeta el nivel de un título** (día 5): su listón es «grave o crítico» y `heading-order` es
+   moderado. Lo sujeta una prueba de render de las piezas.
+6. **Una previsualización que no escribe el relleno lo deja en pie** (día 6), y **las fichas no pueden llegar
+   fila a fila** dentro de un panel que llega fila a fila.
+7. **Una tarjeta que sube bajo un ratón quieto se previsualizaba** (día 7), y el nombre calculado de una
+   tarjeta apilada salía con un espacio de más.
+
+### Lo que el sprint 38 deja abierto
+
+1. **Treinta y cinco firmas**: 0042, 0043 y de la 0045 a la 0077, todas `proposed`, con su paquete al día:
+   [`docs/decisions/signing-2026-11.md`](../decisions/signing-2026-11.md). Las cuatro de este sprint, de la
+   0074 a la 0077, son el lote E, con notas nuevas en la 0010, la 0015, la 0026, la 0041, la 0054, la 0057 y
+   la 0059.
+2. **Las nueve fotografías a 1600 × 1072**: la exención **falla desde el 1 de diciembre de 2026, dentro de
+   13 días**. Su hoja, [`docs/tasks/las-nueve-fotos.md`](../tasks/las-nueve-fotos.md), y
+   `pnpm photos:replace`.
+3. **El e2e de la CI a nueve minutos de su tope** (arriba): partirlo en dos o subirlo cuando el margen se
+   acabe.
+4. **Los nombres de las ocho paletas nuevas son la propuesta del plan**: renombrarlas es tuyo, y cuesta una
+   línea por nombre en el fichero de traducción.
+5. **Cuántas webs guardadas llevan logo**: las webs con logo guardadas antes del día 3 no se repintan; el
+   editor les ofrece los colores una vez. Contarlas es una consulta de solo lectura en Supabase, tuya:
+   `select count(*) from documents where document->'header'->'brand'->'logo' is not null`.
+6. **Lo que el plan nombró y no se hace, con nombre**:
+   - El botón de una paleta con relleno propio no ofrece colores en la barra de texto: `STYLE_REFS` no
+     tiene `fill`, y vacío es una respuesta honesta.
+   - `accent` sigue sin garantía y sin uso.
+   - La segunda tinta de un logo solo se usa como secundario y como acento.
+   - La rueda no previsualiza, y el croma de un color es el suyo (los límites del ADR 0077).
+7. **Encontrado durante el sprint, sin arreglar**:
+   - La marca bajo la pestaña de página llega tarde, deslizándose (día 1).
+   - «Fotos» parte el nombre de cada foto palabra a palabra (día 5).
+   - **Los segmentos de «Menú» previsualizan al entrar el puntero**, como hacían las tarjetas hasta el día 7.
+     Allí una tarjeta que subía bajo un ratón quieto pintaba la web; en «Menú» **no se ha medido** si algo
+     sube bajo el ratón.
+8. **De los sprints 37 a 34, sin tocar**: lo que dicen sus listas. **Y el editor sigue sin verse fuera de
+   Chromium**; la web publicada sí, en los tres motores.
+9. **El sprint 39, sin planificar.**

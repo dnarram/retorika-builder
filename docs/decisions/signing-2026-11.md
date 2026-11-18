@@ -9,7 +9,7 @@
 > 13 November 2026, with nothing to add; brought up to date on sprint 37 día 2, 13 November 2026,
 > días 3 and 4, 14 November 2026, and día 6, 15 November 2026; checked closing sprint 37, 16 November
 > 2026, with nothing to add; brought up to date on sprint 38 día 1 and día 3, 16 November 2026, and día
-> 7, 17 November 2026.
+> 7, 17 November 2026; checked closing sprint 38, 18 November 2026, with nothing to add.
 > **Development does not sign.**
 
 The sprint 34 plan counted 24 (0042, 0043, 0045–0066). ADR 0067 and ADR 0068 were written during
