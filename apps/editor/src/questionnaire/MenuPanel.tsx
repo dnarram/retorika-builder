@@ -76,7 +76,8 @@ import es from "../locales/es.json" with { type: "json" };
  *
  * **Six blocks, top to bottom, in the order an owner decides them**: the brand (name and logo,
  * ADR 0059, día 5), the pages menu, the sections menu of the page being edited, the button, the
- * layout, and the look (día 6) — and under the look, with the design tools on, the exact colour
+ * layout — with, since sprint 39 día 2, where the brand sits and where the links go, the bar's two
+ * other left-centre-right choices — and the look (día 6) — and under the look, with the design tools on, the exact colour
  * and size of each part, rule 6's marked exceptions behind the same switch the text toolbar's are.
  *
  * **Every sentence is asked of the renderer** through `headerStateFor` — the counts, whether a menu
@@ -387,26 +388,12 @@ export function MenuPanel({
             ) : null}
           </>
         ) : null}
-        {/* Where the brand sits in its line (ADR 0070), offered while there is a brand to place. */}
-        {state.brand.shown ? (
-          <>
-            <Segments
-              name={`${groupId}-brand-place`}
-              label={es["editor.menuPanel.place"]}
-              options={PLACES}
-              value={state.brand.place}
-              labelOf={(place) => es[`editor.menuPanel.place.${place}`]}
-              onSelect={(place) => onSetHeader(brandPlacePatch(doc, place))}
-              preview={placePreview}
-              previewer={preview}
-            />
-            {placeNote === null ? null : <Note>{placeNote}</Note>}
-            {/* The gesture's twin (ADR 0070 §5): said where the segments are, in the desktop view
-                only — the phone's canvas has no zones and no edge to pull. */}
-            {device === "desktop" && !state.brand.inRail ? (
-              <Note>{es["editor.menuPanel.brandGesture"]}</Note>
-            ) : null}
-          </>
+        {/* The gestures' twin (ADR 0070 §5), in the desktop view only — the phone's canvas has no
+            zones and no edge to pull. It stays in this block when the brand's place moves to
+            «Disposición» (sprint 39 día 2): it names the stretch of the logo, whose size is here, and
+            the double click, which opens this block. */}
+        {state.brand.shown && device === "desktop" && !state.brand.inRail ? (
+          <Note>{es["editor.menuPanel.brandGesture"]}</Note>
         ) : null}
         <Note>
           {state.brand.shown
@@ -607,6 +594,40 @@ export function MenuPanel({
             </label>
           ))}
         </div>
+        {/*
+          **What is horizontal in the bar, together** (sprint 39 día 2, David's answer B): under the
+          three layouts, where the brand sits in its line and where the links go — the two other
+          left-centre-right choices of the bar, which lived in «Marca» and in «Aspecto» until this
+          day. They read each other: «En medio» or «Al final» keeps the links beside the brand, and
+          the note under the links says so. Names and patches unchanged; only their block moved.
+        */}
+        {/* Where the brand sits in its line (ADR 0070), offered while there is a brand to place. */}
+        {state.brand.shown ? (
+          <>
+            <Segments
+              name={`${groupId}-brand-place`}
+              label={es["editor.menuPanel.place"]}
+              options={PLACES}
+              value={state.brand.place}
+              labelOf={(place) => es[`editor.menuPanel.place.${place}`]}
+              onSelect={(place) => onSetHeader(brandPlacePatch(doc, place))}
+              preview={placePreview}
+              previewer={preview}
+            />
+            {placeNote === null ? null : <Note>{placeNote}</Note>}
+          </>
+        ) : null}
+        <Segments
+          name={`${groupId}-align`}
+          label={es["editor.menuPanel.align"]}
+          options={HEADER_ALIGNMENTS}
+          value={state.look.align}
+          labelOf={(align) => es[`editor.menuPanel.align.${align}`]}
+          onSelect={(align) => onSetHeader(lookPatch(doc, { align }))}
+          preview={(align) => ({ attribute: "data-align", value: align })}
+          previewer={preview}
+        />
+        {alignBesideBrand === null ? null : <Note>{alignBesideBrand}</Note>}
         <Check
           label={es["editor.menuPanel.sticky"]}
           checked={state.sticky}
@@ -699,17 +720,6 @@ export function MenuPanel({
             <Note className="mt-1.5">{es["editor.menuPanel.notes.transparentColumn"]}</Note>
           ) : null}
         </div>
-        <Segments
-          name={`${groupId}-align`}
-          label={es["editor.menuPanel.align"]}
-          options={HEADER_ALIGNMENTS}
-          value={state.look.align}
-          labelOf={(align) => es[`editor.menuPanel.align.${align}`]}
-          onSelect={(align) => onSetHeader(lookPatch(doc, { align }))}
-          preview={(align) => ({ attribute: "data-align", value: align })}
-          previewer={preview}
-        />
-        {alignBesideBrand === null ? null : <Note>{alignBesideBrand}</Note>}
         <Segments
           name={`${groupId}-gap`}
           label={es["editor.menuPanel.gap"]}

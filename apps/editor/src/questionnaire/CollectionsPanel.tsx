@@ -161,9 +161,14 @@ export function CollectionsPanel({
 
   return (
     <section aria-labelledby={headingId} className={panelFrame}>
-      {/* No cross here: «Listas» keeps its «Cerrar» at the foot of the list, a decision of its own
-          (`panelKit.tsx`, `PanelClose`) that the shared header leaves where it is. */}
-      <PanelHeader id={headingId} title={es["editor.collections.title"]} />
+      {/* The cross every other panel has (sprint 39 día 2). «Listas» kept a «Cerrar» at the foot of
+          its list until this day, which on a long list was a scroll away from the panel's own name —
+          and on a phone, where the panel is a sheet over the rail, the only way out. */}
+      <PanelHeader
+        id={headingId}
+        title={es["editor.collections.title"]}
+        close={{ label: es["editor.collections.close"], onClick: onClose }}
+      />
 
       {doc.collections.length === 0 ? (
         <p className="text-xs leading-normal text-ui-muted">{es["editor.collections.none"]}</p>
@@ -251,14 +256,6 @@ export function CollectionsPanel({
           </ul>
         </>
       )}
-
-      <button
-        type="button"
-        onClick={onClose}
-        className="self-start rounded-md px-2 py-1 text-xs font-medium text-ui-muted"
-      >
-        {es["editor.collections.close"]}
-      </button>
     </section>
   );
 }
