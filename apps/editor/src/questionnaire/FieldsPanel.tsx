@@ -10,11 +10,12 @@ import {
   shiftMarks,
 } from "@retorika/schema";
 import { useEffect, useId, useRef } from "react";
-import { type MenuState, menuNoteText, sectionsLeftText } from "../editor/menuState.ts";
+import { menuLineFor, type SectionRow } from "../editor/headerState.ts";
 import { Note, PanelHeader, panelCard, panelFrame } from "../editor/panelKit.tsx";
 import { type FieldRow, fieldCommitFor, groupedFields } from "../editor/sectionFields.ts";
 import { fieldEditFor } from "../editor/textEdits.ts";
 import es from "../locales/es.json" with { type: "json" };
+import type { MenuFocusBlock } from "./MenuPanel.tsx";
 
 /**
  * The fields of the selected section, as boxes.
@@ -46,25 +47,16 @@ export interface FieldsPanelProps {
   onEditText: (address: ElementAddress, text: string, marks?: readonly MarkRun[]) => void;
   onClose: () => void;
   /**
-   * The words this section would be called by in the menu, or `undefined` when it lends no entry
-   * at all — a cover, a footer, an avance, a section with no visible heading, or the one carrying
-   * the page's `<h1>`. The switch is **absent** rather than disabled in that case, which is the
-   * rule «Convertir esta sección en página» already follows: a control that cannot do anything is
-   * worse than no control.
+   * This section as the sections menu of «Menú» sees it (sprint 39 día 1, ADR 0078): whether it is
+   * in the menu and what the menu reads it as, or why it lends no entry — a cover, a footer, an
+   * avance, the one carrying the page's `<h1>`. From sprint 23 to 38 the switch itself was drawn
+   * here, the same `setSectionInMenu` as the row in «Menú»; now this panel reads the state in a line
+   * and opens «Menú» at the row with a door. `undefined` only for a section «Menú» does not list.
    */
-  menuLabel?: string | undefined;
-  /** What the document says today. `undefined` is «nobody has decided», which shows as in. */
-  inMenu?: boolean | undefined;
-  onSetInMenu: (sectionId: string, inMenu: boolean) => void;
-  /**
-   * How much menu is left, said out loud beside the switch (ADR 0043 §5).
-   *
-   * **The count belongs where the decision is made**, which is here. A derived menu gives the
-   * owner nothing else to look at: they cannot see the strip from this panel, and the published
-   * page is the first place the result would otherwise appear. Computed once in `menuState.ts` and
-   * read identically by «Páginas», so the two panels cannot tell them different numbers.
-   */
-  menu: MenuState;
+  menuRow?: SectionRow | undefined;
+  /** Open «Menú» at this section's row, with the keyboard on its switch, or on the row when it has
+   * none. */
+  onOpenMenuFor: (target: MenuFocusBlock) => void;
 }
 
 /** What a row's two boxes become in the document. A link keeps both halves together: changing a
@@ -83,15 +75,13 @@ export function FieldsPanel({
   onClear,
   onEditText,
   onClose,
-  menuLabel,
-  inMenu,
-  menu,
-  onSetInMenu,
+  menuRow,
+  onOpenMenuFor,
 }: FieldsPanelProps) {
   const headingId = useId();
 
   const { sectionRows, lines } = groupedFields(rows);
-  const note = menuNoteText(menu, "sections");
+  const line = menuRow ? menuLineFor(menuRow) : undefined;
 
   function commit(row: FieldRow, text: string, href: string, anchored?: readonly MarkRun[]) {
     // A line's row carries its own address, and the order a created slot is placed by is the
@@ -193,46 +183,28 @@ export function FieldsPanel({
       />
 
       {/**
-       * **Whether this section is in the menu** (ADR 0043 §3) — in its own block, above the
-       * fields and ruled off from them, because it is not a field: the fields are what the
-       * section says, and this is where it is announced.
-       *
-       * **The words the menu would use are shown beside it.** A derived menu is the one thing
-       * the owner cannot otherwise see the wording of — it is their own heading, read when the
-       * page is drawn — and this is the single place in the application where that becomes
-       * visible.
+       * **Whether this section is in the menu, read** (ADR 0043 §3 as ADR 0078 amends it) — in
+       * its own block, above the fields and ruled off from them, because it is not a field: the
+       * fields are what the section says, and this is where it is announced. The words the menu
+       * reads it by are in the line: a derived menu is the one thing the owner cannot otherwise
+       * see the wording of. The door opens «Menú» at this section's row — on its switch, or on the
+       * row when it has none, whose note says why.
        */}
-      {menuLabel === undefined ? null : (
-        <div className="flex flex-col gap-1.5 rounded-ui border border-ui-border bg-ui-bg p-3">
-          <label className="ui-interactive flex items-start gap-2.5">
-            <input
-              type="checkbox"
-              checked={inMenu !== false}
-              onChange={(event) => onSetInMenu(sectionId, event.target.checked)}
-              className="mt-0.5 h-[18px] w-[18px] shrink-0 accent-[var(--ui-brand)]"
-            />
-            <span className="flex flex-col gap-0.5">
-              <span className="text-[13px] font-semibold text-ui-ink">
-                {es["editor.menu.toggle"]}
-              </span>
-              <Note as="span">{es["editor.menu.as"].replace("{label}", menuLabel)}</Note>
-            </span>
-          </label>
-
-          {/**
-           * The count of what is left, and then — only when there is one — the sentence about the
-           * site's own menu: that it is not drawn yet, or that it is drawn small because this
-           * owner decided so. Said rather than implied, which is the half of «nada de interfaz que
-           * prometa más de lo que hay» that cuts the other way: a switch beside a count, on a site
-           * publishing no menu at all, promises a strip nobody will see.
-           *
-           * **Outside the `<label>`, deliberately.** Everything inside a label is the control's
-           * accessible name, and these sentences are about the site rather than about this switch.
-           * Left in, the name read aloud on focus would be four sentences long and would change
-           * every time another section left the menu.
-           */}
-          <Note>{sectionsLeftText(menu)}</Note>
-          {note === undefined ? null : <Note>{note}</Note>}
+      {line === undefined || menuRow === undefined ? null : (
+        <div className="flex items-center gap-2 rounded-ui border border-ui-border bg-ui-bg p-3">
+          <Note as="span" className="min-w-0 flex-1 text-[13px] text-ui-ink">
+            {line.text}
+          </Note>
+          <button
+            type="button"
+            onClick={() => onOpenMenuFor({ block: "section", sectionId })}
+            aria-label={es[
+              line.door === "change" ? "editor.menu.door.changeLabel" : "editor.menu.door.seeLabel"
+            ].replace("{name}", menuRow.name)}
+            className="ui-interactive shrink-0 cursor-pointer rounded-ui-sm px-2 py-1 text-[12px] font-semibold text-ui-brand-deep hover:bg-ui-brand-surface"
+          >
+            {es[line.door === "change" ? "editor.menu.door.change" : "editor.menu.door.see"]}
+          </button>
         </div>
       )}
 

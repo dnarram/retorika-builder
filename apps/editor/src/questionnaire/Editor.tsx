@@ -11,7 +11,7 @@ import {
 } from "@retorika/catalog";
 import catalogEs from "@retorika/catalog/locales/es" with { type: "json" };
 import type { LogoColours } from "@retorika/generator";
-import { buildCss, ownFontsFor, render, sectionMenuEntries } from "@retorika/renderer";
+import { buildCss, ownFontsFor, render } from "@retorika/renderer";
 import {
   bindList,
   canFoldPage,
@@ -185,7 +185,6 @@ import {
   zoneRects,
   zonesFor,
 } from "../editor/menuDrag.ts";
-import { menuStateFor } from "../editor/menuState.ts";
 import {
   DESKTOP_LAYOUT_WIDTH,
   measureOverflow,
@@ -264,7 +263,7 @@ import {
 import { FieldsPanel } from "./FieldsPanel.tsx";
 import { FontChooserDialog } from "./FontChooserDialog.tsx";
 import { ImportFontDialog } from "./ImportFontDialog.tsx";
-import { MenuPanel } from "./MenuPanel.tsx";
+import { type MenuFocus, type MenuFocusBlock, MenuPanel } from "./MenuPanel.tsx";
 import { PagesPanel } from "./PagesPanel.tsx";
 import { PhotosPanel } from "./PhotosPanel.tsx";
 import { RevertDialog } from "./RevertDialog.tsx";
@@ -397,27 +396,6 @@ function looseListOf(doc: RetorikaDocument, sectionId: string): string | undefin
   return found.section.content.find(
     (element) => element.role === "list" && !element.binding && (element.items ?? []).length > 0,
   )?.slot;
-}
-
-/**
- * The words the menu would call this section by, or `undefined` when it lends no entry at all.
- *
- * **Asked of the renderer rather than re-derived here.** Which sections lend an anchor is a rule
- * with five clauses — the cover, the footer, an avance, a heading that is missing, the section
- * carrying the page's `<h1>` — and a second copy of it in the editor would drift the first time
- * one of them changed. The section is asked about **as if it were in the menu**, so one the owner
- * has taken out still shows its switch, which is the only way to put it back.
- */
-function menuLabelFor(doc: RetorikaDocument, sectionId: string): string | undefined {
-  const found = findSection(doc, sectionId);
-  if (!found) return undefined;
-  const asIfIn = {
-    ...found.page,
-    sections: found.page.sections.map((section) =>
-      section.id === sectionId ? { ...section, inMenu: true } : section,
-    ),
-  };
-  return sectionMenuEntries(asIfIn).find((entry) => entry.sectionId === sectionId)?.label;
 }
 
 function sectionDisplayName(doc: RetorikaDocument, sectionId: string): string {
@@ -1525,13 +1503,12 @@ export function Editor({
    * not one. Choosing a section clears it, and choosing it clears the section.
    */
   const headerChosen = useRef(false);
-  /** The block «Menú» was asked to open at (sprint 35 día 6): the brand's, by a double click on the
-   * canvas's brand. A token and not a flag, so a second double click focuses again. */
-  const [menuPanelFocus, setMenuPanelFocus] = useState<
-    { block: "brand"; token: number } | undefined
-  >(undefined);
-  /** Opens «Menú» at a block — reassigned every render, as `openMenuPanel` is. */
-  const openMenuPanelAt = useRef<(block: "brand") => void>(() => {});
+  /** The block or row «Menú» was asked to open at: the brand's, by a double click on the canvas's
+   * brand (sprint 35 día 6); a page's or a section's row, by the door in «Páginas» or «Campos»
+   * (sprint 39 día 1, ADR 0078). A token and not a flag, so asking twice focuses twice. */
+  const [menuPanelFocus, setMenuPanelFocus] = useState<MenuFocus | undefined>(undefined);
+  /** Opens «Menú» at a block or row — reassigned every render, as `openMenuPanel` is. */
+  const openMenuPanelAt = useRef<(block: MenuFocusBlock) => void>(() => {});
   /** A section an entry of the header named on another page, scrolled to once that page is drawn:
    * `applyPatch` puts a changed page at the top, so the scroll has to come after it. */
   const scrollToSectionAfterPatch = useRef<string | null>(null);
@@ -1736,7 +1713,7 @@ export function Editor({
   openMenuPanel.current = () => showRail("menu");
   openMenuPanelAt.current = (block) => {
     showRail("menu");
-    setMenuPanelFocus((current) => ({ block, token: (current?.token ?? 0) + 1 }));
+    setMenuPanelFocus((current) => ({ ...block, token: (current?.token ?? 0) + 1 }));
   };
 
   /**
@@ -3729,7 +3706,7 @@ export function Editor({
       if (!header) return;
       iframeDoc.getSelection()?.removeAllRanges();
       if (!headerChosen.current) selectHeader(header);
-      openMenuPanelAt.current("brand");
+      openMenuPanelAt.current({ block: "brand" });
     });
     function selectHeader(header: HTMLElement) {
       record("select", { sectionId: "header", via: "click", serial: serialOf(iframeDoc) });
@@ -9636,10 +9613,12 @@ export function Editor({
             itemSlotOrder={itemSlotOrderOf(doc, fieldsFor)}
             onFill={onFillSlot}
             onClear={onClearSlot}
-            menuLabel={menuLabelFor(doc, fieldsFor)}
-            inMenu={findSection(doc, fieldsFor)?.section.inMenu}
-            onSetInMenu={onSetSectionInMenu}
-            menu={menuStateFor(doc, pageId)}
+            // This section as «Menú» lists it — the same object the panel draws its rows from, so
+            // the line here and the row there cannot disagree (sprint 39 día 1, ADR 0078).
+            menuRow={headerStateFor(doc, pageId).sectionRows.find(
+              (row) => row.sectionId === fieldsFor,
+            )}
+            onOpenMenuFor={(target) => openMenuPanelAt.current(target)}
             // The panel commits a words-only change through the very same callback the canvas
             // does, and since sprint 12 day 3 it anchors that change in the range the browser is
             // replacing too — so the marks arrive measured rather than guessed, exactly as they do
@@ -9704,8 +9683,7 @@ export function Editor({
             onMovePage={onMovePage}
             onDeletePage={onDeletePage}
             onPageToSection={onPageToSection}
-            onSetPageInMenu={onSetPageInMenu}
-            menu={menuStateFor(doc, pageId)}
+            onOpenMenuFor={(target) => openMenuPanelAt.current(target)}
             canFold={(id) => canFoldPage(doc, id)}
             linksTo={(id) => listLinksTo(doc, id).length}
             entryShown={entryShown}
