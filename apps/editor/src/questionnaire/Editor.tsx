@@ -1816,7 +1816,7 @@ export function Editor({
   // URL and 404s, which is exactly why the placeholder is a data: URI and not a file.
   /**
    * Which entry a page drawn per entry is shown for, per page (ADR 0040): the owner's choice from
-   * «Viendo:» in the «Páginas» panel while the entry still exists, the collection's first otherwise.
+   * «Ficha que se ve:» in the «Páginas» panel while the entry still exists, the collection's first otherwise.
    * Derived against the document on every render rather than trusted, so removing the chosen entry
    * falls back instead of asking the renderer for an entry it would refuse.
    */

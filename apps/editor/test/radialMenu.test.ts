@@ -28,6 +28,7 @@ import {
   TOOLS_SPOKE,
   toolsRing,
 } from "../src/editor/radialMenu.ts";
+import { RAIL_ORDER, STUDIO_TOOLS } from "../src/editor/railLayout.ts";
 
 /**
  * The radial menu's geometry (ADR 0072, sprint 37 día 2). What the walks compare the drawn boxes
@@ -35,9 +36,10 @@ import {
  * the plan is copied in: a copied number agrees with a wrong module.
  */
 
-/** The rail's tools as the shell lists them: six, and eight with the design tools on. */
-const SIX = ["sections", "style", "pages", "menu", "share", "photos"];
-const EIGHT = [...SIX, "design", "collections"];
+/** The rail's tools as the shell lists them: six, and eight with the design tools on — read from
+ * `RAIL_ORDER` and never copied (sprint 39 día 2): a copied order agrees with a wrong rail. */
+const SIX: string[] = [...RAIL_ORDER];
+const EIGHT: string[] = [...RAIL_ORDER, ...STUDIO_TOOLS];
 
 describe("the tools ring", () => {
   for (const ids of [SIX, EIGHT]) {

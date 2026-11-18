@@ -10554,3 +10554,58 @@ ningún landmark; el gesto en el lienzo. **Encontrado y no arreglado**: la pági
 casilla hoy (el inventario la listaba con nota *y* control), así que las filas sin casilla son Inicio, la
 página por ficha, la portada, el pie, el avance y la sección que abre su página; la caminata cubre la del
 botón y la de Inicio.
+
+### Día 2 — «Disposición» reúne lo horizontal, el raíl se reordena (PR de `feat/disposicion-reune-lo-horizontal`)
+
+**Tres sitios que cambian y ningún nombre de los que buscan las caminatas, salvo dos renombres.**
+
+- **El raíl, en el orden que respondiste (E)**: Secciones · Estilo · **Fotos** · Páginas · Menú · Compartir,
+  y Diseño y Listas detrás con las herramientas. Fotos sube desde el final: quien viene de Canva busca sus
+  fotos antes que cómo se comparte un enlace; Menú sigue junto a Páginas. **Una sola lista**,
+  `RAIL_ORDER` en `railLayout.ts`, de la que salen el raíl fijo (que ya no escribe sus seis botones a mano)
+  y el abanico del menú radial; las pruebas la leen en vez de copiarla, como pediste («recalculadas, no
+  copiadas»): la geometría del abanico en la unidad, y en las caminatas del radial la lista de píldoras, la
+  píldora de la que sale el margen de gracia (la última, «Compartir» desde hoy) y las flechas hasta
+  «Páginas», que eran dos escritas a mano y que una caminata del sprint 37 cogió en rojo con el orden nuevo.
+- **«Disposición» reúne lo horizontal (B)**: bajo los tres bocetos, «Dónde va la marca» (salido de «Marca»)
+  y «Dónde van los enlaces» (salido de «Aspecto»), con sus notas, en ese orden: los dos se leen el uno al
+  otro, y la nota que lo dice («Con la marca en medio o al final…») va bajo los enlaces. Los nombres, los
+  parches y la previsualización al pasar no cambian. La frase del gesto se queda en «Marca»: habla de estirar
+  el logo, cuyo tamaño está allí, y del doble clic, que abre ese bloque; el día 3 la lleva a la línea.
+- **«Listas» se cierra con la cruz** de los otros siete («Cerrar las listas»); el «Cerrar» del pie de la
+  lista, a un desplazamiento del título en una lista larga, se va.
+- **Dos renombres**: «Viendo:» → **«Ficha que se ve:»** en «Páginas», y «Quitar la página de ficha» →
+  **«Borrar la página de ficha»** en «Listas», el verbo que «Páginas» usa para lo mismo.
+
+**Localizadores**: 21. Los 2 de los dos renombres, y **19** `getByRole("button", { name: "Listas" })` que pasan
+a `exact: true`: la cruz nueva se llama «Cerrar las listas», y un nombre sin `exact` es una subcadena sin
+mayúsculas, así que cinco caminatas del sprint 14 encontraron dos botones con «Listas» abierto. Es lo que ya
+pasaba con «Cerrar las páginas», y las caminatas de «Páginas» llevan `exact` desde entonces; la suite completa
+lo cogió y la filtrada no, porque no corría las del sprint 14. Las caminatas que reescribí por el orden no
+buscan por nombre: leen la lista.
+
+**Pruebas**: `panelOrder.test.ts` (7): el orden del raíl tal como lo decidiste y el raíl leyéndolo sin una
+segunda lista; el bloque «Disposición» con los bocetos, la marca y los enlaces en ese orden, y ninguno de
+los dos en el bloque del que salió; la frase del gesto en «Marca»; «Listas» con su cruz y sin salida al pie.
+Una caminata nueva, «sprint 39 día 2», a 1280: los botones del raíl en el orden de `RAIL_ORDER`, los dos
+controles dentro del grupo «Disposición» y fuera de «Marca» y «Aspecto», «Al final» mueve la marca de la
+barra y Deshacer la devuelve, axe con «Disposición» a la vista y con «Listas», y la cruz cierra «Listas».
+
+**Saboteos, cada uno deshecho por script**: la lista de herramientas copiada a mano en las caminatas con el
+orden viejo → tres caminatas del radial rojas (sprint 37 días 2 y 5); el raíl fijo escribiendo su lista otra
+vez → `panelOrder` rojo; «Dónde va la marca» devuelta a «Marca» → dos aserciones de `panelOrder` rojas; un
+«Cerrar» al pie de «Listas» → rojo.
+
+**Capturas** antes (`a78f6dc`) y después, con «Disposición» a la vista en «Menú» y una lista con su página por
+ficha para que se lean los dos renombres. «Listas» no tiene captura a 390: bajo 1024 las herramientas no se
+ofrecen, ni antes ni después. En las de 390 se ve el orden nuevo en la barra inferior.
+
+| Panel | 1280 | 1024 | 390 |
+|---|---|---|---|
+| Menú | [antes](review/2026-11-los-paneles-ordenados/dia2-menu-1280-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia2-menu-1280-despues.png) | [antes](review/2026-11-los-paneles-ordenados/dia2-menu-1024-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia2-menu-1024-despues.png) | [antes](review/2026-11-los-paneles-ordenados/dia2-menu-390-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia2-menu-390-despues.png) |
+| Listas | [antes](review/2026-11-los-paneles-ordenados/dia2-listas-1280-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia2-listas-1280-despues.png) | [antes](review/2026-11-los-paneles-ordenados/dia2-listas-1024-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia2-listas-1024-despues.png) | — |
+| Páginas | [antes](review/2026-11-los-paneles-ordenados/dia2-paginas-1280-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia2-paginas-1280-despues.png) | [antes](review/2026-11-los-paneles-ordenados/dia2-paginas-1024-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia2-paginas-1024-despues.png) | [antes](review/2026-11-los-paneles-ordenados/dia2-paginas-390-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia2-paginas-390-despues.png) |
+
+**Lo que no cambia**: esquema, renderer, web publicada (golden sin regenerar), el nombre de ningún landmark,
+el orden del teclado dentro de cada panel salvo en «Menú», donde los dos controles ahora llegan tras los
+bocetos.

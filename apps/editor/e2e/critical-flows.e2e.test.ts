@@ -65,6 +65,7 @@ import {
   TOOLS_SPOKE,
   toolsRing,
 } from "../src/editor/radialMenu.ts";
+import { RAIL_ORDER } from "../src/editor/railLayout.ts";
 import { BASE_URL, QUESTIONNAIRE_URL, startEditorServer, stopEditorServer } from "./server.ts"; /**
  * The preview frame. One per editor, three on the landing page's cards.
  *
@@ -6713,7 +6714,7 @@ describe("sprint 14 día 5 — el panel de listas", () => {
     await frame.locator('[data-section="sec-services"]').waitFor();
     await page.getByRole("switch", { name: "Herramientas de diseño" }).click();
     await page.getByRole("button", { name: "Sí, enciéndelas" }).click();
-    await page.getByRole("button", { name: "Listas" }).click();
+    await page.getByRole("button", { name: "Listas", exact: true }).click();
     return frame;
   }
 
@@ -6737,10 +6738,10 @@ describe("sprint 14 día 5 — el panel de listas", () => {
       await page.frameLocator(PREVIEW).first().locator('[data-section="sec-services"]').waitFor();
 
       // Absent, not dimmed — ADR 0025 §6, and the rule `RailLabel`'s own note states.
-      await expect(page.getByRole("button", { name: "Listas" })).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "Listas", exact: true })).toHaveCount(0);
       await page.getByRole("switch", { name: "Herramientas de diseño" }).click();
       await page.getByRole("button", { name: "Sí, enciéndelas" }).click();
-      await expect(page.getByRole("button", { name: "Listas" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Listas", exact: true })).toBeVisible();
     } finally {
       await page.context().close();
     }
@@ -6961,7 +6962,7 @@ describe("sprint 14 día 6 — enlazar, avisar y desenlazar", () => {
         nodes.map((node) => node.textContent?.replace(/\s+/g, " ").trim()),
       );
 
-      await page.getByRole("button", { name: "Listas" }).click();
+      await page.getByRole("button", { name: "Listas", exact: true }).click();
       await expect(page.getByText("Todavía no tienes ninguna lista.")).toBeVisible();
       await page
         .getByRole("button", { name: /Hacer una lista con las tarjetas de «Qué hago»/ })
@@ -6985,7 +6986,7 @@ describe("sprint 14 día 6 — enlazar, avisar y desenlazar", () => {
     const page = await (await browser.newContext({ viewport: VIEWPORT })).newPage();
     try {
       const frame = await withTools(page);
-      await page.getByRole("button", { name: "Listas" }).click();
+      await page.getByRole("button", { name: "Listas", exact: true }).click();
       await page
         .getByRole("button", { name: /Hacer una lista con las tarjetas de «Qué hago»/ })
         .first()
@@ -7009,7 +7010,7 @@ describe("sprint 14 día 6 — enlazar, avisar y desenlazar", () => {
 
       // The card shows it, and so does the **list**: the edit went to the entry.
       await expect(title).toHaveText("Chapa y pintura");
-      await page.getByRole("button", { name: "Listas" }).click();
+      await page.getByRole("button", { name: "Listas", exact: true }).click();
       // Found by its own label — «Nombre», the catalog's word for this card slot — rather than by
       // being the first textbox on the screen, which it is not reliably.
       await expect(page.getByLabel("Nombre").first()).toHaveValue("Chapa y pintura");
@@ -7024,7 +7025,7 @@ describe("sprint 14 día 6 — enlazar, avisar y desenlazar", () => {
     const page = await (await browser.newContext({ viewport: VIEWPORT })).newPage();
     try {
       const frame = await withTools(page);
-      await page.getByRole("button", { name: "Listas" }).click();
+      await page.getByRole("button", { name: "Listas", exact: true }).click();
       await page
         .getByRole("button", { name: /Hacer una lista con las tarjetas de «Qué hago»/ })
         .first()
@@ -7037,7 +7038,7 @@ describe("sprint 14 día 6 — enlazar, avisar y desenlazar", () => {
       await expect(frame.locator('[data-preset="services"]')).toHaveCount(2);
 
       // Bind it to the list that already exists, from the panel's own offer.
-      await page.getByRole("button", { name: "Listas" }).click();
+      await page.getByRole("button", { name: "Listas", exact: true }).click();
       await page
         .getByRole("button", { name: /Hacer una lista con las tarjetas de «Qué hago»/ })
         .first()
@@ -7061,7 +7062,7 @@ describe("sprint 14 día 6 — enlazar, avisar y desenlazar", () => {
     const page = await (await browser.newContext({ viewport: VIEWPORT })).newPage();
     try {
       const frame = await withTools(page);
-      await page.getByRole("button", { name: "Listas" }).click();
+      await page.getByRole("button", { name: "Listas", exact: true }).click();
       await page
         .getByRole("button", { name: /Hacer una lista con las tarjetas de «Qué hago»/ })
         .first()
@@ -7095,7 +7096,7 @@ describe("sprint 14 día 6 — enlazar, avisar y desenlazar", () => {
       await expect(frame.locator("[data-entry]")).toHaveCount(0);
 
       // And the list is now deletable, which is the path its own refusal named.
-      await page.getByRole("button", { name: "Listas" }).click();
+      await page.getByRole("button", { name: "Listas", exact: true }).click();
       await expect(page.getByRole("button", { name: "Borrar la lista" })).toBeVisible();
     } finally {
       await page.context().close();
@@ -7106,7 +7107,7 @@ describe("sprint 14 día 6 — enlazar, avisar y desenlazar", () => {
     const page = await (await browser.newContext({ viewport: VIEWPORT })).newPage();
     try {
       const frame = await withTools(page);
-      await page.getByRole("button", { name: "Listas" }).click();
+      await page.getByRole("button", { name: "Listas", exact: true }).click();
       await page
         .getByRole("button", { name: /Hacer una lista con las tarjetas de «Qué hago»/ })
         .first()
@@ -7187,7 +7188,7 @@ describe("sprint 14 día 7 — el recorrido completo del sprint", () => {
         nodes.map((node) => node.textContent?.replace(/\s+/g, " ").trim()),
       );
 
-      await walk.getByRole("button", { name: "Listas" }).click();
+      await walk.getByRole("button", { name: "Listas", exact: true }).click();
       await walk
         .getByRole("button", { name: /Hacer una lista con las tarjetas de «Qué hago»/ })
         .click();
@@ -7204,7 +7205,7 @@ describe("sprint 14 día 7 — el recorrido completo del sprint", () => {
       await frame.locator(".rb-menu-choice", { hasText: "Qué hago" }).first().click();
       await expect(frame.locator('[data-preset="services"]')).toHaveCount(2);
 
-      await walk.getByRole("button", { name: "Listas" }).click();
+      await walk.getByRole("button", { name: "Listas", exact: true }).click();
       await walk.getByRole("button", { name: /Mostrar la lista/ }).click();
       await expect(walk.getByText("Guardado en este navegador")).toBeVisible();
       // Six cards: three entries, twice. §7's «una plantilla y muchas páginas».
@@ -7223,7 +7224,7 @@ describe("sprint 14 día 7 — el recorrido completo del sprint", () => {
       await expect(frame.getByText("Comidas caseras")).toHaveCount(2);
 
       // ---- day 5: the refusal that names the section and the limit ------------------------------
-      await walk.getByRole("button", { name: "Listas" }).click();
+      await walk.getByRole("button", { name: "Listas", exact: true }).click();
       for (let n = 3; n < 6; n += 1) {
         await walk.getByRole("button", { name: "Añadir una ficha" }).click();
       }
@@ -7322,7 +7323,7 @@ describe("sprint 14 día 7 — la oferta que no se hace", () => {
       await page.getByRole("switch", { name: "Herramientas de diseño" }).click();
       await page.getByRole("button", { name: "Sí, enciéndelas" }).click();
 
-      await page.getByRole("button", { name: "Listas" }).click();
+      await page.getByRole("button", { name: "Listas", exact: true }).click();
       await page
         .getByRole("button", { name: /Hacer una lista con las tarjetas de «Qué hago»/ })
         .click();
@@ -7333,7 +7334,7 @@ describe("sprint 14 día 7 — la oferta que no se hace", () => {
       await frame.locator(".rb-menu-choice", { hasText: "Opiniones" }).first().click();
       await expect(frame.locator('[data-preset="testimonials"]')).toHaveCount(1);
 
-      await page.getByRole("button", { name: "Listas" }).click();
+      await page.getByRole("button", { name: "Listas", exact: true }).click();
       // Its own «hacer una lista» is offered — that always works, it is its own cards.
       await expect(
         page.getByRole("button", { name: /Hacer una lista con las tarjetas de «Opiniones»/ }),
@@ -8484,6 +8485,88 @@ describe("sprint 23 día 4 — las páginas en el menú y el umbral curado", () 
       await visitor.setViewportSize({ width: 390, height: 844 });
       await panelReady(visitor.locator("aside"));
       await axeSerious(visitor, "la línea del menú en los campos, a 390");
+    } finally {
+      await visitor.context().close();
+    }
+  }, 240_000);
+});
+
+/**
+ * **Sprint 39 día 2 — lo horizontal, junto; el raíl, en su orden; «Listas», con su cruz.**
+ *
+ * Tres sitios que cambian y ningún nombre: el raíl fijo pone «Fotos» tras «Estilo» (la respuesta E de
+ * David), leído del mismo `RAIL_ORDER` que el abanico; «Dónde va la marca» y «Dónde van los enlaces»
+ * pasan bajo los bocetos de «Disposición» (la respuesta B), con sus nombres de siempre; y «Listas» se
+ * cierra con la cruz de los otros siete. axe sobre «Menú» con «Disposición» a la vista y sobre «Listas».
+ */
+describe("sprint 39 día 2 — lo horizontal, junto, y el raíl en su orden", () => {
+  it("ordena el raíl, reúne lo horizontal en «Disposición» y cierra «Listas» con la cruz", async () => {
+    const visitor = await (
+      await browser.newContext({ viewport: { width: 1280, height: 900 } })
+    ).newPage();
+    try {
+      await intoTheCanvas(visitor);
+      const frame = visitor.frameLocator(PREVIEW).first();
+
+      // 1. El raíl fijo, de arriba abajo: el orden del módulo, con los nombres que la gente lee.
+      const rail = visitor.locator('nav[data-testid="rail"]');
+      const labels: Record<string, string> = {
+        sections: "Secciones",
+        style: "Estilo",
+        photos: "Fotos",
+        pages: "Páginas",
+        menu: "Menú",
+        share: "Compartir",
+      };
+      await expect(rail.getByRole("button")).toHaveText(RAIL_ORDER.map((id) => labels[id] ?? id));
+      expect(RAIL_ORDER.map((id) => labels[id])).toEqual([
+        "Secciones",
+        "Estilo",
+        "Fotos",
+        "Páginas",
+        "Menú",
+        "Compartir",
+      ]);
+
+      // 2. «Disposición»: los bocetos, y bajo ellos dónde va la marca y dónde van los enlaces —
+      //    fuera de «Marca» y de «Aspecto», con sus nombres y su efecto de siempre.
+      await rail.getByRole("button", { name: "Menú", exact: true }).click();
+      const panel = visitor.getByRole("complementary", { name: "La cabecera de tu web" });
+      const layout = panel.getByRole("group", { name: "Disposición" });
+      await layout.scrollIntoViewIfNeeded();
+      const places = layout.getByRole("radiogroup", { name: "Dónde va la marca" });
+      const align = layout.getByRole("radiogroup", { name: "Dónde van los enlaces" });
+      await expect(places).toBeVisible();
+      await expect(align).toBeVisible();
+      await expect(
+        panel.getByRole("group", { name: "Marca" }).getByRole("radiogroup", {
+          name: "Dónde va la marca",
+        }),
+      ).toHaveCount(0);
+      await expect(
+        panel.getByRole("group", { name: "Aspecto" }).getByRole("radiogroup", {
+          name: "Dónde van los enlaces",
+        }),
+      ).toHaveCount(0);
+      const bar = frame.locator(".rb-header");
+      await places.getByText("Al final", { exact: true }).click();
+      await expect(bar).toHaveAttribute("data-brand-place", "end");
+      // La nota que une los dos sigue bajo los enlaces: con la marca al final, van junto a ella.
+      await expect(layout).toContainText("Con la marca en medio o al final");
+      await visitor.getByRole("button", { name: "Deshacer", exact: true }).click();
+      await expect(bar).not.toHaveAttribute("data-brand-place", "end");
+      await axeSerious(visitor, "«Menú» con «Disposición» a la vista");
+      await visitor.getByRole("button", { name: "Cerrar la cabecera" }).click();
+
+      // 3. «Listas», con las herramientas: la cruz arriba, y nada abajo.
+      await studioToolsOn(visitor);
+      await rail.getByRole("button", { name: "Listas", exact: true }).click();
+      const lists = visitor.getByRole("region", { name: "Listas reutilizables" });
+      await expect(lists).toBeVisible();
+      await expect(lists.getByRole("button", { name: "Cerrar", exact: true })).toHaveCount(0);
+      await axeSerious(visitor, "«Listas» con su cruz");
+      await lists.getByRole("button", { name: "Cerrar las listas" }).click();
+      await expect(lists).toHaveCount(0);
     } finally {
       await visitor.context().close();
     }
@@ -13928,7 +14011,7 @@ async function withToolsAndList(page: Page): Promise<FrameLocator> {
     await page.getByRole("switch", { name: "Herramientas de diseño" }).click();
     await page.getByRole("button", { name: "Sí, enciéndelas" }).click();
   });
-  await page.getByRole("button", { name: "Listas" }).click();
+  await page.getByRole("button", { name: "Listas", exact: true }).click();
   await page
     .getByRole("button", { name: /Hacer una lista con las tarjetas de «Qué hago»/ })
     .first()
@@ -13940,7 +14023,7 @@ async function withToolsAndList(page: Page): Promise<FrameLocator> {
 describe("sprint 19 día 4 — una página por ficha desde «Listas»", () => {
   const VIEWPORT = { width: 1280, height: 900 };
 
-  it("crea la página, la enseña en su pestaña con «Viendo:», cuenta páginas y ficheros por separado, y quitarla se deshace", async () => {
+  it("crea la página, la enseña en su pestaña con «Ficha que se ve:», cuenta páginas y ficheros por separado, y quitarla se deshace", async () => {
     const page = await (await browser.newContext({ viewport: VIEWPORT })).newPage();
     try {
       const frame = await withToolsAndList(page);
@@ -13969,7 +14052,7 @@ describe("sprint 19 día 4 — una página por ficha desde «Listas»", () => {
       // «Páginas»: the badge, the selector, and the two counts kept apart.
       await page.getByRole("button", { name: "Páginas", exact: true }).click();
       await expect(page.getByText("por ficha · 3")).toBeVisible();
-      await page.getByLabel("Viendo:").selectOption({ label: "Terraza" });
+      await page.getByLabel("Ficha que se ve:").selectOption({ label: "Terraza" });
       await expect(headline).toHaveText("Terraza");
       await expect(page.getByText("2 de 5 páginas.")).toBeVisible();
       await expect(
@@ -13979,8 +14062,8 @@ describe("sprint 19 día 4 — una página por ficha desde «Listas»", () => {
       await expect(page.getByRole("button", { name: "Deshacer la conversión" })).toHaveCount(0);
 
       // The exit loses nothing and one «Deshacer» brings the page back, tab and all.
-      await page.getByRole("button", { name: "Listas" }).click();
-      await page.getByRole("button", { name: "Quitar la página de ficha" }).click();
+      await page.getByRole("button", { name: "Listas", exact: true }).click();
+      await page.getByRole("button", { name: "Borrar la página de ficha" }).click();
       await expect(tabs).toHaveCount(1);
       await expect(page.getByText("· 3 fichas")).toBeVisible();
       await page.getByRole("button", { name: "Deshacer", exact: true }).click();
@@ -14181,7 +14264,7 @@ describe("sprint 19 día 7 — el recorrido como un desconocido, con fichas y si
         await page.getByRole("switch", { name: "Herramientas de diseño" }).click();
         await page.getByRole("button", { name: "Sí, enciéndelas" }).click();
       });
-      await page.getByRole("button", { name: "Listas" }).click();
+      await page.getByRole("button", { name: "Listas", exact: true }).click();
       await page
         .getByRole("button", { name: /Hacer una lista con las tarjetas de «Qué hago»/ })
         .first()
@@ -30126,7 +30209,9 @@ describe("sprint 37 día 1 — el lienzo vuelve a su zoom", () => {
 /** The radial rail's walks share these (sprint 37 días 2 and 3, ADR 0072). */
 const RAIL_HUB = '[data-testid="rail-hub"]';
 const RAIL_FAN = '[data-testid="rail-fan"]';
-const SIX_TOOLS = ["sections", "style", "pages", "menu", "share", "photos"];
+/** The six tools of the rail, in its order — read from the module both layouts read (sprint 39 día 2,
+ * when «Fotos» moved up), never copied: a copied order agrees with a wrong rail. */
+const SIX_TOOLS: string[] = [...RAIL_ORDER];
 
 /** Into the editor with the radial menu already chosen in this browser. */
 async function intoTheRadialEditor(page: Page): Promise<void> {
@@ -30396,12 +30481,14 @@ describe("sprint 37 día 2 — el raíl tiene dos formas", () => {
 
       // Grace: from the last pill, out past the hull onto the page and back before it runs out.
       // **Past the hull, not merely past the pill**: the hull is the fan's hit-test shape, and a
-      // point 60 px right of «Fotos» is still inside it — the first version of this walk went there,
-      // never left the fan, and passed the grace it never tested. So the premise is asserted too:
-      // the strip heard the hand leave.
-      const photos = await page.locator(`${RAIL_FAN} [data-spoke="photos"]`).boundingBox();
-      if (!photos) throw new Error("no «Fotos» pill");
-      const inPill = { x: photos.x + photos.width / 2, y: photos.y + photos.height / 2 };
+      // point 60 px right of the last pill is still inside it — the first version of this walk went
+      // there, never left the fan, and passed the grace it never tested. So the premise is asserted
+      // too: the strip heard the hand leave. The last pill is the rail's last tool, «Compartir» since
+      // sprint 39 día 2 («Fotos» before it).
+      const lastId = SIX_TOOLS[SIX_TOOLS.length - 1];
+      const last = await page.locator(`${RAIL_FAN} [data-spoke="${lastId}"]`).boundingBox();
+      if (!last) throw new Error(`no «${lastId}» pill`);
+      const inPill = { x: last.x + last.width / 2, y: last.y + last.height / 2 };
       const outside = { x: at.x + want.hull + 30, y: inPill.y };
       await page.mouse.move(inPill.x, inPill.y);
       await page.evaluate(() => {
@@ -30590,8 +30677,10 @@ describe("sprint 37 día 3 — el eje con teclado y con el dedo", () => {
       await expect(line).toContainText("menú radial");
 
       // The arrows enter by the first section; End reaches «Herramientas», and Enter on it turns the
-      // fan to the tools with the keyboard on the open tool. Two arrows to «Páginas», Enter chooses,
-      // and the keyboard stays on the hub, which does not open again for the focus it was given.
+      // fan to the tools with the keyboard on the open tool. Arrows to «Páginas» — as many as the
+      // rail's order puts between it and «Secciones», counted from `RAIL_ORDER` and not written
+      // down (two until sprint 39 día 2, three since «Fotos» moved up) —, Enter chooses, and the
+      // keyboard stays on the hub, which does not open again for the focus it was given.
       await page.keyboard.press("ArrowDown");
       expect(await focused(page)).toBe(first);
       await page.keyboard.press("End");
@@ -30599,8 +30688,9 @@ describe("sprint 37 día 3 — el eje con teclado y con el dedo", () => {
       await page.keyboard.press("Enter");
       await expect(page.locator(RAIL_FAN)).toHaveAttribute("data-ring", "tools");
       expect(await focused(page)).toBe("pill sections");
-      await page.keyboard.press("ArrowDown");
-      await page.keyboard.press("ArrowDown");
+      for (let step = 0; step < RAIL_ORDER.indexOf("pages"); step += 1) {
+        await page.keyboard.press("ArrowDown");
+      }
       expect(await focused(page)).toBe("pill pages");
       await page.keyboard.press("Enter");
       await expect(page.locator(RAIL_HUB)).toHaveAttribute("data-tool", "pages");

@@ -18,6 +18,23 @@
 
 export type RailLayout = "fixed" | "radial";
 
+/**
+ * **The rail's tools, top to bottom — the one list both layouts read** (sprint 39 día 2, David's
+ * answer E): «Secciones», «Estilo», «Fotos», «Páginas», «Menú», «Compartir». Fotos moved up from last:
+ * an owner who comes from Canva looks for their pictures before they look for how a link is shared.
+ * «Menú» stays beside «Páginas», because the two menus it governs are the pages' and the sections'
+ * (ADR 0057). The radial menu fans out in this order (ADR 0072 §1: the same tools, the same panels),
+ * and the tests read the list from here rather than copying it: a copied order agrees with a wrong
+ * rail.
+ */
+export const RAIL_ORDER = ["sections", "style", "photos", "pages", "menu", "share"] as const;
+
+/** The two the design-tools switch adds, after the rest and only while it is on (ADR 0025 §6, ADR
+ * 0033 §11). */
+export const STUDIO_TOOLS = ["design", "collections"] as const;
+
+export type RailItemId = (typeof RAIL_ORDER)[number] | (typeof STUDIO_TOOLS)[number];
+
 const KEY = "retorika.rail.v1";
 
 /** `"fixed"` on a first visit, on anything that is not the value written below, and on storage that

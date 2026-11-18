@@ -101,9 +101,9 @@ export const panelFrame = `${PANEL_WIDTH} gap-4 p-5 ${panelCard}`;
  * hand — the same 16×16 two-stroke cross, differing only in whether the diagonal paths were
  * written `M6 6l12 12M18 6L6 18` or `M18 6L6 18M6 6l12 12`, which draw the same cross. One
  * component past the third use (`PagesPanel` and `PhotosPanel` joined it on sprint 21 day 4, when
- * a sheet that cannot be closed became a trap rather than a layout oddity). `CollectionsPanel`
- * keeps its own text «Cerrar» at the foot of the list, which is a different decision about where
- * the exit belongs and not an omission this component fixes.
+ * a sheet that cannot be closed became a trap rather than a layout oddity). `CollectionsPanel` kept
+ * its own text «Cerrar» at the foot of the list until sprint 39 día 2, when it took the cross the
+ * other seven have.
  */
 export function PanelClose({
   onClick,

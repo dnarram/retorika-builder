@@ -36,7 +36,7 @@ describe("PanelHeader", () => {
     );
   });
 
-  it("draws no cross when the panel closes elsewhere, as «Listas» does", () => {
+  it("draws no cross when the panel is given no close (all eight have one since sprint 39 día 2)", () => {
     expect(head({ id: "t", title: "Listas" })).not.toContain("<button");
   });
 });

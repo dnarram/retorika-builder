@@ -25,7 +25,7 @@ import {
   TOOLS_SPOKE,
   toolsRing,
 } from "./radialMenu.ts";
-import type { RailLayout } from "./railLayout.ts";
+import { RAIL_ORDER, type RailItemId, type RailLayout, STUDIO_TOOLS } from "./railLayout.ts";
 import { wireRipples } from "./ripple.ts";
 import { fanKeyAction } from "./sectionKeys.ts";
 
@@ -293,15 +293,7 @@ const RAIL_ICONS = {
  * it is a value the rail can take **only while the design tools are on**, which `EditorShell` is
  * what enforces, and `Editor` falls back to `sections` if the tools go off while it is open.
  */
-export type RailItemId =
-  | "sections"
-  | "style"
-  | "pages"
-  | "menu"
-  | "photos"
-  | "share"
-  | "design"
-  | "collections";
+export type { RailItemId } from "./railLayout.ts";
 
 /**
  * **The slot's hold on the panel it shows, so a panel that goes is seen to go** (sprint 35 día 2).
@@ -1970,16 +1962,9 @@ export function EditorShell({
         buttonRef={layoutSwitchButton}
       />
     );
-  /** The rail's tools, in the fixed rail's order: the two the design tools add only while they are on. */
-  const railTools: RailItemId[] = [
-    "sections",
-    "style",
-    "pages",
-    "menu",
-    "share",
-    "photos",
-    ...(designTools ? (["design", "collections"] as const) : []),
-  ];
+  /** The rail's tools, in the fixed rail's order (`RAIL_ORDER`): the two the design tools add only
+   * while they are on. */
+  const railTools: RailItemId[] = [...RAIL_ORDER, ...(designTools ? STUDIO_TOOLS : [])];
 
   const shell = (
     <div
@@ -2423,44 +2408,17 @@ export function EditorShell({
                 style={{ left: -(railMark?.left ?? 0) }}
               />
             </span>
-            <RailButton
-              icon="sections"
-              label={es["editor.rail.sections"]}
-              active={rail === "sections"}
-              onSelect={() => onRailChange("sections")}
-            />
-            <RailButton
-              icon="style"
-              label={es["editor.rail.style"]}
-              active={rail === "style"}
-              onSelect={() => onRailChange("style")}
-            />
-            <RailButton
-              icon="pages"
-              label={es["editor.rail.pages"]}
-              active={rail === "pages"}
-              onSelect={() => onRailChange("pages")}
-            />
-            {/* The header of the site (ADR 0057, sprint 30 día 3), beside «Páginas» because the two
-              menus it governs are the pages' and the sections'. */}
-            <RailButton
-              icon="menu"
-              label={es["editor.rail.menu"]}
-              active={rail === "menu"}
-              onSelect={() => onRailChange("menu")}
-            />
-            <RailButton
-              icon="share"
-              label={es["editor.rail.share"]}
-              active={rail === "share"}
-              onSelect={() => onRailChange("share")}
-            />
-            <RailButton
-              icon="photos"
-              label={es["editor.rail.photos"]}
-              active={rail === "photos"}
-              onSelect={() => onRailChange("photos")}
-            />
+            {/* The six that are always there, in `RAIL_ORDER` — the list the radial menu fans out
+              in too, so the two layouts cannot disagree on where a tool is (sprint 39 día 2). */}
+            {RAIL_ORDER.map((item) => (
+              <RailButton
+                key={item}
+                icon={item}
+                label={RAIL_LABELS[item]}
+                active={rail === item}
+                onSelect={() => onRailChange(item)}
+              />
+            ))}
             {/* The fifth item, and the only one the switch adds (ADR 0025 §6). **Absent** rather than
               dimmed while the tools are off: `RailLabel`'s own note records that the grey shade for
               "this exists but not yet" lost its last caller in sprint 6, and it is not coming back
