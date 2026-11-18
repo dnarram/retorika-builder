@@ -2,9 +2,10 @@
 
 import { type Collection, MAX_PAGES, type RetorikaDocument } from "@retorika/schema";
 import { useEffect, useId, useRef, useState } from "react";
-import { type MenuState, menuNoteText, pagesLeftText } from "../editor/menuState.ts";
+import { headerStateFor, menuLineFor } from "../editor/headerState.ts";
 import { Note, PanelHeader, panelFrame, panelRow, SmallButton } from "../editor/panelKit.tsx";
 import es from "../locales/es.json" with { type: "json" };
+import type { MenuFocusBlock } from "./MenuPanel.tsx";
 
 /**
  * «Páginas» — the rail's third item, and the advanced module's «Páginas y conversión de secciones».
@@ -31,12 +32,13 @@ import es from "../locales/es.json" with { type: "json" };
  * everywhere else. `movePage` and `deletePage` throw for it; this is what keeps anybody from
  * reaching that.
  *
- * **Since sprint 23 it also decides whether a page appears in the menu** (ADR 0043 §3), which is
- * the other half of the switch that lives in a section's fields. The first page does not offer it
- * — it is «Inicio», and hiding the way home is a trap rather than a choice — and neither does a
- * page drawn per entry, which is in no menu at all (ADR 0040 §5). Absent rather than disabled, for
- * the reason the paragraph above gives, and `setPageInMenu` throws for both so nothing can reach
- * past the interface.
+ * **It reads whether a page is in the menu, and no longer decides it** (sprint 39 día 1, ADR 0078).
+ * From sprint 23 to 38 each row carried its own «En el menú», the same `setPageInMenu` as the row in
+ * «Menú»: two visible controls writing one key. The one switch lives in «Menú» now, beside «Se lee
+ * como…»; here each row says its state in a line — «En el menú», «Fuera del menú», or why it has no
+ * switch — and «Cambiar» opens «Menú» with the keyboard on that page's switch (`onOpenMenuFor`), so
+ * the second step is one press that lands exactly where the decision is made. The line is read from
+ * `headerStateFor`, the same object «Menú» draws its rows from, so the two cannot disagree.
  */
 export function PagesPanel({
   document: doc,
@@ -46,8 +48,7 @@ export function PagesPanel({
   onMovePage,
   onDeletePage,
   onPageToSection,
-  onSetPageInMenu,
-  menu,
+  onOpenMenuFor,
   canFold,
   linksTo,
   entryShown,
@@ -62,14 +63,9 @@ export function PagesPanel({
   onDeletePage: (pageId: string) => void;
   /** Fold the page back into the section it came from — ADR 0022's conversion, undone. */
   onPageToSection: (pageId: string) => void;
-  /** Whether this page appears in the pages menu. Never called for the first page or for a page
-   * drawn per entry: neither offers the switch, and the schema's verb throws for both. */
-  onSetPageInMenu: (pageId: string, inMenu: boolean) => void;
-  /**
-   * How much menu is left, said out loud (ADR 0043 §5) — the same object «Campos» reads, so the
-   * two panels cannot tell the owner different numbers about one document.
-   */
-  menu: MenuState;
+  /** Open «Menú» at this page's row, with the keyboard on its switch — or on the row itself when it
+   * has none (Inicio, a page drawn per entry), whose note says why. */
+  onOpenMenuFor: (target: MenuFocusBlock) => void;
   /** Whether that page can be folded at all, answered by the schema's own `canFoldPage` so the
    * button and the verb cannot drift apart. */
   canFold: (pageId: string) => boolean;
@@ -111,7 +107,8 @@ export function PagesPanel({
   }, [editing]);
 
   const full = doc.pages.length >= MAX_PAGES;
-  const menuNote = menuNoteText(menu, "pages");
+  // The rows as «Menú» sees them: what each line below says, and whether its door opens on a switch.
+  const menuRows = headerStateFor(doc, currentPageId).pageRows;
 
   function commitRename(pageId: string) {
     const title = draft.trim();
@@ -135,6 +132,8 @@ export function PagesPanel({
           const current = page.id === (currentPageId ?? doc.pages[0]?.id);
           const pointing = linksTo(page.id);
           const perEntry = perEntryOf(doc, page);
+          const menuRow = menuRows.find((row) => row.pageId === page.id);
+          const line = menuRow ? menuLineFor(menuRow) : undefined;
 
           return (
             <li key={page.id} className={panelRow}>
@@ -195,22 +194,35 @@ export function PagesPanel({
                 </label>
               )}
 
+              {/* **The menu's line and its door** (sprint 39 día 1, ADR 0078): what «Menú» holds
+                  for this page, read and not switched here, and the one press that lands on it.
+                  The verb is «Cambiar» where a switch waits, «Ver en «Menú»» where only the reason
+                  does — a verb that promised a change the row cannot make would be a dead button. */}
+              {line ? (
+                <div className="flex items-center gap-1 border-t border-ui-border px-2.5 py-1">
+                  <Note as="span" className="min-w-0 flex-1">
+                    {line.text}
+                  </Note>
+                  <button
+                    type="button"
+                    onClick={() => onOpenMenuFor({ block: "page", pageId: page.id })}
+                    aria-label={es[
+                      line.door === "change"
+                        ? "editor.menu.door.changeLabel"
+                        : "editor.menu.door.seeLabel"
+                    ].replace("{name}", page.title)}
+                    className="ui-interactive shrink-0 cursor-pointer rounded-ui-sm px-2 py-1 text-[12px] font-semibold text-ui-brand-deep hover:bg-ui-brand-surface"
+                  >
+                    {
+                      es[
+                        line.door === "change" ? "editor.menu.door.change" : "editor.menu.door.see"
+                      ]
+                    }
+                  </button>
+                </div>
+              ) : null}
+
               <div className="flex flex-wrap items-center gap-1 border-t border-ui-border px-1.5 py-1">
-                {/* **State first, then the actions.** A checkbox says what is true now; the
-                    buttons beside it do something. Absent for the first page and for a page drawn
-                    per entry, which are the two the schema's verb refuses — see the note at the
-                    top of this file. */}
-                {!isEntry && !perEntry && (
-                  <label className="ui-interactive flex cursor-pointer items-center gap-1.5 rounded-ui-sm px-2 py-1 text-[12px] font-semibold text-ui-muted hover:bg-ui-bg hover:text-ui-ink">
-                    <input
-                      type="checkbox"
-                      checked={page.inMenu !== false}
-                      onChange={(event) => onSetPageInMenu(page.id, event.target.checked)}
-                      className="h-[14px] w-[14px] shrink-0 accent-[var(--ui-brand)]"
-                    />
-                    {es["editor.menu.pageToggle"]}
-                  </label>
-                )}
                 <SmallButton
                   label={es["editor.pages.rename"]}
                   onClick={() => {
@@ -292,12 +304,6 @@ export function PagesPanel({
           );
         })}
       </ul>
-
-      {/* **What the menu has left, and whether the site shows one at all** (ADR 0043 §5). It sits
-          right under the rows whose switches change it, and it is the same sentence «Campos» shows
-          under the switch for a section — one object answers both, so they cannot disagree. */}
-      <Note>{pagesLeftText(menu)}</Note>
-      {menuNote === undefined ? null : <Note>{menuNote}</Note>}
 
       {/* **Two counts, never one under the other's label** (David, approving sprint 19). The pages
           the document stores are what the cap of five limits; the files a download writes can be

@@ -49,6 +49,7 @@ import {
   pagesPositionPatch,
   phoneSpan,
   progressPatch,
+  rowReasonText,
   type SectionRow,
   schemeSwatch,
   sectionsMobilePatch,
@@ -82,10 +83,25 @@ import es from "../locales/es.json" with { type: "json" };
  * is drawn, what an empty «Se lee como…» falls back to, whether a fixed bar lets go on a phone. The
  * panel describes the header the published page has, never one it might have.
  *
- * **Two places, one verb, one state.** A page's switch here is the same `setPageInMenu` as its
- * row's in «Páginas», and a section's the same `setSectionInMenu` as its block in «Campos»: what
- * the owner switches in one is what the other shows, because both read the document.
+ * **One place, one verb, one state** (sprint 39 día 1, ADR 0078). A page's switch and a section's
+ * live here and nowhere else; «Páginas» and «Campos» read the state in a line and open this panel at
+ * the row with a door (`focusBlock`), so the owner who was there lands on the switch — or, for a row
+ * that has none, on the row, whose note says why.
  */
+
+/** A block or a row «Menú» can be opened at and give the keyboard to. */
+export type MenuFocusBlock =
+  | { block: "brand" }
+  | { block: "page"; pageId: string }
+  | { block: "section"; sectionId: string };
+/** A token and not a flag, so asking for the same row twice focuses it twice. */
+export type MenuFocus = MenuFocusBlock & { token: number };
+
+/** The `data-menu-row` a page's or a section's row carries, which the door finds it by. */
+export function menuRowKey(target: Exclude<MenuFocusBlock, { block: "brand" }>): string {
+  return target.block === "page" ? `page:${target.pageId}` : `section:${target.sectionId}`;
+}
+
 export interface MenuPanelProps {
   doc: RetorikaDocument;
   /** The page the canvas is drawing; its sections are the sections menu shown. */
@@ -115,10 +131,11 @@ export interface MenuPanelProps {
   /** The canvas's bar, previewed by attribute while a segment is under the mouse (David's
    * adjustment 3 on sprint 35): absent where there is no canvas to preview on. */
   preview?: HeaderPreviewer;
-  /** A block to bring into view and give the keyboard to, each time the token changes: the brand's,
-   * when the canvas's brand was double-clicked (sprint 35 día 6) — the second way in, for whoever
-   * does not know the gesture exists. */
-  focusBlock?: { block: "brand"; token: number } | undefined;
+  /** A block or a row to bring into view and give the keyboard to, each time the token changes:
+   * the brand's, when the canvas's brand was double-clicked (sprint 35 día 6) — the second way in,
+   * for whoever does not know the gesture exists — or a page's or a section's row, from the door in
+   * «Páginas» or «Campos» (sprint 39 día 1). */
+  focusBlock?: MenuFocus | undefined;
   onClose: () => void;
 }
 
@@ -162,20 +179,36 @@ export function MenuPanel({
   // A panel closed with the mouse still on a segment never sees the pointer leave: put the bar back.
   useEffect(() => () => preview?.end("restore"), [preview]);
   const panel = useRef<HTMLElement>(null);
-  // The block asked for, scrolled into the panel's view and its first radio given the keyboard — the
-  // logo's sizes when there is a logo, the brand's place otherwise. Nothing without a token.
+  // The block or row asked for, scrolled into the panel's view and given the keyboard. Nothing
+  // without a token.
   useEffect(() => {
     if (!focusBlock) return;
-    const block = panel.current?.querySelector<HTMLElement>(
-      `fieldset[data-menu-block="${focusBlock.block}"]`,
+    const host = panel.current;
+    if (!host) return;
+    if (focusBlock.block === "brand") {
+      const block = host.querySelector<HTMLElement>('fieldset[data-menu-block="brand"]');
+      if (!block) return;
+      block.scrollIntoView({ block: "nearest" });
+      // The checked radio of the block — the word in force — and the first one failing that.
+      (
+        block.querySelector<HTMLInputElement>('input[type="radio"]:checked') ??
+        block.querySelector<HTMLInputElement>('input[type="radio"]')
+      )?.focus();
+      return;
+    }
+    /*
+     * **The door always lands on something** (David's adjustment 1 approving sprint 39). A row with a
+     * switch gives the keyboard to the switch; a row without one — Inicio, a page drawn per entry, a
+     * cover, a footer, an avance, a section that opens its page — is focusable itself (`tabindex`
+     * -1) and takes it, with its note saying why there is nothing to change here. A focus that fell
+     * on `body` would be a keyboard user lost after a press that promised a place.
+     */
+    const row = host.querySelector<HTMLElement>(
+      `[data-menu-row="${CSS.escape(menuRowKey(focusBlock))}"]`,
     );
-    if (!block) return;
-    block.scrollIntoView({ block: "nearest" });
-    // The checked radio of the block — the word in force — and the first one failing that.
-    (
-      block.querySelector<HTMLInputElement>('input[type="radio"]:checked') ??
-      block.querySelector<HTMLInputElement>('input[type="radio"]')
-    )?.focus();
+    if (!row) return;
+    row.scrollIntoView({ block: "nearest" });
+    (row.querySelector<HTMLInputElement>('input[type="checkbox"]') ?? row).focus();
   }, [focusBlock]);
   const oneLine = state.layout !== "stacked";
   // «En medio» on a one-line bar moves the pages' menu in the markup (ADR 0070 §2), which no attribute
@@ -1111,18 +1144,13 @@ function PageEntryRow({
   onSetInMenu: (pageId: string, inMenu: boolean) => void;
   onSetLabel: (target: MenuLabelTarget, label: string | null) => void;
 }) {
-  const reason =
-    row.reason === "home"
-      ? es["editor.menuPanel.reason.home"]
-      : row.reason === "perEntry"
-        ? es["editor.menuPanel.reason.perEntry"]
-        : undefined;
   return (
     <EntryRow
+      rowKey={menuRowKey({ block: "page", pageId: row.pageId })}
       name={row.title}
       inMenu={row.inMenu}
       onSetInMenu={(inMenu) => onSetInMenu(row.pageId, inMenu)}
-      reason={reason}
+      reason={rowReasonText(row)}
       inButton={row.inButton}
       // A page drawn per entry is in no menu, so a word for it would be read by nobody; the first
       // page's word is read wherever the way back to it is drawn.
@@ -1151,10 +1179,11 @@ function SectionEntryRow({
   const derived = row.derived;
   return (
     <EntryRow
+      rowKey={menuRowKey({ block: "section", sectionId: row.sectionId })}
       name={row.name}
       inMenu={row.inMenu}
       onSetInMenu={(inMenu) => onSetInMenu(row.sectionId, inMenu)}
-      reason={row.reason === undefined ? undefined : es[`editor.menuPanel.reason.${row.reason}`]}
+      reason={rowReasonText(row)}
       inButton={row.inButton}
       label={
         derived === undefined
@@ -1177,6 +1206,7 @@ function SectionEntryRow({
  * exactly the ones they will wonder about.
  */
 function EntryRow({
+  rowKey,
   name,
   inMenu,
   onSetInMenu,
@@ -1184,6 +1214,8 @@ function EntryRow({
   inButton,
   label,
 }: {
+  /** What the door from «Páginas» or «Campos» finds this row by. */
+  rowKey: string;
   name: string;
   inMenu: boolean | null;
   onSetInMenu: (inMenu: boolean) => void;
@@ -1194,7 +1226,13 @@ function EntryRow({
     | undefined;
 }) {
   return (
-    <li className="flex flex-col gap-1.5 rounded-ui border border-ui-border bg-ui-surface p-2">
+    <li
+      data-menu-row={rowKey}
+      // A row with no switch is where the door lands (sprint 39 día 1): focusable by script and
+      // never by Tab, so the keyboard arrives at the reason and the Tab order keeps only controls.
+      {...(inMenu === null ? { tabIndex: -1 } : {})}
+      className="flex flex-col gap-1.5 rounded-ui border border-ui-border bg-ui-surface p-2"
+    >
       {inMenu === null ? (
         <span className="text-[13px] font-semibold text-ui-muted">{name}</span>
       ) : (

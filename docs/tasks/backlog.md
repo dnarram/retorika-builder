@@ -1959,6 +1959,14 @@ open survives.
 
 ## No home but this one
 
+- **Three sentences of `es.json` that nobody reads, found by the guard sprint 39 día 1 wrote and left
+  as they were** (18 November 2026; `apps/editor/test/localeKeys.test.ts`, `KNOWN_ORPHANS`). David's
+  adjustment 1 approving the sprint: a new guard lists what it finds from before and does not clean it —
+  «el día 1 es solo el interruptor». `auth.error.emailRequired` and `auth.error.passwordRequired` (the
+  sign-in form validates with the browser's own messages since sprint 15) and `auth.newPassword.noSession`
+  (the new-password screen never drew its «no session» sentence). Each is a decision of its own: keep
+  the sentence for a screen that may draw it, or remove it. The list may shrink and may not grow.
+
 - **Three things sprint 26's patch route found in the editor, which belong to the editor and not
   to the route** (22 October 2026, días 5 and 6; the record is ADR 0051's día 5 amendment).
 

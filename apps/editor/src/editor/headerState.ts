@@ -42,8 +42,10 @@ import { headerBarBackground } from "./styleReview.ts";
 /**
  * What the site's header holds, read for the «Menú» panel (ADR 0057, sprint 30 días 3–4).
  *
- * **Every answer is the renderer's**, as `menuState.ts` asks it for the same reason: the panel must
- * not describe a header the published page does not have. Which menus are drawn, what their entries
+ * **Every answer is the renderer's**, for one reason: the panel must not describe a header the
+ * published page does not have. (Until sprint 39 día 1 a second module, `menuState.ts`, asked the
+ * renderer the same questions for the switches «Páginas» and «Campos» drew; those switches are gone
+ * and this is the one reader, ADR 0078.) Which menus are drawn, what their entries
  * are called, which destination is the button, whether a fixed bar lets go on a phone —
  * `headerSettings`, `pageMenuEntries`, `sectionMenuEntries`, `actionEntry` and `headerPhoneRow`
  * decide; this only puts their answers in one object, with the sentences the panel owes beside them.
@@ -62,6 +64,13 @@ export interface MenuBlock {
   count: number;
   /** Whether it is drawn on the page being edited. */
   drawn: boolean;
+  /**
+   * Drawn under the threshold of three because the owner curated (ADR 0043 §5): a menu smaller than
+   * the rule allows, published because they asked for it. Said under «Automático» as theirs — the
+   * sentence `menuState.ts` used to say beside the switch, now beside the only switch there is
+   * (sprint 39 día 1, ADR 0078). `false` under «Siempre» and «Nunca», where the threshold is silent.
+   */
+  belowThreshold: boolean;
 }
 
 /** One page, as the pages menu sees it. */
@@ -219,7 +228,7 @@ const actionKeyOf = (action: HeaderAction): string =>
 
 /** The page with every section in the menu, so the renderer answers which ones *could* be: a
  * section the owner took out still needs its switch, which is the only way to put it back — the
- * same question `menuLabelFor` asks for «Campos». */
+ * same question «Campos» reads its line by (`menuLineFor`). */
 function allIn(page: Page): Page {
   return { ...page, sections: page.sections.map((section) => ({ ...section, inMenu: true })) };
 }
@@ -246,6 +255,10 @@ export function headerStateFor(doc: RetorikaDocument, pageId: string | undefined
     .map((entry) => entry.label);
   const pagesDrawn = settings.pagesShown && pages.length > 0;
   const sectionsDrawn = settings.sectionsShown && sections.length > 0;
+  // What the threshold counts: the two menus of the home page, added (ADR 0043 §4) — the site's
+  // answer, not this page's, which is why it can differ from `pages.length + sections.length`.
+  const destinations = pageEntries.length + sectionMenuEntries(home).length;
+  const belowThreshold = destinations > 0 && destinations < MENU_MIN_ENTRIES;
 
   const chosen = doc.header?.action;
   const eligible = new Set(sectionMenuEntries(allIn(page)).map((entry) => entry.sectionId));
@@ -365,11 +378,17 @@ export function headerStateFor(doc: RetorikaDocument, pageId: string | undefined
     },
     barBackground: headerBarBackground(doc),
     pageTitle: page.title,
-    pagesMenu: { mode: modeOf(doc.header?.pages?.shown), count: pages.length, drawn: pagesDrawn },
+    pagesMenu: {
+      mode: modeOf(doc.header?.pages?.shown),
+      count: pages.length,
+      drawn: pagesDrawn,
+      belowThreshold: doc.header?.pages?.shown === undefined && pagesDrawn && belowThreshold,
+    },
     sectionsMenu: {
       mode: modeOf(doc.header?.sections?.shown),
       count: sections.length,
       drawn: sectionsDrawn,
+      belowThreshold: doc.header?.sections?.shown === undefined && sectionsDrawn && belowThreshold,
     },
     pageRows,
     sectionRows,
@@ -451,10 +470,11 @@ export function phoneButtonTooLong(doc: RetorikaDocument): string | undefined {
  * The sentence under a menu's switch: what that switch is doing to this page right now.
  *
  * **«Automático» says the number it is drawn with, or that it is not drawn yet and why** — the
- * threshold read off the renderer, as `menuNoteText` reads it. «Siempre» with nothing to show says
+ * threshold read off the renderer. «Siempre» with nothing to show says
  * so: the renderer emits no empty landmark whatever the owner chose (ADR 0057), and a «Siempre»
  * beside a strip that is not there would be the interface promising what the page does not do.
- * Singular keys of their own, for the reason `sectionsLeftText` gives.
+ * Singular keys of their own: «se dibuja con 1 destinos» is the kind of sentence that tells somebody
+ * the interface was not written for them.
  */
 export function menuStatusText(block: MenuBlock, menu: "pages" | "sections"): string {
   if (block.mode === "never") return es["editor.menuPanel.statusNever"];
@@ -472,9 +492,50 @@ export function menuStatusText(block: MenuBlock, menu: "pages" | "sections"): st
   if (!block.drawn) {
     return es["editor.menuPanel.statusAutoNotYet"].replace("{min}", String(MENU_MIN_ENTRIES));
   }
+  // Under the threshold and drawn anyway: named as theirs, which is the point (ADR 0043 §5) — the
+  // alternative is a site quietly behaving differently from every other one with no why.
+  if (block.belowThreshold) {
+    return (
+      block.count === 1
+        ? es["editor.menuPanel.statusAutoYoursOne"]
+        : es["editor.menuPanel.statusAutoYours"].replace("{n}", n)
+    ).replace("{min}", String(MENU_MIN_ENTRIES));
+  }
   return block.count === 1
     ? es["editor.menuPanel.statusAutoOne"]
     : es["editor.menuPanel.statusAuto"].replace("{n}", n);
+}
+
+/**
+ * **Why a row has no switch**, in the owner's words — or `undefined` for a row that has one. Read by
+ * the «Menú» panel under the row and by the reading lines of «Páginas» and «Campos» (sprint 39 día 1,
+ * ADR 0078), so the three cannot give a different reason for one row.
+ */
+export function rowReasonText(row: PageRow | SectionRow): string | undefined {
+  if (row.reason === undefined) return undefined;
+  return es[`editor.menuPanel.reason.${row.reason}`];
+}
+
+/**
+ * **What the switch says, read from where it is not** (sprint 39 día 1, ADR 0078). Since the one
+ * switch of a page or a section lives in «Menú», «Páginas» and «Campos» read its state in a line and
+ * open «Menú» at the row with a door. The line: the reason, for a row with no switch; «Está en el
+ * botón…» for the button's destination, which the menu leaves out while the button stands; else in
+ * or out — and for a section, in with the words the menu reads («En el menú se lee «Carta».»), the one
+ * thing an owner cannot otherwise see of a menu that writes itself. `door` says what the door is for:
+ * a switch to change, or a row to see, so the verb on it is never a promise the row cannot keep.
+ */
+export function menuLineFor(row: PageRow | SectionRow): { text: string; door: "change" | "see" } {
+  if (row.inMenu === null) return { text: rowReasonText(row) ?? "", door: "see" };
+  if (row.inButton) return { text: es["editor.menuPanel.inButton"], door: "change" };
+  if (!row.inMenu) return { text: es["editor.menu.line.out"], door: "change" };
+  if ("sectionId" in row && row.derived !== undefined) {
+    return {
+      text: es["editor.menu.as"].replace("{label}", row.own ?? row.derived),
+      door: "change",
+    };
+  }
+  return { text: es["editor.menu.line.in"], door: "change" };
 }
 
 /**

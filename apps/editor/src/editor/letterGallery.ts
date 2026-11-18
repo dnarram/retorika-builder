@@ -15,7 +15,7 @@ import es from "../locales/es.json" with { type: "json" };
  * The gallery of letters the «Estilo» panel offers, and the faces its specimens are drawn in
  * (ADR 0046).
  *
- * **A module and not JSX, for the reason `menuState.ts` is one**: what the panel has to get right is
+ * **A module and not JSX, for the reason `headerState.ts` is one**: what the panel has to get right is
  * arithmetic and derivation, not markup — which row is ticked, which file a specimen loads, what the
  * line above the group says — and all of it is asked of the renderer and the tokens rather than
  * copied here. The panel renders what this returns.
