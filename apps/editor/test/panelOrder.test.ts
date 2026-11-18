@@ -100,9 +100,10 @@ describe("«Disposición» holds the bar's horizontal choices (David's answer B)
     expect(look).toContain(group(es["editor.menuPanel.size"]));
   });
 
-  it("keeps the gesture's sentence in the brand block, which the double click opens", () => {
-    expect(brand).toContain(es["editor.menuPanel.brandGesture"]);
-    expect(layout).not.toContain(es["editor.menuPanel.brandGesture"]);
+  it("draws the gesture's sentence in no block: the help line says it (día 3)", () => {
+    expect(brand).not.toContain(es["editor.help.gesture.brand"]);
+    expect(layout).not.toContain(es["editor.help.gesture.brand"]);
+    expect(html).not.toContain("arrastrar");
   });
 });
 

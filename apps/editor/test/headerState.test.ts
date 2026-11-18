@@ -49,9 +49,11 @@ import {
   menuModePatch,
   menuStatusText,
   nameSizePatch,
+  PUBLISHED_PIECES,
   pagesPositionPatch,
   phoneSpan,
   progressPatch,
+  publishedOnlyNote,
   SCHEME_TOKENS,
   schemeSwatch,
   sectionsMobilePatch,
@@ -679,25 +681,129 @@ describe("what a fixed bar turns into once scrolled, as the panel says it (sprin
     expect(headerStateFor(cases[0]?.[1] ?? doc, undefined).scrolledLook).toBe("glass");
   });
 
-  it("writes the note that matches, and the notes of what only the published page does", () => {
+  it("writes the note that matches the scrolled look, and says only what the option does", () => {
     expect(es["editor.menuPanel.stickyGlass"]).toMatch(/translúcida/);
     expect(es["editor.menuPanel.stickySolid"]).not.toMatch(/translúcida/);
+    // What the canvas shows of it is the composed note's to say (día 3 of sprint 39), not these.
     for (const key of [
       "editor.menuPanel.stickyGlass",
       "editor.menuPanel.stickySolid",
-      "editor.menuPanel.notes.sectionsMarked",
-      "editor.menuPanel.notes.motion",
-      "editor.menuPanel.notes.indicator",
-      "editor.menuPanel.notes.foldEstimate",
-      // Sprint 34 día 4: the canvas folded under the fold, and a column past the canvas's width.
+      "editor.menuPanel.progressNote",
+      "editor.menuPanel.notes.fold",
+    ] as const) {
+      expect(es[key], key).not.toMatch(/lienzo|vista previa|publicar/);
+    }
+    // The two notes about this window — the canvas folded under the fold, a column past its width —
+    // stay beside their cards, and still say what the canvas shows.
+    for (const key of [
       "editor.menuPanel.notes.foldedCanvas",
       "editor.menuPanel.notes.columnBeyondCanvas",
-      // Sprint 34 día 6: the line of how much has been read (ADR 0068).
-      "editor.menuPanel.progressNote",
     ] as const) {
-      // Every one says what the canvas shows, so none promises the canvas what it does not draw.
       expect(es[key], key).toMatch(/lienzo/);
     }
+  });
+});
+
+/**
+ * **What only the published page does, said once and composed from what applies** (sprint 39 día 3,
+ * David's answer C1 with his two conditions). The six sentences this replaces were each held to say
+ * what the canvas shows; the one note is held to the same, piece by piece: every divergence is a
+ * piece with a condition, every condition is true of some document and false of another — so a piece
+ * is never a fixed sentence — and nothing applying leaves no note.
+ */
+describe("the note of what only the published page does (sprint 39 día 3)", () => {
+  const doc = fixture("cabecera-con-marca");
+  const home = undefined;
+  const noteFor = (d: RetorikaDocument, pageId: string | undefined = home) =>
+    publishedOnlyNote(headerStateFor(d, pageId), d, pageId);
+
+  it("names every divergence as a piece, each worded for the published page", () => {
+    const keys = PUBLISHED_PIECES.map((piece) => piece.key);
+    expect(keys).toEqual([
+      "rise",
+      "fade",
+      "sectionsMarked",
+      "indicator",
+      "sticky",
+      "stickyGlass",
+      "progress",
+      "fold",
+    ]);
+    for (const key of keys) {
+      const said = es[`editor.menuPanel.published.${key}`];
+      // A clause of one sentence: no capital to open it (the quoted «Ir a…» keeps its own).
+      expect(said, key).not.toMatch(/lienzo|publicar|^[A-ZÁÉÍÓÚ]/);
+      expect(said, key).not.toMatch(/\.$/);
+    }
+    expect(es["editor.menuPanel.published.intro"]).toMatch(/vista previa/);
+    expect(es["editor.menuPanel.published.intro"]).toMatch(/web descargada/);
+  });
+
+  it("has, for every piece, a document it applies to and one it does not", () => {
+    const sticky = setHeader(doc, { sticky: true });
+    const progress = setHeader(sticky, { progress: true });
+    const solid = setHeader(sticky, { look: { background: "primary" } });
+    const fold = setHeader(doc, { sections: { shown: true, position: "fold" } });
+    const inRail = setHeader(doc, { pages: { shown: true, position: "left" } });
+    const onePage: RetorikaDocument = { ...doc, pages: doc.pages.slice(0, 1) };
+    const noSections: RetorikaDocument = {
+      ...doc,
+      pages: [{ ...(doc.pages[0] as RetorikaDocument["pages"][number]), sections: [] }],
+    };
+    const docs = [doc, sticky, progress, solid, fold, inRail, onePage, noSections];
+    for (const piece of PUBLISHED_PIECES) {
+      const answers = docs.map((d) => piece.applies(headerStateFor(d, home), d, home));
+      expect(answers, `${piece.key} is never true`).toContain(true);
+      expect(answers, `${piece.key} is never false: a fixed sentence`).toContain(false);
+    }
+    // And a site with a header, two pages and the menus in the bar says every piece the
+    // generated site has, in the order of the list.
+    expect(noteFor(doc)).toBe(
+      `${es["editor.menuPanel.published.intro"]} ${es["editor.menuPanel.published.rise"]}, ` +
+        `${es["editor.menuPanel.published.fade"]}, ${es["editor.menuPanel.published.sectionsMarked"]} ` +
+        `${es["editor.menuPanel.published.and"]} ${es["editor.menuPanel.published.indicator"]}. ` +
+        es["editor.menuPanel.published.reduced"],
+    );
+  });
+
+  it("says the bar condenses only with a fixed bar, and glass only where the sheet draws glass", () => {
+    expect(noteFor(doc)).not.toMatch(/se estrecha/);
+    const sticky = setHeader(doc, { sticky: true });
+    expect(headerStateFor(sticky, home).scrolledLook).toBe("glass");
+    expect(noteFor(sticky)).toContain(es["editor.menuPanel.published.stickyGlass"]);
+    const solid = setHeader(sticky, { look: { background: "primary" } });
+    expect(noteFor(solid)).toContain(es["editor.menuPanel.published.sticky"]);
+    expect(noteFor(solid)).not.toMatch(/translúcida/);
+  });
+
+  it("names the line of what has been read only when it is on, and «Ir a…» only behind the fold", () => {
+    const sticky = setHeader(doc, { sticky: true });
+    expect(noteFor(sticky)).not.toContain(es["editor.menuPanel.published.progress"]);
+    expect(noteFor(setHeader(sticky, { progress: true }))).toContain(
+      es["editor.menuPanel.published.progress"],
+    );
+    expect(noteFor(doc)).not.toContain(es["editor.menuPanel.published.fold"]);
+    expect(noteFor(setHeader(doc, { sections: { shown: true, position: "fold" } }))).toContain(
+      es["editor.menuPanel.published.fold"],
+    );
+    // The rule slides only in the bar: a column marks its page by its edge.
+    expect(noteFor(setHeader(doc, { pages: { shown: true, position: "left" } }))).not.toContain(
+      es["editor.menuPanel.published.indicator"],
+    );
+  });
+
+  it("says nothing of less movement where nothing moves, and nothing at all where nothing applies", () => {
+    const bare = fixture("barbershop-cover");
+    // One page, one section that is the cover: it rises, and that is all.
+    expect(noteFor(bare)).toBe(
+      `${es["editor.menuPanel.published.intro"]} ${es["editor.menuPanel.published.rise"]}. ` +
+        es["editor.menuPanel.published.reduced"],
+    );
+    const noSections: RetorikaDocument = {
+      ...bare,
+      pages: [{ ...(bare.pages[0] as RetorikaDocument["pages"][number]), sections: [] }],
+    };
+    expect(noteFor(noSections)).toBeNull();
   });
 });
 
