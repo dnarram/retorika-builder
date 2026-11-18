@@ -12,7 +12,59 @@ drift, and the facilitator's script already says findings go to the decision the
 a separate document nobody reads again». So an item with an ADR points at the ADR; an item with
 an issue points at the issue; and only the things with no other home are described here at all.
 
-Last reviewed: 16 November 2026, **closing sprint 37 — «el raíl se vuelve radial, y el móvil vuelve a
+Last reviewed: 18 November 2026, **closing sprint 38 — «los colores del logo son los de la web, y la
+paleta es del dueño».** David asked for five things by priority. First and alone, a defect of concept: a
+logo only *chose* one of four palettes if its colour was near enough, and otherwise the site came out in
+Retorika's blue while question 1 promised «los de tu sector»; «los colores del logo SON los colores de
+marca del usuario». Then more palettes, a palette of one's own without a logo, a predefined palette
+retouched without losing the rest, and a 2026 redesign of the right-hand panels. Eight answers before
+planning, one of them his own fourth option: **the brand's colour keeps its value and changes its role**,
+exact as a fill with black or white ink on it, and a minimally darkened sibling only where it is read as
+text. Eight days in nine PRs (#382–#390, two of them security advisories, #385 and #389) and the close.
+What changed for somebody visiting a site: **the 23 corpus sites are byte-identical to the sprint's start**
+(132 files), and a site generated with a logo now wears the logo's colours. For the owner:
+- the brand's colour keeps its value and changes its role ([ADR 0074](../decisions/0074-the-fill-keeps-the-brands-colour-and-the-text-takes-its-sibling.md), day 1, schema 1.20.0)
+- the palette keeps its origin and the label is computed ([ADR 0075](../decisions/0075-the-palette-keeps-its-origin-and-the-label-is-computed.md), day 1)
+- a palette is derived from one or two colours, every pair proved (day 2)
+- a logo's colours are the site's ([ADR 0076](../decisions/0076-the-logos-colours-are-the-sites.md), day 3)
+- thirteen palettes (day 4)
+- the eight panels share their head, groups, notes and frame (day 5)
+- the palettes are cards, and one under the mouse paints the site without writing (day 6)
+- the palette is the owner's: a colour field that cannot reach the unreadable, and «Tu paleta» from one colour ([ADR 0077](../decisions/0077-the-palette-is-the-owners-behind-the-same-arithmetic.md), day 7)
+
+The record is `docs/design/REVIEW.md`, sprint 38.
+
+**What sprint 38 leaves open** — the full text is the last section of REVIEW's sprint 38:
+
+1. **Thirty-five signatures**: 0042, 0043, 0045–0077, all `proposed`, with their pack up to date,
+   [`docs/decisions/signing-2026-11.md`](../decisions/signing-2026-11.md). 0074–0077 are batch E.
+2. **The nine photographs**: the exemption fails on **1 December 2026**, in 13 days. Their sheet,
+   [`docs/tasks/las-nueve-fotos.md`](las-nueve-fotos.md), and `pnpm photos:replace`.
+3. **The CI e2e step at 32–36 of its 45 minutes**: nine minutes of margin. Split the walks into two
+   `--shard` jobs or raise the limit when it runs out — David's, because Actions minutes are his
+   (protocol, part 9.2).
+4. **The eight new palettes' names are the plan's proposal**; renaming them is David's, one line each in
+   `packages/tokens/src/locales/es.json`.
+5. **How many saved sites carry a logo**: they are not repainted, only offered the colours once. Counting
+   them is a read-only Supabase query, David's: `select count(*) from documents where
+   document->'header'->'brand'->'logo' is not null`.
+6. **Named by the plan, not built**:
+   - a button of a palette with its own fill offers no colours in the text toolbar (`STYLE_REFS` has no
+     `fill`)
+   - `accent` still has no guarantee and no use
+   - a logo's second tint is used only as the secondary and the accent
+   - the colour wheel previews nothing, and a colour's chroma is its own (ADR 0077's limits)
+7. **Found during the sprint, not fixed**:
+   - the page tab's mark slides in late (sprint 38 día 1; item 7 of sprint 37's list below)
+   - «Fotos» breaks each photograph's name word by word (sprint 38 día 5; item 8 below)
+   - «Menú»'s segments preview on the pointer's *entry*, as the palette cards did until día 7, when a card
+     rising under a still mouse painted the site; whether anything rises under the mouse in «Menú» is **not
+     measured**
+8. **From sprints 37 to 34, untouched**, under their own reviews below. The editor has still not been seen
+   outside Chromium; the published site has, in three engines.
+9. **Sprint 39 unplanned.**
+
+The review before that: 16 November 2026, **closing sprint 37 — «el raíl se vuelve radial, y el móvil vuelve a
 su tamaño».** David asked for two things. First, the defect of a small screen: going back to «Ver en
 móvil» from «Ver en ordenador» left the buttons and sections oversized; it was fixed on day 1, alone
 and first. Second, a choice of how the editor's rail is shown: fixed on the left, still the default,
@@ -80,7 +132,7 @@ The record is `docs/design/REVIEW.md`, sprint 37.
    the walks find it by.
 9. **From sprints 36, 35 and 34, untouched**, under their own reviews below. The editor, the radial
    rail included, has still not been seen outside Chromium.
-10. **Sprint 38 unplanned.**
+10. **Sprint 38 unplanned** — planned and closed since: above.
 
 The review before that: 13 November 2026, **closing sprint 36 — «el editor se encadena, y la ayuda tiene su
 línea».** David asked for an editor whose animations and transitions look of their time, taking
