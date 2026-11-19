@@ -10875,3 +10875,102 @@ y cuatro caminatas:
 | «Fotos» | [antes](review/2026-11-los-paneles-ordenados/dia6-fotos-1280-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia6-fotos-1280-despues.png) | [antes](review/2026-11-los-paneles-ordenados/dia6-fotos-1024-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia6-fotos-1024-despues.png) | [antes](review/2026-11-los-paneles-ordenados/dia6-fotos-390-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia6-fotos-390-despues.png) |
 
 **Lo que no cambia**: esquema, renderer, web publicada (golden sin regenerar), ningún nombre ni localizador.
+
+### Día 7 — lo que quedó corto y el cierre (PR de `test/el-cierre-del-sprint-39`)
+
+**Lo que quedó corto de los días 1 a 6.** Nada de código. Una decisión sigue siendo de David: las tarjetas de
+«Fondo de la barra» aún dicen «Principal» y «Secundario» (día 5). Pintan un fondo, y «Titulares y enlaces» no
+sirve para un fondo. Sin su nombre, se quedan como están, en la lista de lo abierto.
+
+**La web publicada no ha cambiado un byte.** El corpus construido con `build-corpus.mts` en `b4c08b6`, el
+principio del sprint, y en la rama: **140 ficheros en 24 webs, cero diferencias** con `diff -rq`. Como el
+renderer no se ha tocado, la auditoría de menús no corre.
+
+**Las suites, cada una sola, con `caffeinate -i -m`:**
+
+| Suite | Resultado |
+|---|---|
+| `typecheck` | verde |
+| `lint` | verde, 82 avisos, los mismos que al cerrar el 38 |
+| `test` | 4 420 en 201 ficheros |
+| `test:invariants` | 27 |
+| `test:golden` | 28, sin regenerar |
+| `renderer:deps` | 2 dependencias permitidas |
+| `schema:guard b4c08b6..HEAD` | ninguna migración |
+| `secrets:scope` | 143 módulos, 34 de cliente, 2 solo de servidor, ningún cruce |
+| `size` | dentro del presupuesto; el script de la barra, 0,8 KB |
+| `test:a11y` | 2 378 en 212 s |
+| `lighthouse` | 27 de 27 en la tercera vuelta |
+| `e2e` | 370 y 1 omitida, en 1 769 s y una sola vuelta |
+
+**Lighthouse necesitó tres vueltas, y se dice por qué.** En la primera, la auditoría de v1 tardó 497 s y pasó el
+tope de 120, aunque puntuó 99 y 100; la de v3 cayó después por el estado que la primera dejó en el registrador
+de Lighthouse. En la segunda (el Mac estaba ya en batería), las nueve auditorías pasaron y falló una prueba de WebKit: la
+línea de lo leído dio escala 0 al fondo de la página. Repetida sola cinco veces, 30 pasadas en verde en los tres
+motores; la tercera vuelta entera, 27 de 27. Esa prueba espera 300 ms fijos tras el `scrollTo` en vez de esperar
+a la escala, y va al backlog. Las cifras, iguales que al cerrar el 38: v1 99, v2 98 (LCP 2,40 s), v3 98 (LCP
+2,33 s), la letra propia 99, y 100 en las cuatro composiciones de la barra; accesibilidad 100 en las nueve.
+
+**El navegador real**, con el servidor del editor, Chromium a 1024, 1280 y 1440 solo con el teclado (1280 con
+«Reducir movimiento») y un iPad emulado por toque: **52 comprobaciones en verde**.
+
+- El raíl por Tab: Secciones · Estilo · Fotos · Páginas · Menú · Compartir.
+- La puerta desde «Páginas» deja el foco en la casilla «Qué ponemos» de «Menú»; Espacio la saca del menú y la
+  devuelve, con el tic dibujado.
+- La puerta desde «Campos» deja el foco en la fila de su sección.
+- Tab hasta «Dónde va la marca»: la línea dice el gesto en su hijo silencioso.
+- Los ocho paneles leídos palabra a palabra contra la lista cerrada de palabras de oficio, y sin ningún hueco
+  `{…}` sin rellenar.
+- Con «Reducir movimiento», ninguna animación dura más de 0,01 ms.
+- En el iPad, un toque elige «Mucha» sin sombra de la marca y elige una paleta sin que su cara se eleve.
+- Ningún desplazamiento horizontal a ningún ancho.
+
+**La CI, por PR**: las siete del sprint, verdes al primer intento.
+
+| PR | Paso e2e, de 45 min |
+|---|---|
+| #391, el cierre del 38 | 34,1 |
+| #392, día 1 | 36,2 |
+| #393, día 2 | 35,8 |
+| #394, día 3 | 36,8 |
+| #395, día 4 | 36,0 |
+| #396, día 5 | 33,9 |
+| #397, día 6 | 34,6 |
+
+**`document-rules.md` no cambia**: ninguna de las siete reglas se ha tocado. **Firmas**: 36, 0042, 0043 y
+0045–0078. El paquete gana las notas del sprint en 0043, 0057, 0066, 0070 y 0071, y en la 0071 la decisión
+del día 4 que tomó desarrollo (la oferta del logo antes que la instrucción de un panel abierto), para que
+David la vete si quiere.
+
+**Capturas de los ocho**, antes (`b4c08b6`) y después, la parte de arriba de cada panel, a 1280, 1024 con
+panel y 390 × 844; «Diseño» y «Listas» no tienen 390:
+
+| Panel | 1280 | 1024 | 390 |
+|---|---|---|---|
+| Estilo | [antes](review/2026-11-los-paneles-ordenados/dia7-estilo-1280-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia7-estilo-1280-despues.png) | [antes](review/2026-11-los-paneles-ordenados/dia7-estilo-1024-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia7-estilo-1024-despues.png) | [antes](review/2026-11-los-paneles-ordenados/dia7-estilo-390-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia7-estilo-390-despues.png) |
+| Fotos | [antes](review/2026-11-los-paneles-ordenados/dia7-fotos-1280-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia7-fotos-1280-despues.png) | [antes](review/2026-11-los-paneles-ordenados/dia7-fotos-1024-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia7-fotos-1024-despues.png) | [antes](review/2026-11-los-paneles-ordenados/dia7-fotos-390-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia7-fotos-390-despues.png) |
+| Páginas | [antes](review/2026-11-los-paneles-ordenados/dia7-paginas-1280-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia7-paginas-1280-despues.png) | [antes](review/2026-11-los-paneles-ordenados/dia7-paginas-1024-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia7-paginas-1024-despues.png) | [antes](review/2026-11-los-paneles-ordenados/dia7-paginas-390-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia7-paginas-390-despues.png) |
+| Menú | [antes](review/2026-11-los-paneles-ordenados/dia7-menu-1280-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia7-menu-1280-despues.png) | [antes](review/2026-11-los-paneles-ordenados/dia7-menu-1024-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia7-menu-1024-despues.png) | [antes](review/2026-11-los-paneles-ordenados/dia7-menu-390-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia7-menu-390-despues.png) |
+| Compartir | [antes](review/2026-11-los-paneles-ordenados/dia7-compartir-1280-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia7-compartir-1280-despues.png) | [antes](review/2026-11-los-paneles-ordenados/dia7-compartir-1024-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia7-compartir-1024-despues.png) | [antes](review/2026-11-los-paneles-ordenados/dia7-compartir-390-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia7-compartir-390-despues.png) |
+| Diseño | [antes](review/2026-11-los-paneles-ordenados/dia7-diseno-1280-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia7-diseno-1280-despues.png) | [antes](review/2026-11-los-paneles-ordenados/dia7-diseno-1024-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia7-diseno-1024-despues.png) | — |
+| Listas | [antes](review/2026-11-los-paneles-ordenados/dia7-listas-1280-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia7-listas-1280-despues.png) | [antes](review/2026-11-los-paneles-ordenados/dia7-listas-1024-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia7-listas-1024-despues.png) | — |
+| Campos | [antes](review/2026-11-los-paneles-ordenados/dia7-campos-1280-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia7-campos-1280-despues.png) | [antes](review/2026-11-los-paneles-ordenados/dia7-campos-1024-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia7-campos-1024-despues.png) | [antes](review/2026-11-los-paneles-ordenados/dia7-campos-390-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia7-campos-390-despues.png) |
+
+#### Lo que el sprint 39 deja abierto
+
+1. **Treinta y seis firmas**: 0042, 0043, 0045–0078, con su paquete al día.
+2. **Las nueve fotos**: la exención cae el **1 de diciembre de 2026**, en 12 días.
+3. **El paso e2e de la CI a 34–37 de sus 45 minutos**: ocho minutos de margen. Partirlo en dos `--shard` o
+   subir el tope, de David.
+4. **El nombre de «Principal» y «Secundario» en «Fondo de la barra»**, de David.
+5. **Lo que el plan nombró para el backlog**: Escape en el raíl fijo sigue sin cerrar el panel; los anchos en
+   px, si David quiere quitarlos; «Campos» → «Textos» si lo pide; `Chip` sigue sin existir; las claves
+   huérfanas de `KNOWN_ORPHANS`.
+6. **Encontrado en el sprint, sin arreglar**:
+   - la prueba de WebKit de la línea de lo leído espera 300 ms fijos y falló una vez de 32;
+   - la pestaña de página se queda en un punto a 1024 con un panel abierto, igual que al principio del sprint;
+   - la transición de pantalla del cuestionario tapó un clic en una vuelta del e2e del día 4 y arrastró diez
+     caminatas que comparten página;
+   - Lighthouse tardó una vez 497 s en una auditoría.
+7. **El editor sigue sin verse fuera de Chromium**; la web publicada sí, en tres motores.
+8. **El sprint 40, sin planificar.**
