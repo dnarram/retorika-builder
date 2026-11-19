@@ -1593,7 +1593,7 @@ describe("regression — converting a section, and renaming the page it made", (
     await frame.locator('[data-section="sec-services"]').click();
     await frame
       .locator(
-        '[data-section="sec-services"] .rb-action[aria-label="Convertir esta sección en página"]',
+        '[data-section="sec-services"] .rb-action[aria-label="Hacer página con esta sección"]',
       )
       .click();
 
@@ -1662,7 +1662,7 @@ describe("día 7 — dos conversiones desde el editor, y el ZIP resultante abier
     await frame.locator('[data-section="sec-location"]').click();
     await frame
       .locator(
-        '[data-section="sec-location"] .rb-action[aria-label="Convertir esta sección en página"]',
+        '[data-section="sec-location"] .rb-action[aria-label="Hacer página con esta sección"]',
       )
       .click();
 
@@ -2153,7 +2153,7 @@ describe("sprint 7 día 3 — deshacer una conversión desde «Páginas»", () =
       await withProbeOnFailure(walkPage, "sec-services", atPress, async () => {
         await frame
           .locator(
-            '[data-section="sec-services"] .rb-action[aria-label="Convertir esta sección en página"]',
+            '[data-section="sec-services"] .rb-action[aria-label="Hacer página con esta sección"]',
           )
           .click();
       });
@@ -2161,7 +2161,7 @@ describe("sprint 7 día 3 — deshacer una conversión desde «Páginas»", () =
       await expect(frame.locator('[data-preset="teaser"]')).toBeVisible();
 
       await walkPage.getByRole("button", { name: "Páginas", exact: true }).click();
-      const fold = walkPage.getByRole("button", { name: "Deshacer la conversión" });
+      const fold = walkPage.getByRole("button", { name: "Volver a ser sección" });
       // One button, on the converted page. The entry page is listed and does not offer it —
       // `pageToSection` refuses the first page, so a button there would be a dead one.
       await expect(fold).toHaveCount(1);
@@ -2407,9 +2407,7 @@ describe("sprint 7 día 7 — dos hallazgos de esta semana, cerrados", () => {
       for (const id of ["sec-services", "sec-location"]) {
         await frame.locator(`[data-section="${id}"]`).click();
         await frame
-          .locator(
-            `[data-section="${id}"] .rb-action[aria-label="Convertir esta sección en página"]`,
-          )
+          .locator(`[data-section="${id}"] .rb-action[aria-label="Hacer página con esta sección"]`)
           .click();
       }
       await expect(walkPage.locator('[data-testid="page-tabs"] button')).toHaveCount(3);
@@ -2582,13 +2580,13 @@ describe("sprint 7 día 7 — el recorrido completo del sprint", () => {
       await frame.locator('[data-section="sec-location"]').click();
       await frame
         .locator(
-          '[data-section="sec-location"] .rb-action[aria-label="Convertir esta sección en página"]',
+          '[data-section="sec-location"] .rb-action[aria-label="Hacer página con esta sección"]',
         )
         .click();
       await expect(tabs).toHaveCount(2);
 
       await walkPage.getByRole("button", { name: "Páginas", exact: true }).click();
-      await walkPage.getByRole("button", { name: "Deshacer la conversión" }).click();
+      await walkPage.getByRole("button", { name: "Volver a ser sección" }).click();
       await expect(tabs).toHaveCount(1);
       await expect(frame.locator('[data-section="sec-location"]')).toBeVisible();
 
@@ -2708,7 +2706,7 @@ describe("sprint 8 — el modo estudio: encender, diseñar a mano, colocar, y vo
       // The offer, and the promise it makes before anybody accepts it.
       await frame.locator('[data-section="sec-cover"]').click();
       await frame.locator('.rb-action[aria-label="Diseñar a mano"]').first().click();
-      await expect(frame.getByText("Esta sección la coloca el catálogo")).toBeVisible();
+      await expect(frame.getByText("Esta sección viene colocada de serie")).toBeVisible();
 
       const headline = frame.locator('[data-section="sec-cover"] [data-id="el-headline"]');
       const wordsBefore = await headline.textContent();
@@ -2991,7 +2989,7 @@ describe("sprint 8 día 7 — el recorrido completo del sprint", () => {
       expect(columnNow).toBe("25");
 
       await studio.getByRole("button", { name: "Foto", exact: true }).click();
-      await studio.getByRole("button", { name: "Foto menor" }).click();
+      await studio.getByRole("button", { name: "Foto más pequeña" }).click();
       // Addressed by what it says rather than by where it sits. `aside p` at `nth(-2)` meant this
       // paragraph until sprint 9 day 5 added a family below it, and then it meant the panel's
       // closing note — a positional locator into a panel changes subject every time the panel
@@ -3441,15 +3439,17 @@ describe("sprint 9 día 5 — medidas, espaciado y la excepción marcada", () =>
       // The audit finds it, names it in the owner's own words, and gives it back to the system.
       await studio.getByRole("button", { name: "Diseño" }).click();
       const panel = studio.locator("aside").first();
-      await panel.getByRole("button", { name: /Fuera del sistema \(1\)/ }).click();
+      await panel.getByRole("button", { name: /Puesto a mano \(1\)/ }).click();
       await expect(panel.getByText("Reformas Vega")).toBeVisible();
       await expect(panel.getByText("37px")).toBeVisible();
 
-      await panel.getByRole("button", { name: "Volver al sistema" }).click();
+      await panel.getByRole("button", { name: "Volver al de la web" }).click();
       await expect(frame.locator('[data-id="el-headline"]')).toHaveCSS("padding", "0px");
       // And the audit says what being empty means, rather than showing an empty box.
       await expect(
-        panel.getByText("Toda tu web usa los colores y las medidas del sistema.", { exact: false }),
+        panel.getByText("Nada está puesto a mano: toda tu web sigue su paleta y sus medidas", {
+          exact: false,
+        }),
       ).toBeVisible();
     } finally {
       await studio.context().close();
@@ -3520,7 +3520,7 @@ describe("sprint 9 día 6 — la revisión de contraste", () => {
       await expect(dialog.getByRole("button", { name: "Descargar igualmente" })).toHaveCount(0);
 
       // The one-click fix is to drop the exception, so the reference underneath shows through.
-      await dialog.getByRole("button", { name: "Volver al color del tema" }).click();
+      await dialog.getByRole("button", { name: "Volver al color de la web" }).click();
       // Polled, for the reason day 5's test records: autosave is debounced, so the document is
       // fixed before storage says so and a single read answers with the state before the click.
       await expect
@@ -3654,7 +3654,7 @@ describe("sprint 9 día 7 — el recorrido completo del sprint", () => {
       // The audit sees it (day 5's surface), marked and named in the owner's own words.
       await studio.getByRole("button", { name: "Diseño" }).click();
       const panel = studio.locator("aside").first();
-      await panel.getByRole("button", { name: /Fuera del sistema/ }).click();
+      await panel.getByRole("button", { name: /Puesto a mano/ }).click();
       await expect(panel.getByText("Reformas Vega")).toBeVisible();
 
       // The download is blocked — no way past, with the number that justifies it.
@@ -3664,7 +3664,7 @@ describe("sprint 9 día 7 — el recorrido completo del sprint", () => {
       await expect(blocked.getByRole("button", { name: "Descargar igualmente" })).toHaveCount(0);
 
       // Fixed in one click, from the dialog itself — back to a reference, not a guessed colour.
-      await blocked.getByRole("button", { name: "Volver al color del tema" }).click();
+      await blocked.getByRole("button", { name: "Volver al color de la web" }).click();
       await expect(blocked).toHaveCount(0);
 
       // ---- press an exact value in for real, this time a legible one, so the ZIP has something
@@ -3788,20 +3788,24 @@ describe("sprint 9 día 7 — colchón: el diálogo se queda sobre lo que sigue 
       const descargar = studio.getByRole("button", { name: "Descargar", exact: true });
       await descargar.click();
       const dialog = studio.getByRole("alertdialog");
-      await expect(dialog.getByRole("button", { name: "Volver al color del tema" })).toHaveCount(2);
+      await expect(dialog.getByRole("button", { name: "Volver al color de la web" })).toHaveCount(
+        2,
+      );
 
       // Sprint 17 day 1, on the dialog this walk already has open. Reopened afterwards to carry on
       // with what the walk was about — cheaper than a sixth trip through the questionnaire.
       await expectModalTrap(studio, dialog, descargar);
       await descargar.click();
-      await expect(dialog.getByRole("button", { name: "Volver al color del tema" })).toHaveCount(2);
+      await expect(dialog.getByRole("button", { name: "Volver al color de la web" })).toHaveCount(
+        2,
+      );
 
-      await dialog.getByRole("button", { name: "Volver al color del tema" }).first().click();
+      await dialog.getByRole("button", { name: "Volver al color de la web" }).first().click();
 
       // The dialog is still here, with the one finding that is still true.
       await expect(studio.getByRole("alertdialog")).toHaveCount(1);
       await expect(
-        studio.getByRole("alertdialog").getByRole("button", { name: "Volver al color del tema" }),
+        studio.getByRole("alertdialog").getByRole("button", { name: "Volver al color de la web" }),
       ).toHaveCount(1);
 
       // The second fix closes it — and does not download on its own. `download` was never
@@ -3813,7 +3817,7 @@ describe("sprint 9 día 7 — colchón: el diálogo se queda sobre lo que sigue 
         .catch(() => "no download");
       await studio
         .getByRole("alertdialog")
-        .getByRole("button", { name: "Volver al color del tema" })
+        .getByRole("button", { name: "Volver al color de la web" })
         .click();
       await expect(studio.getByRole("alertdialog")).toHaveCount(0);
       expect(await downloadPromise).toBe("no download");
@@ -6751,7 +6755,7 @@ describe("sprint 14 día 5 — el panel de listas", () => {
     const page = await (await browser.newContext({ viewport: VIEWPORT })).newPage();
     try {
       await openPanel(page);
-      await expect(page.getByRole("heading", { name: "Listas reutilizables" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Listas", exact: true })).toBeVisible();
       await expect(page.getByText("Servicios")).toBeVisible();
       await expect(page.getByText("· 3 fichas")).toBeVisible();
       // Named by the catalog, never by the section id — «Qué hago», twice, because two show it.
@@ -6836,7 +6840,7 @@ describe("sprint 14 día 5 — el panel de listas", () => {
     try {
       await openPanel(page);
       await expect(page.getByRole("button", { name: "Borrar la lista" })).toHaveCount(0);
-      await expect(page.getByText(/primero desenlaza las secciones/)).toBeVisible();
+      await expect(page.getByText(/primero quita la lista de las secciones/)).toBeVisible();
       // And it says nothing is lost, which is true: §7's exit keeps the cards.
       await expect(page.getByText(/se quedan como tarjetas normales/)).toBeVisible();
     } finally {
@@ -6892,9 +6896,9 @@ describe("sprint 14 día 5 — el panel de listas", () => {
     const page = await (await browser.newContext({ viewport: VIEWPORT })).newPage();
     try {
       await openPanel(page);
-      await expect(page.getByRole("heading", { name: "Listas reutilizables" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Listas", exact: true })).toBeVisible();
       await page.getByRole("switch", { name: "Herramientas de diseño" }).click();
-      await expect(page.getByRole("heading", { name: "Listas reutilizables" })).toHaveCount(0);
+      await expect(page.getByRole("heading", { name: "Listas", exact: true })).toHaveCount(0);
     } finally {
       await page.context().close();
     }
@@ -7081,8 +7085,10 @@ describe("sprint 14 día 6 — enlazar, avisar y desenlazar", () => {
       await frame.locator('[data-section="sec-services"] li.rb-item h3').first().click();
       await frame.locator(".rb-toolbar").waitFor();
       // **Per section, and the words say so** — there is no per-card exit, by design.
-      await expect(frame.getByRole("button", { name: "Desenlazar esta sección" })).toBeVisible();
-      await frame.getByRole("button", { name: "Desenlazar esta sección" }).click();
+      await expect(
+        frame.getByRole("button", { name: "Quitar la lista de esta sección" }),
+      ).toBeVisible();
+      await frame.getByRole("button", { name: "Quitar la lista de esta sección" }).click();
       await expect(page.getByText("Guardado en este navegador")).toBeVisible();
 
       // The cards are still there, saying the same things, and nothing is bound any more.
@@ -7235,7 +7241,7 @@ describe("sprint 14 día 7 — el recorrido completo del sprint", () => {
       // ---- day 6: the exit is the section's, and the cards stay ----------------------------------
       await frame.locator('[data-section="sec-services"] li.rb-item h3').first().click();
       await frame.locator(".rb-toolbar").waitFor();
-      await frame.getByRole("button", { name: "Desenlazar esta sección" }).click();
+      await frame.getByRole("button", { name: "Quitar la lista de esta sección" }).click();
       await expect(walk.getByText("Guardado en este navegador")).toBeVisible();
       // The first section keeps six real cards; the second still draws them from the list.
       await expect(frame.locator('[data-section="sec-services"] li.rb-item')).toHaveCount(6);
@@ -8273,7 +8279,7 @@ describe("sprint 23 día 3 — quitar una sección del menú", () => {
         .getByRole("button", { name: "Cambiar si «Horario y ubicación» aparece en el menú" })
         .click();
       // La puerta aterriza en la casilla de esa sección, en «Menú»: Espacio la desmarca, sin ratón.
-      const menu = visitor.getByRole("complementary", { name: "La cabecera de tu web" });
+      const menu = visitor.getByRole("complementary", { name: "El menú de tu web" });
       const toggle = menu.getByRole("checkbox", { name: "Horario y ubicación" });
       await expect(toggle).toBeFocused();
       await expect(toggle).toBeChecked();
@@ -8323,12 +8329,12 @@ describe("sprint 23 día 4 — las páginas en el menú y el umbral curado", () 
       // el documento en la forma con la que se escribió cada número de abajo.
       await visitor.getByRole("button", { name: "Menú", exact: true }).click();
       await visitor
-        .getByRole("complementary", { name: "La cabecera de tu web" })
+        .getByRole("complementary", { name: "El menú de tu web" })
         .getByRole("group", { name: "Botón destacado" })
         .getByText("Ninguno", { exact: true })
         .click();
       await expect(frame.locator(".rb-header .rb-nav-action")).toHaveCount(0);
-      await visitor.getByRole("button", { name: "Cerrar la cabecera" }).click();
+      await visitor.getByRole("button", { name: "Cerrar el menú" }).click();
 
       // Convertir «Qué ponemos» en página es lo que hace aparecer el segundo menú: hasta aquí no
       // hay a dónde ir, y la tira de páginas no se dibuja.
@@ -8336,7 +8342,7 @@ describe("sprint 23 día 4 — las páginas en el menú y el umbral curado", () 
       await frame.locator('[data-section="sec-services"]').click();
       await frame
         .locator(
-          '[data-section="sec-services"] .rb-action[aria-label="Convertir esta sección en página"]',
+          '[data-section="sec-services"] .rb-action[aria-label="Hacer página con esta sección"]',
         )
         .click();
       const pages = frame.locator('.rb-nav-wide nav[aria-label="Páginas"] a');
@@ -8360,7 +8366,7 @@ describe("sprint 23 día 4 — las páginas en el menú y el umbral curado", () 
         .nth(1)
         .getByRole("button", { name: "Cambiar si «Qué ponemos» aparece en el menú" })
         .click();
-      const menu = visitor.getByRole("complementary", { name: "La cabecera de tu web" });
+      const menu = visitor.getByRole("complementary", { name: "El menú de tu web" });
       const pageToggle = menu.getByRole("checkbox", { name: "Qué ponemos" });
       await expect(pageToggle).toBeFocused();
       await expect(pageToggle).toBeChecked();
@@ -8374,7 +8380,7 @@ describe("sprint 23 día 4 — las páginas en el menú y el umbral curado", () 
       await expect(frame.locator('.rb-nav-wide nav[aria-label="Páginas"]')).toHaveCount(0);
       await expect(frame.locator('[data-preset="teaser"]')).toContainText("Qué ponemos");
       await expect(menu).toContainText(
-        "No hay nada que mostrar: no queda ninguna página en el menú, así que no se dibuja.",
+        "No hay nada que mostrar: no queda ninguna página en el menú, así que no se muestra.",
       );
       // Tres secciones siguen en el menú, así que la web sigue por encima del umbral y no hay nada
       // que decirle al dueño sobre ello.
@@ -8400,14 +8406,14 @@ describe("sprint 23 día 4 — las páginas en el menú y el umbral curado", () 
        * comporta distinto de todas las demás sin explicar por qué (ADR 0043 §5).
        */
       await expect(menu).toContainText(
-        /Automático: se dibuja con 2 destinos, menos de los \d+ con los que aparece solo\. Aparece porque lo has decidido tú\./,
+        /Automático: se muestra con 2 enlaces, menos de los \d+ con los que aparece solo\. Aparece porque lo has decidido tú\./,
       );
 
       await sectionToggle("Horario y ubicación").uncheck();
       // «Reservar»: the word the generator gave the contact section as its own entry (ADR 0059),
       // which came back to the strip with it when the button was set to «Ninguno» above.
       await expect(sections).toHaveText(["Reservar"]);
-      await expect(menu).toContainText(/se dibuja con 1 destino, menos de los \d+/);
+      await expect(menu).toContainText(/se muestra con 1 enlace, menos de los \d+/);
 
       /**
        * **Y con nada, nada** — la cláusula que David añadió al aprobar el sprint. Ni `<nav>`, ni
@@ -8513,9 +8519,9 @@ describe("sprint 39 día 3 — la línea dice el gesto", () => {
       // «Menú»: Tab until «Dónde va la marca» — the line says the brand's gesture; the live child
       // says nothing of it. Leaving the group, the line falls back.
       await visitor.getByRole("button", { name: "Menú", exact: true }).click();
-      const panel = visitor.getByRole("complementary", { name: "La cabecera de tu web" });
+      const panel = visitor.getByRole("complementary", { name: "El menú de tu web" });
       await expect(panel).toBeVisible();
-      await panel.getByRole("button", { name: "Cerrar la cabecera" }).focus();
+      await panel.getByRole("button", { name: "Cerrar el menú" }).focus();
       await tabUntil(
         visitor,
         (at) => at.tag === "INPUT" && at.type === "radio" && at.name.endsWith("-brand-place"),
@@ -8531,11 +8537,11 @@ describe("sprint 39 día 3 — la línea dice el gesto", () => {
       // The mouse over «Dónde va el navegador de secciones» (a generated site has one page, so
       // the pages' «Dónde va» is not drawn): the menu's gesture; off it, nothing.
       const pagesPlace = panel.getByRole("radiogroup", {
-        name: "Dónde va el navegador de secciones",
+        name: "Dónde va el menú de secciones",
       });
       await pagesPlace.hover();
       await expect(quiet).toContainText("También puedes arrastrar el menú");
-      await panel.getByRole("heading", { name: "La cabecera de tu web" }).hover();
+      await panel.getByRole("heading", { name: "El menú de tu web" }).hover();
       await expect(quiet).not.toContainText("arrastrar el menú");
       // Closing with the mouse still on the cards — the cross pressed from the keyboard, so the
       // mouse never leaves them: the line falls quiet with the panel, which is the unmount's doing
@@ -8543,7 +8549,7 @@ describe("sprint 39 día 3 — la línea dice el gesto", () => {
       // gesture after the panel was gone).
       await pagesPlace.hover();
       await expect(quiet).toContainText("arrastrar el menú");
-      await panel.getByRole("button", { name: "Cerrar la cabecera" }).focus();
+      await panel.getByRole("button", { name: "Cerrar el menú" }).focus();
       await visitor.keyboard.press("Enter");
       await expect(panel).toHaveCount(0);
       await expect(quiet).not.toContainText("arrastrar el menú");
@@ -8584,7 +8590,7 @@ describe("sprint 39 día 3 — la línea dice el gesto", () => {
  * cierra con la cruz de los otros siete. axe sobre «Menú» con «Disposición» a la vista y sobre «Listas».
  */
 describe("sprint 39 día 2 — lo horizontal, junto, y el raíl en su orden", () => {
-  it("ordena el raíl, reúne lo horizontal en «Disposición» y cierra «Listas» con la cruz", async () => {
+  it("ordena el raíl, reúne lo horizontal en «Cómo se coloca» y cierra «Listas» con la cruz", async () => {
     const visitor = await (
       await browser.newContext({ viewport: { width: 1280, height: 900 } })
     ).newPage();
@@ -8615,8 +8621,8 @@ describe("sprint 39 día 2 — lo horizontal, junto, y el raíl en su orden", ()
       // 2. «Disposición»: los bocetos, y bajo ellos dónde va la marca y dónde van los enlaces —
       //    fuera de «Marca» y de «Aspecto», con sus nombres y su efecto de siempre.
       await rail.getByRole("button", { name: "Menú", exact: true }).click();
-      const panel = visitor.getByRole("complementary", { name: "La cabecera de tu web" });
-      const layout = panel.getByRole("group", { name: "Disposición" });
+      const panel = visitor.getByRole("complementary", { name: "El menú de tu web" });
+      const layout = panel.getByRole("group", { name: "Cómo se coloca" });
       await layout.scrollIntoViewIfNeeded();
       const places = layout.getByRole("radiogroup", { name: "Dónde va la marca" });
       const align = layout.getByRole("radiogroup", { name: "Dónde van los enlaces" });
@@ -8639,13 +8645,13 @@ describe("sprint 39 día 2 — lo horizontal, junto, y el raíl en su orden", ()
       await expect(layout).toContainText("Con la marca en medio o al final");
       await visitor.getByRole("button", { name: "Deshacer", exact: true }).click();
       await expect(bar).not.toHaveAttribute("data-brand-place", "end");
-      await axeSerious(visitor, "«Menú» con «Disposición» a la vista");
-      await visitor.getByRole("button", { name: "Cerrar la cabecera" }).click();
+      await axeSerious(visitor, "«Menú» con «Cómo se coloca» a la vista");
+      await visitor.getByRole("button", { name: "Cerrar el menú" }).click();
 
       // 3. «Listas», con las herramientas: la cruz arriba, y nada abajo.
       await studioToolsOn(visitor);
       await rail.getByRole("button", { name: "Listas", exact: true }).click();
-      const lists = visitor.getByRole("region", { name: "Listas reutilizables" });
+      const lists = visitor.getByRole("region", { name: "Listas", exact: true });
       await expect(lists).toBeVisible();
       await expect(lists.getByRole("button", { name: "Cerrar", exact: true })).toHaveCount(0);
       await axeSerious(visitor, "«Listas» con su cruz");
@@ -8682,13 +8688,13 @@ describe("sprint 39 día 1 — la puerta del interruptor", () => {
       await frame.locator('[data-section="sec-services"]').click();
       await frame
         .locator(
-          '[data-section="sec-services"] .rb-action[aria-label="Convertir esta sección en página"]',
+          '[data-section="sec-services"] .rb-action[aria-label="Hacer página con esta sección"]',
         )
         .click();
       await expect(frame.locator('.rb-nav-wide nav[aria-label="Páginas"] a')).toHaveText([
         "Qué ponemos",
       ]);
-      const menu = visitor.getByRole("complementary", { name: "La cabecera de tu web" });
+      const menu = visitor.getByRole("complementary", { name: "El menú de tu web" });
 
       // 1. La página al botón destacado: conserva su casilla, y su nota dice que el menú la deja
       //    fuera mientras el botón esté.
@@ -8698,7 +8704,7 @@ describe("sprint 39 día 1 — la puerta del interruptor", () => {
         .getByText("Qué ponemos", { exact: true })
         .click();
       await expect(frame.locator(".rb-header .rb-nav-action")).toHaveText("Qué ponemos");
-      await visitor.getByRole("button", { name: "Cerrar la cabecera" }).click();
+      await visitor.getByRole("button", { name: "Cerrar el menú" }).click();
       /**
        * **Lo que «Cerrar» hace hoy con el foco, medido**: el botón se va con el panel y el foco cae
        * en el documento; el raíl fijo no lo recoge (fila del backlog, sprint 37). Se escribe tal
@@ -10544,7 +10550,7 @@ describe("la barra superior reparte su ancho entre el logo y las pestañas", () 
       for (const section of sections.slice(1, 5)) {
         const host = frame.locator(`[data-section="${section}"]`);
         const verb = frame.locator(
-          `[data-section="${section}"] .rb-action[aria-label="Convertir esta sección en página"]`,
+          `[data-section="${section}"] .rb-action[aria-label="Hacer página con esta sección"]`,
         );
         if ((await host.count()) === 0) continue;
         await host.click();
@@ -12039,7 +12045,7 @@ describe("el panel y las herramientas llegan, no aparecen", () => {
       await frame.locator('[data-section="sec-services"]').click();
       await frame
         .locator(
-          '[data-section="sec-services"] .rb-action[aria-label="Convertir esta sección en página"]',
+          '[data-section="sec-services"] .rb-action[aria-label="Hacer página con esta sección"]',
         )
         .click();
       const tabs = walker.locator('[data-testid="page-tabs"] button');
@@ -12373,7 +12379,7 @@ describe("sprint 17 día 3 — el lienzo se maneja con el teclado", () => {
       // nowhere in the frame.
       const keys = page.getByTestId("help-line-quiet");
       await expect(keys).toContainText("cambiar de sección");
-      await expect(keys).toContainText("Esc: soltar el lienzo");
+      await expect(keys).toContainText("Esc: salir de la vista previa");
       await expect(frame.locator(".rb-keys")).toHaveCount(0);
 
       // **The six verbs, which is the whole point of the day.** They did not exist until now.
@@ -14143,7 +14149,7 @@ describe("sprint 19 día 4 — una página por ficha desde «Listas»", () => {
         page.getByText("Al descargar saldrán 4 páginas: una por cada ficha de «Qué hago»."),
       ).toBeVisible();
       // No fold for a page that came from no section.
-      await expect(page.getByRole("button", { name: "Deshacer la conversión" })).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "Volver a ser sección" })).toHaveCount(0);
 
       // The exit loses nothing and one «Deshacer» brings the page back, tab and all.
       await page.getByRole("button", { name: "Listas", exact: true }).click();
@@ -17360,7 +17366,7 @@ describe("sprint 24 día 8 — un elemento se arrastra a su celda", () => {
       const beforeOffer = await placedIn(frame, "sec-cover");
       await dragElementBy(page, headline, 200, 0);
       // The offer, and nothing moved while it was being asked — «nada se mueve al empezar».
-      await expect(frame.getByText("Esta sección la coloca el catálogo")).toBeVisible();
+      await expect(frame.getByText("Esta sección viene colocada de serie")).toBeVisible();
       await page.mouse.up();
       expect(await placedIn(frame, "sec-cover")).toEqual(beforeOffer);
 
@@ -18212,7 +18218,7 @@ describe("sprint 24 día 10 — el cierre, sin ratón", () => {
       await tabToVerb(page, "handmade");
       await page.keyboard.press("Enter");
       await expect(
-        page.frameLocator(PREVIEW).first().getByText("Esta sección la coloca el catálogo"),
+        page.frameLocator(PREVIEW).first().getByText("Esta sección viene colocada de serie"),
       ).toBeVisible();
       await afterTheEdit(page, async () => {
         await tabInFrameUntil(
@@ -18491,7 +18497,7 @@ describe("sprint 25 día 2 — escalar mide la sección viva", () => {
 
       await cover.click();
       await frame.locator('.rb-action[aria-label="Diseñar a mano"]').first().click();
-      await expect(frame.getByText("Esta sección la coloca el catálogo")).toBeVisible();
+      await expect(frame.getByText("Esta sección viene colocada de serie")).toBeVisible();
       await escalated(frame, async () => {
         await frame.locator(".rb-escalate-yes").click();
       });
@@ -19116,9 +19122,12 @@ describe("sprint 25 día 6 — las unidades dichas y el alto que sigue al texto"
 
       // Los cuatro números siguen siendo los del documento —unidades de noventa y seis— y ahora
       // hay una línea que dice qué significan y qué mueve cada paso.
-      await expect(panel.getByText("96 en cada sección", { exact: false })).toBeVisible();
-      await expect(panel.getByText("filas de 8 px", { exact: false })).toBeVisible();
-      await expect(panel.getByText("Mayús de ocho", { exact: false })).toBeVisible();
+      // In plain words since sprint 39 día 4, and still the arrows' worth (ADR 0050, amendment §5).
+      await expect(
+        panel.getByText("de 1 a 96 a lo ancho de la sección", { exact: false }),
+      ).toBeVisible();
+      await expect(panel.getByText("de 8 en 8 píxeles", { exact: false })).toBeVisible();
+      await expect(panel.getByText("con Mayús de 8 en 8", { exact: false })).toBeVisible();
     } finally {
       await context.close();
     }
@@ -20777,7 +20786,7 @@ describe("sprint 26 día 4 — fotos, estilos, páginas e interruptor", () => {
       await patchesAfter(page, () =>
         frame
           .locator(
-            '[data-section="sec-services"] .rb-action[aria-label="Convertir esta sección en página"]',
+            '[data-section="sec-services"] .rb-action[aria-label="Hacer página con esta sección"]',
           )
           .click(),
       );
@@ -21048,7 +21057,7 @@ describe("sprint 26 día 8 — el cierre", () => {
       await edit(() =>
         frame
           .locator(
-            '[data-section="sec-services"] .rb-action[aria-label="Convertir esta sección en página"]',
+            '[data-section="sec-services"] .rb-action[aria-label="Hacer página con esta sección"]',
           )
           .click(),
       );
@@ -23640,9 +23649,9 @@ describe("sprint 30 día 3 — la cabecera se elige en el lienzo", () => {
       await expect(header).toHaveClass(/rb-selected/);
       await expect(frame.locator("[data-section].rb-selected")).toHaveCount(0);
       await expect(frame.locator(".rb-actions")).toHaveCount(0);
-      const panel = visitor.getByRole("complementary", { name: "La cabecera de tu web" });
+      const panel = visitor.getByRole("complementary", { name: "El menú de tu web" });
       await expect(panel).toBeVisible();
-      await expect(panel).toContainText("Navegador de secciones");
+      await expect(panel).toContainText("Menú de secciones");
       await expect(panel).toContainText("Contacto");
 
       // 3. Choosing a section unchooses the header: one thing in the canvas at a time.
@@ -23669,7 +23678,7 @@ describe("sprint 30 día 3 — la cabecera se elige en el lienzo", () => {
       await frame.locator('[data-section="sec-services"]').click();
       await frame
         .locator(
-          '[data-section="sec-services"] .rb-action[aria-label="Convertir esta sección en página"]',
+          '[data-section="sec-services"] .rb-action[aria-label="Hacer página con esta sección"]',
         )
         .click();
       await expect(frame.locator('.rb-nav-wide nav[aria-label="Páginas"] a')).toHaveText([
@@ -23723,7 +23732,7 @@ describe("sprint 30 día 4 — el panel «Menú»", () => {
       await expect(sectionsNav.filter({ hasText: "Servicios" })).toHaveCount(1);
 
       await studio.getByRole("button", { name: "Menú", exact: true }).click();
-      const panel = studio.getByRole("complementary", { name: "La cabecera de tu web" });
+      const panel = studio.getByRole("complementary", { name: "El menú de tu web" });
       await expect(panel).toBeVisible();
 
       // 1. «Se lee como…»: one letter warns and writes nothing; the word reaches the canvas as it
@@ -23770,7 +23779,7 @@ describe("sprint 30 día 4 — el panel «Menú»", () => {
         await frame.locator(`[data-section="${sectionId}"]`).click();
         await frame
           .locator(
-            `[data-section="${sectionId}"] .rb-action[aria-label="Convertir esta sección en página"]`,
+            `[data-section="${sectionId}"] .rb-action[aria-label="Hacer página con esta sección"]`,
           )
           .click();
         await expect(frame.locator(`[data-section="${sectionId}"]`)).toHaveCount(0);
@@ -23788,7 +23797,7 @@ describe("sprint 30 día 4 — el panel «Menú»", () => {
         .click();
       await expect(pagesNav).toHaveCount(0);
       await expect(frame.locator('.rb-nav-wide nav[aria-label="Secciones"]')).toHaveCount(1);
-      await expect(panel.getByText("No se dibuja, aunque tenga destinos.")).toBeVisible();
+      await expect(panel.getByText("No se muestra, aunque tenga enlaces.")).toBeVisible();
 
       // 5. The button: born pointing at the contact section with the restaurant's own word for it,
       //    «Reservar» (ADR 0059, día 5), and out of the sections menu for it. «Ninguno» puts the
@@ -23933,7 +23942,7 @@ describe("sprint 30 día 5 — el logo viaja como una foto", () => {
 
       // 5. «Menú» → Marca: the logo on the bar's colour; «Quitar» takes it off the canvas.
       await studio.getByRole("button", { name: "Menú", exact: true }).click();
-      const panel = studio.getByRole("complementary", { name: "La cabecera de tu web" });
+      const panel = studio.getByRole("complementary", { name: "El menú de tu web" });
       await expect(panel).toBeVisible();
       await expect(panel.getByTestId("logo-swatch").locator("img")).toHaveCount(1);
       await panel.getByRole("button", { name: "Quitar" }).click();
@@ -23991,7 +24000,7 @@ describe("sprint 30 día 5 — el logo viaja como una foto", () => {
  * with Escape and gives the focus back to «Menú».
  */
 describe("sprint 30 día 6 — el aspecto de la cabecera", () => {
-  it("fondo principal, mayúsculas y fija: en el lienzo, en «Fuera del sistema» y en el ZIP abierto", async () => {
+  it("fondo principal, mayúsculas y fija: en el lienzo, en «Puesto a mano» y en el ZIP abierto", async () => {
     const context = await browser.newContext({ viewport: { width: 1440, height: 950 } });
     const studio = await context.newPage();
     const dir = mkdtempSync(join(tmpdir(), "retorika-e2e-aspecto-"));
@@ -24013,7 +24022,7 @@ describe("sprint 30 día 6 — el aspecto de la cabecera", () => {
           );
 
       await studio.getByRole("button", { name: "Menú", exact: true }).click();
-      const panel = studio.getByRole("complementary", { name: "La cabecera de tu web" });
+      const panel = studio.getByRole("complementary", { name: "El menú de tu web" });
       await expect(panel).toBeVisible();
 
       // 1. «Principal»: the bar is painted the palette's primary, its words the surface.
@@ -24055,17 +24064,17 @@ describe("sprint 30 día 6 — el aspecto de la cabecera", () => {
       await expect(action).toHaveCSS("color", "rgb(90, 26, 26)");
       await studio.getByRole("button", { name: "Diseño", exact: true }).click();
       const design = studio.locator("aside").first();
-      await design.getByRole("button", { name: /Fuera del sistema \(1\)/ }).click();
-      await expect(design.getByText("Cabecera · botón")).toBeVisible();
+      await design.getByRole("button", { name: /Puesto a mano \(1\)/ }).click();
+      await expect(design.getByText("Barra de arriba · botón")).toBeVisible();
       await expect(design.getByText("#5a1a1a")).toBeVisible();
-      await design.getByRole("button", { name: "Volver al sistema" }).click();
+      await design.getByRole("button", { name: "Volver al de la web" }).click();
       await expect(action).toHaveCSS("color", rgbOf(await token("--color-primary")));
 
       // 5. A second page, so a phone has pages to fold into «Menú»: «Dónde estamos» converted.
       await frame.locator('[data-section="sec-location"]').click();
       await frame
         .locator(
-          '[data-section="sec-location"] .rb-action[aria-label="Convertir esta sección en página"]',
+          '[data-section="sec-location"] .rb-action[aria-label="Hacer página con esta sección"]',
         )
         .click();
       await expect(frame.locator('[data-section="sec-location"]')).toHaveCount(0);
@@ -24236,7 +24245,7 @@ describe("sprint 30 día 7 — lo que la lista pedía y nadie había caminado", 
       );
 
       await studio.getByRole("button", { name: "Menú", exact: true }).click();
-      const panel = studio.getByRole("complementary", { name: "La cabecera de tu web" });
+      const panel = studio.getByRole("complementary", { name: "El menú de tu web" });
       await expect(panel).toBeVisible();
       const background = (name: string) =>
         panel
@@ -24317,7 +24326,7 @@ describe("sprint 30 día 7 — lo que la lista pedía y nadie había caminado", 
       await expect(
         panel.getByText("Sobre una foto no podemos comprobar que se lea", { exact: false }),
       ).toBeVisible();
-      await downloadZip("over-photo", "La cabecera va sobre una foto");
+      await downloadZip("over-photo", "La barra de arriba va sobre una foto");
 
       // 5. «Se lee como…» with 21 letters: the bound is said, nothing is written, the entry keeps
       //    its word; emptied, the entry reads the derived word again.
@@ -24384,9 +24393,7 @@ describe("sprint 31 día 1 — el lienzo maqueta a 1280 y se escala", () => {
       // 1280 con «Menú»: la misma página, más pequeña — 788 px de hueco, a 0,6156, sobre el suelo.
       await page.setViewportSize({ width: 1280, height: 900 });
       await page.getByRole("button", { name: "Menú", exact: true }).click();
-      await expect(
-        page.getByRole("complementary", { name: "La cabecera de tu web" }),
-      ).toBeVisible();
+      await expect(page.getByRole("complementary", { name: "El menú de tu web" })).toBeVisible();
       await expect
         .poll(() => canvasNow(page))
         .toMatchObject({ layout: DESKTOP_LAYOUT_WIDTH, note: null });
@@ -24487,7 +24494,7 @@ describe("sprint 31 día 4 — el raíl se elige en el lienzo", () => {
       await frame.locator('[data-section="sec-services"]').click();
       await frame
         .locator(
-          '[data-section="sec-services"] .rb-action[aria-label="Convertir esta sección en página"]',
+          '[data-section="sec-services"] .rb-action[aria-label="Hacer página con esta sección"]',
         )
         .click();
       await expect(frame.locator('.rb-nav-wide nav[aria-label="Páginas"] a')).toHaveText([
@@ -24531,9 +24538,7 @@ describe("sprint 31 día 4 — el raíl se elige en el lienzo", () => {
       await expect(header).toHaveClass(/rb-selected/);
       expect(await rail.evaluate((el) => getComputedStyle(el).outlineStyle)).toBe("solid");
       await expect(frame.locator("[data-section].rb-selected")).toHaveCount(0);
-      await expect(
-        page.getByRole("complementary", { name: "La cabecera de tu web" }),
-      ).toBeVisible();
+      await expect(page.getByRole("complementary", { name: "El menú de tu web" })).toBeVisible();
 
       // 2. The rail's way to «Contacto» — the button that went with the pages — takes the canvas to
       //    the section and chooses it, as the bar's did on sprint 30 día 3.
@@ -24662,14 +24667,14 @@ describe("sprint 31 día 5 — el panel «Dónde va»", () => {
       await frame.locator('[data-section="sec-services"]').click();
       await frame
         .locator(
-          '[data-section="sec-services"] .rb-action[aria-label="Convertir esta sección en página"]',
+          '[data-section="sec-services"] .rb-action[aria-label="Hacer página con esta sección"]',
         )
         .click();
       await expect(frame.locator('.rb-nav-wide nav[aria-label="Páginas"] a')).toHaveText([
         "Qué ponemos",
       ]);
       await page.getByRole("button", { name: "Menú", exact: true }).click();
-      const panel = page.getByRole("complementary", { name: "La cabecera de tu web" });
+      const panel = page.getByRole("complementary", { name: "El menú de tu web" });
       await expect(panel).toBeVisible();
       const [chooser] = await Promise.all([
         page.waitForEvent("filechooser"),
@@ -24690,7 +24695,7 @@ describe("sprint 31 día 5 — el panel «Dónde va»", () => {
       const leftRail = frame.locator('.rb-rail[data-side="left"]');
       await expect(leftRail).toBeVisible();
       await expect(
-        panel.getByText("En el lienzo se ve siempre, porque el lienzo enseña tu web a 1280 px."),
+        panel.getByText("En la vista previa se ve siempre, porque enseña tu web a 1280 px."),
       ).toBeVisible();
 
       // …and at 1024 with the panel open, under the floor: the canvas lays the page out at 887, the
@@ -24699,7 +24704,7 @@ describe("sprint 31 día 5 — el panel «Dónde va»", () => {
       await page.setViewportSize({ width: 1024, height: 900 });
       await expect(
         panel.getByText(
-          "En esta ventana el lienzo enseña tu web a 887 px, y la columna se pliega en la barra.",
+          "En esta ventana la vista previa enseña tu web a 887 px, y la columna vuelve a la barra.",
           { exact: false },
         ),
       ).toBeVisible();
@@ -24707,7 +24712,7 @@ describe("sprint 31 día 5 — el panel «Dónde va»", () => {
       await page.setViewportSize({ width: 1440, height: 900 });
       await expect(leftRail).toBeVisible();
       await expect(
-        panel.getByText("En el lienzo se ve siempre, porque el lienzo enseña tu web a 1280 px."),
+        panel.getByText("En la vista previa se ve siempre, porque enseña tu web a 1280 px."),
       ).toBeVisible();
 
       // 2. The brand and the button with the pages: the logo goes into the column.
@@ -24717,13 +24722,18 @@ describe("sprint 31 día 5 — el panel «Dónde va»", () => {
 
       // 3. The sections to the right column: three columns, and what two columns need.
       const sectionsPlace = panel.getByRole("radiogroup", {
-        name: "Dónde va el navegador de secciones",
+        name: "Dónde va el menú de secciones",
       });
       await sectionsPlace.getByText("Columna derecha", { exact: true }).click();
       const rightRail = frame.locator('.rb-rail[data-side="right"]');
       await expect(rightRail).toBeVisible();
       await expect(
-        panel.getByText("el navegador necesita 1248 px", { exact: false }),
+        panel.getByText(
+          "el menú de secciones solo cabe en pantallas de ordenador de 1248 px o más",
+          {
+            exact: false,
+          },
+        ),
       ).toBeVisible();
       const railEntries = await rightRail
         .locator("a")
@@ -24817,7 +24827,7 @@ describe("sprint 32 día 5 — el editor dice lo que se mueve", () => {
       await frame.locator('[data-section="sec-services"]').click();
       await frame
         .locator(
-          '[data-section="sec-services"] .rb-action[aria-label="Convertir esta sección en página"]',
+          '[data-section="sec-services"] .rb-action[aria-label="Hacer página con esta sección"]',
         )
         .click();
       const entry = frame.locator('.rb-nav-wide nav[aria-label="Páginas"] a').first();
@@ -24865,7 +24875,7 @@ describe("sprint 32 día 5 — el editor dice lo que se mueve", () => {
       // sprint 39 día 3, composed from what this site has: the sections rising, the menu marking
       // its section; and, once the bar is fixed, that it condenses, which the note gains.
       await page.getByRole("button", { name: "Menú", exact: true }).click();
-      const panel = page.getByRole("complementary", { name: "La cabecera de tu web" });
+      const panel = page.getByRole("complementary", { name: "El menú de tu web" });
       await expect(panel).toBeVisible();
       const published = panel.getByTestId("published-note");
       await expect(published).toContainText("En la vista previa nada se mueve");
@@ -24874,7 +24884,9 @@ describe("sprint 32 día 5 — el editor dice lo que se mueve", () => {
         "el menú de secciones marca la sección que se está viendo",
       );
       await expect(published).not.toContainText("se estrecha");
-      await expect(panel.getByText("Una línea muy fina", { exact: false })).toBeVisible();
+      await expect(
+        panel.getByRole("checkbox", { name: "Línea bajo la barra de arriba" }),
+      ).toBeVisible();
       await panel.getByRole("checkbox", { name: "Se queda arriba al bajar" }).check();
       await expect(
         panel.getByText("se vuelve translúcida, con la página difuminada detrás", { exact: false }),
@@ -25016,7 +25028,7 @@ describe("sprint 31 día 6 — el móvil del raíl", () => {
       await frame.locator('[data-section="sec-services"]').click();
       await frame
         .locator(
-          '[data-section="sec-services"] .rb-action[aria-label="Convertir esta sección en página"]',
+          '[data-section="sec-services"] .rb-action[aria-label="Hacer página con esta sección"]',
         )
         .click();
       await expect(frame.locator('.rb-nav-wide nav[aria-label="Páginas"] a')).toHaveText([
@@ -25025,7 +25037,7 @@ describe("sprint 31 día 6 — el móvil del raíl", () => {
 
       // 1. Everything placed from the panel, as an owner does.
       await page.getByRole("button", { name: "Menú", exact: true }).click();
-      const panel = page.getByRole("complementary", { name: "La cabecera de tu web" });
+      const panel = page.getByRole("complementary", { name: "El menú de tu web" });
       await panel
         .getByRole("radiogroup", { name: "Dónde va el menú de páginas" })
         .getByText("Columna izquierda", { exact: true })
@@ -25034,7 +25046,7 @@ describe("sprint 31 día 6 — el móvil del raíl", () => {
         .getByRole("checkbox", { name: "La marca y el botón van con el menú de páginas" })
         .check();
       await panel
-        .getByRole("radiogroup", { name: "Dónde va el navegador de secciones" })
+        .getByRole("radiogroup", { name: "Dónde va el menú de secciones" })
         .getByText("Columna derecha", { exact: true })
         .click();
       await panel
@@ -25045,9 +25057,13 @@ describe("sprint 31 día 6 — el móvil del raíl", () => {
       await panel.getByRole("checkbox", { name: "Se queda arriba al bajar" }).check();
       // This site's words fold the bar past the phone (ADR 0067), so the note covers that width
       // too since sprint 34 día 4: «En el móvil, y hasta N px, solo la barra.»
-      await expect(panel.getByText(/^En el móvil, y hasta \d+ px, solo la barra\.$/)).toBeVisible();
+      await expect(
+        panel.getByText(
+          /^En el móvil y en (tabletas|pantallas) de hasta \d+ px(, ordenadores pequeños incluidos)?, solo la barra\.$/,
+        ),
+      ).toBeVisible();
       await expect(frame.locator(".rb-rail")).toHaveCount(2);
-      await panel.getByRole("button", { name: "Cerrar la cabecera" }).click();
+      await panel.getByRole("button", { name: "Cerrar el menú" }).click();
 
       // 2. The phone view of the canvas: no column, «Ir a…» beside «Menú», and an entry of it takes
       //    the canvas to its section and closes it.
@@ -25203,7 +25219,7 @@ describe("sprint 33 día 1 — el lienzo no ejecuta el script", () => {
       await frame.locator('[data-section="sec-services"]').click();
       await frame
         .locator(
-          '[data-section="sec-services"] .rb-action[aria-label="Convertir esta sección en página"]',
+          '[data-section="sec-services"] .rb-action[aria-label="Hacer página con esta sección"]',
         )
         .click();
       await expect(frame.locator('.rb-nav-wide nav[aria-label="Páginas"] a')).toHaveCount(1);
@@ -25237,7 +25253,7 @@ describe("sprint 33 día 1 — el lienzo no ejecuta el script", () => {
       await page.getByRole("button", { name: "Ver en ordenador" }).click();
       await deviceArrived(page, DESKTOP_LAYOUT_WIDTH);
       await page.getByRole("button", { name: "Menú", exact: true }).click();
-      const panel = page.getByRole("complementary", { name: "La cabecera de tu web" });
+      const panel = page.getByRole("complementary", { name: "El menú de tu web" });
       await panel.getByRole("checkbox", { name: "Se queda arriba al bajar" }).check();
       await expect(frame.locator("header.rb-header")).toHaveAttribute("data-sticky", "");
       await sessionHolds(page, (raw) => raw.includes('"sticky":true'), "recibió la barra fija");
@@ -25268,7 +25284,7 @@ describe("sprint 33 día 1 — la hoja del móvil bloquea la página", () => {
       await frame.locator('[data-section="sec-services"]').click();
       await frame
         .locator(
-          '[data-section="sec-services"] .rb-action[aria-label="Convertir esta sección en página"]',
+          '[data-section="sec-services"] .rb-action[aria-label="Hacer página con esta sección"]',
         )
         .click();
       await expect(frame.locator('.rb-nav-wide nav[aria-label="Páginas"] a')).toHaveCount(1);
@@ -25336,7 +25352,7 @@ describe("sprint 33 día 3 — el editor real dibuja la cabecera como su documen
     await frame.locator('[data-section="sec-services"]').click();
     await frame
       .locator(
-        '[data-section="sec-services"] .rb-action[aria-label="Convertir esta sección en página"]',
+        '[data-section="sec-services"] .rb-action[aria-label="Hacer página con esta sección"]',
       )
       .click();
     await expect(frame.locator('.rb-nav-wide nav[aria-label="Páginas"] a')).toHaveText([
@@ -25498,9 +25514,7 @@ describe("sprint 33 día 3 — el editor real dibuja la cabecera como su documen
       if (!box) throw new Error("the right column is not drawn");
       await page.mouse.click(box.x + box.width / 2, box.y + box.height * 0.92);
       await expect(frame.locator("header.rb-header")).toHaveClass(/rb-selected/);
-      await expect(
-        page.getByRole("complementary", { name: "La cabecera de tu web" }),
-      ).toBeVisible();
+      await expect(page.getByRole("complementary", { name: "El menú de tu web" })).toBeVisible();
       expect(
         await frame
           .locator(".rb-rail")
@@ -25517,7 +25531,7 @@ describe("sprint 33 día 3 — el editor real dibuja la cabecera como su documen
     try {
       const frame = await placedSite(page);
       await page.getByRole("button", { name: "Menú", exact: true }).click();
-      const panel = page.getByRole("complementary", { name: "La cabecera de tu web" });
+      const panel = page.getByRole("complementary", { name: "El menú de tu web" });
       await expect(panel).toBeVisible();
       await expect
         .poll(() => frame.locator("body").evaluate(() => innerWidth))
@@ -25535,10 +25549,15 @@ describe("sprint 33 día 3 — el editor real dibuja la cabecera como su documen
           ),
       ).toEqual(["left", "right"]);
       await expect(
-        panel.getByText("En el lienzo se ve siempre, porque el lienzo enseña tu web a 1280 px."),
+        panel.getByText("En la vista previa se ve siempre, porque enseña tu web a 1280 px."),
       ).toHaveCount(2);
       await expect(
-        panel.getByText("el navegador necesita 1248 px", { exact: false }),
+        panel.getByText(
+          "el menú de secciones solo cabe en pantallas de ordenador de 1248 px o más",
+          {
+            exact: false,
+          },
+        ),
       ).toBeVisible();
 
       // The two divergences the panel had not named (día 3). The pages in the bar: the rule under
@@ -25557,7 +25576,7 @@ describe("sprint 33 día 3 — el editor real dibuja la cabecera como su documen
       );
       await expect(published).not.toContainText("«Ir a…» cuelga");
       await panel
-        .getByRole("radiogroup", { name: "Dónde va el navegador de secciones" })
+        .getByRole("radiogroup", { name: "Dónde va el menú de secciones" })
         .getByText("Desplegable «Ir a…»", { exact: true })
         .click();
       await expect(published).toContainText("«Ir a…» cuelga de la barra entera");
@@ -25593,9 +25612,7 @@ describe("sprint 33 día 4 — un menú se arrastra a su zona", () => {
       for (const id of ["sec-services", "sec-gallery"]) {
         await frame.locator(`[data-section="${id}"]`).click();
         await frame
-          .locator(
-            `[data-section="${id}"] .rb-action[aria-label="Convertir esta sección en página"]`,
-          )
+          .locator(`[data-section="${id}"] .rb-action[aria-label="Hacer página con esta sección"]`)
           .click();
       }
       const entries = frame.locator('.rb-nav-wide nav[data-part="pagesLinks"] a');
@@ -25607,7 +25624,7 @@ describe("sprint 33 día 4 — un menú se arrastra a su zona", () => {
       const header = frame.locator("header.rb-header");
       const zones = frame.locator(".rb-zone");
       const said = page.locator('p[role="status"]');
-      const panel = page.getByRole("complementary", { name: "La cabecera de tu web" });
+      const panel = page.getByRole("complementary", { name: "El menú de tu web" });
       const positionNow = () =>
         page.evaluate(() => {
           const raw = localStorage.getItem("retorika.session.v1") ?? "";
@@ -25655,7 +25672,7 @@ describe("sprint 33 día 4 — un menú se arrastra a su zona", () => {
       await expect(zones).toHaveCount(0);
       await page.mouse.up();
       await expect.poll(positionNow).not.toBe("left");
-      await panel.getByRole("button", { name: "Cerrar la cabecera" }).click();
+      await panel.getByRole("button", { name: "Cerrar el menú" }).click();
       await expect(panel).toHaveCount(0);
       await deviceArrived(page, DESKTOP_LAYOUT_WIDTH);
       const zoom = await canvasZoom(page);
@@ -25695,9 +25712,7 @@ describe("sprint 33 día 4 — un menú se arrastra a su zona", () => {
       await expect(said).toHaveText("Menú de páginas: columna izquierda");
       // The release's own click chose nothing: the panel is closed, the header unchosen.
       await expect(header).not.toHaveClass(/rb-selected/);
-      await expect(page.getByRole("complementary", { name: "La cabecera de tu web" })).toHaveCount(
-        0,
-      );
+      await expect(page.getByRole("complementary", { name: "El menú de tu web" })).toHaveCount(0);
       // The card says where it is.
       await page.getByRole("button", { name: "Menú", exact: true }).click();
       await expect(
@@ -25705,7 +25720,7 @@ describe("sprint 33 día 4 — un menú se arrastra a su zona", () => {
           .getByRole("radiogroup", { name: "Dónde va el menú de páginas" })
           .getByRole("radio", { name: "Columna izquierda" }),
       ).toBeChecked();
-      await panel.getByRole("button", { name: "Cerrar la cabecera" }).click();
+      await panel.getByRole("button", { name: "Cerrar el menú" }).click();
       await expect(panel).toHaveCount(0);
       await deviceArrived(page, DESKTOP_LAYOUT_WIDTH);
 
@@ -25788,7 +25803,7 @@ async function placedSite(page: Page, header: Record<string, unknown>): Promise<
   for (const id of ["sec-services", "sec-gallery"]) {
     await frame.locator(`[data-section="${id}"]`).click();
     await frame
-      .locator(`[data-section="${id}"] .rb-action[aria-label="Convertir esta sección en página"]`)
+      .locator(`[data-section="${id}"] .rb-action[aria-label="Hacer página con esta sección"]`)
       .click();
   }
   await expect(frame.locator('.rb-nav-wide nav[data-part="pagesLinks"] a')).toHaveCount(2);
@@ -25888,14 +25903,14 @@ describe("sprint 33 día 5 — el arrastre completo", () => {
       // Held by the row's ground and carried over the pages' column: the ghost says it stacks.
       await carry(page, await rowGround(frame), at(120, 500), false);
       await expect(frame.locator('.rb-zone[data-zone="left"][data-hot]')).toHaveCount(1);
-      await expect(frame.locator(".rb-menu-ghost")).toContainText("Navegador de secciones");
+      await expect(frame.locator(".rb-menu-ghost")).toContainText("Menú de secciones");
       await expect(frame.locator(".rb-menu-ghost-note")).toHaveText(
         "Se apila bajo el menú de páginas",
       );
       await page.mouse.up();
       await expect.poll(() => positionOf(page, "sections")).toBe("left");
       await expect(page.locator('p[role="status"]')).toHaveText(
-        "Navegador de secciones: columna izquierda",
+        "Menú de secciones: columna izquierda",
       );
       // One column, the pages first and the sections under them (ADR 0060 §2).
       expect(
@@ -26033,9 +26048,7 @@ describe("sprint 33 día 5 — el arrastre completo", () => {
     try {
       const frame = await placedSite(page, {});
       await page.getByRole("button", { name: "Menú", exact: true }).click();
-      await expect(
-        page.getByRole("complementary", { name: "La cabecera de tu web" }),
-      ).toBeVisible();
+      await expect(page.getByRole("complementary", { name: "El menú de tu web" })).toBeVisible();
       await expect.poll(() => canvasZoom(page)).toBeLessThan(0.7);
       const { zoom, at } = await frameOnScreen(page);
       expect(zoom).toBeGreaterThanOrEqual(CANVAS_ZOOM_FLOOR);
@@ -26183,14 +26196,14 @@ describe("sprint 33 día 5 — el arrastre completo", () => {
       // In the desktop view the help line says the menus can be dragged while the hand is on
       // «Dónde va» (sprint 39 día 3, ADR 0071); the panel itself carries no such sentence.
       await page.getByRole("button", { name: "Menú", exact: true }).click();
-      const panel = page.getByRole("complementary", { name: "La cabecera de tu web" });
+      const panel = page.getByRole("complementary", { name: "El menú de tu web" });
       const line = page.getByTestId("help-line-quiet");
       await expect(panel.getByText("arrastrar el menú", { exact: false })).toHaveCount(0);
       await panel.getByRole("radiogroup", { name: "Dónde va el menú de páginas" }).hover();
       await expect(line).toContainText("También puedes arrastrar el menú");
-      await panel.getByRole("heading", { name: "La cabecera de tu web" }).hover();
+      await panel.getByRole("heading", { name: "El menú de tu web" }).hover();
       await expect(line).not.toContainText("arrastrar el menú");
-      await panel.getByRole("button", { name: "Cerrar la cabecera" }).click();
+      await panel.getByRole("button", { name: "Cerrar el menú" }).click();
       await page.getByRole("button", { name: "Ver en móvil" }).click();
       await deviceArrived(page, NARROWEST_WIDTH);
       await frame.locator("body").evaluate(() => window.scrollTo(0, 0));
@@ -26238,7 +26251,7 @@ describe("sprint 33 día 5 — el arrastre completo", () => {
       });
       await page.setViewportSize({ width: 1024, height: 900 });
       await page.getByRole("button", { name: "Menú", exact: true }).click();
-      const panel = page.getByRole("complementary", { name: "La cabecera de tu web" });
+      const panel = page.getByRole("complementary", { name: "El menú de tu web" });
       await expect(panel).toBeVisible();
       await expect.poll(() => frame.locator("body").evaluate(() => innerWidth)).toBe(887);
       await frame.locator("body").evaluate(() => window.scrollTo(0, 0));
@@ -26254,17 +26267,20 @@ describe("sprint 33 día 5 — el arrastre completo", () => {
       await page.mouse.up();
       await expect.poll(() => positionOf(page, "sections")).toBe("right");
       await expect(page.locator('p[role="status"]')).toHaveText(
-        "Navegador de secciones: columna derecha",
+        "Menú de secciones: columna derecha",
       );
       // Two columns on opposite sides: the sections' needs 1248, and here both fold.
       await expect(
-        panel.getByText("Con las páginas en la otra columna, el navegador necesita 1248 px", {
-          exact: false,
-        }),
+        panel.getByText(
+          "Con las páginas en la otra columna, el menú de secciones solo cabe en pantallas de ordenador de 1248 px o más",
+          {
+            exact: false,
+          },
+        ),
       ).toBeVisible();
       await expect(
         panel.getByText(
-          "En esta ventana el lienzo enseña tu web a 887 px, y la columna se pliega en la barra.",
+          "En esta ventana la vista previa enseña tu web a 887 px, y la columna vuelve a la barra.",
           { exact: false },
         ),
       ).toHaveCount(2);
@@ -26292,7 +26308,7 @@ describe("sprint 33 día 6 — un menú se coge también por su entrada", () => 
       await frame.locator('[data-section="sec-services"]').click();
       await frame
         .locator(
-          '[data-section="sec-services"] .rb-action[aria-label="Convertir esta sección en página"]',
+          '[data-section="sec-services"] .rb-action[aria-label="Hacer página con esta sección"]',
         )
         .click();
       await sessionHolds(
@@ -26393,7 +26409,7 @@ describe("sprint 33 día 6 — un botón largo avisa y no bloquea", () => {
       await expect(button).toHaveCount(1);
 
       await studio.getByRole("button", { name: "Menú", exact: true }).click();
-      const panel = studio.getByRole("complementary", { name: "La cabecera de tu web" });
+      const panel = studio.getByRole("complementary", { name: "El menú de tu web" });
       await expect(panel).toBeVisible();
       // The button's destination is the entry that says it is in the button.
       const destination = panel.locator("li", {
@@ -26416,7 +26432,7 @@ describe("sprint 33 día 6 — un botón largo avisa y no bloquea", () => {
       await expect(button).toHaveText("Reserva tu mesa");
       await expect(destination.getByText("no cabe en la barra", { exact: false })).toBeVisible();
       await field.blur();
-      await panel.getByRole("button", { name: "Cerrar la cabecera" }).click();
+      await panel.getByRole("button", { name: "Cerrar el menú" }).click();
 
       // The review: past the photos' warning, the button's own, a warning with a way past it.
       await studio.getByRole("button", { name: "Descargar" }).click();
@@ -26462,17 +26478,18 @@ describe("sprint 34 día 4 — el dueño sabe por qué se pliega", () => {
       await intoTheCanvas(studio);
       const frame = studio.frameLocator(PREVIEW).first();
       await studio.getByRole("button", { name: "Menú", exact: true }).click();
-      const panel = studio.getByRole("complementary", { name: "La cabecera de tu web" });
+      const panel = studio.getByRole("complementary", { name: "El menú de tu web" });
       await expect(panel).toBeVisible();
 
       // 1. In a tablet's fold the panel says it — tablets, up to 805 — and «En el móvil» covers it.
       await expect(
-        panel.getByText("no caben en una línea hasta 805 px: hasta ese ancho —tabletas", {
-          exact: false,
-        }),
+        panel.getByText(
+          "no caben en una línea en el móvil ni en tabletas de hasta 805 px: allí la barra se muestra como en el móvil",
+          { exact: false },
+        ),
       ).toBeVisible();
       await expect(
-        panel.getByRole("radiogroup", { name: "En el móvil y hasta 805 px" }),
+        panel.getByRole("radiogroup", { name: "En el móvil y en tabletas de hasta 805 px" }),
       ).toBeVisible();
 
       // 2. Three long labels fold it past 1024: the desktop site carries the phone's menu.
@@ -26488,12 +26505,14 @@ describe("sprint 34 día 4 — el dueño sabe por qué se pliega", () => {
       }
       await expect(
         panel.getByText(
-          "no caben en una línea hasta 1062 px: hasta ese ancho la web de escritorio lleva el menú del móvil",
+          "no caben en una línea en el móvil ni en pantallas de hasta 1062 px, ordenadores pequeños incluidos: allí tu web lleva el menú del móvil",
           { exact: false },
         ),
       ).toBeVisible();
       await expect(
-        panel.getByRole("radiogroup", { name: "En el móvil y hasta 1062 px" }),
+        panel.getByRole("radiogroup", {
+          name: "En el móvil y en pantallas de hasta 1062 px, ordenadores pequeños incluidos",
+        }),
       ).toBeVisible();
 
       // 3. A 1024 window with the panel open lays the canvas out at 887, under the fold: the canvas
@@ -26501,7 +26520,7 @@ describe("sprint 34 día 4 — el dueño sabe por qué se pliega", () => {
       await studio.setViewportSize({ width: 1024, height: 900 });
       await expect(
         panel.getByText(
-          "En el lienzo, a este ancho, la barra se dibuja como en el móvil: sus palabras no caben en una línea. Desde 1063 px se ve entera.",
+          "En la vista previa, a este ancho, la barra se muestra como en el móvil: sus palabras no caben en una línea. Se ve entera en pantallas de ordenador de 1063 px o más.",
         ),
       ).toBeVisible();
       await expect
@@ -26510,7 +26529,7 @@ describe("sprint 34 día 4 — el dueño sabe por qué se pliega", () => {
         )
         .toBe(false);
       await studio.setViewportSize({ width: 1440, height: 950 });
-      await panel.getByRole("button", { name: "Cerrar la cabecera" }).click();
+      await panel.getByRole("button", { name: "Cerrar el menú" }).click();
 
       // 4. The review: past the photos' warning, the fold first, with a way past it.
       await studio.getByRole("button", { name: "Descargar" }).click();
@@ -26525,10 +26544,10 @@ describe("sprint 34 día 4 — el dueño sabe por qué se pliega", () => {
       await expect(folds).toBeVisible();
       const row = folds.getByTestId("fold-row");
       await expect(row).toContainText(
-        "Hasta 1062 px, la web de escritorio lleva el menú del móvil, sin columnas",
+        "En pantallas de hasta 1062 px, ordenadores pequeños incluidos, tu web lleva el menú del móvil, sin columnas",
       );
       await expect(row).toContainText(
-        "Tu menú no cabe en una línea hasta 1062 px: acorta alguna etiqueta con «Se lee como…» o quita entradas del menú.",
+        "Tu menú no cabe en una línea en pantallas de hasta 1062 px, ordenadores pequeños incluidos: acorta alguna etiqueta con «Se lee como…» o quita enlaces del menú.",
       );
       const [download] = await Promise.all([
         studio.waitForEvent("download"),
@@ -26557,7 +26576,7 @@ describe("sprint 34 día 5 — «Menú» es agarre", () => {
     try {
       const frame = await placedSite(page, {});
       await page.getByRole("button", { name: "Menú", exact: true }).click();
-      const panel = page.getByRole("complementary", { name: "La cabecera de tu web" });
+      const panel = page.getByRole("complementary", { name: "El menú de tu web" });
       await expect(panel).toBeVisible();
 
       // 1. A page's label grown to twenty letters folds the bar past 1024 (the site folds at 805
@@ -26571,9 +26590,11 @@ describe("sprint 34 día 5 — «Menú» es agarre", () => {
         }),
       ).toHaveCount(1);
       await field.blur();
-      const foldNote = panel.getByText(/no caben en una línea hasta \d+ px/);
+      const foldNote = panel.getByText(
+        /no caben en una línea en el móvil ni en (?:tabletas|pantallas) de hasta \d+ px/,
+      );
       await expect(foldNote).toBeVisible();
-      const fold = Number(/hasta (\d+) px/.exec((await foldNote.textContent()) ?? "")?.[1]);
+      const fold = Number(/de hasta (\d+) px/.exec((await foldNote.textContent()) ?? "")?.[1]);
       if (!(fold >= 1024 && fold < DESKTOP_LAYOUT_WIDTH)) {
         throw new Error(`the fold is ${fold}: this walk needs one in [1024, 1280)`);
       }
@@ -26612,7 +26633,7 @@ describe("sprint 34 día 5 — «Menú» es agarre", () => {
       // Under the fold no column stands, and the panel says the column folds here.
       await expect(frame.locator('.rb-rail[data-side="left"]')).toBeHidden();
       await expect(
-        panel.getByText("y la columna se pliega en la barra", { exact: false }),
+        panel.getByText("y la columna vuelve a la barra", { exact: false }),
       ).toBeVisible();
 
       // 4. Pressed without moving, «Menú» is the sheet's own button: it opens, Escape closes it.
@@ -26624,7 +26645,7 @@ describe("sprint 34 día 5 — «Menú» es agarre", () => {
 
       // 5. At 1440 with the panel closed the canvas is the page at 1280, over the fold: the strip
       //    whole, «Menú» gone, and the column the drop wrote standing.
-      await panel.getByRole("button", { name: "Cerrar la cabecera" }).click();
+      await panel.getByRole("button", { name: "Cerrar el menú" }).click();
       await page.setViewportSize({ width: 1440, height: 950 });
       await expect
         .poll(() => frame.locator("body").evaluate(() => innerWidth))
@@ -26652,7 +26673,7 @@ describe("sprint 34 día 6 — la línea de progreso", () => {
       await intoTheCanvas(studio);
       const frame = studio.frameLocator(PREVIEW).first();
       await studio.getByRole("button", { name: "Menú", exact: true }).click();
-      const panel = studio.getByRole("complementary", { name: "La cabecera de tu web" });
+      const panel = studio.getByRole("complementary", { name: "El menú de tu web" });
       await expect(panel).toBeVisible();
       const sticky = panel.getByRole("checkbox", { name: "Se queda arriba al bajar" });
       const progress = panel.getByRole("checkbox", { name: "Muestra cuánto se ha leído" });
@@ -26700,7 +26721,7 @@ describe("sprint 34 día 6 — la línea de progreso", () => {
       await studio.getByRole("button", { name: "Deshacer", exact: true }).click();
       await expect(sticky).toBeChecked();
       await expect(progress).toBeChecked();
-      await panel.getByRole("button", { name: "Cerrar la cabecera" }).click();
+      await panel.getByRole("button", { name: "Cerrar el menú" }).click();
 
       // 4. The ZIP carries it: the bar's attribute and the rule that reads the root's scroll.
       await studio.getByRole("button", { name: "Descargar" }).click();
@@ -27620,7 +27641,7 @@ describe("sprint 35 día 5 — el panel de la marca", () => {
 
       // 1. «Menú», and a logo uploaded from it: drawn at «Normal», and the row of its size appears.
       await studio.getByRole("button", { name: "Menú", exact: true }).click();
-      const panel = studio.getByRole("complementary", { name: "La cabecera de tu web" });
+      const panel = studio.getByRole("complementary", { name: "El menú de tu web" });
       await expect(panel).toBeVisible();
       const logoSizes = panel.getByRole("radiogroup", { name: "Tamaño del logo" });
       await expect(logoSizes).toHaveCount(0);
@@ -27634,7 +27655,7 @@ describe("sprint 35 día 5 — el panel de la marca", () => {
       await expect(logoSizes).toBeVisible();
       await expect(logoSizes.getByRole("radio", { name: "Normal" })).toBeChecked();
       await expect(
-        panel.getByText("Se ve a 40 píxeles de alto, sobre el fondo de la cabecera."),
+        panel.getByText("Se ve a 40 píxeles de alto, sobre el fondo de la barra de arriba."),
       ).toBeVisible();
       await frameMotionSettled(frame);
       const normal = await logoHeight();
@@ -27650,7 +27671,7 @@ describe("sprint 35 día 5 — el panel de la marca", () => {
       await expect(logoSizes.getByRole("radio", { name: "Normal" })).toBeChecked();
 
       // Leaving puts the bar back as it was.
-      const away = await pointAt(panel.getByRole("heading", { name: "La cabecera de tu web" }));
+      const away = await pointAt(panel.getByRole("heading", { name: "El menú de tu web" }));
       await studio.mouse.move(away.x, away.y, { steps: 4 });
       await expect(bar).not.toHaveAttribute("data-logo-size", /.*/);
       expect(await logoHeight()).toBeCloseTo(normal, 0);
@@ -27677,7 +27698,7 @@ describe("sprint 35 día 5 — el panel de la marca", () => {
       await expect(logoSizes.getByRole("radio", { name: "Grande" })).toBeChecked();
       await expect(bar).toHaveAttribute("data-logo-size", "lg");
       await expect(
-        panel.getByText("Se ve a 56 píxeles de alto, sobre el fondo de la cabecera."),
+        panel.getByText("Se ve a 56 píxeles de alto, sobre el fondo de la barra de arriba."),
       ).toBeVisible();
       // Leaving after the press keeps it: the preview was forgotten, not put back.
       await studio.mouse.move(away.x, away.y, { steps: 4 });
@@ -27780,7 +27801,7 @@ describe("sprint 36 día 6 — un logo que tarda no deshace lo que se pulsó", (
       const bar = frame.locator("header.rb-header");
       const logo = bar.locator("img.rb-logo");
       await studio.getByRole("button", { name: "Menú", exact: true }).click();
-      const panel = studio.getByRole("complementary", { name: "La cabecera de tu web" });
+      const panel = studio.getByRole("complementary", { name: "El menú de tu web" });
       await expect(panel).toBeVisible();
       const choose = async (name: "Subir tu logo" | "Cambiar") => {
         const [chooser] = await Promise.all([
@@ -27877,7 +27898,7 @@ describe("sprint 35 día 6 — la marca se arrastra y se estira", () => {
     await intoTheCanvas(page);
     const frame = page.frameLocator(PREVIEW).first();
     await page.getByRole("button", { name: "Menú", exact: true }).click();
-    const panel = page.getByRole("complementary", { name: "La cabecera de tu web" });
+    const panel = page.getByRole("complementary", { name: "El menú de tu web" });
     await expect(panel).toBeVisible();
     const [chooser] = await Promise.all([
       page.waitForEvent("filechooser"),
@@ -27887,7 +27908,7 @@ describe("sprint 35 día 6 — la marca se arrastra y se estira", () => {
     const logo = frame.locator("header.rb-header img.rb-logo");
     await expect(logo).toHaveCount(1);
     await imageLoaded(logo);
-    await panel.getByRole("button", { name: "Cerrar la cabecera" }).click();
+    await panel.getByRole("button", { name: "Cerrar el menú" }).click();
     await expect(panel).toHaveCount(0);
     await deviceArrived(page, DESKTOP_LAYOUT_WIDTH);
     await frame.locator("body").evaluate(() => window.scrollTo(0, 0));
@@ -27964,12 +27985,10 @@ describe("sprint 35 día 6 — la marca se arrastra y se estira", () => {
       const press = await pointIn(name, 0.5, 0.5);
       await page.mouse.click(press.x, press.y);
       await expect(header).toHaveClass(/rb-selected/);
-      await expect(
-        page.getByRole("complementary", { name: "La cabecera de tu web" }),
-      ).toBeVisible();
+      await expect(page.getByRole("complementary", { name: "El menú de tu web" })).toBeVisible();
       await expect.poll(() => brandOf(page)).toBe("center/");
       expect(await editSerialOf(page)).toBe(serial + 1);
-      await page.getByRole("button", { name: "Cerrar la cabecera" }).click();
+      await page.getByRole("button", { name: "Cerrar el menú" }).click();
       await deviceArrived(page, DESKTOP_LAYOUT_WIDTH);
       await motionSettled(page);
 
@@ -28015,7 +28034,7 @@ describe("sprint 35 día 6 — la marca se arrastra y se estira", () => {
       //    (the limit REVIEW names), and the block it opens at is the brand's anyway, the first.
       const once = await pointIn(name, 0.5, 0.5);
       await page.mouse.click(once.x, once.y);
-      const panel = page.getByRole("complementary", { name: "La cabecera de tu web" });
+      const panel = page.getByRole("complementary", { name: "El menú de tu web" });
       await expect(panel).toBeVisible();
       await motionSettled(page);
       const twice = await pointIn(name, 0.5, 0.5);
@@ -28036,7 +28055,7 @@ describe("sprint 35 día 6 — la marca se arrastra y se estira", () => {
       // Nothing written by the two clicks.
       await expect.poll(() => brandOf(page)).toBe("center/lg");
       expect(await editSerialOf(page)).toBe(serial + 2);
-      await page.getByRole("button", { name: "Cerrar la cabecera" }).click();
+      await page.getByRole("button", { name: "Cerrar el menú" }).click();
 
       // 5. «Deshacer» twice: the logo at «Normal», the brand at the start.
       await page.getByRole("button", { name: "Deshacer", exact: true }).click();
@@ -28122,7 +28141,7 @@ describe("sprint 35 día 7 — cada control responde", () => {
 
     // 2. «Menú»: the mark under the chosen segment, and it slides to the next choice.
     await page.getByRole("button", { name: "Menú", exact: true }).click();
-    const panel = page.getByRole("complementary", { name: "La cabecera de tu web" });
+    const panel = page.getByRole("complementary", { name: "El menú de tu web" });
     await expect(panel).toBeVisible();
     await motionSettled(page);
     const gaps = panel.getByRole("radiogroup", { name: "Separación entre enlaces" });
@@ -28158,7 +28177,7 @@ describe("sprint 35 día 7 — cada control responde", () => {
     );
     await panel.evaluate((el) => el.scrollTo(0, 200));
     expect(await panel.evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
-    await page.getByRole("button", { name: "Cerrar la cabecera" }).click();
+    await page.getByRole("button", { name: "Cerrar el menú" }).click();
     await motionSettled(page);
 
     // 4. «Deshacer» held down: the day-2 press — 2 % smaller — and nothing under reduced motion.
@@ -29819,7 +29838,7 @@ describe("sprint 36 día 7 — el lienzo responde", () => {
       await frame.locator('[data-section="sec-services"]').click();
       await frame
         .locator(
-          '[data-section="sec-services"] .rb-action[aria-label="Convertir esta sección en página"]',
+          '[data-section="sec-services"] .rb-action[aria-label="Hacer página con esta sección"]',
         )
         .click();
       const tabs = page.locator('[data-testid="page-tabs"] button');
@@ -31718,7 +31737,7 @@ describe("sprint 38 día 3 — los colores del logo son los de la web", () => {
       expect((await painted(frame)).heading).toBe(rgb("#156FE7"));
 
       await studio.getByRole("button", { name: "Menú", exact: true }).click();
-      const panel = studio.getByRole("complementary", { name: "La cabecera de tu web" });
+      const panel = studio.getByRole("complementary", { name: "El menú de tu web" });
       const upload = async () => {
         const [chooser] = await Promise.all([
           studio.waitForEvent("filechooser"),
@@ -31772,7 +31791,7 @@ describe("sprint 38 día 3 — los colores del logo son los de la web", () => {
       await expect.poll(async () => (await painted(frame)).heading).toBe(rgb("#156FE7"));
 
       await studio.getByRole("button", { name: "Menú", exact: true }).click();
-      const panel = studio.getByRole("complementary", { name: "La cabecera de tu web" });
+      const panel = studio.getByRole("complementary", { name: "El menú de tu web" });
       const [chooser] = await Promise.all([
         studio.waitForEvent("filechooser"),
         panel.getByRole("button", { name: "Subir tu logo" }).click(),
@@ -31975,7 +31994,7 @@ describe("sprint 38 día 6 — las paletas son tarjetas", () => {
       await expect(headline(frame)).toHaveCSS("color", TERRACOTTA);
       await expect(undo(studio)).toBeEnabled();
       await expect(swatches).toHaveAccessibleName("Los colores de «Terracota cálida»");
-      await expect(swatches.getByText("Principal")).toBeVisible();
+      await expect(swatches.getByText("Titulares y enlaces")).toBeVisible();
       await expect(swatches.getByText("#9A3412")).toBeVisible();
       expect((await order()).slice(0, 5)).toEqual([
         "neutral",
@@ -32172,7 +32191,7 @@ describe("sprint 38 día 7 — la paleta es del dueño", () => {
     await page.getByRole("button", { name: "Estilo", exact: true }).click();
     await pressAt(page, card(page, "Vino tinto"));
     await expect(headline(frame)).toHaveCSS("color", WINE);
-    await page.getByRole("button", { name: "Cambiar «Principal»" }).click();
+    await page.getByRole("button", { name: "Cambiar «Titulares y enlaces»" }).click();
     return frame;
   }
   const lightness = (page: Page) => page.getByRole("slider", { name: "Claridad", exact: true });
@@ -32244,10 +32263,9 @@ describe("sprint 38 día 7 — la paleta es del dueño", () => {
       await expect(card(page, "Vino tinto")).toBeChecked();
 
       // The field stayed open through all of it: the card was chosen the whole time.
-      await expect(page.getByRole("button", { name: "Cambiar «Principal»" })).toHaveAttribute(
-        "aria-expanded",
-        "true",
-      );
+      await expect(
+        page.getByRole("button", { name: "Cambiar «Titulares y enlaces»" }),
+      ).toHaveAttribute("aria-expanded", "true");
       // The keyboard: End is the legible extreme, an arrow past it changes nothing, and the run is
       // one step.
       await lightness(page).focus();
@@ -32281,7 +32299,7 @@ describe("sprint 38 día 7 — la paleta es del dueño", () => {
     try {
       const frame = await wineField(page);
       const before = await serial(frame);
-      await page.getByLabel("Elegir en la rueda: Principal").fill("#ffd1d1");
+      await page.getByLabel("Elegir en la rueda: Titulares y enlaces").fill("#ffd1d1");
       const refused = page.getByTestId("colour-refused");
       await expect(refused.getByRole("status")).toHaveText(/^Sobre el fondo: \d,\d; necesita 4,5$/);
       // Not written: the canvas and the document are the wine's.
@@ -32295,7 +32313,7 @@ describe("sprint 38 día 7 — la paleta es del dueño", () => {
       expect(await headlineReads(frame)).toBeGreaterThanOrEqual(4.5);
 
       // The hex: something that is not a colour is said, and a pale one refused the same way.
-      const hex = page.getByLabel("Código del color: Principal");
+      const hex = page.getByLabel("Código del color: Titulares y enlaces");
       await hex.fill("rojo");
       await hex.press("Enter");
       await expect(page.getByText("Escribe un color así: #7F1D1D.")).toBeVisible();
@@ -32331,7 +32349,7 @@ describe("sprint 38 día 7 — la paleta es del dueño", () => {
       );
       expect(await headlineReads(frame)).toBeGreaterThanOrEqual(4.5);
       // Its colours are now the card's, each with its field.
-      await expect(page.getByRole("button", { name: "Cambiar «Relleno»" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Cambiar «Botones y franjas»" })).toBeVisible();
       // The origin is written: the session holds `own`.
       await expect
         .poll(() =>
