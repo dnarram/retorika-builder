@@ -2,7 +2,7 @@
 
 import type { ElementAddress, RetorikaDocument } from "@retorika/schema";
 import { useId } from "react";
-import { Note, PanelHeader, panelFrame, panelRow } from "../editor/panelKit.tsx";
+import { arriveSharp, Note, PanelHeader, panelFrame, panelRow } from "../editor/panelKit.tsx";
 import {
   countPhotos,
   listPhotos,
@@ -140,6 +140,7 @@ export function PhotosPanel({
                     <img
                       src={photoUrls.get(photo.src) ?? photo.src}
                       alt=""
+                      onLoad={arriveSharp}
                       className={`h-10 w-14 shrink-0 rounded-ui-sm border border-ui-border ${
                         // A logo is shown whole, not cropped: its shape is the point of it.
                         photo.kind === "logo" ? "object-contain" : "object-cover"
