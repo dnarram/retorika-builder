@@ -12,7 +12,49 @@ drift, and the facilitator's script already says findings go to the decision the
 a separate document nobody reads again». So an item with an ADR points at the ADR; an item with
 an issue points at the issue; and only the things with no other home are described here at all.
 
-Last reviewed: 18 November 2026, **closing sprint 38 — «los colores del logo son los de la web, y la
+Last reviewed: 19 November 2026, **closing sprint 39 — «los paneles, ordenados».** No new feature: David
+asked for the eight right-hand panels to be put in order — an inventory control by control before any
+code, a verdict for each, every word of the trade said plainly, and the 2026 pieces of sprint 38 applied
+where they answer the hand. Seven days in seven PRs (#392–#397 and the close). What changed for somebody
+visiting a site: **nothing — the 24 corpus sites are byte-identical to the sprint's start** (140 files).
+For the owner:
+- the menu's switch lives in «Menú» alone, and «Páginas» and «Campos» read it with a door that always lands
+  on something ([ADR 0078](../decisions/0078-the-menu-switch-lives-in-menu-and-the-other-two-panels-read-it-with-a-door.md), day 1)
+- what is horizontal in the bar sits together under «Cómo se coloca»; the rail reads Estilo · Fotos ·
+  Páginas · Menú · Compartir, the radial menu too; «Listas» closes with the cross (day 2)
+- one note at the foot of «Menú» says what only the downloaded site does, composed from what applies; the
+  gestures and the panels' instructions moved to the help line (day 3)
+- the words of the trade in plain Spanish, and «{w} px» true for every width (day 4)
+- the checkbox draws its tick and a changed note fades in (day 5)
+- the segment under the mouse shows the mark's shadow and previews only on a move; a card's face rises while
+  the box pressed stays still; the thumbnails arrive in focus, measured first (day 6)
+
+The record is `docs/design/REVIEW.md`, sprint 39.
+
+**What sprint 39 leaves open** — the full text is the last section of REVIEW's sprint 39:
+
+1. **Thirty-six signatures**: 0042, 0043, 0045–0078, all `proposed`, with their pack up to date,
+   [`docs/decisions/signing-2026-11.md`](../decisions/signing-2026-11.md). In 0071, one call development
+   made on day 4 — the logo's colours before an open panel's instruction — is named for David's veto.
+2. **The nine photographs**: the exemption fails on **1 December 2026**, in 12 days.
+   [`docs/tasks/las-nueve-fotos.md`](las-nueve-fotos.md) and `pnpm photos:replace`.
+3. **The CI e2e step at 34–37 of its 45 minutes**: eight minutes of margin. Shard or raise — David's.
+4. **«Principal» and «Secundario» on the bar's background cards** still carry the old names of the colours;
+   they paint a background, so «Titulares y enlaces» does not fit. Naming them is David's.
+5. **Named by the plan for the backlog**: Escape in the fixed rail still does not close the panel (item
+   below, sprint 37); the widths in px stay unless David wants them gone; «Campos» → «Textos» if he asks;
+   `Chip` still does not exist; the orphan keys of `KNOWN_ORPHANS` (item below, sprint 39 día 1).
+6. **Found during the sprint, not fixed**:
+   - the WebKit test of the reading line (`packages/publisher/test/engines.browser.test.ts`) waits a fixed
+     300 ms after `scrollTo` instead of waiting for the scale; it failed once in 32 runs on 19 November
+   - the page tab shrinks to a dot at 1024 with a panel open — the same at the sprint's start
+   - the questionnaire's screen transition took a press in one full e2e run of day 4, and the ten walks that
+     share its page failed after it; they passed alone and in the next full run
+   - one Lighthouse audit took 497 s once; in the next two runs each took 5 s
+7. **The editor has still not been seen outside Chromium**; the published site has, in three engines.
+8. **Sprint 40 unplanned.**
+
+The review before that: 18 November 2026, **closing sprint 38 — «los colores del logo son los de la web, y la
 paleta es del dueño».** David asked for five things by priority. First and alone, a defect of concept: a
 logo only *chose* one of four palettes if its colour was near enough, and otherwise the site came out in
 Retorika's blue while question 1 promised «los de tu sector»; «los colores del logo SON los colores de
