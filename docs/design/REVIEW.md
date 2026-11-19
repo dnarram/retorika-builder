@@ -10766,3 +10766,53 @@ trozos de frases que la búsqueda por cadena entera no cubrió («del sistema»,
 
 **Lo que no cambia**: esquema, renderer, web publicada (golden sin regenerar), el nombre de los botones del raíl,
 el nombre del menú de la web publicada («Páginas», «Secciones», ADR 0043).
+
+### Día 5 — el tic se dibuja y la nota funde (PR de `feat/el-tic-y-la-nota`)
+
+**P1, tu «el tic dibujado va en el Check que queda».** Las casillas de «Menú» —las opciones de la barra y el
+interruptor de cada fila— son ahora una sola pieza, `CheckLabel`, en el mismo fichero (dos usos; sube a `panelKit`
+cuando la quiera un tercer panel):
+
+- **La casilla de la plataforma sigue siendo el control.** Oculta a la vista con `opacity: 0` y un píxel, nunca con
+  `display: none`: Tab llega, Espacio marca y un lector la nombra por su etiqueta. Encima va una caja dibujada.
+- **El foco se ve en la caja dibujada** (`peer-focus-visible`): el control mide un píxel, y un anillo alrededor de un
+  píxel no se ve. Es la lección del cuestionario del sprint 22.
+- **El tic se monta solo mientras está marcada**, y su trazo se dibuja con `ui-draw`, la pieza del tic de
+  «Guardado» (`--ui-base`). Se dibuja al marcar y nunca al desmarcar ni al volver a pintar. La etiqueta lleva la
+  onda desde donde cayó la pulsación (`ui-ripple`). Con «Reducir movimiento», el tic está entero en el fotograma
+  siguiente.
+- **La esquina de la caja es de 4 px**, y queda nombrada como excepción en la escala de formas: la escala empieza
+  en 8, y 8 sobre una caja de 16 es un círculo, que se lee como una radio.
+
+En reposo, la caja dibujada es igual que la nativa; las capturas lo enseñan. Lo que cambia es el movimiento.
+
+**P2, la nota funde.** `Note` recuerda la frase con la que se pintó primero. Una frase distinta llega con
+`ui-cross-in` (solo opacidad, `--ui-fast`); la misma frase es el mismo nodo y no se mueve; la primera nunca funde,
+porque las filas del panel ya llegan con `data-ui-rows`. Vale para todos los paneles, porque todos usan `Note`. Si
+la frase nueva tiene más líneas, la altura salta: solo se mueve la opacidad, nunca la maquetación.
+
+**Pruebas nuevas, rojas antes y verdes después**: `tickAndNote.test.ts` (las tres formas de la nota en happy-dom;
+cada casilla de «Menú» sigue en la página y con su onda; un tic por casilla marcada y ninguno en las vacías) y la
+caminata «sprint 39 día 5»: Tab hasta «Se queda arriba al bajar», el anillo en la caja dibujada, Espacio, el tic
+dibujado una vez por `ui-draw` y quitado al desmarcar, el interruptor de una fila que hace fundir la frase del
+estado, y axe. Otra caminata con «Reducir movimiento» comprueba el tic entero. **Localizadores: 0.**
+
+**Saboteos, cada uno deshecho por script**:
+
+- La nota que funde en el primer pintado: dos pruebas de unidad en rojo.
+- El tic montado siempre: la de «un tic por casilla marcada» en rojo.
+- `hidden` (`display: none`) en la casilla: la unidad en rojo, y la caminata no llega con Tab en 160 pulsaciones.
+- Sin el anillo en la caja dibujada: la caminata en rojo.
+
+**Visto en las capturas, para el cierre.** Las tarjetas de «Fondo de la barra» aún se llaman «Principal» y
+«Secundario». El día 4 cambió esos nombres en «Estilo», en la barra de texto y en la revisión, pero aquí pintan un
+fondo, y «Titulares y enlaces» no sirve para un fondo. El nombre lo decide David.
+
+**Capturas** antes (`e9d6408`) y después, a 1280, 1024 con panel y 390 × 844:
+
+| «Menú» | 1280 | 1024 | 390 |
+|---|---|---|---|
+| «Se queda arriba» marcada | [antes](review/2026-11-los-paneles-ordenados/dia5-menu-1280-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia5-menu-1280-despues.png) | [antes](review/2026-11-los-paneles-ordenados/dia5-menu-1024-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia5-menu-1024-despues.png) | [antes](review/2026-11-los-paneles-ordenados/dia5-menu-390-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia5-menu-390-despues.png) |
+| Las filas del menú de secciones | [antes](review/2026-11-los-paneles-ordenados/dia5-filas-1280-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia5-filas-1280-despues.png) | [antes](review/2026-11-los-paneles-ordenados/dia5-filas-1024-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia5-filas-1024-despues.png) | [antes](review/2026-11-los-paneles-ordenados/dia5-filas-390-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia5-filas-390-despues.png) |
+
+**Lo que no cambia**: esquema, renderer, web publicada (golden sin regenerar), ningún nombre ni localizador.
