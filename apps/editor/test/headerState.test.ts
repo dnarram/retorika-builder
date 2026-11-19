@@ -154,7 +154,7 @@ describe("headerStateFor", () => {
 
 /**
  * Sprint 30 día 4: the numbers and sentences the panel's controls stand on, each held against the
- * page the renderer publishes — the panel's whole promise is that «se dibuja con 3 destinos» is
+ * page the renderer publishes — the panel's whole promise is that «se muestra con 3 enlaces» is
  * three links a visitor can press.
  */
 const CORPUS = ["cabecera-con-marca", "menu-explicito", "menu-y-paginas", "menu-curado"];
@@ -441,7 +441,7 @@ describe("the look (sprint 30 día 6): every option reaches the published page",
     }
   });
 
-  it("«En su fila» is the page's `data-sections`, and keeps the rest of `sections`", () => {
+  it("«Fila bajo la barra» is the page's `data-sections`, and keeps the rest of `sections`", () => {
     const bar = setHeader(doc, sectionsPositionPatch(doc, "bar"));
     expect(headerStateFor(bar, undefined).sectionsPosition).toBe("bar");
     expect(published(bar).header.getAttribute("data-sections")).toBe("bar");
@@ -553,7 +553,7 @@ describe("«Dónde va» (sprint 31 día 5)", () => {
   });
 
   it("says what the canvas shows of a column, from the width it lays the page out at", () => {
-    const fill = (key: keyof typeof es, values: Record<string, number>) =>
+    const fill = (key: keyof typeof es, values: Record<string, number | string>) =>
       Object.entries(values).reduce(
         (text, [name, value]) => text.replace(`{${name}}`, String(value)),
         es[key] as string,
@@ -561,7 +561,7 @@ describe("«Dónde va» (sprint 31 día 5)", () => {
     // At 1280: seen from its width, and always in the canvas.
     expect(columnNote(RAIL_FOLD_WIDTH, DESKTOP_LAYOUT_WIDTH, "desktop")).toBe(
       fill("editor.menuPanel.notes.column", {
-        width: RAIL_FOLD_WIDTH,
+        screens: "pantallas de ordenador de 1024 px o más",
         canvas: DESKTOP_LAYOUT_WIDTH,
       }),
     );
@@ -583,7 +583,7 @@ describe("«Dónde va» (sprint 31 día 5)", () => {
     );
     // In the phone view there is no column, whatever the width.
     expect(columnNote(RAIL_FOLD_WIDTH, 320, "mobile")).toBe(
-      fill("editor.menuPanel.notes.columnPhone", { width: RAIL_FOLD_WIDTH }),
+      fill("editor.menuPanel.notes.columnPhone", { screens: "tabletas de menos de 1024 px" }),
     );
     // No sentence carries a number of its own: every width is the renderer's or the canvas's.
     for (const key of [
@@ -618,7 +618,7 @@ describe("the exact values behind the switch (sprint 30 día 6)", () => {
     }
   });
 
-  it("writes a marked exception the page paints, and «Volver al sistema» leaves no trace", () => {
+  it("writes a marked exception the page paints, and «Volver a los de la web» leaves no trace", () => {
     const colored = setHeader(doc, headerStylePatch(doc, "action", "color", "#123456"));
     const sized = setHeader(colored, headerStylePatch(colored, "action", "fontSize", "19px"));
     expect(headerExact(sized, "action", "color")).toBe("#123456");
@@ -693,13 +693,13 @@ describe("what a fixed bar turns into once scrolled, as the panel says it (sprin
     ] as const) {
       expect(es[key], key).not.toMatch(/lienzo|vista previa|publicar/);
     }
-    // The two notes about this window — the canvas folded under the fold, a column past its width —
-    // stay beside their cards, and still say what the canvas shows.
+    // The two notes about this window — the preview folded under the fold, a column past its width —
+    // stay beside their cards, and still say what the preview shows (in its plain name since día 4).
     for (const key of [
       "editor.menuPanel.notes.foldedCanvas",
       "editor.menuPanel.notes.columnBeyondCanvas",
     ] as const) {
-      expect(es[key], key).toMatch(/lienzo/);
+      expect(es[key], key).toMatch(/vista previa/);
     }
   });
 });
@@ -816,7 +816,7 @@ describe("the note of what only the published page does (sprint 39 día 3)", () 
  * where it lays the page out at or under the fold; and a column's card where the fold keeps it away.
  */
 describe("what the owner is told of a bar that folds (sprint 34 día 4)", () => {
-  const fill = (text: string, values: Record<string, number>) =>
+  const fill = (text: string, values: Record<string, number | string>) =>
     Object.entries(values).reduce(
       (t, [name, value]) => t.replace(`{${name}}`, String(value)),
       text,
@@ -829,37 +829,51 @@ describe("what the owner is told of a bar that folds (sprint 34 día 4)", () => 
 
   it("says the fold under «Dónde va» by its weight", () => {
     expect(foldNoteText(tablet)).toBe(
-      fill(es["editor.menuPanel.notes.foldsTablet"], { width: 987 }),
+      fill(es["editor.menuPanel.notes.foldsTablet"], { screens: "tabletas de hasta 987 px" }),
     );
     expect(foldNoteText(desktop)).toBe(
-      fill(es["editor.menuPanel.notes.foldsDesktop"], { width: 1100 }),
+      fill(es["editor.menuPanel.notes.foldsDesktop"], {
+        screens: "pantallas de hasta 1100 px, ordenadores pequeños incluidos",
+      }),
     );
     expect(foldNoteText(nearly)).toBe(fill(es["editor.menuPanel.notes.foldsNearly"], { n: 3 }));
     expect(foldNoteText(never)).toBe(fill(es["editor.menuPanel.notes.foldsAlways"], { n: 41 }));
     expect(foldNoteText({ weight: "always", over: 1, nearly: true })).toBe(
       es["editor.menuPanel.notes.foldsNearlyOne"],
     );
-    // The tablet's says tablets; from 1024 it is the desktop site with the phone's menu.
-    expect(foldNoteText(tablet)).toMatch(/tabletas/);
-    expect(foldNoteText(desktop)).toMatch(/escritorio lleva el menú del móvil/);
+    // The tablet's says tablets; from 1024 it is the desktop site with the phone's menu — said, since
+    // sprint 39 día 4, as the screens it covers: small computers included.
+    expect(foldNoteText(tablet)).toMatch(/tabletas de hasta 987 px/);
+    expect(foldNoteText(desktop)).toMatch(
+      /ordenadores pequeños incluidos: allí tu web lleva el menú del móvil/,
+    );
   });
 
   it("says the desktop's fold in the download review, with the count where there is one", () => {
     // A tablet's fold is the panel's alone (David, día 4): `LoudFold` has no tablet to say.
     expect(foldReviewText(desktop)).toEqual({
-      row: fill(es["editor.download.fold.row.desktop"], { width: 1100 }),
-      why: fill(es["editor.download.fold.why"], { width: 1100 }),
+      row: fill(es["editor.download.fold.row.desktop"], {
+        screens: "pantallas de hasta 1100 px, ordenadores pequeños incluidos",
+      }),
+      why: fill(es["editor.download.fold.why"], {
+        screens: "pantallas de hasta 1100 px, ordenadores pequeños incluidos",
+      }),
     });
     expect(foldReviewText(past)).toEqual({
-      row: fill(es["editor.download.fold.row.desktop"], { width: 1300 }),
+      row: fill(es["editor.download.fold.row.desktop"], {
+        screens: "pantallas de hasta 1300 px, ordenadores pequeños incluidos",
+      }),
       why: fill(es["editor.download.fold.whyOver"], {
-        width: 1300,
+        screens: "pantallas de hasta 1300 px, ordenadores pequeños incluidos",
         n: 6,
-        from: TWO_RAILS_FOLD_WIDTH,
+        from: "pantallas de ordenador de 1248 px o más",
       }),
     });
     expect(foldReviewText({ ...past, over: 1 }).why).toBe(
-      fill(es["editor.download.fold.whyOverOne"], { width: 1300, from: TWO_RAILS_FOLD_WIDTH }),
+      fill(es["editor.download.fold.whyOverOne"], {
+        screens: "pantallas de hasta 1300 px, ordenadores pequeños incluidos",
+        from: "pantallas de ordenador de 1248 px o más",
+      }),
     );
     expect(foldReviewText(nearly)).toEqual({
       row: es["editor.download.fold.row.always"],
@@ -876,7 +890,9 @@ describe("what the owner is told of a bar that folds (sprint 34 día 4)", () => 
 
   it("tells the canvas where it lays the page out at or under the fold, from the pixel above it", () => {
     expect(foldedCanvasNote(tablet, 887, "desktop")).toBe(
-      fill(es["editor.menuPanel.notes.foldedCanvas"], { width: 988 }),
+      fill(es["editor.menuPanel.notes.foldedCanvas"], {
+        screens: "tabletas y pantallas de 988 px o más",
+      }),
     );
     expect(foldedCanvasNote(tablet, 987, "desktop")).not.toBeNull();
     expect(foldedCanvasNote(tablet, 988, "desktop")).toBeNull();
@@ -890,7 +906,9 @@ describe("what the owner is told of a bar that folds (sprint 34 día 4)", () => 
   it("says «En el móvil» and the fixed bar's notes up to the fold, or at every width", () => {
     for (const key of ["sectionsMobile", "stickyPhone", "stickyPhoneRow"] as const) {
       expect(phoneSpan(key, 720)).toBe(es[`editor.menuPanel.${key}`]);
-      expect(phoneSpan(key, 987)).toBe(fill(es[`editor.menuPanel.${key}UpTo`], { width: 987 }));
+      expect(phoneSpan(key, 987)).toBe(
+        fill(es[`editor.menuPanel.${key}UpTo`], { screens: "tabletas de hasta 987 px" }),
+      );
       expect(phoneSpan(key, "always")).toBe(es[`editor.menuPanel.${key}Always`]);
     }
   });
@@ -899,7 +917,9 @@ describe("what the owner is told of a bar that folds (sprint 34 día 4)", () => 
     expect(columnCardNote(undefined, RAIL_FOLD_WIDTH)).toBeNull();
     expect(columnCardNote(tablet, RAIL_FOLD_WIDTH)).toBeNull();
     expect(columnCardNote(desktop, 1101)).toBe(
-      fill(es["editor.menuPanel.position.columnFrom"], { width: 1101 }),
+      fill(es["editor.menuPanel.position.columnFrom"], {
+        screens: "pantallas de ordenador de 1101 px o más",
+      }),
     );
     expect(columnCardNote(never, Number.POSITIVE_INFINITY)).toBe(
       es["editor.menuPanel.position.columnNever"],
@@ -909,7 +929,7 @@ describe("what the owner is told of a bar that folds (sprint 34 día 4)", () => 
   it("says a column that stands past the canvas, and one that never stands", () => {
     expect(columnNote(1301, DESKTOP_LAYOUT_WIDTH, "desktop")).toBe(
       fill(es["editor.menuPanel.notes.columnBeyondCanvas"], {
-        width: 1301,
+        screens: "pantallas de ordenador de 1301 px o más",
         canvas: DESKTOP_LAYOUT_WIDTH,
       }),
     );
@@ -1104,8 +1124,8 @@ describe("the brand's size and place (sprint 35 día 5)", () => {
     expect(fold.brandFrom).toBe(plainWidth + 1);
     expect(fold.width).toBeGreaterThan(plainWidth);
     const said = es["editor.menuPanel.notes.foldsBrandFrom"].replace(
-      "{width}",
-      String(plainWidth + 1),
+      "{screens}",
+      `tabletas y pantallas de ${plainWidth + 1} px o más`,
     );
     expect(foldNoteText(fold).endsWith(said)).toBe(true);
     if (fold.weight === "desktop") expect(foldReviewText(fold).why.endsWith(said)).toBe(true);
@@ -1138,7 +1158,7 @@ describe("the brand's size and place (sprint 35 día 5)", () => {
     });
     const state = headerStateFor(railed, undefined);
     expect(state.brand.inRail).toBe(true);
-    expect(es["editor.menuPanel.placeRail"]).toContain("{width}");
+    expect(es["editor.menuPanel.placeRail"]).toContain("{screens}");
     expect(headerStateFor(base(), undefined).brand.inRail).toBe(false);
   });
 });

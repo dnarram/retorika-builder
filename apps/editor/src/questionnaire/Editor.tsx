@@ -2644,7 +2644,9 @@ export function Editor({
           ? "fields"
           : effectiveRail === "pages"
             ? "pages"
-            : null,
+            : effectiveRail === "menu"
+              ? "menu"
+              : null,
       pagesFull: doc.pages.length >= MAX_PAGES,
       // The logo's colours before the radial menu: one is about the owner's site, the other about the
       // editor. Each needs somewhere to send its answer.

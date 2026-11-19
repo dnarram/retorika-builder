@@ -42,8 +42,10 @@ export type KeyboardPlace = "section" | "bar" | "grip" | "writing" | "hub" | nul
 export type GestureHint = "menu" | "foldedMenu" | "brand";
 
 /** A panel whose one instruction the line says while it is open: how a page is made («Páginas», when
- * there is room for one), and what to fill in («Campos»). Names and states stay in the panel. */
-export type PanelHint = "pages" | "fields";
+ * there is room for one), what to fill in («Campos»), and that a link of the menu in the preview takes
+ * you to its section or page («Menú», since sprint 39 día 4 made its head one sentence of what it
+ * holds). Names and states stay in the panel. */
+export type PanelHint = "pages" | "fields" | "menu";
 
 export interface HelpNotice {
   sectionName: string;
@@ -221,8 +223,16 @@ export function quietSays(state: HelpLineState): HelpLineSays {
   // The gesture of the control the hand is on, then the open panel's one instruction: what a person
   // reached for, before what they merely have chosen on the canvas.
   if (state.gesture) return quiet(GESTURE_TEXT[state.gesture]);
+  // **The logo's colours outrank an open panel's instruction** (sprint 39 día 4): that offer arrives
+  // when a logo comes in from «Menú», so it is the consequence of what the hand just did in the panel
+  // that is open, and an instruction can wait for it. The radial menu's offer, which is about the
+  // editor and not the site, still waits under the instruction, at the bottom with every offer.
+  if (state.panel && state.offer === "logoColours") {
+    return { ...quiet(es["editor.logo.offer"]), offer: true };
+  }
   if (state.panel === "pages" && !state.pagesFull) return quiet(es["editor.help.panel.pages"]);
   if (state.panel === "fields") return quiet(es["editor.help.panel.fields"]);
+  if (state.panel === "menu") return quiet(es["editor.help.panel.menu"]);
   if (state.chosen) {
     const hint = chosenHint(state.chosen);
     if (hint !== "") return quiet(hint);

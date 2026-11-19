@@ -56,6 +56,7 @@ import {
   sectionsMobilePatch,
   sectionsPositionPatch,
   stickyPatch,
+  widthPhrase,
 } from "../editor/headerState.ts";
 import type { GestureHint } from "../editor/helpLine.ts";
 import {
@@ -250,7 +251,10 @@ export function MenuPanel({
       ? null
       : { attribute: "data-brand-place", value: place };
   const placeNote = state.brand.inRail
-    ? es["editor.menuPanel.placeRail"].replace("{width}", String(state.pagesFoldWidth))
+    ? es["editor.menuPanel.placeRail"].replace(
+        "{screens}",
+        widthPhrase(state.pagesFoldWidth, "from"),
+      )
     : !oneLine
       ? es["editor.menuPanel.placeStacked"]
       : state.brand.place === "center"
@@ -416,11 +420,9 @@ export function MenuPanel({
             ) : null}
           </>
         ) : null}
-        <Note>
-          {state.brand.shown
-            ? es["editor.menuPanel.brandNote"]
-            : es["editor.menuPanel.brandNothing"]}
-        </Note>
+        {/* What an empty brand means, said only then: what a shown one does is what the bar shows
+            (sprint 39 día 4 took out the note that repeated it). */}
+        {state.brand.shown ? null : <Note>{es["editor.menuPanel.brandNothing"]}</Note>}
       </PanelSection>
 
       {/* 1. The pages menu — its switch, then every page in the order of «Páginas», which is the
@@ -461,8 +463,8 @@ export function MenuPanel({
                 onChange={(on) => onSetHeader(brandWithPagesPatch(on))}
                 notes={[
                   es["editor.menuPanel.brandWithPagesNote"].replace(
-                    "{width}",
-                    String(state.pagesFoldWidth),
+                    "{screens}",
+                    widthPhrase(state.pagesFoldWidth, "below"),
                   ),
                 ]}
               />
@@ -678,10 +680,7 @@ export function MenuPanel({
           label={es["editor.menuPanel.hairline"]}
           checked={state.hairline}
           onChange={(hairline) => onSetHeader({ hairline })}
-          notes={[
-            es["editor.menuPanel.hairlineNote"],
-            ...(state.transparent ? [es["editor.menuPanel.hairlineTransparent"]] : []),
-          ]}
+          notes={state.transparent ? [es["editor.menuPanel.hairlineTransparent"]] : []}
         />
       </PanelSection>
 
@@ -773,7 +772,7 @@ export function MenuPanel({
           label={es["editor.menuPanel.hoverUnderline"]}
           checked={state.look.hoverUnderline}
           onChange={(hoverUnderline) => onSetHeader(lookPatch(doc, { hoverUnderline }))}
-          notes={[es["editor.menuPanel.hoverUnderlineNote"]]}
+          notes={[]}
         />
 
         {designTools ? (
@@ -839,7 +838,12 @@ function sectionsPlaceNotes(
   const width = state.sectionsFoldWidth;
   return [
     ...(state.rails.length === 2
-      ? [es["editor.menuPanel.notes.columnOpposite"].replace("{width}", String(width))]
+      ? [
+          es["editor.menuPanel.notes.columnOpposite"].replace(
+            "{screens}",
+            widthPhrase(width, "from"),
+          ),
+        ]
       : []),
     columnNote(width, layoutWidth, device),
   ];
@@ -1106,7 +1110,7 @@ function ExactPart({
       )}
       {own ? (
         <span className="ml-auto">
-          <SmallButton label={es["editor.design.exceptionBack"]} onClick={onClear} />
+          <SmallButton label={es["editor.menuPanel.exactBack"]} onClick={onClear} />
         </span>
       ) : null}
     </div>

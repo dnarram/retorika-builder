@@ -276,8 +276,9 @@ describe("the header's parts", () => {
     // On a surface bar the button is `color.primary`: blue words on a blue button block.
     const onSurface = headerDoc({ style: { action: { color: exact(theme["color.primary"]) } } });
     expect(reviewStyle(onSurface).blocking.map((f) => f.exception.role)).toEqual(["button"]);
-    // Named as a person reads it in the dialog and in «Fuera del sistema», never by its key.
-    expect(reviewStyle(onSurface).blocking[0]?.exception.label).toBe("Cabecera · botón");
+    // Named as a person reads it in the dialog and in «Puesto a mano», never by its key — and by the
+    // bar's plain name since sprint 39 día 4.
+    expect(reviewStyle(onSurface).blocking[0]?.exception.label).toBe("Barra de arriba · botón");
     // On a primary bar the button is `color.surface`: the same blue words read fine.
     const onPrimary = headerDoc({
       look: { background: "primary" },
