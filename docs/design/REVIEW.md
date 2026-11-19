@@ -10677,3 +10677,92 @@ de la línea con el ratón sobre «Dónde va» (a 1280 y 1024; a 390 no hay gest
 
 **Lo que no cambia**: esquema, renderer, web publicada (golden sin regenerar), ningún landmark, la frase del
 gesto de la marca con doble clic (la dice la línea). Notas en las ADR 0066, 0070 (§5) y 0071.
+
+### Día 4 — las palabras de oficio (PR de `feat/las-palabras-de-oficio`)
+
+**La tabla del inventario, aplicada.** El inventario del 18 de noviembre listó las palabras que un dueño que viene
+de Canva o de Word lee en los ocho paneles y no conoce; este día las cambia todas, en los paneles, en la barra de
+texto, en la revisión de descarga y en la línea de ayuda:
+
+| Antes | Ahora | Dónde se leía |
+|---|---|---|
+| «La cabecera de tu web», «cabecera» | «El menú de tu web», «la barra de arriba» | título de «Menú», sus notas, la revisión de descarga, el nombre de las partes («Barra de arriba · botón») |
+| «Lo que se ve encima de la primera sección… Pulsa una entrada…» | «Tu marca, el menú y el botón de la barra de arriba.»; el «pulsa» a la línea | la ayuda de «Menú» (tu condición de D) |
+| «Navegador de secciones» | «Menú de secciones» | «Menú», el arrastre |
+| «Disposición» | «Cómo se coloca» | «Menú» |
+| «A mano» + «Fuera del sistema: estos valores…» | «Colores y tamaños exactos» + «No cambian al cambiar la paleta…» | «Menú», con las herramientas |
+| «Fuera del sistema», «Volver al sistema», «Volver al color del tema» | «Puesto a mano», «Volver al de la web» / «Volver a los de la web», «Volver al color de la web» | «Diseño», «Menú», el aviso de contraste, la barra de texto |
+| «Relleno», «Texto sobre el relleno», «Principal», «Secundario», «Gris» / «Apagado» | «Botones y franjas», «Texto de los botones», «Titulares y enlaces», «Subtítulos», «Texto suave» — las mismas palabras en «Estilo», la barra de texto y el aviso | «Estilo», la barra de texto, la revisión |
+| «Matiz» | «Tono» | el campo de color |
+| «lienzo» | «la vista previa» | notas de «Menú», las teclas de la línea |
+| «se dibuja», «destinos», «entradas» | «se muestra», «enlaces» | estados de «Menú», el pliegue |
+| «se pliega en la barra» | «vuelve a la barra» | la nota de la columna |
+| «el catálogo» | «viene colocada de serie» | «Diseño», la oferta de «Diseñar a mano», «Volver a la original» |
+| «Listas reutilizables», «desenlaza», «Desenlazar esta sección» | «Listas», «quita la lista de», «Quitar la lista de esta sección» | «Listas», la barra de texto |
+| «Deshacer la conversión», «Convertir esta sección en página» | «Volver a ser sección», «Hacer página con esta sección» | «Páginas», el verbo de la sección |
+| «Foto menor» | «Foto más pequeña» | «Diseño» |
+| «En su fila», «Fila debajo de la barra» | «Fila bajo la barra» | «Menú» |
+| «Tamaño de la letra» (de los enlaces) | «Tamaño de los enlaces» | «Menú» |
+| «una letra del sistema» | «una letra corriente, la que tenga el dispositivo de quien visite tu web» | el elector de letra |
+| «ejecuta el script» | «no en los que bloquean los programas de las páginas» | la barra fija sobre la portada |
+| «un mapa del sitio para los buscadores» | «los buscadores la encontrarán mejor» | «Compartir» |
+
+**Fuera, las notas que repetían su control**: la segunda frase de la ayuda de «Estilo», «Lo que marques aquí se ve
+en la cabecera y lleva a Inicio», «Una línea muy fina…», «El enlace no cambia de color…», «El escritorio no se
+toca» y la nota del dosier en «Diseño» («Las familias abren plegadas…»).
+
+**«{w} px» dice la verdad según el ancho** (tu ajuste 3). Toda frase que nombra pantallas por su ancho pasa por una
+función, `widthPhrase(width, side)` en `headerState.ts`, con el peso que la 0067 ya decidió: tableta bajo 1024,
+ordenador desde 1024. Tres lados, porque las frases necesitan tres: desde ese ancho («tabletas y pantallas de 805
+px o más», «pantallas de ordenador de 1290 px o más»), hasta ese ancho y por debajo de él («tabletas de hasta 805
+px», «pantallas de hasta 1290 px, ordenadores pequeños incluidos»), con el móvil nombrado por la propia frase («en
+el móvil y en tabletas de hasta 805 px»). 1024 va con los ordenadores cuando se incluye y con las tabletas cuando
+no. Un ancho que no es un número lanza: «Infinity px» se publicaría como frase. Su unidad con 805, 1024 y 1290.
+**«A ningún ancho» y «por muy poco» se quedan**: son tus palabras del sprint 34, no del oficio.
+
+**Una guarda nueva, `plainWords.test.ts`**: ninguna frase del editor lleva una palabra de la lista cerrada
+(cabecera, lienzo, navegador de secciones, sistema, catálogo, destino, se dibuja, se pliega, entrada,
+Disposición, reutilizable, desenlazar, conversión, Matiz, Al publicar), con la única excepción nombrada y su
+porqué («tu sistema de reservas», la palabra del dueño). Y ninguna frase lleva ya `{width} px`.
+
+**Localizadores: 114 por rol y nombre**, en un commit mecánico propio: «La cabecera de tu web» (39) y «Cerrar la
+cabecera» (17), «Convertir esta sección en página» (25, como `aria-label` del verbo de la sección), «Dónde va el
+navegador de secciones», «Volver al color del tema», «Puesto a mano», «Volver a ser sección», «Listas», «Quitar
+la lista de esta sección», «Foto más pequeña», «Cambiar «Titulares y enlaces»», «Cómo se coloca» y los dos grupos
+«En el móvil y en…». Además, **41 aserciones de texto** leían las frases reescritas (33 en la primera pasada y 8 que encontró la suite completa). El plan estimaba unos
+cincuenta: la cuenta de verdad son estos.
+
+**Saboteos, cada uno deshecho por script**: «cabecera» de vuelta en una frase → la guarda roja, nombrando la
+clave y la palabra llana; `widthPhrase` llamando ordenador a todo ancho → ocho pruebas rojas.
+
+**Lo que encontró el e2e completo, y cómo se resolvió.** Ocho caminatas rojas en la primera vuelta. Siete leían
+trozos de frases que la búsqueda por cadena entera no cubrió («del sistema», «desenlaza», «96 en cada sección»,
+«hasta 805 px», «Elegir en la rueda: Principal») y leen ahora las nuevas. Dos cosas pedían juicio:
+
+- **La instrucción de «Menú» tapaba la oferta de los colores del logo.** Esa oferta llega justo al subir un logo
+  desde «Menú», con el panel abierto, y la instrucción nueva («Pulsa un enlace del menú…») iba por delante. Ahora
+  **la oferta del logo pasa por delante de la instrucción del panel abierto**: es la consecuencia de lo que la
+  mano acaba de hacer ahí, y la instrucción puede esperar. La del menú radial, que habla del editor y no de la
+  web, sigue debajo de la instrucción. Es un orden nuevo en la línea y lo puedes vetar; la alternativa es no
+  decir la instrucción de «Menú» en la línea y perderla.
+- **Las flechas, en «Colocación».** El plan reescribía la ayuda de «Colocación» sin la frase de las flechas; la
+  0050 (enmienda, §5) la decidió con una razón escrita —los pasos del panel y las flechas de la vista previa son
+  el mismo acto, y quien encuentra uno debe saber del otro— y una caminata la sujetaba. Se queda, en llano: «En la
+  vista previa, las flechas mueven el elemento elegido de 1 en 1, y con Mayús de 8 en 8.»
+
+**Capturas** antes (`18436ee`) y después, la parte de arriba de cada panel, a 1280, 1024 con panel y 390 × 844;
+«Diseño» y «Listas» no tienen 390 (bajo 1024 no hay herramientas):
+
+| Panel | 1280 | 1024 | 390 |
+|---|---|---|---|
+| Estilo | [antes](review/2026-11-los-paneles-ordenados/dia4-estilo-1280-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia4-estilo-1280-despues.png) | [antes](review/2026-11-los-paneles-ordenados/dia4-estilo-1024-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia4-estilo-1024-despues.png) | [antes](review/2026-11-los-paneles-ordenados/dia4-estilo-390-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia4-estilo-390-despues.png) |
+| Fotos | [antes](review/2026-11-los-paneles-ordenados/dia4-fotos-1280-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia4-fotos-1280-despues.png) | [antes](review/2026-11-los-paneles-ordenados/dia4-fotos-1024-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia4-fotos-1024-despues.png) | [antes](review/2026-11-los-paneles-ordenados/dia4-fotos-390-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia4-fotos-390-despues.png) |
+| Páginas | [antes](review/2026-11-los-paneles-ordenados/dia4-paginas-1280-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia4-paginas-1280-despues.png) | [antes](review/2026-11-los-paneles-ordenados/dia4-paginas-1024-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia4-paginas-1024-despues.png) | [antes](review/2026-11-los-paneles-ordenados/dia4-paginas-390-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia4-paginas-390-despues.png) |
+| Menú | [antes](review/2026-11-los-paneles-ordenados/dia4-menu-1280-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia4-menu-1280-despues.png) | [antes](review/2026-11-los-paneles-ordenados/dia4-menu-1024-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia4-menu-1024-despues.png) | [antes](review/2026-11-los-paneles-ordenados/dia4-menu-390-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia4-menu-390-despues.png) |
+| Compartir | [antes](review/2026-11-los-paneles-ordenados/dia4-compartir-1280-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia4-compartir-1280-despues.png) | [antes](review/2026-11-los-paneles-ordenados/dia4-compartir-1024-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia4-compartir-1024-despues.png) | [antes](review/2026-11-los-paneles-ordenados/dia4-compartir-390-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia4-compartir-390-despues.png) |
+| Diseño | [antes](review/2026-11-los-paneles-ordenados/dia4-diseno-1280-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia4-diseno-1280-despues.png) | [antes](review/2026-11-los-paneles-ordenados/dia4-diseno-1024-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia4-diseno-1024-despues.png) | — |
+| Listas | [antes](review/2026-11-los-paneles-ordenados/dia4-listas-1280-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia4-listas-1280-despues.png) | [antes](review/2026-11-los-paneles-ordenados/dia4-listas-1024-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia4-listas-1024-despues.png) | — |
+| Campos | [antes](review/2026-11-los-paneles-ordenados/dia4-campos-1280-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia4-campos-1280-despues.png) | [antes](review/2026-11-los-paneles-ordenados/dia4-campos-1024-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia4-campos-1024-despues.png) | [antes](review/2026-11-los-paneles-ordenados/dia4-campos-390-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia4-campos-390-despues.png) |
+
+**Lo que no cambia**: esquema, renderer, web publicada (golden sin regenerar), el nombre de los botones del raíl,
+el nombre del menú de la web publicada («Páginas», «Secciones», ADR 0043).

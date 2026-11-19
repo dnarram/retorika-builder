@@ -148,3 +148,12 @@ they sit under the keys and over the chosen element's hint: `gesture`, then `pan
 (`editor.help.gesture.*`, `editor.help.panel.*`) join the list the guard holds to this module, and the
 three panels join the files held to reading none. What stayed in the panels is not an instruction: the
 names of the zones, the states, and the one composed note of what only the published page does.
+
+## Note — the logo's colours before an open panel's instruction (19 November 2026, sprint 39 día 4)
+
+«Menú»'s head became one sentence of what it holds, and how its links behave in the preview — an
+instruction — joined the panels' instructions in the line (`panel: "menu"`). The full suite found it
+hiding the logo's colours, offered the moment a logo comes in from «Menú» with the panel open. So the
+logo's offer now outranks an open panel's instruction: it is the consequence of what the hand just did
+in that panel. The radial menu's offer, about the editor and not the site, stays under the instruction
+and at the bottom with every offer. Development's call on the day, named in REVIEW for David to veto.
