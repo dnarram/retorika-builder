@@ -1,0 +1,57 @@
+name: Chromium
+description: The Chromium Playwright drives, cached on its version, and the system libraries it needs, fetched past a mirror that drops files.
+
+# One block for the three jobs that drive a browser (a11y-size, lighthouse, e2e), which carried it
+# verbatim until 19 November 2026 — the third copy is when it becomes one (CLAUDE.md, Style).
+
+runs:
+  using: composite
+  steps:
+    # The browser binary is cached on the exact Playwright version, which is what decides which
+    # Chromium build it expects. Chromium only: it is an implementation detail of the assertions,
+    # not a compatibility matrix.
+    - name: Read the Playwright version
+      id: playwright
+      shell: bash
+      run: echo "version=$(pnpm exec playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+
+    - uses: actions/cache@v4
+      id: playwright-cache
+      with:
+        path: ~/.cache/ms-playwright
+        key: playwright-chromium-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+
+    # **A mirror that drops files is retried, and what it gave is kept** (19 November 2026). On a
+    # cache hit the browser is there but the system libraries it links against are not, because
+    # the runner is new every time, so apt runs on every job. That day the runners' Azure mirror
+    # served some of the nine font packages and dropped the rest, and apt's fallback —
+    # security.ubuntu.com — did not answer from the runner: the close of sprint 39 lost its e2e job
+    # three times in 25 minutes at this step, after 4 to 6 minutes each, while the lighthouse job
+    # fetched the same 21.9 MB in one second in the same minute. Two things answer it:
+    #
+    # - apt itself retries a file and gives up on a silent server after 20 s, instead of waiting
+    #   six minutes at 10 kB/s on one;
+    # - the step tries four times. apt keeps every package it finished in its own cache when the
+    #   install fails, so each new attempt asks only for what is still missing: the attempts add
+    #   up instead of starting again.
+    #
+    # Four attempts with apt's timeouts stay well inside the minutes the jobs leave for setting up.
+    - name: Make apt retry and give up on a silent server
+      shell: bash
+      run: |
+        printf 'Acquire::Retries "3";\nAcquire::http::Timeout "20";\nAcquire::https::Timeout "20";\n' \
+          | sudo tee /etc/apt/apt.conf.d/80-retorika-retries > /dev/null
+
+    - name: Install Chromium and its system libraries
+      shell: bash
+      env:
+        WHAT: ${{ steps.playwright-cache.outputs.cache-hit == 'true' && 'install-deps' || 'install --with-deps' }}
+      run: |
+        for attempt in 1 2 3 4; do
+          # shellcheck disable=SC2086 # WHAT is two words on a cold cache, on purpose
+          if pnpm exec playwright $WHAT chromium; then exit 0; fi
+          echo "::warning::playwright $WHAT failed on attempt $attempt; apt keeps what it fetched, so the next asks only for the rest"
+          sleep 15
+        done
+        echo "::error::playwright $WHAT failed four times: the mirrors did not serve the packages"
+        exit 1

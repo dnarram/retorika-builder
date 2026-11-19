@@ -127,23 +127,8 @@ jobs:
       # Protocol Part 8.5: under 60 KB gzipped, zero JavaScript.
       - run: pnpm size
 
-      # The browser binary is cached on the exact Playwright version, which is what decides
-      # which Chromium build it expects. Chromium only: it is an implementation detail of two
-      # assertions, not a compatibility matrix.
-      - name: Read the Playwright version
-        id: playwright
-        run: echo "version=$(pnpm exec playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache@v4
-        id: playwright-cache
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-chromium-${{ runner.os }}-${{ steps.playwright.outputs.version }}
-      # On a cache hit the browser is there but the system libraries it links against are
-      # not, because the runner is new every time.
-      - if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: pnpm exec playwright install --with-deps chromium
-      - if: steps.playwright-cache.outputs.cache-hit == 'true'
-        run: pnpm exec playwright install-deps chromium
+      # Chromium, cached on its version, and its system libraries past a mirror that drops files.
+      - uses: ./.github/actions/chromium
 
       # The letter as Linux draws it (sprint 34 día 3, David's decision): every glyph of the shipped
       # faces at every size the bar takes, which `pnpm fonts:advances` folds into the glyph table's
@@ -168,20 +153,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
 
-      # The same cache block as a11y-size, verbatim: Lighthouse drives the Chromium Playwright
-      # installed, so one browser serves both jobs and the key is the same.
-      - name: Read the Playwright version
-        id: playwright
-        run: echo "version=$(pnpm exec playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache@v4
-        id: playwright-cache
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-chromium-${{ runner.os }}-${{ steps.playwright.outputs.version }}
-      - if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: pnpm exec playwright install --with-deps chromium
-      - if: steps.playwright-cache.outputs.cache-hit == 'true'
-        run: pnpm exec playwright install-deps chromium
+      # The same Chromium as a11y-size: Lighthouse drives the browser Playwright installed, so one
+      # browser serves both jobs and the cache key is the same.
+      - uses: ./.github/actions/chromium
 
       # Protocol Part 8.5: performance and accessibility at 95 or more over a sample site, the
       # three compositions, mobile preset. The four scores per composition are in the log.
@@ -257,21 +231,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
 
-      # The same cache block as a11y-size, verbatim: same browser, same version, same reason
-      # to keep it — a Chromium download on every run would make this the slowest job here by
-      # a wide margin instead of a comparable one.
-      - name: Read the Playwright version
-        id: playwright
-        run: echo "version=$(pnpm exec playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache@v4
-        id: playwright-cache
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-chromium-${{ runner.os }}-${{ steps.playwright.outputs.version }}
-      - if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: pnpm exec playwright install --with-deps chromium
-      - if: steps.playwright-cache.outputs.cache-hit == 'true'
-        run: pnpm exec playwright install-deps chromium
+      # The same Chromium as a11y-size, for the same reason to cache it: a Chromium download on
+      # every run would make this the slowest job here by a wide margin instead of a comparable one.
+      - uses: ./.github/actions/chromium
 
       # Three of the five critical flows the protocol names — see the doc comment at the top
       # of apps/editor/e2e/critical-flows.e2e.test.ts for which two are missing and why.
