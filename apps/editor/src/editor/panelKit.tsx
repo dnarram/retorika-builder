@@ -266,9 +266,25 @@ export function PanelSection({
 }
 
 /**
+ * **Whether a note's sentence fades in** (sprint 39 día 5, David's P2): when it differs from the one
+ * the note was first drawn with. The first sentence is drawn as it is — the panel's rows already arrive
+ * (`data-ui-rows`), and a note that faded on opening would be a second arrival on the same row — and a
+ * sentence the hand changed by moving a control beside it comes in on `ui-cross-in`, opacity alone,
+ * `--ui-fast`. Back to the first sentence, nothing fades: the first one is the panel's own.
+ */
+export function noteFades(first: ReactNode, text: string): boolean {
+  return text !== first;
+}
+
+/**
  * **A panel's note**: the sentence beside a control that says what it does or why it cannot (sprint
  * 38 día 5). One size and one grey, written by hand in four panels before, and one amber for the
  * notes that warn, which `--ui-warn-deep` now holds instead of a hex in each file.
+ *
+ * **Its sentence fades when it changes** (sprint 39 día 5): keyed by its text, so a new sentence is a
+ * new node that arrives on `ui-cross-in`, and a re-render with the same sentence is the same node and
+ * moves nothing. Only a plain sentence — a note that holds markup is drawn as it is. The height still
+ * jumps when the new sentence has more lines than the old: only opacity moves, never the layout.
  */
 export function Note({
   tone = "muted",
@@ -277,19 +293,28 @@ export function Note({
   children,
   ...rest
 }: { tone?: "muted" | "warn"; as?: "p" | "span" } & ComponentProps<"p">) {
+  const first = useRef<ReactNode>(children);
+  const body =
+    typeof children === "string" && noteFades(first.current, children) ? (
+      <span key={children} className="ui-cross-in">
+        {children}
+      </span>
+    ) : (
+      children
+    );
   const colour = tone === "warn" ? "text-ui-warn-deep" : "text-ui-muted";
   // A `span` for the second line of a label — a checkbox's «Se verá como…» — where a paragraph would
   // be invalid HTML; drawn as a block so it sits under the first line exactly as a paragraph would.
   if (as === "span") {
     return (
       <span {...rest} className={`block text-[12px] leading-snug ${colour} ${className}`}>
-        {children}
+        {body}
       </span>
     );
   }
   return (
     <p {...rest} className={`m-0 text-[12px] leading-snug ${colour} ${className}`}>
-      {children}
+      {body}
     </p>
   );
 }
