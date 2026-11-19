@@ -411,7 +411,7 @@
   "editor.design.elements": "ELEMENTOS",
   "editor.design.hidden": "oculto",
   "editor.design.placement": "Colocación",
-  "editor.design.placementHelp": "«Columna» y «Ancho» se cuentan de 1 a 96 a lo ancho de la sección, y cada pulsación mueve 8: una columna de la rejilla. «Fila» y «Alto» van de 8 en 8 píxeles, o lo que su contenido necesite.",
+  "editor.design.placementHelp": "«Columna» y «Ancho» se cuentan de 1 a 96 a lo ancho de la sección, y cada pulsación mueve 8: una columna de la rejilla. «Fila» y «Alto» van de 8 en 8 píxeles, o lo que su contenido necesite. En la vista previa, las flechas mueven el elemento elegido de 1 en 1, y con Mayús de 8 en 8.",
   "editor.design.column": "Columna",
   "editor.design.width": "Ancho",
   "editor.design.row": "Fila",

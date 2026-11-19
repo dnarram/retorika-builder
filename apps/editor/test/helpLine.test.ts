@@ -156,6 +156,17 @@ describe("the gesture of the control under the hand, and the panel's instruction
     // «Menú»'s head is one sentence of what it holds since sprint 39 día 4; how its links behave in
     // the preview is an instruction, and the line says it.
     expect(quietSays(at({ panel: "menu" })).text).toBe(es["editor.help.panel.menu"]);
+    // The logo's colours, offered after a logo came in from «Menú», outrank the open panel's
+    // instruction; the radial menu's offer does not (the full e2e found the first hidden).
+    expect(quietSays(at({ panel: "menu", offer: "logoColours" }))).toEqual({
+      child: "quiet",
+      text: es["editor.logo.offer"],
+      tone: "info",
+      offer: true,
+    });
+    expect(quietSays(at({ panel: "menu", offer: "radial" })).text).toBe(
+      es["editor.help.panel.menu"],
+    );
     expect(es["editor.menuPanel.help"]).toBe("Tu marca, el menú y el botón de la barra de arriba.");
   });
 

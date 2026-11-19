@@ -223,6 +223,13 @@ export function quietSays(state: HelpLineState): HelpLineSays {
   // The gesture of the control the hand is on, then the open panel's one instruction: what a person
   // reached for, before what they merely have chosen on the canvas.
   if (state.gesture) return quiet(GESTURE_TEXT[state.gesture]);
+  // **The logo's colours outrank an open panel's instruction** (sprint 39 día 4): that offer arrives
+  // when a logo comes in from «Menú», so it is the consequence of what the hand just did in the panel
+  // that is open, and an instruction can wait for it. The radial menu's offer, which is about the
+  // editor and not the site, still waits under the instruction, at the bottom with every offer.
+  if (state.panel && state.offer === "logoColours") {
+    return { ...quiet(es["editor.logo.offer"]), offer: true };
+  }
   if (state.panel === "pages" && !state.pagesFull) return quiet(es["editor.help.panel.pages"]);
   if (state.panel === "fields") return quiet(es["editor.help.panel.fields"]);
   if (state.panel === "menu") return quiet(es["editor.help.panel.menu"]);
