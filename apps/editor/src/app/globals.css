@@ -320,6 +320,59 @@
 }
 
 /**
+ * **The face of a choice rises, and the box that is pressed does not** (sprint 39 día 6, David's P4 and
+ * his adjustment 2 approving the sprint: «la cara lleva el marco»).
+ *
+ * A card in a panel is two elements: the box — the `button` or `label` the press lands on, the focus
+ * ring's, transparent and still — and the face inside it, which carries everything the eye reads as
+ * the card: its border, its background, the chosen ring and the shadow. Under a mouse the face rises a
+ * pixel with its shadow, frame and all; the box stays where it is, so a press 20 ms after the pointer
+ * arrives lands on the same box at the same place (sprint 37, «la caja que se pulsa no viaja»). The
+ * chosen face does not rise: it is already the answer. Pressed, it returns to the surface.
+ *
+ * `translate`, not `transform`: the face is a `span` no utility positions, and the property is its own
+ * so nothing else this element wears can undo it. Behind `(hover: hover)`, for the reason `ui-lift`
+ * is; the movement behind `no-preference` too, so under less movement the edge and the shadow still
+ * say «this one» and nothing moves. `Segment` does not wear it: its answer to the mouse is the shadow
+ * of the mark (`ui-follow`), and three signals in forty pixels would be noise.
+ */
+@utility ui-face {
+  transition-property: color, background-color, border-color, box-shadow, translate;
+  transition-duration: var(--ui-fast);
+  transition-timing-function: var(--ui-ease);
+
+  @media (hover: hover) {
+    :hover > &:not([data-chosen]) {
+      border-color: var(--ui-border-strong);
+      box-shadow: var(--ui-shadow-1);
+    }
+
+    @media (prefers-reduced-motion: no-preference) {
+      :hover > &:not([data-chosen]) {
+        translate: 0 -1px;
+      }
+    }
+  }
+
+  :active > &:not([data-chosen]) {
+    translate: 0 0;
+    box-shadow: none;
+  }
+}
+
+/**
+ * **What follows the hand without landing** (sprint 39 día 6, David's P3): the shadow of a segment's
+ * mark, under the option the mouse is on. It follows on `--ui-fast` with the plain curve and fades the
+ * same way; the mark itself lands on `ui-slide`'s spring when the option is pressed. A follower never
+ * springs: a spring is for what arrives, and this has not.
+ */
+@utility ui-follow {
+  transition-property: transform, opacity;
+  transition-duration: var(--ui-fast);
+  transition-timing-function: var(--ui-ease);
+}
+
+/**
  * **A panel that has scrolled says so at its top** (sprint 35 día 7): a soft shadow under the top
  * edge once the content has gone up under it, and none while it is at the top. The classic two
  * backgrounds, and no animation at all: a cover in the panel's own colour that scrolls with the

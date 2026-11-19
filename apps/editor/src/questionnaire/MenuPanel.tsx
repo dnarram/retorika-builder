@@ -68,12 +68,14 @@ import {
 } from "../editor/headerState.ts";
 import type { GestureHint } from "../editor/helpLine.ts";
 import {
+  arriveSharp,
+  Face,
   Note,
   PanelHeader,
   PanelSection,
   panelFrame,
-  panelRow,
-  panelRowSelected,
+  pressBox,
+  pressLabel,
   Segment,
   Segments,
   SmallButton,
@@ -341,6 +343,7 @@ export function MenuPanel({
                 <img
                   src={logoUrl}
                   alt=""
+                  onLoad={arriveSharp}
                   style={{ height: `${state.brand.logoPx}px` }}
                   className="w-auto max-w-[112px] object-contain"
                 />
@@ -603,12 +606,7 @@ export function MenuPanel({
         {state.barEmpty ? <Note>{es["editor.menuPanel.notes.barEmpty"]}</Note> : null}
         <div className="grid grid-cols-3 gap-1.5">
           {LAYOUTS.map((layout) => (
-            <label
-              key={layout}
-              className={`relative flex cursor-pointer flex-col items-center gap-1.5 px-1.5 py-2 ${
-                state.layout === layout ? panelRowSelected : panelRow
-              }`}
-            >
+            <label key={layout} className={pressLabel}>
               <input
                 type="radio"
                 name={`${groupId}-layout`}
@@ -616,10 +614,15 @@ export function MenuPanel({
                 onChange={() => onSetHeader({ layout })}
                 className="absolute h-px w-px opacity-0"
               />
-              <LayoutSketch layout={layout} />
-              <span className="text-center text-[12px] leading-tight font-medium text-ui-ink">
-                {es[`editor.menuPanel.layout.${layout}`]}
-              </span>
+              <Face
+                chosen={state.layout === layout}
+                className="flex h-full flex-col items-center gap-1.5 px-1.5 py-2"
+              >
+                <LayoutSketch layout={layout} />
+                <span className="text-center text-[12px] leading-tight font-medium text-ui-ink">
+                  {es[`editor.menuPanel.layout.${layout}`]}
+                </span>
+              </Face>
             </label>
           ))}
         </div>
@@ -705,12 +708,7 @@ export function MenuPanel({
               const swatch = schemeSwatch(doc, background);
               const checked = state.look.background === background;
               return (
-                <label
-                  key={background}
-                  className={`relative flex cursor-pointer flex-col items-stretch gap-1 p-1.5 ${
-                    checked ? panelRowSelected : panelRow
-                  }`}
-                >
+                <label key={background} className={pressLabel}>
                   <input
                     type="radio"
                     name={`${groupId}-background`}
@@ -718,27 +716,29 @@ export function MenuPanel({
                     onChange={() => onSetHeader(lookPatch(doc, { background }))}
                     className="absolute h-px w-px opacity-0"
                   />
-                  {/* The bar's colour with a word in the colour its words take, from this site's
+                  <Face chosen={checked} className="flex h-full flex-col items-stretch gap-1 p-1.5">
+                    {/* The bar's colour with a word in the colour its words take, from this site's
                       palette. A transparent bar shows the page through it: dashed, over the
                       page's own colour, since what is really under it is the cover. */}
-                  <span
-                    aria-hidden="true"
-                    style={{ background: swatch.bar, color: swatch.text }}
-                    className={`flex h-7 items-center justify-center rounded-ui-sm text-[13px] font-bold ${
-                      background === "transparent"
-                        ? "border border-dashed border-ui-border-strong"
-                        : "border border-black/10"
-                    }`}
-                  >
-                    Aa
-                  </span>
-                  <span
-                    className={`text-center text-[12px] leading-tight ${
-                      checked ? "font-semibold text-ui-brand-deep" : "text-ui-ink"
-                    }`}
-                  >
-                    {es[`editor.menuPanel.background.${background}`]}
-                  </span>
+                    <span
+                      aria-hidden="true"
+                      style={{ background: swatch.bar, color: swatch.text }}
+                      className={`flex h-7 items-center justify-center rounded-ui-sm text-[13px] font-bold ${
+                        background === "transparent"
+                          ? "border border-dashed border-ui-border-strong"
+                          : "border border-black/10"
+                      }`}
+                    >
+                      Aa
+                    </span>
+                    <span
+                      className={`text-center text-[12px] leading-tight ${
+                        checked ? "font-semibold text-ui-brand-deep" : "text-ui-ink"
+                      }`}
+                    >
+                      {es[`editor.menuPanel.background.${background}`]}
+                    </span>
+                  </Face>
                 </label>
               );
             })}
@@ -885,12 +885,7 @@ function Places<T extends PagesPosition | SectionsPosition>({
       </p>
       <div className="grid grid-cols-3 gap-1.5 phone:grid-cols-2">
         {options.map((position) => (
-          <label
-            key={position}
-            className={`relative flex cursor-pointer flex-col items-center gap-1.5 px-1.5 py-2 ${
-              value === position ? panelRowSelected : panelRow
-            }`}
-          >
+          <label key={position} className={pressLabel}>
             <input
               type="radio"
               name={name}
@@ -898,15 +893,20 @@ function Places<T extends PagesPosition | SectionsPosition>({
               onChange={() => onSelect(position)}
               className="absolute h-px w-px opacity-0"
             />
-            <PlaceSketch place={position} />
-            <span className="text-center text-[12px] leading-tight font-medium text-ui-ink">
-              {es[`editor.menuPanel.position.${position}`]}
-            </span>
-            {cardNote(position) === null ? null : (
-              <span className="text-center text-[11px] leading-tight text-ui-muted">
-                {cardNote(position)}
+            <Face
+              chosen={value === position}
+              className="flex h-full flex-col items-center gap-1.5 px-1.5 py-2"
+            >
+              <PlaceSketch place={position} />
+              <span className="text-center text-[12px] leading-tight font-medium text-ui-ink">
+                {es[`editor.menuPanel.position.${position}`]}
               </span>
-            )}
+              {cardNote(position) === null ? null : (
+                <span className="text-center text-[11px] leading-tight text-ui-muted">
+                  {cardNote(position)}
+                </span>
+              )}
+            </Face>
           </label>
         ))}
       </div>
@@ -1138,19 +1138,24 @@ function Choice({
   onSelect: () => void;
 }) {
   return (
-    <label
-      className={`flex cursor-pointer items-center gap-2 px-2.5 py-1.5 text-[13px] ${
-        checked ? `${panelRowSelected} font-semibold text-ui-brand-deep` : `${panelRow} text-ui-ink`
-      }`}
-    >
-      <input
-        type="radio"
-        name={name}
-        checked={checked}
-        onChange={onSelect}
-        className={radioClass}
-      />
-      <span className="min-w-0 truncate">{label}</span>
+    // The radio is drawn here, not hidden, so it wears its own focus ring: the box is `pressBox` and
+    // not `pressLabel`, which would draw a second ring around the whole row.
+    <label className={pressBox}>
+      <Face
+        chosen={checked}
+        className={`flex items-center gap-2 px-2.5 py-1.5 text-[13px] ${
+          checked ? "font-semibold text-ui-brand-deep" : "text-ui-ink"
+        }`}
+      >
+        <input
+          type="radio"
+          name={name}
+          checked={checked}
+          onChange={onSelect}
+          className={radioClass}
+        />
+        <span className="min-w-0 truncate">{label}</span>
+      </Face>
     </label>
   );
 }

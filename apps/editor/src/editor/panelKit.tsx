@@ -166,6 +166,54 @@ export const panelChoice = `${panelRow} ui-ripple`;
 export const panelChoiceSelected = `${panelRowSelected} ui-ripple`;
 
 /**
+ * **A picture comes into focus as it arrives** (sprint 39 día 6, David's half of P5): the thumbnails
+ * of «Fotos» and the logo's swatch in «Menú» take `ui-blur-in` when their bytes have arrived — on
+ * `load`, not on mounting, or an image still loading would run its arrival empty. Written on the node,
+ * so a re-render that keeps the same picture keeps it sharp and does not arrive again.
+ */
+export function arriveSharp(event: { currentTarget: HTMLImageElement }): void {
+  event.currentTarget.classList.add("ui-blur-in");
+}
+
+/**
+ * **The box a card is pressed by** (sprint 39 día 6): transparent, still, the focus ring's. On a
+ * `label` around a hidden radio, `ui-choice` draws the ring on the box, since the radio is one pixel.
+ * Everything the eye reads as the card is its `Face`.
+ */
+export const pressBox = "relative block w-full cursor-pointer rounded-ui text-left";
+export const pressLabel = `${pressBox} ui-choice`;
+
+/**
+ * **The face of a card** (sprint 39 día 6, David's P4 with his adjustment 2): border, background, the
+ * chosen ring and the shadow, which rise together under the mouse while the box stays where it is
+ * (`ui-face`). The ripple is the face's too, so the press rings where the card is drawn. `className`
+ * is the card's own inside: its layout and padding, which used to sit on the box.
+ */
+export function Face({
+  chosen,
+  className = "",
+  children,
+}: {
+  chosen: boolean;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <span
+      data-ui-face=""
+      {...(chosen ? { "data-chosen": "" } : {})}
+      className={`ui-face ui-ripple rounded-ui border ${
+        chosen
+          ? "border-ui-brand bg-ui-brand-surface ring-[3px] ring-ui-brand-surface"
+          : "border-ui-border bg-ui-surface"
+      } ${className}`}
+    >
+      {children}
+    </span>
+  );
+}
+
+/**
  * The small verb that sits inside a row — «Subir», «Quitar esta ficha», «Cambiar el nombre».
  *
  * One component where there were two. `PagesPanel`'s was 12px semibold muted and knew about
@@ -358,6 +406,37 @@ export function Segments<T extends string, P = never>({
 }) {
   const grid = useRef<HTMLDivElement>(null);
   const mark = useRef<HTMLSpanElement>(null);
+  const ghost = useRef<HTMLSpanElement>(null);
+  /*
+   * **The shadow of the mark, under the hand** (sprint 39 día 6, David's P3): the option the mouse is
+   * on shows where the mark would go, at a third of its strength, following on `ui-follow`; the chosen
+   * option has no shadow, since the mark is there; leaving the group or pressing takes it away, and
+   * the mark itself lands on its spring. Written on the node, like the mark, so following the mouse is
+   * no render. Appearing, it is placed before it is shown, so it fades in where it is instead of
+   * gliding over from the last option it was under.
+   */
+  const under = (option: T | null) => {
+    const host = grid.current;
+    const shade = ghost.current;
+    if (!host || !shade) return;
+    const index = option === null || option === value ? -1 : options.indexOf(option);
+    const segment = index < 0 ? null : host.querySelectorAll<HTMLElement>(":scope > label")[index];
+    if (!segment) {
+      shade.style.opacity = "0";
+      return;
+    }
+    const box = segment.getBoundingClientRect();
+    const from = host.getBoundingClientRect();
+    const hidden = shade.style.opacity !== "0.3";
+    if (hidden) shade.style.transitionProperty = "opacity";
+    shade.style.width = `${box.width - 16}px`;
+    shade.style.transform = `translate(${box.left - from.left + 8}px, ${box.bottom - from.top - 4}px)`;
+    if (hidden) {
+      void shade.offsetWidth;
+      shade.style.transitionProperty = "";
+    }
+    shade.style.opacity = "0.3";
+  };
   /*
    * **A mark slides under the chosen option** (sprint 35 día 7), as the page tabs' indicator does:
    * one bar for the group, placed under the checked segment's box and moved on `ui-slide` when the
@@ -406,6 +485,13 @@ export function Segments<T extends string, P = never>({
           className="ui-slide pointer-events-none absolute top-0 left-0 z-[1] h-[2px] rounded-full bg-ui-brand"
           style={{ opacity: 0 }}
         />
+        <span
+          ref={ghost}
+          data-testid="segment-ghost"
+          aria-hidden="true"
+          className="ui-follow pointer-events-none absolute top-0 left-0 z-[1] h-[2px] rounded-full bg-ui-brand"
+          style={{ opacity: 0 }}
+        />
         {options.map((option) => (
           <Segment
             key={option}
@@ -413,18 +499,17 @@ export function Segments<T extends string, P = never>({
             label={labelOf(option)}
             checked={value === option}
             onSelect={() => {
+              under(null);
               previewer?.end("keep");
               onSelect(option);
             }}
-            {...(previewer && preview
-              ? {
-                  onHover: (on: boolean) => {
-                    const shown = on ? preview(option) : null;
-                    if (shown) previewer.show(shown);
-                    else previewer.end("restore");
-                  },
-                }
-              : {})}
+            onHover={(on: boolean) => {
+              under(on ? option : null);
+              if (!previewer || !preview) return;
+              const shown = on ? preview(option) : null;
+              if (shown) previewer.show(shown);
+              else previewer.end("restore");
+            }}
           />
         ))}
       </div>
@@ -446,15 +531,24 @@ export function Segment({
   onSelect: () => void;
   onHover?: (on: boolean) => void;
 }) {
+  // Whether the mouse is over this segment by a move of its own (the palette cards' rule, sprint 38
+  // día 7): a segment can arrive under a mouse that has not moved — a block above it opens or closes
+  // — and the browser says so with an entry and no move. The preview waits for the hand. Sprint 38
+  // left the segments on `pointerenter`; this is that defect closed (sprint 39 día 6, P3).
+  const hovering = useRef(false);
   return (
     <label
       {...(onHover
         ? {
-            onPointerEnter: (event: PointerEvent) => {
-              if (event.pointerType === "mouse") onHover(true);
+            onPointerMove: (event: PointerEvent) => {
+              if (event.pointerType !== "mouse" || hovering.current) return;
+              hovering.current = true;
+              onHover(true);
             },
             onPointerLeave: (event: PointerEvent) => {
-              if (event.pointerType === "mouse") onHover(false);
+              if (event.pointerType !== "mouse" || !hovering.current) return;
+              hovering.current = false;
+              onHover(false);
             },
           }
         : {})}

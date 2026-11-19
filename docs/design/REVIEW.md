@@ -10816,3 +10816,62 @@ fondo, y «Titulares y enlaces» no sirve para un fondo. El nombre lo decide Dav
 | Las filas del menú de secciones | [antes](review/2026-11-los-paneles-ordenados/dia5-filas-1280-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia5-filas-1280-despues.png) | [antes](review/2026-11-los-paneles-ordenados/dia5-filas-1024-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia5-filas-1024-despues.png) | [antes](review/2026-11-los-paneles-ordenados/dia5-filas-390-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia5-filas-390-despues.png) |
 
 **Lo que no cambia**: esquema, renderer, web publicada (golden sin regenerar), ningún nombre ni localizador.
+
+### Día 6 — el segmento bajo la mano, la cara se eleva, la llegada se enfoca (PR de `feat/el-segmento-bajo-la-mano`)
+
+**P3, el defecto que dejó abierto el 38.** Un segmento previsualiza cuando el ratón se mueve sobre él, nunca al
+entrar: un segmento que aterriza bajo un ratón quieto, porque un bloque de encima se abre o se cierra, no hace nada.
+Es la regla de las tarjetas de paleta del día 7 del 38. Y la opción bajo el ratón enseña **la sombra de la marca**:
+un tercio de su fuerza, bajo esa opción, con una pieza nueva, `ui-follow` (`transform` y `opacity` en `--ui-fast`,
+curva normal y sin muelle, porque un muelle es para lo que llega). Se escribe sobre el nodo, sin render. La opción
+elegida no tiene sombra, porque ahí está la marca. Al pulsar, la sombra se va y la marca llega con su muelle.
+
+**P4, con tu ajuste 2: la cara lleva el marco.** Siete tarjetas: las parejas de letra, las medidas y las paletas
+en «Estilo»; los bocetos de «Cómo se coloca», los fondos de la barra, los sitios de «Dónde va» y los destinos del
+botón en «Menú». Cada una es ahora dos piezas:
+
+- **La caja** (`pressBox`): el `button` o el `label` que recibe la pulsación, transparente y quieta, con el anillo
+  del foco. Sobre una radio oculta, `ui-choice` dibuja el anillo en la caja.
+- **La cara** (`Face`): borde, fondo, anillo de elegida, sombra y onda. `ui-face` la sube un píxel con su sombra
+  bajo el ratón, nunca con «Reducir movimiento» y nunca la elegida. Al pulsar vuelve a la superficie.
+
+`Segment` queda fuera: su respuesta al ratón es la sombra de la marca.
+
+**P5, la mitad: la llegada enfocándose, medida antes.** Las miniaturas de «Fotos» y la muestra del logo de «Menú»
+llegan con `ui-blur-in` al cargar, no al montarse. La medida: la galería duplicada hasta **13 miniaturas**, la CPU
+cuatro veces más lenta, una apertura en frío aparte y diez alternadas, cinco con la llegada y cinco con ella
+anulada. **Ningún fotograma perdido** en las diez; el peor intervalo, 16,8 ms, que es el reloj de 60 Hz. Cuento
+como perdido un intervalo de más de 20 ms: a 60 Hz cada intervalo es de 16,7 ms con una décima arriba o abajo, y
+un fotograma que pierde su vsync tarda dos. La caminata sujeta la decisión. La muestra del logo es una sola imagen
+con la misma pieza y no tiene medida propia.
+
+**Pruebas nuevas, rojas antes y verdes después**: `faceAndFollow.test.ts` (las dos piezas en su presupuesto,
+quién lleva la cara, el segmento por movimiento, la llegada en `load`, el anillo de la caja a 3:1 sobre el panel)
+y cuatro caminatas:
+
+- La sombra sigue al ratón por tres segmentos, no escribe nada (el serial y «Deshacer» iguales) y espera a la
+  mano: una entrada sin movimiento no enseña nada.
+- La cara se eleva y la caja no viaja: 20 ms después de llegar el ratón, lo que hay bajo la mano es la misma
+  tarjeta, y su caja no se ha movido.
+- Con «Reducir movimiento», la cara no se mueve, y su borde y su sombra siguen diciendo cuál.
+- Los fotogramas de las doce miniaturas.
+
+**Saboteos, cada uno deshecho por script**:
+
+- La caja con `ui-lift`: «la caja no viaja» en rojo.
+- El segmento otra vez en `pointerenter`: la entrada sin movimiento enseña la sombra, en rojo.
+- Una sombra bajo la opción elegida: en rojo.
+- La elevación también con «Reducir movimiento»: en rojo.
+
+**Localizadores: 0.**
+
+**Capturas** antes (`39ea78d`) y después, a 1280 y 1024 con el ratón encima y sin «Reducir movimiento», y a
+390 × 844 sin ratón:
+
+| Panel | 1280 | 1024 | 390 |
+|---|---|---|---|
+| «Estilo», el ratón sobre una paleta | [antes](review/2026-11-los-paneles-ordenados/dia6-estilo-1280-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia6-estilo-1280-despues.png) | [antes](review/2026-11-los-paneles-ordenados/dia6-estilo-1024-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia6-estilo-1024-despues.png) | [antes](review/2026-11-los-paneles-ordenados/dia6-estilo-390-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia6-estilo-390-despues.png) |
+| «Menú», el ratón sobre «Mucha» | [antes](review/2026-11-los-paneles-ordenados/dia6-menu-1280-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia6-menu-1280-despues.png) | [antes](review/2026-11-los-paneles-ordenados/dia6-menu-1024-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia6-menu-1024-despues.png) | [antes](review/2026-11-los-paneles-ordenados/dia6-menu-390-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia6-menu-390-despues.png) |
+| «Fotos» | [antes](review/2026-11-los-paneles-ordenados/dia6-fotos-1280-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia6-fotos-1280-despues.png) | [antes](review/2026-11-los-paneles-ordenados/dia6-fotos-1024-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia6-fotos-1024-despues.png) | [antes](review/2026-11-los-paneles-ordenados/dia6-fotos-390-antes.png) · [después](review/2026-11-los-paneles-ordenados/dia6-fotos-390-despues.png) |
+
+**Lo que no cambia**: esquema, renderer, web publicada (golden sin regenerar), ningún nombre ni localizador.

@@ -32482,3 +32482,280 @@ describe("sprint 39 día 5 — el tic se dibuja y la nota funde", () => {
     }
   }, 240_000);
 });
+
+/**
+ * **Sprint 39 día 6 — el segmento bajo la mano, y la cara que se eleva** (David's P3 and P4, with his
+ * adjustment 2). The segment under the mouse shows where the mark would go and writes nothing; a
+ * segment that arrives under a mouse that has not moved does nothing at all; a card's face rises with
+ * its frame while the box the press lands on stays exactly where it was.
+ */
+describe("sprint 39 día 6 — el segmento bajo la mano, y la cara que se eleva", () => {
+  it("la sombra de la marca sigue al ratón, no escribe, y espera a que la mano se mueva", async () => {
+    const visitor = await (
+      await browser.newContext({ viewport: { width: 1280, height: 900 } })
+    ).newPage();
+    try {
+      await intoTheCanvas(visitor);
+      await visitor.getByRole("button", { name: "Menú", exact: true }).click();
+      const panel = visitor.getByRole("complementary", { name: "El menú de tu web" });
+      await expect(panel).toBeVisible();
+      const gaps = panel.getByRole("radiogroup", { name: "Separación entre enlaces" });
+      await gaps.scrollIntoViewIfNeeded();
+      const ghost = gaps.getByTestId("segment-ghost");
+      const segment = (name: string) => gaps.locator("label", { hasText: name });
+      const opacity = () => ghost.evaluate((el) => Number(getComputedStyle(el).opacity));
+      /** The middle of the shadow, and the box it should sit under. */
+      const under = async (name: string) => {
+        const shade = await ghost.boundingBox();
+        const box = await segment(name).boundingBox();
+        if (!shade || !box) throw new Error("not drawn");
+        const middle = shade.x + shade.width / 2;
+        return middle > box.x && middle < box.x + box.width;
+      };
+      await expect(gaps.getByRole("radio", { name: "Normal" })).toBeChecked();
+      const serial = await editSerialOf(visitor);
+      const undo = visitor.locator('button[aria-label="Deshacer"]');
+      const undoable = await undo.isEnabled();
+
+      // 1. A segment arriving under a still mouse — what the browser reports with an entry and no
+      //    move — shows nothing. Sabotaged: the segment back on `pointerenter`, and the shadow and
+      //    the preview came on with no hand moving.
+      await segment("Poca").evaluate((label) => {
+        for (const type of ["pointerover", "pointerenter"]) {
+          label.dispatchEvent(
+            new PointerEvent(type, { pointerType: "mouse", bubbles: type === "pointerover" }),
+          );
+        }
+      });
+      await visitor.waitForTimeout(200);
+      expect(await opacity(), "a shadow with no hand moving").toBe(0);
+
+      // 2. The hand over three segments: the shadow follows it, at a third, and the chosen one has
+      //    none, since the mark is there.
+      for (const name of ["Poca", "Mucha"]) {
+        const at = await pointIn(segment(name));
+        await visitor.mouse.move(at.x, at.y, { steps: 4 });
+        await expect.poll(opacity).toBeCloseTo(0.3, 2);
+        await expect.poll(() => under(name), { message: `the shadow under «${name}»` }).toBe(true);
+      }
+      const normal = await pointIn(segment("Normal"));
+      await visitor.mouse.move(normal.x, normal.y, { steps: 4 });
+      await expect.poll(opacity).toBe(0);
+
+      // 3. Nothing written: the serial is the one before, and «Deshacer» says what it said.
+      expect(await editSerialOf(visitor), "a shadow is not a patch").toBe(serial);
+      expect(await undo.isEnabled()).toBe(undoable);
+
+      // 4. Off the group, gone; pressed, the shadow goes and the mark lands where it was.
+      const away = await pointIn(panel.getByRole("heading", { name: "El menú de tu web" }));
+      await visitor.mouse.move(away.x, away.y, { steps: 4 });
+      await expect.poll(opacity).toBe(0);
+      const much = await pointIn(segment("Mucha"));
+      await visitor.mouse.move(much.x, much.y, { steps: 4 });
+      await expect.poll(opacity).toBeCloseTo(0.3, 2);
+      await visitor.mouse.click(much.x, much.y);
+      await expect(gaps.getByRole("radio", { name: "Mucha" })).toBeChecked();
+      await expect.poll(opacity).toBe(0);
+      expect(await editSerialOf(visitor)).toBeGreaterThan(serial);
+      await axeSerious(visitor, "«Menú» with the mark's shadow");
+    } finally {
+      await visitor.context().close();
+    }
+  }, 240_000);
+
+  it("la cara de una tarjeta se eleva y la caja que se pulsa no viaja", async () => {
+    const visitor = await (
+      await browser.newContext({ viewport: { width: 1280, height: 900 } })
+    ).newPage();
+    try {
+      await intoTheCanvas(visitor);
+      await visitor.getByRole("button", { name: "Estilo", exact: true }).click();
+      await expect(
+        visitor.getByRole("heading", { name: "El estilo de toda la web" }),
+      ).toBeVisible();
+      // A palette that is not the chosen one: its face is the one that rises.
+      // Pinned by its id: «not chosen» stops being true of it the moment it is pressed.
+      const id = await visitor
+        .locator('button[data-palette][aria-checked="false"]')
+        .nth(2)
+        .getAttribute("data-palette");
+      const card = visitor.locator(`button[data-palette="${id}"]`);
+      await card.scrollIntoViewIfNeeded();
+      const face = card.locator("[data-ui-face]");
+      const before = await card.boundingBox();
+      if (!before) throw new Error("the card is not drawn");
+      const at = await pointIn(card);
+      await visitor.mouse.move(at.x, at.y);
+      // **Twenty milliseconds after the pointer arrives** (sprint 37, «la caja que se pulsa no
+      // viaja»): what is under the hand is the same card, and its box has not moved by a hair.
+      await visitor.waitForTimeout(20);
+      const pressed = await visitor.evaluate(
+        ({ x, y }) =>
+          document.elementFromPoint(x, y)?.closest("button")?.getAttribute("data-palette"),
+        at,
+      );
+      expect(pressed, "the press lands on the card the hand arrived on").toBe(id);
+      expect(await card.boundingBox(), "the box the press lands on does not travel").toEqual(
+        before,
+      );
+      // The face rises a pixel, frame and shadow together.
+      await expect
+        .poll(() => face.evaluate((el) => getComputedStyle(el).translate))
+        .toBe("0px -1px");
+      expect(await face.evaluate((el) => getComputedStyle(el).boxShadow)).not.toBe("none");
+      // Tailwind's reset gives every element a solid border of no width: the width is what says none.
+      expect(await card.evaluate((el) => getComputedStyle(el).borderTopWidth)).toBe("0px");
+      expect(await card.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe(
+        "rgba(0, 0, 0, 0)",
+      );
+
+      // Pressed, it is chosen, and the chosen face does not rise: it is already the answer.
+      await visitor.mouse.click(at.x, at.y);
+      await expect(card).toHaveAttribute("aria-checked", "true");
+      // (Choosing a palette changes what the panel holds above the cards, so the card may move after
+      // the press: that is the panel's, before today, and not the face's.)
+      await expect.poll(() => face.evaluate((el) => getComputedStyle(el).translate)).toBe("none");
+
+      // The keyboard's ring is on the still box: the card is a button, and the ring is its own.
+      await visitor.mouse.move(5, 5);
+      await card.focus();
+      await visitor.keyboard.press("ArrowRight");
+      const focused = visitor.locator("button[data-palette]:focus-visible");
+      await expect(focused).toHaveCount(1);
+      expect(await focused.evaluate((el) => getComputedStyle(el).outlineStyle)).toBe("solid");
+
+      // A hidden radio's ring is on its box: Tab into the letter pairs.
+      const pair = visitor.locator('label.ui-choice input[type="radio"]').first();
+      await pair.focus();
+      await visitor.keyboard.press("ArrowDown");
+      await visitor.keyboard.press("ArrowUp");
+      const box = visitor.locator("label.ui-choice:has(input:focus-visible)");
+      await expect(box).toHaveCount(1);
+      expect(await box.evaluate((el) => getComputedStyle(el).outlineStyle)).toBe("solid");
+      await axeSerious(visitor, "«Estilo» with faces");
+    } finally {
+      await visitor.context().close();
+    }
+  }, 240_000);
+
+  it("con «Reducir movimiento», la cara no se mueve, y el borde y la sombra siguen diciendo cuál", async () => {
+    const visitor = await (
+      await browser.newContext({ viewport: { width: 1280, height: 900 }, reducedMotion: "reduce" })
+    ).newPage();
+    try {
+      await intoTheCanvas(visitor);
+      await visitor.getByRole("button", { name: "Estilo", exact: true }).click();
+      const card = visitor.locator('button[data-palette][aria-checked="false"]').nth(2);
+      await card.scrollIntoViewIfNeeded();
+      const face = card.locator("[data-ui-face]");
+      const at = await pointIn(card);
+      await visitor.mouse.move(at.x, at.y);
+      await expect
+        .poll(() => face.evaluate((el) => getComputedStyle(el).boxShadow))
+        .not.toBe("none");
+      expect(await face.evaluate((el) => getComputedStyle(el).translate)).toBe("none");
+    } finally {
+      await visitor.context().close();
+    }
+  }, 240_000);
+});
+
+/**
+ * **Sprint 39 día 6 — la llegada enfocándose, medida antes** (David's half of P5: «si la medida cabe en
+ * 16 ms»). The CPU slowed four times, the frames read by `requestAnimationFrame` while «Fotos» opens
+ * and its thumbnails arrive: three openings with `ui-blur-in` and three with it held still by an
+ * injected rule, so what the arrival costs is told apart from what opening the panel costs anyway.
+ */
+describe("sprint 39 día 6 — la llegada enfocándose, medida", () => {
+  it("no pierde un fotograma mientras llegan doce miniaturas con la CPU ×4", async () => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    const visitor = await context.newPage();
+    try {
+      await intoTheCanvas(visitor);
+      // Twelve thumbnails at least, as the plan measures: the generated site has five photographs,
+      // and the gallery duplicated is twelve real ones, each a row of «Fotos».
+      const frame = visitor.frameLocator(PREVIEW).first();
+      const photos = visitor.getByRole("region", { name: "Fotos de tu web" }).locator("img");
+      for (let copy = 0; copy < 4; copy += 1) {
+        await visitor.getByRole("button", { name: "Fotos", exact: true }).click();
+        const count = await photos.count();
+        await visitor.getByRole("button", { name: "Fotos", exact: true }).click();
+        if (count >= 12) break;
+        await frame.locator('[data-section="sec-gallery"]').click();
+        await frame
+          .locator('[data-section="sec-gallery"] .rb-action[aria-label="Duplicar esta sección"]')
+          .click();
+        await motionSettled(visitor);
+      }
+      const cdp = await context.newCDPSession(visitor);
+      const opening = async () => {
+        await visitor.evaluate(() => {
+          const frames: number[] = [];
+          (window as unknown as { rbFrames: number[] }).rbFrames = frames;
+          let last = performance.now();
+          const tick = (now: number) => {
+            frames.push(now - last);
+            last = now;
+            if (frames.length < 72) requestAnimationFrame(tick);
+          };
+          requestAnimationFrame(tick);
+        });
+        await visitor.getByRole("button", { name: "Fotos", exact: true }).click();
+        await visitor.waitForTimeout(1500);
+        const frames = await visitor.evaluate(
+          () => (window as unknown as { rbFrames: number[] }).rbFrames,
+        );
+        const panel = visitor.getByRole("region", { name: "Fotos de tu web" });
+        const thumbnails = await panel.locator("img").count();
+        const arrived = await panel.locator("img.ui-blur-in").count();
+        await visitor.getByRole("button", { name: "Fotos", exact: true }).click();
+        await visitor.waitForTimeout(400);
+        // The first frame is the click's own task; the arrival is in the ones after it.
+        const after = frames.slice(1);
+        return {
+          thumbnails,
+          arrived,
+          worst: Math.round(Math.max(...after) * 10) / 10,
+          // At 60 Hz a frame is 16.7 ms give or take a tenth: a frame that misses its vsync takes
+          // two, so «over budget» is past 20 ms, and the 16.8s of the clock's jitter are not counted.
+          dropped: after.filter((ms) => ms > 20).length,
+          frames: after.length,
+        };
+      };
+      await cdp.send("Emulation.setCPUThrottlingRate", { rate: 4 });
+      // One cold opening first, counted apart: the first render of the panel and the first decode
+      // of each picture are paid once whatever the arrival does.
+      const cold = await opening();
+      // Then the two alternated, five each, so neither is always the warmer one.
+      const held = await visitor.addStyleTag({
+        content: ".ui-blur-in { animation: none !important; }",
+      });
+      const withArrival: Awaited<ReturnType<typeof opening>>[] = [];
+      const without: Awaited<ReturnType<typeof opening>>[] = [];
+      for (let round = 0; round < 5; round += 1) {
+        await held.evaluate((style) => {
+          (style as HTMLStyleElement).disabled = false;
+        });
+        without.push(await opening());
+        await held.evaluate((style) => {
+          (style as HTMLStyleElement).disabled = true;
+        });
+        withArrival.push(await opening());
+      }
+      await cdp.send("Emulation.setCPUThrottlingRate", { rate: 1 });
+      console.log(`[día 6] cold: ${JSON.stringify(cold)}`);
+      console.log(`[día 6] with ui-blur-in: ${JSON.stringify(withArrival)}`);
+      console.log(`[día 6] held still: ${JSON.stringify(without)}`);
+      // **Measured on 19 November 2026 and accepted**: thirteen thumbnails, the CPU four times
+      // slower, no frame missed in ten warm openings, with the arrival or without it; the worst
+      // interval was 16.8 ms, the clock's own. The arrival stays as long as this holds.
+      for (const each of withArrival) {
+        expect(each.thumbnails, "the twelve the plan measures").toBeGreaterThanOrEqual(12);
+        expect(each.arrived, "every thumbnail arrives sharp").toBe(each.thumbnails);
+        expect(each.dropped, `a frame missed while ${each.thumbnails} thumbnails arrived`).toBe(0);
+      }
+    } finally {
+      await context.close();
+    }
+  }, 240_000);
+});

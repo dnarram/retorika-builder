@@ -28,13 +28,14 @@ import {
 import { type LogoPalettes, sameColours } from "../editor/logoColours.ts";
 import { nearestPalette, parseHex } from "../editor/logoPalette.ts";
 import {
+  Face,
   Note,
   PanelHeader,
   PanelSection,
   type Previewer,
-  panelChoice,
-  panelChoiceSelected,
   panelFrame,
+  pressBox,
+  pressLabel,
 } from "../editor/panelKit.tsx";
 import es from "../locales/es.json" with { type: "json" };
 
@@ -262,13 +263,7 @@ export function StylePanel({
         {TYPE_PAIRS.map((pair) => {
           const selected = currentType?.id === pair.id;
           return (
-            <label
-              key={pair.id}
-              className={
-                "relative flex h-14 cursor-pointer items-center gap-3.5 px-4 " +
-                (selected ? panelChoiceSelected : panelChoice)
-              }
-            >
+            <label key={pair.id} className={pressLabel}>
               <input
                 type="radio"
                 name={typeGroup}
@@ -276,24 +271,26 @@ export function StylePanel({
                 onChange={() => onPickTypePair(pair.id)}
                 className="absolute h-px w-px opacity-0"
               />
-              {/* The specimen is drawn in the pair's own heading stack, so it shows the font that
+              <Face chosen={selected} className="flex h-14 items-center gap-3.5 px-4">
+                {/* The specimen is drawn in the pair's own heading stack, so it shows the font that
                   will actually resolve on this machine — which is the whole reason the label next
                   to it does not name one (issue #9). */}
-              <span
-                aria-hidden="true"
-                className="w-8 shrink-0 text-center text-[22px] leading-none text-ui-ink"
-                style={{ fontFamily: pair.fonts["font.heading"] }}
-              >
-                {es["editor.style.specimen"]}
-              </span>
-              <span
-                className={
-                  "text-[15px] " +
-                  (selected ? "font-semibold text-ui-ink" : "font-medium text-ui-ink")
-                }
-              >
-                {nameOf(pair.nameKey)}
-              </span>
+                <span
+                  aria-hidden="true"
+                  className="w-8 shrink-0 text-center text-[22px] leading-none text-ui-ink"
+                  style={{ fontFamily: pair.fonts["font.heading"] }}
+                >
+                  {es["editor.style.specimen"]}
+                </span>
+                <span
+                  className={
+                    "text-[15px] " +
+                    (selected ? "font-semibold text-ui-ink" : "font-medium text-ui-ink")
+                  }
+                >
+                  {nameOf(pair.nameKey)}
+                </span>
+              </Face>
             </label>
           );
         })}
@@ -362,13 +359,7 @@ export function StylePanel({
           {SCALES.map((scale) => {
             const selected = currentScale?.id === scale.id;
             return (
-              <label
-                key={scale.id}
-                className={
-                  "relative flex h-14 cursor-pointer items-center gap-3.5 px-4 " +
-                  (selected ? panelChoiceSelected : panelChoice)
-                }
-              >
+              <label key={scale.id} className={pressLabel}>
                 <input
                   type="radio"
                   name={scaleGroup}
@@ -376,38 +367,40 @@ export function StylePanel({
                   onChange={() => onPickScale(scale.id)}
                   className="absolute h-px w-px opacity-0"
                 />
-                {/* Drawn from the scale's own eleven values, for the same reason the `Aa` above is
+                <Face chosen={selected} className="flex h-14 items-center gap-3.5 px-4">
+                  {/* Drawn from the scale's own eleven values, for the same reason the `Aa` above is
                     drawn in the pair's own font stack: what the specimen shows *is* what the site
                     will get. The corner is this scale's `radius.md` and the gap its `space.xs`,
                     both used literally; only the bar's height is scaled, and by `calc()` rather
                     than by parsing the string, so a value in `rem` and one in `px` both work
                     without this file knowing which it was given. */}
-                <span
-                  aria-hidden="true"
-                  className="flex w-10 shrink-0 flex-col justify-center border border-ui-border bg-white px-1.5"
-                  style={{
-                    height: 38,
-                    borderRadius: scale.radii["radius.md"],
-                    gap: scale.spaces["space.xs"],
-                  }}
-                >
                   <span
+                    aria-hidden="true"
+                    className="flex w-10 shrink-0 flex-col justify-center border border-ui-border bg-white px-1.5"
                     style={{
-                      height: `calc(${scale.sizes["size.heading"]} * 0.28)`,
-                      borderRadius: 1,
-                      background: "#334155",
+                      height: 38,
+                      borderRadius: scale.radii["radius.md"],
+                      gap: scale.spaces["space.xs"],
                     }}
-                  />
-                  <span style={{ height: 2, borderRadius: 1, background: "#CBD5E1" }} />
-                </span>
-                <span
-                  className={
-                    "text-[15px] " +
-                    (selected ? "font-semibold text-ui-ink" : "font-medium text-ui-ink")
-                  }
-                >
-                  {nameOf(scale.nameKey)}
-                </span>
+                  >
+                    <span
+                      style={{
+                        height: `calc(${scale.sizes["size.heading"]} * 0.28)`,
+                        borderRadius: 1,
+                        background: "#334155",
+                      }}
+                    />
+                    <span style={{ height: 2, borderRadius: 1, background: "#CBD5E1" }} />
+                  </span>
+                  <span
+                    className={
+                      "text-[15px] " +
+                      (selected ? "font-semibold text-ui-ink" : "font-medium text-ui-ink")
+                    }
+                  >
+                    {nameOf(scale.nameKey)}
+                  </span>
+                </Face>
               </label>
             );
           })}
@@ -777,43 +770,43 @@ function PaletteCardButton({
             },
           }
         : {})}
-      className={`flex min-h-[72px] cursor-pointer flex-col items-stretch gap-2 p-3 text-left ${
-        card.selected ? panelChoiceSelected : panelChoice
-      }`}
+      className={pressBox}
     >
-      {card.colors ? (
-        <span
-          aria-hidden="true"
-          className="flex h-6 overflow-hidden rounded-ui-sm border border-black/10"
-        >
-          {stripeOf(card.colors).map((colour, index) => (
-            <span
-              // The stripe never reorders, so a block's place is its identity.
-              // biome-ignore lint/suspicious/noArrayIndexKey: see above
-              key={index}
-              className="flex-1"
-              style={{ background: colour }}
-            />
-          ))}
-        </span>
-      ) : (
-        <span
-          aria-hidden="true"
-          className="h-6 rounded-ui-sm border border-ui-border-strong border-dashed bg-ui-surface"
-        />
-      )}
-      <span className="text-[13px] font-semibold leading-tight text-ui-ink">{card.name}</span>
-      {card.customised ? (
-        <span className="text-[11px] leading-tight text-ui-muted">
-          {es["editor.style.customised"]}
-        </span>
-      ) : null}
-      {card.aside ? (
-        // Hidden from the name and read as the description: «De tu logo» stays «De tu logo».
-        <span id={asideId} aria-hidden="true" className="text-[11px] leading-tight text-ui-muted">
-          {card.aside}
-        </span>
-      ) : null}
+      <Face chosen={card.selected} className="flex min-h-[72px] flex-col items-stretch gap-2 p-3">
+        {card.colors ? (
+          <span
+            aria-hidden="true"
+            className="flex h-6 overflow-hidden rounded-ui-sm border border-black/10"
+          >
+            {stripeOf(card.colors).map((colour, index) => (
+              <span
+                // The stripe never reorders, so a block's place is its identity.
+                // biome-ignore lint/suspicious/noArrayIndexKey: see above
+                key={index}
+                className="flex-1"
+                style={{ background: colour }}
+              />
+            ))}
+          </span>
+        ) : (
+          <span
+            aria-hidden="true"
+            className="h-6 rounded-ui-sm border border-ui-border-strong border-dashed bg-ui-surface"
+          />
+        )}
+        <span className="text-[13px] font-semibold leading-tight text-ui-ink">{card.name}</span>
+        {card.customised ? (
+          <span className="text-[11px] leading-tight text-ui-muted">
+            {es["editor.style.customised"]}
+          </span>
+        ) : null}
+        {card.aside ? (
+          // Hidden from the name and read as the description: «De tu logo» stays «De tu logo».
+          <span id={asideId} aria-hidden="true" className="text-[11px] leading-tight text-ui-muted">
+            {card.aside}
+          </span>
+        ) : null}
+      </Face>
     </button>
   );
 }
