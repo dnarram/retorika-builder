@@ -32395,3 +32395,90 @@ describe("sprint 38 día 7 — la paleta es del dueño", () => {
     }
   }, 180_000);
 });
+
+describe("sprint 39 día 5 — el tic se dibuja y la nota funde", () => {
+  it("marca con Espacio, dibuja el tic una vez, enseña el foco en la caja, y la nota que cambia funde", async () => {
+    const visitor = await (
+      await browser.newContext({ viewport: { width: 1280, height: 900 } })
+    ).newPage();
+    try {
+      await intoTheCanvas(visitor);
+      await visitor.getByRole("button", { name: "Menú", exact: true }).click();
+      const panel = visitor.getByRole("complementary", { name: "El menú de tu web" });
+      await expect(panel).toBeVisible();
+      // Opening draws every note as it is: nothing in the panel arrives twice.
+      await expect(panel.locator(".ui-cross-in")).toHaveCount(0);
+
+      // From the keyboard alone: Tab to «Se queda arriba al bajar», Space checks it. The platform
+      // box is the control (sabotaged: `display: none` on it, and Tab never reached it).
+      await panel.getByRole("button", { name: "Cerrar el menú" }).focus();
+      await tabUntil(
+        visitor,
+        (at) => at.type === "checkbox" && at.near.startsWith("Se queda arriba al bajar"),
+        "the «Se queda arriba al bajar» checkbox",
+        160,
+      );
+      const sticky = panel.getByRole("checkbox", { name: "Se queda arriba al bajar" });
+      await expect(sticky).not.toBeChecked();
+      // The label is the box's parent: the hidden input, the drawn box and the words inside it.
+      const label = sticky.locator("xpath=..");
+      await expect(label.locator("[data-tick]")).toHaveCount(0);
+      // The ring is drawn on the box the eye is on, not on a one-pixel input.
+      const ring = await label
+        .locator("[data-check-box]")
+        .evaluate((box) => getComputedStyle(box).outlineStyle);
+      expect(ring, "the drawn box wears the keyboard's ring").toBe("solid");
+
+      await visitor.keyboard.press("Space");
+      await expect(sticky).toBeChecked();
+      const tick = label.locator("[data-tick] path");
+      await expect(tick).toBeVisible();
+      // Drawn by `ui-draw`, once: the animation that runs is that one, and it ends.
+      const drawn = await tick.evaluate((path) =>
+        path.getAnimations().map((a) => (a as CSSAnimation).animationName),
+      );
+      expect(drawn).toEqual(["ui-draw"]);
+      await expect.poll(() => tick.evaluate((path) => path.getAnimations().length)).toBe(0);
+      // Unchecking takes the tick away and draws nothing.
+      await visitor.keyboard.press("Space");
+      await expect(sticky).not.toBeChecked();
+      await expect(label.locator("[data-tick]")).toHaveCount(0);
+
+      // A row's switch changes the menu's state underneath it: the new sentence fades in.
+      const row = panel.locator('[data-menu-row^="section:"] input[type="checkbox"]').first();
+      await row.focus();
+      await visitor.keyboard.press("Space");
+      const faded = panel.locator(".ui-cross-in");
+      await expect(faded.first()).toBeVisible();
+      await expect(faded.first()).toContainText(/se muestra|No hay nada que mostrar/);
+      await axeSerious(visitor, "«Menú» with the drawn checkboxes");
+    } finally {
+      await visitor.context().close();
+    }
+  }, 240_000);
+
+  it("con «Reducir movimiento», el tic está sin dibujarse delante", async () => {
+    const visitor = await (
+      await browser.newContext({ viewport: { width: 1280, height: 900 }, reducedMotion: "reduce" })
+    ).newPage();
+    try {
+      await intoTheCanvas(visitor);
+      await visitor.getByRole("button", { name: "Menú", exact: true }).click();
+      const panel = visitor.getByRole("complementary", { name: "El menú de tu web" });
+      const sticky = panel.getByRole("checkbox", { name: "Se queda arriba al bajar" });
+      await sticky.focus();
+      await visitor.keyboard.press("Space");
+      const tick = sticky.locator("xpath=..").locator("[data-tick] path");
+      await expect(tick).toBeVisible();
+      // The global block takes the drawing to a hundredth of a millisecond: the next frame has it whole.
+      await visitor.evaluate(
+        () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))),
+      );
+      expect(await tick.evaluate((path) => getComputedStyle(path).strokeDashoffset)).toMatch(
+        /^0(px)?$/,
+      );
+    } finally {
+      await visitor.context().close();
+    }
+  }, 240_000);
+});

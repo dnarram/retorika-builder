@@ -64,6 +64,9 @@ const OFF_SCALE_RADII = [
   "rounded-[9px]", // DeviceToggle track — excluded by direction, permanent
   "rounded-[6px]", // DeviceToggle, desktop button — idem
   "rounded-[6px]", // DeviceToggle, mobile button — idem
+  // «Menú»'s drawn checkbox (sprint 39 día 5): a square with the corner a checkbox has everywhere.
+  // The scale starts at 8, which on a 16 px box is a circle — and a circle reads as a radio.
+  "rounded-[4px]",
 ] as const;
 
 describe("the shape scale", () => {

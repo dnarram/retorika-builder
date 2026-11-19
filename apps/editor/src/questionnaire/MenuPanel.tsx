@@ -23,7 +23,15 @@ import {
   SECTIONS_POSITIONS,
   type SectionsPosition,
 } from "@retorika/schema";
-import { type ComponentProps, type PointerEvent, useEffect, useId, useRef, useState } from "react";
+import {
+  type ComponentProps,
+  type PointerEvent,
+  type ReactNode,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+} from "react";
 import type { HeaderPreview, HeaderPreviewer } from "../editor/headerPreview.ts";
 import {
   brandNamePatch,
@@ -163,7 +171,7 @@ const SIZED_PARTS: ReadonlySet<HeaderPart> = new Set([
   "action",
 ]);
 
-const checkboxClass = "h-[16px] w-[16px] shrink-0 accent-[var(--ui-brand)]";
+const radioClass = "h-[16px] w-[16px] shrink-0 accent-[var(--ui-brand)]";
 
 export function MenuPanel({
   doc,
@@ -1140,7 +1148,7 @@ function Choice({
         name={name}
         checked={checked}
         onChange={onSelect}
-        className={checkboxClass}
+        className={radioClass}
       />
       <span className="min-w-0 truncate">{label}</span>
     </label>
@@ -1160,15 +1168,7 @@ function Check({
 }) {
   return (
     <div className="flex flex-col gap-1">
-      <label className="ui-interactive flex cursor-pointer items-center gap-2 text-[13px] font-semibold text-ui-ink">
-        <input
-          type="checkbox"
-          checked={checked}
-          onChange={(event) => onChange(event.target.checked)}
-          className={checkboxClass}
-        />
-        {label}
-      </label>
+      <CheckLabel label={label} checked={checked} onChange={onChange} />
       {/* Outside the label, like every note in these panels: they are about the site, and a
           checkbox's accessible name should not be three sentences long. */}
       {notes.map((note) => (
@@ -1177,6 +1177,65 @@ function Check({
         </Note>
       ))}
     </div>
+  );
+}
+
+/**
+ * **A checkbox whose tick is drawn** (sprint 39 día 5, David's P1: «el tic dibujado va en el Check que
+ * queda»). The platform's box is visually hidden — never `display: none`, so Space still checks it and
+ * a reader still finds it by its name — and a drawn box stands in its place, its tick a path that draws
+ * itself with `ui-draw` (the «Guardado» tick's piece, `--ui-base`) the moment it is mounted: on
+ * checking, never on unchecking, never on a re-render. The press ripples from where it landed
+ * (`ui-ripple`), as every choice in the panels does; under reduced motion the global block flattens
+ * both and the tick is simply there.
+ *
+ * The focus ring is the box's: the control is one pixel wide, so `peer-focus-visible` draws the ring
+ * where the eye is (the questionnaire's `ui-choice` lesson, sprint 22). Used by every checkbox of «Menú»
+ * — the options of the bar and the switch of each row — which is two uses in one file, so it stays here
+ * (sprint 39 plan, decision 8) until a third panel wants it.
+ */
+function CheckLabel({
+  label,
+  checked,
+  onChange,
+}: {
+  label: ReactNode;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <label className="ui-interactive ui-ripple relative flex min-w-0 cursor-pointer items-center gap-2 rounded-ui-sm text-[13px] font-semibold text-ui-ink">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(event) => onChange(event.target.checked)}
+        className="peer absolute h-px w-px opacity-0"
+      />
+      <span
+        aria-hidden="true"
+        data-check-box=""
+        className="grid h-4 w-4 shrink-0 place-items-center rounded-[4px] border border-ui-border-strong bg-ui-surface peer-checked:border-ui-brand peer-checked:bg-ui-brand peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-ui-brand peer-focus-visible:outline-solid"
+      >
+        {checked ? (
+          <svg
+            data-tick=""
+            aria-hidden="true"
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={3.5}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="text-white"
+          >
+            <path className="ui-draw" pathLength={1} d="M20 6L9 17l-5-5" />
+          </svg>
+        ) : null}
+      </span>
+      {label}
+    </label>
   );
 }
 
@@ -1281,15 +1340,11 @@ function EntryRow({
       {inMenu === null ? (
         <span className="text-[13px] font-semibold text-ui-muted">{name}</span>
       ) : (
-        <label className="ui-interactive flex cursor-pointer items-center gap-2 text-[13px] font-semibold text-ui-ink">
-          <input
-            type="checkbox"
-            checked={inMenu}
-            onChange={(event) => onSetInMenu(event.target.checked)}
-            className={checkboxClass}
-          />
-          <span className="min-w-0 truncate">{name}</span>
-        </label>
+        <CheckLabel
+          label={<span className="min-w-0 truncate">{name}</span>}
+          checked={inMenu}
+          onChange={onSetInMenu}
+        />
       )}
       {reason === undefined ? null : <Note>{reason}</Note>}
       {inButton ? <Note>{es["editor.menuPanel.inButton"]}</Note> : null}
