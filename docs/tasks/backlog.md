@@ -2001,6 +2001,15 @@ open survives.
 
 ## No home but this one
 
+- **A list entry that carries a photograph — the decision ADR 0033 did not take, named for sprint 41**
+  (20 November 2026, sprint 40 día 1). «Listas» offered «Hacer una lista» for a Galería and an Equipo and
+  the press ended in «Algo ha fallado», because `collectionFromList` refuses a card with a photograph and
+  nothing caught it (`packages/schema/src/collections.ts:715`). Día 1 retired the offer where it cannot be
+  kept (ADR 0025: absent, not disabled). What David chose for later, costed: an image field per entry in
+  the schema (migration), the renderer drawing it in the card and on the page per entry, the field in
+  «Listas» and in the ficha, the photo pipe for one more `src` per entry — **two days and an ADR**. Until
+  then a Galería and an Equipo stay cards, which is what they were.
+
 - **Three sentences of `es.json` that nobody reads, found by the guard sprint 39 día 1 wrote and left
   as they were** (18 November 2026; `apps/editor/test/localeKeys.test.ts`, `KNOWN_ORPHANS`). David's
   adjustment 1 approving the sprint: a new guard lists what it finds from before and does not clean it —

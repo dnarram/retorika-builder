@@ -46,7 +46,9 @@ import es from "../locales/es.json" with { type: "json" };
  * `removeEntry` all throw, and the owner must never meet one: the panel asks the same readers the
  * verbs ask — `usesOfCollection` and `entryCountBlock` — *before* drawing the control, and says what
  * is in the way instead. A pressable button that refuses is the dead button this editor has refused
- * since sprint 1.
+ * since sprint 1. `candidates` keeps the rule the same way `canBind` does (sprint 40 día 1): the
+ * editor asks `collectionFromList` itself before offering «Hacer una lista», so a section whose cards
+ * carry a photograph — which the verb refuses — is not offered at all (ADR 0025: absent, not disabled).
  */
 export function CollectionsPanel({
   document: doc,
