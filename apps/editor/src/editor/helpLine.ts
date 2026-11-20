@@ -74,8 +74,9 @@ export interface HelpLineState {
   menuNote: "composition" | "escalate" | null;
   /** The text bar open over a text bound to a collection. */
   bound: { places: number; list: string } | null;
-  /** A chosen element: whether it is a text, and whether the arrows can move it. */
-  chosen: { text: boolean; movable: boolean } | null;
+  /** A chosen element: whether it is a text, whether the arrows can move it, and whether it is a
+   * link that leads somewhere in the site, so Ctrl/Cmd+Intro goes there (ADR 0079). */
+  chosen: { text: boolean; movable: boolean; goes: boolean } | null;
   placeholders: number;
   /** A screen that is touched and never hovered: no keys are said, there are none. */
   touch: boolean;
@@ -151,9 +152,18 @@ export function boundBadge(places: number): string {
 /** What the chosen element's hint says: nothing for an element that can neither be written in nor
  * moved, and both halves joined when both are true (ADR 0049). Also the text of the `sr-only`
  * description inside the frame, so the line and `aria-describedby` cannot disagree. */
-export function chosenHint(chosen: { text: boolean; movable: boolean }): string {
+export function chosenHint(
+  chosen: { text: boolean; movable: boolean; goes: boolean },
+  platform: "mac" | "other" = "other",
+): string {
   return [
     chosen.text ? es["editor.canvas.chosenHint"] : "",
+    // The key is named by the machine, like every other key the line says (ADR 0052 §3).
+    chosen.goes
+      ? platform === "mac"
+        ? es["editor.canvas.goHintMac"]
+        : es["editor.canvas.goHint"]
+      : "",
     chosen.movable ? es["editor.canvas.moveHint"] : "",
   ]
     .filter((part) => part !== "")
@@ -234,7 +244,11 @@ export function quietSays(state: HelpLineState): HelpLineSays {
   if (state.panel === "fields") return quiet(es["editor.help.panel.fields"]);
   if (state.panel === "menu") return quiet(es["editor.help.panel.menu"]);
   if (state.chosen) {
-    const hint = chosenHint(state.chosen);
+    // A touched screen has no Ctrl or Cmd to name; the bar's «Ir» is the way there.
+    const hint = chosenHint(
+      { ...state.chosen, goes: state.chosen.goes && !state.touch },
+      state.platform,
+    );
     if (hint !== "") return quiet(hint);
   }
   if (state.placeholders === 1) return quiet(es["editor.placeholder.one"], "warn");

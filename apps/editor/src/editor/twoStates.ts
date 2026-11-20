@@ -36,6 +36,10 @@ export type TextState = "idle" | "chosen" | "writing";
  * - `commit` — end the edit and keep it, which is what `Intro` has meant since sprint 11.
  * - `revert` — end the edit and put the original words back, which is what `Escape` has meant.
  * - `release` — stop being chosen, and give the keyboard back to the section.
+ * - `go` — go where the chosen link leads (sprint 40 día 2, ADR 0079): Ctrl or Cmd with Intro, the
+ *   one modified press this module takes, and only while chosen — Intro alone writes, as it did. The
+ *   wiring asks whether the element is a link that leads somewhere; for anything else the press is
+ *   left alone, which is what `ignore` would have done.
  * - `ignore` — not ours. The press reaches whatever it was for, including the caret and the
  *   selection, and including every arrow until día 8 gives them a meaning here.
  */
@@ -44,13 +48,25 @@ export type TextKeyAction =
   | { kind: "commit" }
   | { kind: "revert" }
   | { kind: "release" }
+  | { kind: "go" }
   | { kind: "ignore" };
 
 const IGNORED: TextKeyAction = { kind: "ignore" };
 
 export function textKeyAction(press: KeyPress, state: TextState): TextKeyAction {
   if (state === "idle") return IGNORED;
-  // Any modifier disqualifies everything, Shift included: `Shift+Arrow` is a selection gesture
+  // The one modified press that is ours: Ctrl+Intro or Cmd+Intro on a chosen text goes where it
+  // leads. Not while writing, where Intro commits and a modifier is the browser's.
+  if (
+    state === "chosen" &&
+    press.key === "Enter" &&
+    (press.metaKey || press.ctrlKey) &&
+    !press.shiftKey &&
+    !press.altKey
+  ) {
+    return { kind: "go" };
+  }
+  // Any other modifier disqualifies everything, Shift included: `Shift+Arrow` is a selection gesture
   // everywhere and `Meta+Z` is the browser's own undo inside a `contentEditable` (`shortcuts.ts`).
   if (press.altKey || press.metaKey || press.ctrlKey || press.shiftKey) return IGNORED;
   if (state === "writing") {

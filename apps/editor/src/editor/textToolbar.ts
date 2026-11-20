@@ -95,10 +95,10 @@ export function familyRefsFor(): readonly FamilyRef[] {
 /**
  * Which controls this element gets.
  *
- * `link` is true only for something that already has a destination — a button or a link. It is a
- * second door to what the fields panel does, the way the «Fotos» panel is a second door to a
- * photograph, and not a second mechanism: pressing it opens that panel on this element rather than
- * editing an href in the frame.
+ * `destination` is true only for something that already has one — a button or a link. Since sprint
+ * 40 día 2 (ADR 0079) the bar chooses it from the site's own pages and sections and goes there with
+ * «Ir»; a phone, an address or the outside is still written in «Campos», the panel that owns free
+ * destinations, so `listDeadDestinations` keeps one source to chase.
  *
  * `color` can be empty, and the row is then not drawn at all. That is a real state rather than a
  * defensive one — it is what a background with no proved pair produces.
@@ -106,7 +106,7 @@ export function familyRefsFor(): readonly FamilyRef[] {
 export interface ToolbarControls {
   color: ColorRef[];
   size: readonly SizeRef[];
-  link: boolean;
+  destination: boolean;
   /**
    * Whether `B` and `I` are drawn — ADR 0024's bold and italic, over a run of characters.
    *
@@ -193,7 +193,7 @@ export function toolbarFor(
   return {
     color: colorRolesFor(element.role, theme),
     size: sizeRefsFor(),
-    link: element.role === "button" || element.role === "link",
+    destination: element.role === "button" || element.role === "link",
     marks: element.role !== "button" && element.role !== "link",
     ...(designTools
       ? {
@@ -214,7 +214,7 @@ export function hasAnyControl(controls: ToolbarControls): boolean {
   return (
     controls.color.length > 0 ||
     controls.size.length > 0 ||
-    controls.link ||
+    controls.destination ||
     controls.marks ||
     controls.family !== undefined ||
     controls.measures !== undefined

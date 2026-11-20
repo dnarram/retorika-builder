@@ -52,15 +52,35 @@ describe("textKeyAction", () => {
     }
   });
 
-  it("refuses every modifier, Shift included", () => {
+  it("goes where a chosen link leads on Ctrl+Intro or Cmd+Intro, and never while writing", () => {
+    // Sprint 40 día 2 (ADR 0079): inside a section the click edits a link, so going where it leads
+    // is a press of its own — the modified Intro on a chosen text. While writing, Intro commits and
+    // a modifier is the browser's; whether the chosen text is a link at all is the wiring's to ask.
+    expect(textKeyAction(press("Enter", { ctrlKey: true }), "chosen")).toEqual({ kind: "go" });
+    expect(textKeyAction(press("Enter", { metaKey: true }), "chosen")).toEqual({ kind: "go" });
+    expect(textKeyAction(press("Enter", { ctrlKey: true }), "writing")).toEqual({ kind: "ignore" });
+    expect(textKeyAction(press("Enter", { metaKey: true }), "writing")).toEqual({ kind: "ignore" });
+    expect(textKeyAction(press("Enter", { ctrlKey: true }), "idle")).toEqual({ kind: "ignore" });
+    // Shift or Alt on top of it is somebody else's shortcut.
+    expect(textKeyAction(press("Enter", { ctrlKey: true, shiftKey: true }), "chosen")).toEqual({
+      kind: "ignore",
+    });
+    expect(textKeyAction(press("Enter", { metaKey: true, altKey: true }), "chosen")).toEqual({
+      kind: "ignore",
+    });
+  });
+
+  it("refuses every other modifier, Shift included", () => {
     // `Shift+Arrow` extends a selection everywhere, and `Shift+Intro` is not this editor's gesture.
-    // The rule `sectionKeyAction` applies to the canvas, applied to the text inside it.
+    // The rule `sectionKeyAction` applies to the canvas, applied to the text inside it. The one
+    // exception is the test above: Ctrl or Cmd with Intro on a chosen text.
     for (const modifier of ["altKey", "metaKey", "ctrlKey", "shiftKey"] as const) {
       for (const state of ["chosen", "writing"] as const) {
+        const goes = state === "chosen" && (modifier === "metaKey" || modifier === "ctrlKey");
         expect(
           textKeyAction(press("Enter", { [modifier]: true }), state),
           `${modifier} while ${state}`,
-        ).toEqual({ kind: "ignore" });
+        ).toEqual({ kind: goes ? "go" : "ignore" });
         expect(
           textKeyAction(press("Escape", { [modifier]: true }), state),
           `${modifier} while ${state}`,

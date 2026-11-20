@@ -159,18 +159,18 @@ describe("which elements get a bar at all", () => {
     }
   });
 
-  it("offers the link control only where there is already a destination", () => {
-    // Not a second mechanism: a second door to the fields panel, the way «Fotos» is a second door
-    // to a photograph. A heading has nowhere to point, and a greyed-out field beside it would
-    // invent one.
-    expect(toolbarFor({ role: "button" })?.link).toBe(true);
-    expect(toolbarFor({ role: "link" })?.link).toBe(true);
-    expect(toolbarFor({ role: "heading" })?.link).toBe(false);
-    expect(toolbarFor({ role: "body" })?.link).toBe(false);
+  it("offers the destination control only where there is already a destination", () => {
+    // A heading has nowhere to point, and a greyed-out control beside it would invent one. Since
+    // sprint 40 día 2 the control chooses among the site's pages and sections and goes there with
+    // «Ir» (ADR 0079); the outside is still «Campos»'s, the panel that owns free destinations.
+    expect(toolbarFor({ role: "button" })?.destination).toBe(true);
+    expect(toolbarFor({ role: "link" })?.destination).toBe(true);
+    expect(toolbarFor({ role: "heading" })?.destination).toBe(false);
+    expect(toolbarFor({ role: "body" })?.destination).toBe(false);
   });
 
   it("draws nothing when nothing applies", () => {
-    expect(hasAnyControl({ color: [], size: [], link: false, marks: false })).toBe(false);
+    expect(hasAnyControl({ color: [], size: [], destination: false, marks: false })).toBe(false);
     const heading = toolbarFor({ role: "heading" });
     expect(heading && hasAnyControl(heading)).toBe(true);
   });
@@ -284,12 +284,12 @@ describe("what the design tools add", () => {
   it("draws a bar with the tools on even where every other control is empty", () => {
     // A hypothetical element whose background has no proved pair: no colours, but measurements
     // still apply, so there is still a bar. `hasAnyControl` has to know that.
-    expect(hasAnyControl({ color: [], size: [], link: false, marks: false })).toBe(false);
+    expect(hasAnyControl({ color: [], size: [], destination: false, marks: false })).toBe(false);
     expect(
       hasAnyControl({
         color: [],
         size: [],
-        link: false,
+        destination: false,
         marks: false,
         measures: { padding: [], borderRadius: [], exact: [] },
       }),
@@ -297,7 +297,13 @@ describe("what the design tools add", () => {
     // And on the letter alone, which is the same question asked of the field added last: the answer
     // has to come from what the object holds, not from `toolbarFor` happening to set the two at once.
     expect(
-      hasAnyControl({ color: [], size: [], link: false, marks: false, family: ["font.body"] }),
+      hasAnyControl({
+        color: [],
+        size: [],
+        destination: false,
+        marks: false,
+        family: ["font.body"],
+      }),
     ).toBe(true);
   });
 });
@@ -356,6 +362,6 @@ describe("B and I", () => {
   });
 
   it("are enough on their own to make a bar worth drawing", () => {
-    expect(hasAnyControl({ color: [], size: [], link: false, marks: true })).toBe(true);
+    expect(hasAnyControl({ color: [], size: [], destination: false, marks: true })).toBe(true);
   });
 });
