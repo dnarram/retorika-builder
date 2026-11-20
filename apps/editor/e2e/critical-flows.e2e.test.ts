@@ -7330,6 +7330,20 @@ describe("sprint 14 día 7 — la oferta que no se hace", () => {
       await page.getByRole("button", { name: "Sí, enciéndelas" }).click();
 
       await page.getByRole("button", { name: "Listas", exact: true }).click();
+      // **Sprint 40 día 1 — the offer that cannot be kept is not made.** A restaurant is born with a
+      // Galería (ADR 0039) whose cards carry a photograph, which a list entry cannot hold: the verb
+      // refuses it, and until today the panel offered it anyway and the press ended in «Algo ha
+      // fallado». Exactly one offer on this site, and none for the Galería (ADR 0025: absent, not
+      // disabled). The Galería itself is on the page, so the absence is a decision and not a miss.
+      await expect(frame.locator('[data-preset="gallery"]')).toHaveCount(1);
+      await expect(
+        page.getByRole("button", { name: /Hacer una lista con las tarjetas de/ }),
+      ).toHaveCount(1);
+      await expect(
+        page.getByRole("button", {
+          name: /Hacer una lista con las tarjetas de «Fotos de trabajos»/,
+        }),
+      ).toHaveCount(0);
       await page
         .getByRole("button", { name: /Hacer una lista con las tarjetas de «Qué hago»/ })
         .click();
@@ -7341,7 +7355,9 @@ describe("sprint 14 día 7 — la oferta que no se hace", () => {
       await expect(frame.locator('[data-preset="testimonials"]')).toHaveCount(1);
 
       await page.getByRole("button", { name: "Listas", exact: true }).click();
-      // Its own «hacer una lista» is offered — that always works, it is its own cards.
+      // Its own «hacer una lista» is offered: its cards are an author and a quote, words only, so the
+      // verb would take them. (This line used to say «that always works, it is its own cards» — false
+      // for a Galería or an Equipo, whose cards carry a photograph; sprint 40 día 1.)
       await expect(
         page.getByRole("button", { name: /Hacer una lista con las tarjetas de «Opiniones»/ }),
       ).toBeVisible();

@@ -119,6 +119,7 @@ import {
   screenPx,
   VERB_SCALE,
 } from "../editor/chromeScale.ts";
+import { collectionCandidates, sectionDisplayName } from "../editor/collectionCandidates.ts";
 import { delegate } from "../editor/delegate.ts";
 import type { SwitchNotice } from "../editor/designTools.ts";
 import {
@@ -372,8 +373,7 @@ function boundAt(
   return { collectionId: binding.collectionId, field: binding.field, entryId };
 }
 
-/** The bound list in this section, if it has one — what «Desenlazar esta sección» and the section's
- * own «convertir en lista» both need to know. */
+/** The bound list in this section, if it has one — what «Desenlazar esta sección» needs to know. */
 function boundListOf(
   doc: RetorikaDocument,
   sectionId: string,
@@ -388,22 +388,6 @@ function boundListOf(
     }
   }
   return undefined;
-}
-
-/** A list this section has that is **not** bound — the subject of «convertir en lista». */
-function looseListOf(doc: RetorikaDocument, sectionId: string): string | undefined {
-  const found = findSection(doc, sectionId);
-  if (!found) return undefined;
-  return found.section.content.find(
-    (element) => element.role === "list" && !element.binding && (element.items ?? []).length > 0,
-  )?.slot;
-}
-
-function sectionDisplayName(doc: RetorikaDocument, sectionId: string): string {
-  const found = findSection(doc, sectionId);
-  if (!found) return sectionId;
-  const key = `section.${found.section.preset.catalogId}.name` as keyof typeof catalogEs;
-  return catalogEs[key] ?? sectionId;
 }
 
 /** The preset's slots in the order it declares them, which is where a newly created element
@@ -9742,22 +9726,11 @@ export function Editor({
             blockFor={(collectionId, would) =>
               entryCountBlock(doc, collectionId, would, (catalogId) => presetFor(catalogId))
             }
-            // Every section with cards and no list yet, named by the catalog. Read from the document
-            // rather than tracked, so no new verb has to remember to keep a list of candidates.
-            candidates={doc.pages.flatMap((page) =>
-              page.sections.flatMap((section) => {
-                const slot = looseListOf(doc, section.id);
-                return slot === undefined
-                  ? []
-                  : [
-                      {
-                        sectionId: section.id,
-                        slot,
-                        suggestedName: sectionDisplayName(doc, section.id),
-                      },
-                    ];
-              }),
-            )}
+            // Every section whose cards the verb would turn into a list, named by the catalog. Read
+            // from the document rather than tracked, and **asked by trying the verb** like `canBind`
+            // below (sprint 40 día 1): a Galería's cards carry a photograph, which a list entry cannot
+            // hold, and the offer that was drawn for it answered the press with «Algo ha fallado».
+            candidates={collectionCandidates(doc)}
             onMakeList={onCollectionFromList}
             onBindList={onBindList}
             // **Asked by trying it**, which is the only way to keep this answer and `bindList`'s own

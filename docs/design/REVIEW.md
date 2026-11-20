@@ -10974,3 +10974,48 @@ panel y 390 × 844; «Diseño» y «Listas» no tienen 390:
    - Lighthouse tardó una vez 497 s en una auditoría.
 7. **El editor sigue sin verse fuera de Chromium**; la web publicada sí, en tres motores.
 8. **El sprint 40, sin planificar.**
+
+## Sprint 40 — «El logo entero, el enlace que se edita y el mapa» (desde el 20 de noviembre de 2026)
+
+Seis encargos de David, en su orden: tres defectos primero (los colores del logo, los enlaces que se
+editan, las listas de tarjetas), un mapa en «Dónde estamos», un fondo con motivos, y la revisión de
+estirar y mover. Los tres defectos se reprodujeron con fichero y línea antes de proponer nada, en la
+sesión del 20 de noviembre; el inventario de estirar y mover se entregó el mismo día y sus huecos pasan
+al 41 por decisión suya. Sus siete respuestas, los cuatro ajustes al aprobar y el quinto después (los dos
+logos DNR no entran en el repositorio) están en el plan, copiado íntegro en la memoria del proyecto.
+Siete días: 1 listas, 2 enlaces (ADR 0079), 3 logo (nota en ADR 0076), 4 «Cómo llegar» (ADR 0080, esquema
+1.21.0), 5 y 6 el fondo con motivos (ADR 0081, esquema 1.22.0), 7 el cierre. Criterios de todo el sprint:
+ninguna web guardada cambia de aspecto sin decisión escrita; la publicada no cambia un byte salvo en las
+que usen lo nuevo, y el ZIP del corpus lo demuestra al cierre; HTML y CSS estáticos, el script en 829 B;
+axe y teclado en verde; `prefers-reduced-motion` manda; ninguna instrucción sobre la página; palabras llanas.
+
+### Día 1 — las listas ofrecen solo lo que pueden (PR de `fix/la-oferta-que-no-se-cumple`)
+
+**El defecto, medido.** «A veces el editor me ofrece crear una lista de tarjetas y al pulsar da error.» La
+oferta vive solo en «Listas»: un botón «Hacer una lista con las tarjetas de «X»» por cada sección con una
+lista sin vincular y al menos una tarjeta (`looseListOf`), sin mirar qué llevan las tarjetas. El verbo,
+`collectionFromList` (`packages/schema/src/collections.ts:715-718`), rechaza toda tarjeta con un valor que no
+sea texto o enlace —una foto—, y nadie lo capturaba: del panel al reductor del historial no hay un
+try/catch, y el error acababa en `global-error.tsx`, «Algo ha fallado». Galería y Equipo llevan foto en
+cada tarjeta, y **un restaurante nace con Galería** (ADR 0039): de ahí el «a veces». Ocultar la foto no
+ayuda —`clearSlot` deja el valor— y una Galería o un Equipo añadidos a mano nacen con imagen de relleno.
+ADR 0025 ya lo había nombrado dos veces: «ausente, no desactivado» (§5) y, en su enmienda, «un botón muerto
+que parecía vivo». `canBind`, la otra oferta del panel, **pregunta probando** el verbo desde el sprint 14;
+`candidates` no.
+
+**Lo que hay ahora.** `apps/editor/src/editor/collectionCandidates.ts`, puro: por cada sección con lista
+suelta llama a `collectionFromList` dentro de un try y solo ofrece lo que el verbo haría. `looseListOf` y
+`sectionDisplayName` se mudan allí desde `Editor.tsx`. En un restaurante, «Listas» ofrece «Qué hago» y no
+«Fotos de trabajos»; nada da error. Sin esquema y sin ADR: ADR 0025 manda. El comentario de la caminata
+«la oferta que no se hace» decía «eso siempre funciona, son sus propias tarjetas»: era falso para Galería y
+Equipo, y se reescribe.
+
+**Pruebas.** `test/collectionCandidates.test.ts`: un restaurante generado ofrece exactamente «Qué hago» (y
+la prueba asevera antes que la Galería está, con tarjetas y sin vincular, para que el caso no deje de ser
+el caso en silencio); un Equipo insertado tampoco se ofrece; una lista vinculada deja de ofrecerse; el
+nombre sale del catálogo. e2e «la oferta que no se hace»: con la Galería en la página, un solo «Hacer una
+lista…» y ninguno para «Fotos de trabajos», antes de pulsar «Qué hago». **Saboteos**: sin el try, la
+Galería aparece en la unitaria; con `candidates` leyendo las listas sueltas a secas, la caminata cuenta dos.
+
+**Lo que deja.** «Foto por entrada» —lo que ADR 0033 no decidió— va al backlog con su coste para el 41:
+esquema (campo de imagen por entrada), renderer, «Listas», fichas y migración, dos días y una ADR.
