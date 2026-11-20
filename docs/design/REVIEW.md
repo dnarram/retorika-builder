@@ -11080,7 +11080,12 @@ escribiendo y Esc dejándolo como estaba por el camino; el botón de la barra y 
 cabecera y abren «Menú» sin mover el lienzo. La caminata del sprint 30 día 3 lee lo nuevo en su paso 1
 («Reservar» elige la cabecera; la entrada del menú de secciones sigue llevando a la sección) y la que
 contaba `.rb-toolbar-link` cuenta el `select`. Cadena corrida: flujos 1, 2, 3 y 5, las dos regresiones y
-el sprint 30 día 3, 13 en verde en 23 s. **Saboteos**: ver la PR.
+el sprint 30 día 3, 13 en verde en 23 s. **Suite entera, 1 776 s: un rojo**, la caminata del sprint 31
+día 4, que pulsaba el botón «Contacto» dentro del raíl esperando ir a la sección; reescrita: el botón
+elige la cabecera también en el raíl y la entrada del menú de secciones lleva a «Dónde estamos». Los
+tres saboteos del navegador (la regla «sección → edita» quitada; «Ir» sin manejador; la cabecera sin
+elegir) pusieron en rojo exactamente las caminatas que los sujetan; el cuarto, Intro a secas yendo en
+vez de escribir, lo sujeta la unitaria de `twoStates`.
 
 **Lo que pierde, nombrado.** Un clic más para ir a una página desde un botón de sección («Ir», o
 Ctrl/Cmd+Intro); «Reservar» ya no es atajo a Contacto en el lienzo; la palabra «Enlace» en la barra.

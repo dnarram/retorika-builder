@@ -24635,15 +24635,22 @@ describe("sprint 31 día 4 — el raíl se elige en el lienzo", () => {
       await expect(frame.locator("[data-section].rb-selected")).toHaveCount(0);
       await expect(page.getByRole("complementary", { name: "El menú de tu web" })).toBeVisible();
 
-      // 2. The rail's way to «Contacto» — the button that went with the pages — takes the canvas to
-      //    the section and chooses it, as the bar's did on sprint 30 día 3.
-      const contact = frame.locator('[data-section="sec-contact"]');
+      // 2. The button that went with the pages — «Contacto» — is the header's wherever it stands:
+      //    pressed in the rail it **chooses the header** and moves nothing (ADR 0066 §1, done on
+      //    sprint 40 día 2, ADR 0079; until then it took the canvas to the section, as the bar's did
+      //    on sprint 30 día 3). The rail's way to a section is an entry of its sections menu, which
+      //    takes the canvas there and chooses it.
       await pressAt(page, rail.locator('a[href="#sec-contact"]').first());
-      await expect(contact).toHaveClass(/rb-selected/);
+      await expect(header).toHaveClass(/rb-selected/);
+      await expect(frame.locator("[data-section].rb-selected")).toHaveCount(0);
+      expect(await frame.locator("body").evaluate(() => window.scrollY)).toBe(0);
+      const location = frame.locator('[data-section="sec-location"]');
+      await pressAt(page, rail.locator('a[href="#sec-location"]').first());
+      await expect(location).toHaveClass(/rb-selected/);
       await expect(header).not.toHaveClass(/rb-selected/);
       await expect
         .poll(() =>
-          contact.evaluate((el) => {
+          location.evaluate((el) => {
             const view = el.ownerDocument.defaultView as Window;
             const top = Math.round(el.getBoundingClientRect().top);
             return { scrolled: view.scrollY > 0, inView: top >= -1 && top < view.innerHeight };
@@ -24655,7 +24662,7 @@ describe("sprint 31 día 4 — el raíl se elige en el lienzo", () => {
       //    first section — and the key legend that arrives with the section stands clear of the
       //    rail, at the right (David's adjustment 3). The cover is chosen first, as on sprint 30
       //    día 3: Tab enters the page at the section the keyboard holds, and step 2 gave it
-      //    «Contacto», five pills further down.
+      //    «Dónde estamos», pills further down.
       await frame.locator("body").evaluate(() => window.scrollTo(0, 0));
       await pressAt(page, cover, 0.02, 0.5);
       await expect(cover).toHaveClass(/rb-selected/);
