@@ -11187,3 +11187,9 @@ e2e «sprint 40 día 4»: nace con la web hacia la dirección; **la dirección c
 href**; otro sitio gana y, vaciado, vuelve la dirección; vaciar las palabras lo quita. Golden nuevo
 `donde-estamos-con-mapa`; las 24 anteriores idénticas. a11y 2 378 en verde; `pnpm size` 2,4 KB por página.
 **Saboteos**: ver la PR.
+
+**La suite entera, 1 782 s: un rojo, y no era un defecto del producto.** La caminata del sprint 9 día 7
+necesita, antes de probar nada, que la barra del titular de «Contacto» solape su párrafo a 1 100 px. Con
+«Dónde estamos» una fila más alta, el clic dejaba el titular al pie del marco, el párrafo a 878 de 900, y
+la barra se quedaba 9,5 px corta. La caminata centra ahora el titular antes de pulsarlo, porque el solape
+es un hecho de «Contacto» y no de lo alto que sea lo de encima; en verde sola.

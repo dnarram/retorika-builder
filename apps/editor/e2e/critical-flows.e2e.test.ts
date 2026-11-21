@@ -3965,7 +3965,16 @@ describe("sprint 9 día 7 — colchón: la barra no traga un clic que era para o
       await studio.getByRole("switch", { name: "Herramientas de diseño" }).click();
       await studio.getByRole("button", { name: "Sí, enciéndelas" }).click();
 
-      await frame.locator('[data-section="sec-contact"] [data-id="el-contact-headline"]').click();
+      // **Centred before it is pressed** (sprint 40 día 4): what this needs is the headline's bar over
+      // the paragraph, and that is a fact about «Contacto» alone — not about how tall the sections
+      // above it happen to be. With «Dónde estamos» one line taller («Cómo llegar», ADR 0080) a bare
+      // press scrolled the headline only as far as the bottom of the frame, the paragraph sat 22px
+      // from it at 878 of 900, and the bar stopped 9.5px short of it. Centred, the overlap is back.
+      const contactHeadline = frame.locator(
+        '[data-section="sec-contact"] [data-id="el-contact-headline"]',
+      );
+      await contactHeadline.evaluate((el) => el.scrollIntoView({ block: "center" }));
+      await contactHeadline.click();
       await frame.locator(".rb-toolbar-color").waitFor();
       await frame.locator(".rb-toolbar-color").evaluate((el) => {
         (el as HTMLInputElement).value = "#fefefe";
