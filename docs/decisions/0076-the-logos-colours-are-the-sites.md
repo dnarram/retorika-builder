@@ -96,3 +96,46 @@ proved when the button was the primary, is judged again when the theme gains a f
   `logoColours.ts` (the untouched start, the logo's palettes, the offer); the help line's colours notice and
   offer; «De tu logo» in «Estilo»; `reviewTheme` and the theme dialog in the gate.
 - Notes in ADR 0010, 0015, 0041, 0054 and 0059.
+
+## Note — sprint 40 día 3: the second ink is read by families of hue
+
+**The defect, measured.** David, opening sprint 40: «He probado con el logo DNR y el editor no capta
+ningún naranja.» His logo is navy letters and an orange line. Sampled as the editor samples it (64×64 in
+Chromium), the orange was **29.5 % of the counted pixels, split across 35 eight-level buckets, the largest
+8.2 %**; on his flat export, 30.1 % across 46, the largest 7.0 %. The rule of día 2 — the most populous
+bucket holding a tenth of the counted pixels and ΔE 20 from the first — lost it, and `derivePalette`
+turned the accent 150° from the navy: the site came out navy and brown. Extraction, not threshold: a
+texture, a gradient or a thin stroke splits an ink across buckets, and no share asked of one bucket keeps
+it without also keeping stray pixels.
+
+**What reads it now** (`dominantColours`, `secondInk`): the first colour is unchanged — the most populous
+bucket — so no site «De tu logo» moves its brand colour. The buckets with a visible colour (OKLCH chroma
+0.04 or more) are grouped by hue in bands of 30°; the first colour's band and its two neighbours are its
+own; the most populous other band holding **5 %** of the counted pixels is the second ink, when its colour
+stands ΔE 20 from the first. **Its colour is the family's most populous bucket** — the flat colour of the
+stroke — when that bucket holds a fifth of the family, and the family's mean only when none does (David's
+condition). A grey first colour has no band, and any band may be the second.
+
+| Logo | First | Second, before | Second, now |
+|---|---|---|---|
+| DNR, flat export (local only) | `#152642` | none | `#954C23`, ΔE 0.5 from `#944C23` |
+| DNR, «Medio» finish (local only) | `#162642` | none | `#944C23`, hue 47.8° |
+| `logo-dos-tintas.png` (the stand-in) | `#152542` | none | `#934B23` |
+| Retorika's mark | `#0165FB` | none | `#F12D66` (mean; largest bucket 16 % of its family) |
+| Retorika's wordmark | `#011736` | none | none (pink 3.3 %) |
+| The four flat logos of the repository | unchanged | none | none |
+
+**The brand's reference hex is not in its files.** David gave `#B95319` for the orange (light version)
+and `#E65F19` (dark). Neither DNR file contains it: the nearest opaque orange pixel is ΔE 11.2 from
+`#B95319`, the family's most populous bucket ΔE 18.8, the orange's OKLCH lightness 0.46–0.52 against
+0.56. His decision: the test asserts the file's own colour, `#944C23` ± 5, and this note says so.
+
+**His files never enter the repository** (his adjustment 5): the table above for them is measured by
+`apps/editor/brand/dnrLogo.brand.test.ts`, a project that exists only with `RETORIKA_BRAND_LOGOS`. The CI
+reads 64×64 samples of the repository's own logos (`pnpm logo:samples`) and the synthetic stand-in.
+
+**What a saved site sees.** The theme stored is not recomputed: colours travel as two hex strings. But the
+editor reads the logo's bytes again when a site opens, so a site «De tu logo» whose logo has a textured
+second ink reads «De tu logo, personalizada» from today, its «De tu logo» card offers the new palette,
+and the help line offers it once (§3 of this ADR). The published site does not change a byte until the
+owner takes it. David accepted this with his answer.

@@ -165,9 +165,29 @@ export default defineConfig({
           // would otherwise also pick up "*.e2e.test.ts" and try to launch a browser and a real
           // `next dev` server on every plain `pnpm test`.
           // And the menu audit's browser suite (sprint 33 día 2): the "audit" project below.
-          exclude: [...configDefaults.exclude, "e2e/**/*.e2e.test.ts", "audit/**"],
+          // And the brand test (sprint 40 día 3): the "brand" project below.
+          exclude: [...configDefaults.exclude, "e2e/**/*.e2e.test.ts", "audit/**", "brand/**"],
         },
       },
+      // **David's own logos, measured where they live** (sprint 40 día 3). The two files never enter
+      // the repository (his adjustment 5 approving the sprint), so the table read from them cannot be
+      // a test the CI runs: it is this project, declared only when RETORIKA_BRAND_LOGOS names the
+      // folder that holds them — `RETORIKA_BRAND_LOGOS=. pnpm test:brand`. Absent, the project does
+      // not exist; it is never a test that quietly skips. It launches Chromium, for the editor's own
+      // sampling (`test/chromiumSample.ts`).
+      ...(process.env["RETORIKA_BRAND_LOGOS"]
+        ? [
+            {
+              test: {
+                name: "brand",
+                root: "./apps/editor",
+                include: ["brand/**/*.brand.test.ts"],
+                environment: "node",
+                testTimeout: 60_000,
+              },
+            },
+          ]
+        : []),
       // The menu audit (sprint 33 día 2): the full matrix of places × schemes × fixed, at seven
       // widths, in Chromium, Firefox and WebKit, against the published page and the canvas's own
       // document. Declared only when RETORIKA_AUDIT=1, which `pnpm audit:menus` sets: some twelve

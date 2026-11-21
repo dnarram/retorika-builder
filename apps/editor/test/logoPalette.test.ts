@@ -1,4 +1,6 @@
-import { PALETTES } from "@retorika/tokens";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { hexToOklch, PALETTES } from "@retorika/tokens";
 import { describe, expect, it } from "vitest";
 import {
   colourDistance,
@@ -108,7 +110,8 @@ describe("dominantColour", () => {
 
 /**
  * A logo's second tint (sprint 38 día 2): the secondary and the accent of a derived palette, when
- * the logo really has one — at least a tenth of the counted pixels and at least ΔE 20 from the first.
+ * the logo really has one — since sprint 40 día 3 a family of hue holding at least a twentieth of the
+ * counted pixels, outside the first colour's band and its neighbours, and at least ΔE 20 from it.
  */
 describe("dominantColours", () => {
   it("reads one tint from a flat logo and two from a two-colour one, most present first", () => {
@@ -123,10 +126,15 @@ describe("dominantColours", () => {
     ]);
   });
 
-  it("does not count a second colour under a tenth of the pixels", () => {
-    expect(dominantColours(mixed("#2563EB", 60, "#DC2626", 64))).toEqual([parseHex("#2563EB")]);
-    // Exactly a tenth counts.
-    expect(dominantColours(mixed("#2563EB", 90, "#DC2626", 100))).toHaveLength(2);
+  it("does not count a second colour under a twentieth of the pixels, and counts one at it", () => {
+    // A tenth until sprint 40 día 3, when the second ink came to be read by families of hue: the
+    // share is the family's, and five per cent sits between Retorika's wordmark (3.3 %, no second
+    // tint) and its mark (9.9 %, the pink). Exactly a twentieth counts.
+    expect(dominantColours(mixed("#2563EB", 96, "#DC2626", 100))).toEqual([parseHex("#2563EB")]);
+    expect(dominantColours(mixed("#2563EB", 95, "#DC2626", 100))).toEqual([
+      parseHex("#2563EB"),
+      parseHex("#DC2626"),
+    ]);
   });
 
   it("does not count the first colour's own fringe as a second colour", () => {
@@ -150,9 +158,174 @@ describe("dominantColours", () => {
     expect(dominantColours(logo)).toEqual(dominantColours(logo));
   });
 
+  it("leaves the first colour where it was: the most populous bucket", () => {
+    // Sprint 40 día 3 changed the second ink only. A site «De tu logo» keeps its brand colour.
+    expect(dominantColours(mixed("#162642", 70, "#944C23", 100))[0]).toEqual(parseHex("#162642"));
+  });
+
   it("writes a tint as the upper-case hex the palettes are written in", () => {
     expect(toHex({ r: 37, g: 99, b: 235 })).toBe("#2563EB");
     expect(toHex({ r: 0, g: 11, b: 43 })).toBe("#000B2B");
+  });
+});
+
+/**
+ * **The second ink, read by families of hue** (sprint 40 día 3, encargo 1). The defect: David's logo
+ * carried its orange in 30 % of the counted pixels, split across 35 buckets of which the largest held
+ * 8.2 %, and the rule of one bucket at a tenth lost it.
+ */
+describe("the second ink, by families of hue", () => {
+  /** Pixels in order: each pair a colour and how many of it. */
+  function made(parts: readonly [string, number][]): Uint8ClampedArray {
+    const total = parts.reduce((sum, [, count]) => sum + count, 0);
+    const data = new Uint8ClampedArray(total * 4);
+    let at = 0;
+    for (const [hex, count] of parts) {
+      data.set(solid(hex, count), at);
+      at += count * 4;
+    }
+    return data;
+  }
+
+  /** Twelve oranges in twelve different 8-level buckets, all in the hue band of `#944C23`
+   * (38.7°–58.6°, computed and written down rather than trusted). */
+  const ORANGES = [
+    "#8C4423",
+    "#8C4C23",
+    "#8C5423",
+    "#944423",
+    "#944C23",
+    "#945423",
+    "#9C4423",
+    "#9C4C23",
+    "#9C5423",
+    "#A44423",
+    "#A44C23",
+    "#A45423",
+  ] as const;
+
+  it("finds an ink no bucket of which reaches a tenth, the defect David reported", () => {
+    // 300 navy and 120 orange spread evenly over twelve buckets: each 2.4 % of the counted pixels,
+    // the family 28.6 % — the shape measured on his logo.
+    const pixels = made([["#162642", 300], ...ORANGES.map((hex): [string, number] => [hex, 10])]);
+    const [brand, second] = dominantColours(pixels);
+    expect(brand).toEqual(parseHex("#162642"));
+    expect(second, "the orange is lost").toBeDefined();
+    const hue = second ? hexToOklch(toHex(second)).h : Number.NaN;
+    expect(hue).toBeGreaterThan(38);
+    expect(hue).toBeLessThan(59);
+  });
+
+  it("takes the family's most populous bucket when it holds a fifth of the family, and the mean when none does", () => {
+    // David's condition: the flat colour of the stroke, not a mean. 21 of 100 → the bucket.
+    const others = ORANGES.filter((hex) => hex !== "#944C23");
+    const spread = (total: number): [string, number][] =>
+      others.map((hex, index) => [
+        hex,
+        Math.floor(total / others.length) + (index < total % others.length ? 1 : 0),
+      ]);
+    const at21 = made([["#162642", 300], ["#944C23", 21], ...spread(79)]);
+    expect(dominantColours(at21)[1]).toEqual(parseHex("#944C23"));
+    // 19 of 100 → the mean of the whole family, which is not the bucket's colour.
+    const family19: [string, number][] = [["#944C23", 19], ...spread(81)];
+    const at19 = made([["#162642", 300], ...family19]);
+    const mean = (() => {
+      const total = family19.reduce((sum, [, count]) => sum + count, 0);
+      const sum = family19.reduce(
+        (acc, [hex, count]) => {
+          const { r, g, b } = parseHex(hex);
+          return { r: acc.r + r * count, g: acc.g + g * count, b: acc.b + b * count };
+        },
+        { r: 0, g: 0, b: 0 },
+      );
+      return {
+        r: Math.round(sum.r / total),
+        g: Math.round(sum.g / total),
+        b: Math.round(sum.b / total),
+      };
+    })();
+    expect(dominantColours(at19)[1]).toEqual(mean);
+    expect(mean).not.toEqual(parseHex("#944C23"));
+  });
+
+  it("never takes the first colour's own band or its neighbours as the second", () => {
+    // A blue brand with a cyan beside it (215°, the band next to the blue's 263°): the cyan is the
+    // blue's shading, not a second ink — Retorika's own mark has exactly this, and its second ink is
+    // the pink further round. With nothing else, there is no second tint.
+    expect(
+      dominantColours(
+        made([
+          ["#2563EB", 60],
+          ["#06B6D4", 40],
+        ]),
+      ),
+    ).toEqual([parseHex("#2563EB")]);
+    expect(
+      dominantColours(
+        made([
+          ["#2563EB", 60],
+          ["#06B6D4", 30],
+          ["#DC2626", 10],
+        ]),
+      ),
+    ).toEqual([parseHex("#2563EB"), parseHex("#DC2626")]);
+  });
+
+  it("lets any band be the second for a grey first colour, which has no hue of its own", () => {
+    expect(
+      dominantColours(
+        made([
+          ["#666666", 90],
+          ["#F26B1D", 10],
+        ]),
+      ),
+    ).toEqual([parseHex("#666666"), parseHex("#F26B1D")]);
+  });
+
+  it("gives the same answer every time, whatever order the pixels come in", () => {
+    const pixels = made([["#162642", 300], ...ORANGES.map((hex): [string, number] => [hex, 10])]);
+    const reversed = made([
+      ...[...ORANGES].reverse().map((hex): [string, number] => [hex, 10]),
+      ["#162642", 300],
+    ]);
+    expect(dominantColours(reversed)).toEqual(dominantColours(pixels));
+  });
+});
+
+/**
+ * **The table measured on real logos**, from 64×64 samples the editor's own sampling took in Chromium
+ * (`pnpm logo:samples`, `test/chromiumSample.ts`). Only files that are in this repository; David's
+ * DNR logos are measured by the local brand test and never committed (his adjustment 5).
+ * `logo-dos-tintas.png` is their stand-in: drawn for the purpose, with their structure measured — an
+ * orange 30.8 % of the counted pixels in 44 buckets, the largest 7.7 % of the total — so the rule of
+ * one bucket at a tenth loses it as it lost his.
+ */
+describe("the table measured on the repository's logos", () => {
+  const sample = (name: string) =>
+    new Uint8ClampedArray(
+      readFileSync(join(import.meta.dirname, "fixtures", "logo-samples", `${name}.rgba`)),
+    );
+  const near = (colour: Rgb | undefined, hex: string) =>
+    colour === undefined ? Number.POSITIVE_INFINITY : colourDistance(colour, parseHex(hex));
+
+  it("reads the two-ink stand-in as navy and its orange's own flat colour", () => {
+    const [brand, second] = dominantColours(sample("dos-tintas"));
+    expect(near(brand, "#162642")).toBeLessThanOrEqual(5);
+    expect(near(second, "#944C23")).toBeLessThanOrEqual(5);
+  });
+
+  it("gives Retorika's mark its pink, read as the family's mean, and its wordmark no second tint", () => {
+    const [blue, pink] = dominantColours(sample("retorika-mark"));
+    expect(near(blue, "#0165FB")).toBeLessThanOrEqual(5);
+    expect(pink).toEqual(parseHex("#F12D66"));
+    expect(dominantColours(sample("retorika-wordmark"))).toHaveLength(1);
+  });
+
+  it("leaves every flat logo of the repository with its one colour, and the white one with none", () => {
+    expect(dominantColours(sample("corpus-rust"))).toEqual([parseHex("#9A3412")]);
+    expect(dominantColours(sample("e2e-blue"))).toEqual([parseHex("#2563EB")]);
+    expect(dominantColours(sample("e2e-yellow"))).toEqual([parseHex("#FFCD00")]);
+    expect(dominantColours(sample("e2e-white"))).toEqual([]);
   });
 });
 
