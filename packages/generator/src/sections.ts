@@ -19,6 +19,7 @@ import {
   secondaryPhoneDestination,
   visitAnchor,
 } from "./destination.ts";
+import es from "./locales/es.json" with { type: "json" };
 
 /**
  * `{ciudad}` has no source today. Question 4 collects one free-text address
@@ -269,9 +270,20 @@ export function buildLocation(answers: Answers, sector: SectorId): Section | und
     body("el-address", "address", answers.address.trim()),
   ];
   if (answers.hours.trim() !== "") content.push(body("el-hours", "hours", answers.hours.trim()));
-  // The map slot needs latitude/longitude; question 4 collects free text only. Left unfilled
-  // rather than guessed — it is optional in the catalog (0..1), the same shape as ADR 0004's
-  // other half, still pending a tile provider.
+  /*
+   * **«Cómo llegar», with nothing stored but its words** (ADR 0080, sprint 40 día 4, David's answer
+   * to encargo 2 and his adjustment 1): the link follows the address the section shows, read when the
+   * page is drawn (`mapHref`), so an owner who corrects the address in «Campos» moves the link with
+   * it. Writing the address here as the map's `query` would be the copy that drifts — the sabotage
+   * the e2e walk is red under. Removed or rewritten from «Campos».
+   */
+  content.push({
+    id: "el-map",
+    role: "map",
+    hidden: false,
+    slot: "map",
+    value: { kind: "map", label: es["location.map.label"] },
+  });
 
   return {
     id: LOCATION_SECTION_ID,

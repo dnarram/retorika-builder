@@ -163,6 +163,7 @@ export {
   setMobilePatch,
   setPlacement,
 } from "./layout.ts";
+export { addressOf, MAP_ADDRESS_SLOT, mapHref } from "./map.ts";
 export type { Mark, MarkRange, MarkRun, TextEdit } from "./marks.ts";
 export {
   addRun,

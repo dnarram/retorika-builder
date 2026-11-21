@@ -2458,9 +2458,8 @@ describe("1.20.0 — the fill keeps the brand's colour", () => {
     palette: { kind: "logo" },
   });
 
-  it("is registered, and it is the one the chain ends at", () => {
+  it("is registered", () => {
     expect(step("1.20.0").version).toBe("1.20.0");
-    expect(SCHEMA_VERSION).toBe("1.20.0");
   });
 
   it("seals a 1.19.0 document and moves nothing, because the three keys are optional", () => {
@@ -2537,5 +2536,137 @@ describe("1.20.0 — the fill keeps the brand's colour", () => {
     }
     // `logo-amarillo` (sprint 38 día 1) is the one that does: the second shape of the stylesheet.
     expect(stamped).toBe(1);
+  });
+});
+
+/**
+ * `0022` — the map follows the address (ADR 0080, sprint 40 día 4): a `map` value may carry a `query`,
+ * and its point becomes an optional pair; with neither, the link follows the address its section
+ * shows. `up` seals and moves nothing; `down` takes out every map without a point and keeps the rest.
+ */
+describe("1.21.0 — the map follows the address", () => {
+  const location = (map: Record<string, unknown> | null): Record<string, unknown> => ({
+    id: "sec-location",
+    preset: { catalogId: "location", variantId: "stacked" },
+    source: "catalog",
+    layout: null,
+    content: [
+      {
+        id: "el-location-headline",
+        role: "heading",
+        hidden: false,
+        slot: "headline",
+        value: { kind: "text", text: "Dónde estamos" },
+      },
+      {
+        id: "el-address",
+        role: "body",
+        hidden: false,
+        slot: "address",
+        value: { kind: "text", text: "Muelle 3, Ronda" },
+      },
+      ...(map
+        ? [
+            {
+              id: "el-map",
+              role: "map",
+              hidden: false,
+              slot: "map",
+              value: { kind: "map", ...map },
+            },
+          ]
+        : []),
+    ],
+  });
+  const site = (version: string, map: Record<string, unknown> | null) => ({
+    schemaVersion: version,
+    id: "doc-mapa",
+    siteName: "Taberna del Puerto",
+    theme,
+    collections: [],
+    pages: [{ id: "home", slug: "index", title: "Taberna del Puerto", sections: [location(map)] }],
+  });
+
+  it("is registered, and it is the one the chain ends at", () => {
+    expect(step("1.21.0").version).toBe("1.21.0");
+    expect(SCHEMA_VERSION).toBe("1.21.0");
+  });
+
+  it("seals a 1.20.0 document and moves nothing, a map with its point included", () => {
+    const pointed = site("1.20.0", { label: "Mapa", latitude: 36.74, longitude: -5.16 });
+    expect(upTo(pointed, "1.21.0")).toEqual({ ...pointed, schemaVersion: "1.21.0" });
+    expect(() => parseDocument(upTo(pointed, "1.21.0"))).not.toThrow();
+    const once = migrateToCurrent(site("1.20.0", null));
+    expect(migrateToCurrent(once)).toEqual(once);
+  });
+
+  it("parses a map that follows the address, one with a place of its own, and one with a point", () => {
+    for (const map of [
+      { label: "Cómo llegar" },
+      { label: "Cómo llegar", query: "Plaza de España, Ronda" },
+      { label: "Cómo llegar", latitude: 36.74, longitude: -5.16 },
+    ]) {
+      expect(() => parseDocument(site("1.21.0", map)), JSON.stringify(map)).not.toThrow();
+    }
+  });
+
+  it("refuses half a point, a point off the globe, and an empty place", () => {
+    expect(() => parseDocument(site("1.21.0", { label: "x", latitude: 36.74 }))).toThrow(
+      /latitude and a longitude/,
+    );
+    expect(() => parseDocument(site("1.21.0", { label: "x", longitude: -5.16 }))).toThrow(
+      /latitude and a longitude/,
+    );
+    expect(() =>
+      parseDocument(site("1.21.0", { label: "x", latitude: 91, longitude: 0 })),
+    ).toThrow();
+    expect(() => parseDocument(site("1.21.0", { label: "x", query: "  " }))).toThrow();
+  });
+
+  /** **`down` is lossy, and this is the loss, named:** a map without a point has no 1.20.0 form. */
+  it("takes out every map without a point on the way down, and keeps a point without its place", () => {
+    const down = step("1.21.0").down;
+    expect(down, "1.21.0 has no `down`").toBeDefined();
+    const followed = down?.(site("1.21.0", { label: "Cómo llegar" })) ?? {};
+    expect(followed).toEqual(site("1.20.0", null));
+    expect(() => parseDocument(upTo(followed, "1.20.0"))).not.toThrow();
+    const pointed = down?.(
+      site("1.21.0", { label: "Mapa", query: "Ronda", latitude: 36.74, longitude: -5.16 }),
+    );
+    expect(pointed).toEqual(site("1.20.0", { label: "Mapa", latitude: 36.74, longitude: -5.16 }));
+  });
+
+  it("round-trips a document with no map, and one whose map has a point", () => {
+    const down = step("1.21.0").down;
+    for (const map of [null, { label: "Mapa", latitude: 36.74, longitude: -5.16 }]) {
+      const input = site("1.20.0", map);
+      expect(down?.(upTo(input, "1.21.0"))).toEqual(input);
+    }
+  });
+
+  it("is the claim it rests on: every map stamped before 1.21.0 carries its point", () => {
+    // `contacto-y-horario` (sprint 1, by hand) holds ADR 0004's map with a latitude and a longitude —
+    // the only shape 1.20.0 allowed — and `donde-estamos-con-mapa` (sprint 40 día 4) the new one.
+    const corpus = readdirSync(DOCUMENTS_DIR).filter((file) => file.endsWith(".json"));
+    const found: string[] = [];
+    for (const file of corpus) {
+      const raw = JSON.parse(readFileSync(join(DOCUMENTS_DIR, file), "utf8")) as {
+        schemaVersion: string;
+        pages: { sections: { content: { value?: Record<string, unknown> }[] }[] }[];
+      };
+      for (const page of raw.pages) {
+        for (const section of page.sections) {
+          for (const element of section.content) {
+            if (element.value?.["kind"] !== "map") continue;
+            found.push(file);
+            if (raw.schemaVersion === "1.21.0") continue;
+            expect(typeof element.value["latitude"], file).toBe("number");
+            expect(typeof element.value["longitude"], file).toBe("number");
+            expect(element.value["query"], file).toBeUndefined();
+          }
+        }
+      }
+    }
+    expect(found.sort()).toEqual(["contacto-y-horario.json", "donde-estamos-con-mapa.json"]);
   });
 });

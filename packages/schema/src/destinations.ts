@@ -1,5 +1,6 @@
 import type { Page, RetorikaDocument } from "./document.ts";
 import { flattenElements } from "./invariants.ts";
+import { mapHref } from "./map.ts";
 import type { Role } from "./roles.ts";
 import { SLUG_PATTERN } from "./slug.ts";
 
@@ -164,6 +165,20 @@ export function listDeadDestinations(doc: RetorikaDocument): DeadDestination[] {
       for (const element of flattenElements(section.content)) {
         if (element.hidden) continue;
         const value = element.value;
+        // **A «Cómo llegar» is a link too** (ADR 0080, sprint 40 día 4): one that follows the
+        // address leads nowhere when the address is gone, and the download says so like any other.
+        if (value?.kind === "map") {
+          if (mapHref(value, section) !== "") continue;
+          dead.push({
+            pageId: page.id,
+            sectionId: section.id,
+            elementId: element.id,
+            slot: element.slot,
+            role: element.role,
+            text: value.label,
+          });
+          continue;
+        }
         if (value?.kind !== "link") continue;
         if (!isDead(value.href, page.id, links)) continue;
         dead.push({

@@ -11141,3 +11141,55 @@ nunca es segunda (azul con cian); la marca gris; el orden de los píxeles no cam
 sobre las siete muestras. e2e «sprint 38 día 3»: la pregunta 1 con `logo-dos-tintas.png` y la web generada
 con `--color-secondary` y `--color-accent` a ΔE ≤ 5 de `#944C23`. Local: los dos DNR, en verde.
 **Saboteos**: ver la PR.
+
+### Día 4 — «Cómo llegar» (PR de `feat/como-llegar`)
+
+**Lo que David eligió** (encargo 2): un enlace «Cómo llegar» a Google Maps desde la dirección, que nace
+con la web y se quita en «Campos»; y al aprobar, su ajuste 1: **el enlace sigue a la dirección**, sin
+copia guardada, salvo que el dueño escriba otro sitio a propósito.
+
+**Lo que había.** El hueco `map` existía desde el sprint 1 y ADR 0004 prometía «imagen estática más
+enlace», pero el valor exigía latitud y longitud, ninguna pregunta las pide, el generador lo dejaba vacío
+y ningún panel lo escribía. El único mapa del corpus, `contacto-y-horario`, escrito a mano, iba a
+OpenStreetMap por coordenadas.
+
+**Lo que hay ahora** ([ADR 0080](../decisions/0080-the-map-is-a-link-to-the-address-and-is-born-with-the-site.md)):
+
+- **Un `<a>` y nada más**: sin script (la constante sigue en 829 B), sin imagen, sin marco, sin petición.
+  El navegador del visitante va a Google solo cuando pulsa: sin cookies, sin terceros en la página, sin
+  consentimiento que pedir. Sin conexión la web se abre entera.
+- **Adónde lleva no se guarda.** El valor es `{ kind: "map", label }`; `mapHref` (`packages/schema/src/map.ts`)
+  lee al pintar: un punto si lo hay (OpenStreetMap, como siempre, y `contacto-y-horario` sale byte a
+  byte), si no un sitio escrito a propósito (`query`), y si no **la dirección que enseña su sección**. La
+  dirección viaja solo como valor de la consulta, por `encodeURIComponent`, y por `safeUrl`.
+- **Sin punto, sin sitio y sin dirección visible, es un enlace muerto**: `listDeadDestinations` lo nombra,
+  la descarga se bloquea, «Campos» pinta la fila en rojo y dice por qué, y el renderer escribe `#`. El
+  renderer y la comprobación leen la misma función.
+- **Nace con la web**: el generador escribe `{ kind: "map", label: "Cómo llegar" }` y nada de la
+  dirección. «Campos» enseña la fila «Mapa»: sus palabras, una línea con adónde lleva y la caja «Otro
+  sitio, si no es la dirección». Una web guardada antes no tiene mapa y no lo gana sola: la fila se le
+  ofrece vacía. En el lienzo, el enlace se edita como el de un botón (ADR 0079).
+- **Esquema 1.21.0, migración `0022`**: `query` nuevo, el punto pasa a pareja opcional. `up` no mueve
+  nada; `down` quita el mapa sin punto y lo dice. Instantánea regenerada.
+- **Una frase mía que no era verdad, corregida el mismo día**: la migración decía «ningún documento ha
+  tenido nunca un mapa»; `contacto-y-horario` lo tiene. La prueba asevera lo que sí es cierto: todo mapa
+  anterior a 1.21.0 lleva su punto y nada más.
+
+**Pruebas.** Esquema: `map.test.ts` (sigue a la dirección; una dirección corregida es otro enlace;
+codificación de comillas, `&`, `#`, `<`; el sitio escrito gana; el punto a OpenStreetMap; nada sin
+dirección visible; el mapa muerto en `listDeadDestinations`, y no el oculto ni el que tiene sitio) y el
+bloque 1.21.0 de `migrations.test.ts`. Renderer: `map.test.ts` (el href del golden; la dirección
+corregida; un `javascript:` en la dirección queda dentro de la consulta; `#` sin destino; el mismo href
+en `dom` y en `html`; `contacto-y-horario` intacto). Generador: el test de «sin mapa» se invierte, y
+asevera que el valor no guarda nada de la dirección. Catálogo: el hueco que lee el mapa es la dirección
+de «Dónde estamos». Editor: la fila del mapa, su oferta en una web guardada, `fieldValueFor`, el muerto.
+e2e «sprint 40 día 4»: nace con la web hacia la dirección; **la dirección corregida en «Campos» cambia el
+href**; otro sitio gana y, vaciado, vuelve la dirección; vaciar las palabras lo quita. Golden nuevo
+`donde-estamos-con-mapa`; las 24 anteriores idénticas. a11y 2 378 en verde; `pnpm size` 2,4 KB por página.
+**Saboteos**: ver la PR.
+
+**La suite entera, 1 782 s: un rojo, y no era un defecto del producto.** La caminata del sprint 9 día 7
+necesita, antes de probar nada, que la barra del titular de «Contacto» solape su párrafo a 1 100 px. Con
+«Dónde estamos» una fila más alta, el clic dejaba el titular al pie del marco, el párrafo a 878 de 900, y
+la barra se quedaba 9,5 px corta. La caminata centra ahora el titular antes de pulsarlo, porque el solape
+es un hecho de «Contacto» y no de lo alto que sea lo de encima; en verde sola.

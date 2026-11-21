@@ -17,7 +17,7 @@ import {
  * role or a token is additive and bumps the minor; removing or renaming one breaks and
  * bumps the major.
  */
-export const SCHEMA_VERSION = "1.20.0";
+export const SCHEMA_VERSION = "1.21.0";
 
 const idSchema = z.string().min(1).max(128);
 
@@ -107,13 +107,29 @@ const contentValueSchema = z.union([
       marks: marksSchema.optional(),
     })
     .superRefine(withinText),
-  z.strictObject({
-    kind: z.literal("map"),
-    /** Published as a static image plus a link to the maps application (ADR 0004). */
-    label: z.string(),
-    latitude: z.number(),
-    longitude: z.number(),
-  }),
+  z
+    .strictObject({
+      kind: z.literal("map"),
+      /**
+       * The words of the link — «Cómo llegar». Until 1.21.0 the value also had to carry a latitude
+       * and a longitude, which no question asks for: no document ever held a map.
+       *
+       * **Where it leads is not stored** (ADR 0080, sprint 40 día 4, David's adjustment 1): with no
+       * coordinates and no `query`, the map follows the address its section shows, read when the
+       * page is drawn (`mapHref`). The owner who corrects the address in «Campos» moves the map with
+       * it. A copy of the address here would be two copies of one fact, drifting the first edit.
+       */
+      label: z.string(),
+      /** A place written on purpose instead of the address — «Otro destino» in «Campos». */
+      query: z.string().trim().min(1).max(300).optional(),
+      /** A point, both or neither: what ADR 0004 asked for, and still drawn to OpenStreetMap. */
+      latitude: z.number().min(-90).max(90).optional(),
+      longitude: z.number().min(-180).max(180).optional(),
+    })
+    .refine((value) => (value.latitude === undefined) === (value.longitude === undefined), {
+      message: "A map carries both a latitude and a longitude, or neither.",
+      path: ["longitude"],
+    }),
   z.strictObject({
     kind: z.literal("embed"),
     /** Never emitted unless embeds are explicitly enabled. See ADR 0004. */
