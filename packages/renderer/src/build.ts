@@ -1,5 +1,6 @@
 import { FOOTER_ID, presetFor, TEASER_ID } from "@retorika/catalog";
 import {
+  type Background,
   type Collection,
   type ContentElement,
   FILL_KEYS,
@@ -19,6 +20,8 @@ import {
   SORTED_TOKEN_KEYS,
   type StyleProperty,
   tokenToCssVariable,
+  type VeilColours,
+  veilFor,
 } from "@retorika/schema";
 import { cssAttributeValue, cssThemeValue, NEUTRALISED_URL, safeUrl } from "./escape.ts";
 import { fillVars } from "./fill.ts";
@@ -1228,5 +1231,88 @@ export function buildCss(doc: RetorikaDocument, target: "html" | "dom"): string 
     ...fineGridCss(doc),
     ...elementStyleCss(doc),
     ...breakpointCss(doc),
+    // A background with motifs under a section or the site, with its veil (ADR 0081). Last, so its
+    // own phone rule follows the shared one; `[]` for every document without one, which is every
+    // document before 1.22.0 — those publish exactly the bytes they always did.
+    ...backgroundCss(doc),
   ].join("\n");
+}
+
+/** What a stylesheet may carry inside `url("…")`: a bundle name, a bare file name, or the preview's
+ * object URL — nothing that could close the quotes or the `url()`, and nothing `safeUrl` refuses. */
+const CSS_URL_SAFE = /^[A-Za-z0-9:/._%-]+$/;
+
+function cssUrl(src: string): string {
+  if (safeUrl(src) !== src || !CSS_URL_SAFE.test(src)) {
+    throw new Error(`backgroundCss: "${src}" is not a name this stylesheet can carry`);
+  }
+  return `url("${src}")`;
+}
+
+/**
+ * **A background with motifs, and the veil over it** (ADR 0081, sprint 40 día 5).
+ *
+ * The picture goes under the box — `body` for the site, the section's own for a section — and a
+ * `::before` lies over it and under every word: `color.surface` at the opacity `veilFor` derives
+ * from the picture's extremes **when the page is drawn**, so a palette change is a new veil and the
+ * document stores no number. `isolation: isolate` with `z-index: -1` is what puts the veil above the
+ * box's own background and below everything in it, the header and its glass included: the fixed
+ * bar composes over the veiled motif, which the tokens' proof holds readable.
+ *
+ * `html` takes the surface where the site has a picture, so `body`'s does not propagate to the
+ * canvas — propagated, `cover` would size against the root and stretch the picture down the whole
+ * document, and the veil, a child of `body`, could not cover what the canvas paints.
+ *
+ * Two ways to paint and no third (David's answer): `tile` at the picture's own size, half of it on
+ * a phone (rule 7's derivation, in this sheet's own `@media` after the shared one); `cover` filling
+ * the box, centred. Never `fixed`: iOS Safari ignores it, and it is a movement tied to scrolling.
+ */
+function backgroundCss(doc: RetorikaDocument): string[] {
+  const rules: string[] = [];
+  const mobile: string[] = [];
+  const colours: VeilColours = {
+    "color.surface": doc.theme["color.surface"],
+    "color.ink": doc.theme["color.ink"],
+    "color.primary": doc.theme["color.primary"],
+    "color.secondary": doc.theme["color.secondary"],
+    "color.muted": doc.theme["color.muted"],
+  };
+  const paint = (selector: string, background: Background) => {
+    const alpha = veilFor(colours, background.extremes);
+    const tile = background.paint === "tile";
+    rules.push(
+      `${selector} { position: relative; isolation: isolate;`,
+      `  background-image: ${cssUrl(background.src)};`,
+      tile
+        ? `  background-size: ${background.width}px ${background.height}px; background-repeat: repeat;`
+        : "  background-size: cover; background-repeat: no-repeat;",
+      `  background-position: ${tile ? "center top" : "center"}; }`,
+      `${selector}::before { content: ""; position: absolute; inset: 0; z-index: -1;`,
+      "  pointer-events: none;",
+      `  background: color-mix(in srgb, var(--color-surface) ${alpha}%, transparent); }`,
+    );
+    if (tile) {
+      mobile.push(
+        `  ${selector} { background-size: ${background.width / 2}px ${background.height / 2}px; }`,
+      );
+    }
+  };
+  if (doc.background) {
+    rules.push("html { background: var(--color-surface); }");
+    paint("body", doc.background);
+  }
+  for (const page of doc.pages) {
+    for (const section of page.sections) {
+      if (section.background) {
+        paint(`[data-section="${cssAttributeValue(section.id)}"]`, section.background);
+      }
+    }
+  }
+  if (rules.length === 0) return [];
+  return [
+    "",
+    ...rules,
+    ...(mobile.length === 0 ? [] : ["@media (max-width: 720px) {", ...mobile, "}"]),
+    "",
+  ];
 }

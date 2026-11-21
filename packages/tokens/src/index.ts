@@ -1,3 +1,6 @@
+/** The veil a motif needs, derived where the renderer can reach it (ADR 0081). */
+export type { Extremes, VeilColours } from "@retorika/schema";
+export { VEIL_TEXT_KEYS, veilFor } from "@retorika/schema";
 export { RETORIKA_BRAND } from "./brand.ts";
 export type { ContrastPair, PairKey } from "./contrast.ts";
 export {

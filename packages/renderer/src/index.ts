@@ -183,5 +183,10 @@ function titleFor(page: { title: string }, siteName: string): string {
  * the first `src` outside `sections[].content` — is learned once for every reader.
  */
 function collectAssets(doc: RetorikaDocument): AssetRef[] {
-  return imageSourcesOf(doc).map((source) => ({ src: source.src, alt: source.alt }));
+  // A background with motifs (ADR 0081) is decoration and has no `alt`; its `src` is bundled like
+  // every other.
+  return imageSourcesOf(doc).map((source) => ({
+    src: source.src,
+    alt: source.kind === "background" ? "" : source.alt,
+  }));
 }

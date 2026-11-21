@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { backgroundSchema } from "./background.ts";
 import { ownFontsSchema } from "./fonts.ts";
 import { headerSchema, menuLabelSchema } from "./header.ts";
 import { type MarkRun, marksSchema, markTextIssue } from "./marks.ts";
@@ -17,7 +18,7 @@ import {
  * role or a token is additive and bumps the minor; removing or renaming one breaks and
  * bumps the major.
  */
-export const SCHEMA_VERSION = "1.21.0";
+export const SCHEMA_VERSION = "1.22.0";
 
 const idSchema = z.string().min(1).max(128);
 
@@ -269,6 +270,11 @@ export const sectionSchema = z.strictObject({
   /** null means "use the catalog preset's layout". */
   layout: sectionLayoutSchema.nullable(),
   /**
+   * A picture under this section, with its veil (ADR 0081, sprint 40 día 5). Absent is the ordinary
+   * state and every document before 1.22.0. Painted over the site's own background, when both exist.
+   */
+  background: backgroundSchema.optional(),
+  /**
    * Whether this destination appears in the menu (ADR 0043).
    *
    * **Absent means it appears**, which is what absent meant before the key existed — so no stored
@@ -457,6 +463,12 @@ export const documentSchema = z.strictObject({
   header: headerSchema.optional(),
   pages: z.array(pageSchema).min(1),
   collections: z.array(collectionSchema),
+  /**
+   * A picture under the whole site, with its veil (ADR 0081): the sections are transparent and the
+   * page shows it through them; a section with a background of its own paints over it. Absent is the
+   * ordinary state and every document before 1.22.0.
+   */
+  background: backgroundSchema.optional(),
 });
 export type RetorikaDocument = z.infer<typeof documentSchema>;
 

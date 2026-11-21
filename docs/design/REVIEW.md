@@ -11193,3 +11193,64 @@ necesita, antes de probar nada, que la barra del titular de «Contacto» solape 
 «Dónde estamos» una fila más alta, el clic dejaba el titular al pie del marco, el párrafo a 878 de 900, y
 la barra se quedaba 9,5 px corta. La caminata centra ahora el titular antes de pulsarlo, porque el solape
 es un hecho de «Contacto» y no de lo alto que sea lo de encima; en verde sola.
+
+### Día 5 — un fondo con motivos: el modelo, el velo y el renderer (PR de `feat/un-fondo-con-motivos`)
+
+**Lo que David eligió** (encargo 5): sección y toda la web; mosaico o a sangre, sin «fija»; velo medido
+por imagen con los pares de `validateTheme`; PNG si tiene alfa, JPEG si no, ≤ 1 600 px. Al aprobar, sus
+ajustes 2 (los extremos se miden a la resolución guardada, nunca en la muestra de 64×64), 3 (una prueba
+de que el fondo de la web no se pinta entre la foto de la portada y su texto, y de que el cristal de la
+barra sigue pasando 4,5 sobre el motivo) y 4 (si el día 6 no cabe, se corta la puerta de la sección).
+Hoy es la mitad del modelo y el renderer; el editor es el día 6.
+
+**Lo que hay ahora** ([ADR 0081](../decisions/0081-a-background-with-motifs-carries-its-measured-veil.md)):
+
+- **El modelo**: `background` opcional en el documento y en cada sección: `{ src, width, height, paint:
+  "tile" | "cover", extremes: { darkest, lightest } }`. Esquema 1.22.0, migración `0023`: `up` no mueve
+  nada; `down` quita las dos claves y lo dice. El verbo `setBackground(doc, scope, background | null)`
+  devuelve el mismo documento para el mismo valor. `imageSourcesOf` gana el tipo `background` con su
+  sitio, y los trece lectores lo heredan: el publisher lo mete en el ZIP, la descarga lo exige, la
+  cuenta lo reconcilia, `pnpm size` lo pesa en la línea del dueño.
+- **El velo se deriva al pintar, nunca se guarda**: `veilFor` (`packages/schema/src/veil.ts`) busca la
+  menor opacidad de `color.surface`, en centésimas, con la que tinta, primario, secundario y apagado
+  pasan 4,5 sobre la superficie mezclada con cada extremo del motivo: la aritmética del cristal
+  (`mixHex`) con los extremos del motivo en lugar de negro y blanco. Cambiar de paleta es otro velo.
+  Probado sobre las 13 paletas y la rueda derivada para el peor motivo posible (negro y blanco), y el
+  cristal de la barra sobre el motivo velado en sus dos esquemas (ajuste 3).
+- **La aritmética se muda**: `relativeLuminance`, `contrastRatio` y `mixHex` eran de `tokens` desde el
+  sprint 1; el renderer no puede importar `tokens` (su lista blanca, y `tokens` depende del esquema), así
+  que viven en `packages/schema/src/colour.ts` y `tokens` las reexporta. Ningún comportamiento cambia.
+- **Lo que pinta la página**: la imagen bajo la caja (`body` para la web, la sección para la suya) y un
+  `::before` encima y bajo cada palabra: `color.surface` a la opacidad del velo, `z-index: -1` en una caja
+  con `isolation: isolate`. Ese orden es la decisión: el velo queda sobre el fondo de la caja y bajo todo
+  lo que contiene, incluida la barra y su cristal. Donde la web tiene imagen, `html` toma la superficie
+  para que la de `body` no se propague al lienzo (propagada, `cover` se mediría contra la raíz y la
+  estiraría a lo largo de todo el documento). Mosaico al tamaño de la imagen, **la mitad en el móvil**
+  (regla 7); a sangre centrado; nunca `fixed`.
+- **Medido en Chromium** (`background.browser.test.ts`, ajuste 3): sobre el fixture con motivo bajo la
+  web y portada sobre foto, las palabras de la portada están sobre su panel de superficie y este sobre
+  la foto; nada entre las palabras y `body` pinta la imagen; el velo es `position: absolute`, `z-index:
+  -1`, con la opacidad calculada igual a la de `veilFor`. Y con la página desplazada, la barra fija es
+  cristal (0,88) sobre el motivo velado: la tinta sobre ese compuesto pasa 4,5 en los dos extremos.
+- **El fixture**: `fixtures/assets/motivo.png`, dibujado para esto (líneas marino finas y puntos
+  terracota sobre transparente, 160 × 160, 3,2 KB), extremos `#1A2949` y `#B45309` medidos a plena
+  resolución; `fondo-con-motivos.json` es la portada sobre foto de `image-background-full`, la sección de
+  servicios de `cover-and-services` con el motivo a sangre, una barra fija con el nombre, y el motivo en
+  mosaico bajo la web. Su golden es nuevo; **las 25 anteriores salen idénticas**.
+- **Lo que se pierde, nombrado**: con líneas marino bajo la paleta neutra el velo sale al **98 %**, y el
+  motivo casi no se ve. Es la consecuencia honesta de «nunca nace un fondo ilegible»: el píxel peor
+  decide, porque las palabras pueden caer en cualquier sitio. El día 6 lo dice en palabras llanas al
+  subirlo, como pidió David.
+- Dos pruebas del corpus aprendieron a mirar: `breakpoints.test.ts` leía como parche toda regla con
+  `[data-section=` y ahora exige `[data-id=`; `panel.test.ts` cuenta el tercer panel.
+
+**Pruebas.** Esquema: `background.test.ts` (el velo es la menor opacidad que pasa, y una menos no;
+cero para un motivo tan pálido como la superficie, más de 60 para negro sobre blanco; crece con la
+oscuridad; cambia con la paleta; centésima entera y determinista; `setBackground` escribe, quita, devuelve
+el mismo documento y rechaza; la caminata nombra los dos fondos y reescribe los dos `src`), y el bloque
+1.22.0 de `migrations.test.ts`. Tokens: `veil.test.ts` (13 paletas y la rueda, y el cristal sobre el
+velo). Renderer: `background.test.ts` (la opacidad del CSS es `veilFor`; mosaico a la mitad en el
+`@media`; nada pinta la foto de portada; otra paleta, otro velo; las mismas reglas en `dom`; ningún
+documento sin fondo emite nada; `cssUrl` rechaza `javascript:`, comillas y `<` y acepta `blob:`) y el de
+Chromium. a11y 2 381 en verde, parity y las 30 goldens, `pnpm size` 9,5 KB para la web nueva,
+`renderer:deps` sin dependencia nueva. **Saboteos**: ver la PR.

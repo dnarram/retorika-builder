@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "1.21.0",
+  "schemaVersion": "1.22.0",
   "document": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
@@ -1640,6 +1640,58 @@
                       }
                     ]
                   },
+                  "background": {
+                    "type": "object",
+                    "properties": {
+                      "src": {
+                        "type": "string",
+                        "pattern": "^(?:assets\\/)?[A-Za-z0-9][A-Za-z0-9._-]*\\.(?:png|jpe?g)$"
+                      },
+                      "width": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 1600
+                      },
+                      "height": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 1600
+                      },
+                      "paint": {
+                        "type": "string",
+                        "enum": [
+                          "tile",
+                          "cover"
+                        ]
+                      },
+                      "extremes": {
+                        "type": "object",
+                        "properties": {
+                          "darkest": {
+                            "type": "string",
+                            "pattern": "^#[0-9a-fA-F]{6}$"
+                          },
+                          "lightest": {
+                            "type": "string",
+                            "pattern": "^#[0-9a-fA-F]{6}$"
+                          }
+                        },
+                        "required": [
+                          "darkest",
+                          "lightest"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "required": [
+                      "src",
+                      "width",
+                      "height",
+                      "paint",
+                      "extremes"
+                    ],
+                    "additionalProperties": false
+                  },
                   "inMenu": {
                     "type": "boolean"
                   },
@@ -1785,6 +1837,58 @@
           ],
           "additionalProperties": false
         }
+      },
+      "background": {
+        "type": "object",
+        "properties": {
+          "src": {
+            "type": "string",
+            "pattern": "^(?:assets\\/)?[A-Za-z0-9][A-Za-z0-9._-]*\\.(?:png|jpe?g)$"
+          },
+          "width": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1600
+          },
+          "height": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1600
+          },
+          "paint": {
+            "type": "string",
+            "enum": [
+              "tile",
+              "cover"
+            ]
+          },
+          "extremes": {
+            "type": "object",
+            "properties": {
+              "darkest": {
+                "type": "string",
+                "pattern": "^#[0-9a-fA-F]{6}$"
+              },
+              "lightest": {
+                "type": "string",
+                "pattern": "^#[0-9a-fA-F]{6}$"
+              }
+            },
+            "required": [
+              "darkest",
+              "lightest"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "src",
+          "width",
+          "height",
+          "paint",
+          "extremes"
+        ],
+        "additionalProperties": false
       }
     },
     "required": [

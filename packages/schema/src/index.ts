@@ -1,3 +1,10 @@
+export type { Background, BackgroundPaint } from "./background.ts";
+export {
+  BACKGROUND_MAX_EDGE,
+  BACKGROUND_PAINTS,
+  BACKGROUND_SRC_PATTERN,
+  backgroundSchema,
+} from "./background.ts";
 export type {
   CardinalityBlock,
   CollectionUse,
@@ -22,6 +29,7 @@ export {
   unbindList,
   usesOfCollection,
 } from "./collections.ts";
+export { AA_NORMAL_TEXT, contrastRatio, mixHex, relativeLuminance } from "./colour.ts";
 export type { TeaserFactory } from "./conversion.ts";
 export { canFoldPage, foldsInto, MAX_PAGES, pageToSection, sectionToPage } from "./conversion.ts";
 export type { DeadDestination } from "./destinations.ts";
@@ -208,6 +216,8 @@ export {
   setSectionInMenu,
   setVariant,
 } from "./sections.ts";
+export type { BackgroundScope } from "./setBackground.ts";
+export { setBackground } from "./setBackground.ts";
 export {
   type ShareImageIssue,
   shareDescriptionOf,
@@ -251,3 +261,5 @@ export {
   tokenKeySchema,
   tokenToCssVariable,
 } from "./tokens.ts";
+export type { Extremes, VeilColours } from "./veil.ts";
+export { VEIL_TEXT_KEYS, veilFor } from "./veil.ts";
