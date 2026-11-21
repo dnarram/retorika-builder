@@ -1,4 +1,4 @@
-import { PALETTES } from "@retorika/tokens";
+import { hexToOklch, PALETTES } from "@retorika/tokens";
 
 /**
  * The colours of a logo, read from its pixels — and which predefined palette they resemble.
@@ -174,14 +174,42 @@ function averageOf(bucket: Bucket): Rgb {
 }
 
 /**
- * A second tint is a second colour only when it is really there and really different (sprint 38
- * día 2): at least this share of the counted pixels, and at least this far from the first in ΔE. The
- * share keeps a stray pixel of a third colour from becoming the site's secondary; the distance keeps
- * the anti-aliased fringe of the first colour — a bucket beside it, a few units away — from counting
- * as a colour of its own, which it is not.
+ * **The second tint is read by families of hue, not by buckets** (sprint 40 día 3, David's answer to
+ * encargo 1).
+ *
+ * Until today it was the most populous 8-level bucket that held at least a tenth of the counted pixels
+ * and stood ΔE 20 from the first. That works for a flat logo and loses the second ink of any logo with
+ * a texture, a gradient or a thin stroke: the ink is split across dozens of buckets and none of them
+ * reaches a tenth. Measured on David's own logo (navy letters and an orange line, 20 November 2026):
+ * the orange was **29.5 % of the counted pixels, in 35 buckets, the largest 8.2 %** — and the site came
+ * out navy and brown, the accent turned 150° from the navy. On his flat export, 30.1 % in 46 buckets,
+ * the largest 7.0 %. Extraction, not threshold: no share would have kept the orange without also
+ * keeping stray pixels.
+ *
+ * So the pixels with a visible colour (`FAMILY_CHROMA` in OKLCH) are grouped by hue in bands of
+ * `FAMILY_BAND` degrees; the band of the first colour and its two neighbours are its own — its fringe,
+ * its shading — and the most populous other band holding `SECOND_FAMILY_SHARE` of the counted pixels
+ * is the second ink, when its colour stands `SECOND_DISTANCE` from the first. A first colour with no
+ * visible hue (a grey) has no band of its own, and every band may be the second.
+ *
+ * **Its colour is not a mean** (David's condition): it is the most populous bucket inside the family —
+ * the flat colour of the stroke — when that bucket holds `FAMILY_BUCKET_MIN` of the family; only a
+ * family spread so evenly that no bucket does (a gradient) is read as its mean. The two DNR files: the
+ * bucket holds 23–28 % of the orange family and reads `#944C23` in both, at 64, 128, 256 px and at full
+ * resolution. Retorika's own mark: its pink holds 16–17 % in its largest bucket and is read as its mean.
+ * The table is pinned in `test/logoPalette.test.ts`; the real DNR files are measured only locally
+ * (`RETORIKA_BRAND_LOGOS`), never committed.
  */
-const SECOND_SHARE = 0.1;
 const SECOND_DISTANCE = 20;
+/** At least this share of the counted pixels: Retorika's mark's pink is 9.9 %, its wordmark's 3.3 %
+ * (no second tint, the letters dwarf the mark), DNR's orange 29.5–30.1 %. Five sits in the gap. */
+const SECOND_FAMILY_SHARE = 0.05;
+/** Below this OKLCH chroma a pixel is a grey to the eye, and its hue is noise. */
+const FAMILY_CHROMA = 0.04;
+/** The width of a hue family, in degrees. */
+const FAMILY_BAND = 30;
+/** The share of its family a bucket needs to be the family's colour rather than its mean. */
+const FAMILY_BUCKET_MIN = 0.2;
 
 /**
  * The one colour that best stands for an image, or `null` when it has none worth taking.
@@ -198,10 +226,78 @@ export function dominantColour(pixels: Uint8ClampedArray): Rgb | null {
   return dominantColours(pixels)[0] ?? null;
 }
 
+/** The hue band a bucket's colour belongs to, or `null` for a grey (no visible hue). */
+function bandOf(colour: Rgb): number | null {
+  const { C, h } = hexToOklch(toHex(colour));
+  if (C < FAMILY_CHROMA) return null;
+  return Math.floor((((h % 360) + 360) % 360) / FAMILY_BAND);
+}
+
+const BANDS = 360 / FAMILY_BAND;
+
+/** Whether two bands are the same or neighbours, round the circle. */
+function nearBand(a: number, b: number): boolean {
+  const apart = Math.abs(a - b) % BANDS;
+  return Math.min(apart, BANDS - apart) <= 1;
+}
+
 /**
- * The image's tints, most present first: the dominant colour, and a second one when the logo really
- * has one (`SECOND_SHARE`, `SECOND_DISTANCE`) — the secondary and the accent of a derived palette
- * (ADR 0076). One entry for a logo of one colour, none for a logo with no colour in it.
+ * The second ink, read by families of hue (see `SECOND_FAMILY_SHARE`): the most populous family other
+ * than the first colour's, coloured by its most populous bucket or, spread evenly, by its mean.
+ *
+ * Grouped by bucket rather than by pixel, so a family's members are buckets that each carry their own
+ * hue — the bucket's average — which keeps this a pass over a few hundred buckets rather than four
+ * thousand colour conversions. Ties on count fall to the lower band, then to the lower bucket key,
+ * never to `Map` order.
+ */
+function secondInk(sorted: readonly Bucket[], counted: number, firstColour: Rgb): Rgb | null {
+  const firstBand = bandOf(firstColour);
+  const families = new Map<number, Bucket[]>();
+  for (const bucket of sorted) {
+    const band = bandOf(averageOf(bucket));
+    if (band === null) continue;
+    if (firstBand !== null && nearBand(band, firstBand)) continue;
+    const family = families.get(band) ?? [];
+    family.push(bucket);
+    families.set(band, family);
+  }
+  const ranked = [...families.entries()]
+    .map(([band, members]) => ({
+      band,
+      members,
+      count: members.reduce((sum, bucket) => sum + bucket.count, 0),
+    }))
+    .sort((a, b) => b.count - a.count || a.band - b.band);
+  for (const family of ranked) {
+    if (family.count < counted * SECOND_FAMILY_SHARE) return null;
+    // `sorted` is most populous first, so the family's members are too.
+    const top = family.members[0];
+    if (!top) continue;
+    const colour =
+      top.count >= family.count * FAMILY_BUCKET_MIN
+        ? averageOf(top)
+        : averageOf(
+            family.members.reduce(
+              (sum, bucket) => ({
+                key: sum.key,
+                count: sum.count + bucket.count,
+                r: sum.r + bucket.r,
+                g: sum.g + bucket.g,
+                b: sum.b + bucket.b,
+              }),
+              { key: 0, count: 0, r: 0, g: 0, b: 0 },
+            ),
+          );
+    if (colourDistance(colour, firstColour) >= SECOND_DISTANCE) return colour;
+  }
+  return null;
+}
+
+/**
+ * The image's tints, most present first: the dominant colour — the most populous bucket, unchanged —
+ * and a second one when the logo really has one, read by families of hue (`secondInk`) — the
+ * secondary and the accent of a derived palette (ADR 0076). One entry for a logo of one colour, none
+ * for a logo with no colour in it.
  */
 export function dominantColours(pixels: Uint8ClampedArray): Rgb[] {
   const sorted = buckets(pixels);
@@ -209,14 +305,8 @@ export function dominantColours(pixels: Uint8ClampedArray): Rgb[] {
   if (!first) return [];
   const counted = sorted.reduce((sum, bucket) => sum + bucket.count, 0);
   const firstColour = averageOf(first);
-  const second = sorted
-    .slice(1)
-    .find(
-      (bucket) =>
-        bucket.count >= counted * SECOND_SHARE &&
-        colourDistance(averageOf(bucket), firstColour) >= SECOND_DISTANCE,
-    );
-  return second ? [firstColour, averageOf(second)] : [firstColour];
+  const second = secondInk(sorted, counted, firstColour);
+  return second ? [firstColour, second] : [firstColour];
 }
 
 /** `{r, g, b}` as `#RRGGBB`, the way every palette in `@retorika/tokens` is written. */

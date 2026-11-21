@@ -14,6 +14,7 @@
     "test:invariants": "vitest run -t INV_",
     "test:golden": "vitest run golden",
     "test:a11y": "RETORIKA_A11Y=1 vitest run --project a11y --maxWorkers 2",
+    "test:brand": "vitest run --project brand",
     "test:coverage": "vitest run --coverage",
     "e2e": "RETORIKA_E2E=1 vitest run --project e2e --maxWorkers 1",
     "test:db": "RETORIKA_DB=1 vitest run --project db-pg --maxWorkers 1",
@@ -41,6 +42,7 @@
     "fonts:survey": "node scripts/survey-fonts.ts",
     "brand:assets": "node scripts/brand-assets.ts",
     "brand:vector": "node scripts/brand-vector.ts",
+    "logo:samples": "node scripts/logo-samples.ts",
     "photos:intake": "node packages/photobank/tools/intake-cli.ts",
     "photos:approve": "node packages/photobank/tools/approve-cli.ts",
     "photos:replace": "node packages/photobank/tools/replace-cli.ts"

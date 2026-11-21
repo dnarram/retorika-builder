@@ -11089,3 +11089,55 @@ vez de escribir, lo sujeta la unitaria de `twoStates`.
 
 **Lo que pierde, nombrado.** Un clic más para ir a una página desde un botón de sección («Ir», o
 Ctrl/Cmd+Intro); «Reservar» ya no es atajo a Contacto en el lienzo; la palabra «Enlace» en la barra.
+
+### Día 3 — el logo entero: la segunda tinta por familias (PR de `fix/el-logo-entero`)
+
+**El defecto, medido.** «He probado con el logo DNR y el editor no capta ningún naranja.» Con la ruta
+exacta del editor (64×64 estirado en Chromium), el naranja del logo de David era **el 29,5 % de los
+píxeles contados, repartido en 35 cubos de 8 niveles, el mayor con el 8,2 %**; en su exportación plana,
+30,1 % en 46 cubos, el mayor 7,0 %. La regla del sprint 38 pedía un cubo con la décima parte: ninguno
+llegaba, y `derivePalette` giraba el acento 150° desde el marino. La web salía marino y marrón. Fallo de
+extracción, no de umbral: una textura, un degradado o un trazo fino parten la tinta en muchos cubos.
+
+**Lo que hay ahora** (nota en [ADR 0076](../decisions/0076-the-logos-colours-are-the-sites.md)): la marca
+sigue siendo el cubo más poblado, así que ninguna web «De tu logo» mueve su color de marca. La segunda
+tinta se lee **por familias de tono**: los cubos con color visible (croma OKLCH ≥ 0,04) se agrupan en
+bandas de 30°; la banda de la marca y sus dos vecinas son suyas; gana la familia más poblada con **el 5 %**
+de los contados y a ΔE 20 de la marca. **Su color es el cubo más poblado de la familia** si tiene la
+quinta parte de ella, y la media solo si ninguno la tiene (la condición de David). Una marca gris no tiene
+banda y cualquier familia puede ser la segunda.
+
+| Logo | Antes | Ahora |
+|---|---|---|
+| DNR plano (solo en local) | marino | marino + `#954C23`, a ΔE 0,5 de `#944C23` |
+| DNR «Medio» (solo en local) | marino | marino + `#944C23`, tono 47,8° |
+| `logo-dos-tintas.png` (el sustituto) | marino | marino + `#934B23` |
+| Marca Retorika | azul | azul + rosa `#F12D66` (media; su mayor cubo es el 16 % de la familia) |
+| Wordmark Retorika | azul marino | igual (rosa 3,3 %) |
+| Los logos planos del repo | un color | igual |
+
+**El hex de referencia no está en los ficheros.** Ninguno de los dos DNR contiene `#B95319`: el píxel
+naranja opaco más cercano queda a ΔE 11,2 y el cubo de la familia a ΔE 18,8. Por decisión de David la
+prueba asevera el color del propio fichero, `#944C23` ± 5.
+
+**Los logos DNR no entran en el repositorio** (su ajuste 5). En su lugar:
+- `apps/editor/e2e/fixtures/logo-dos-tintas.png`, dibujado para esto (letras marino, línea fina naranja
+  con puntos, grano de semilla fija), 256 px y 39 KB, con la estructura medida en los suyos: naranja
+  30,8 % en 44 cubos, el mayor 7,7 % del total. Con la regla vieja pierde el naranja, como el suyo.
+- Muestras de 64×64 de los logos del repo en `apps/editor/test/fixtures/logo-samples/`, tomadas con la
+  ruta del editor en Chromium (`pnpm logo:samples`, `test/chromiumSample.ts`).
+- La tabla de sus ficheros, en `apps/editor/brand/dnrLogo.brand.test.ts`: un proyecto de vitest que solo
+  existe con `RETORIKA_BRAND_LOGOS` (`RETORIKA_BRAND_LOGOS=. pnpm test:brand`). Sin la variable no existe;
+  nunca se salta en silencio. Los dos ficheros siguen en la raíz bajo `.git/info/exclude`.
+
+**Lo que ve una web guardada.** El tema guardado no se recalcula. Pero el editor relee el logo al abrir:
+una web «De tu logo» cuyo logo tenga una segunda tinta texturada pasa a leerse «De tu logo, personalizada»,
+su tarjeta ofrece la paleta nueva y la línea la ofrece una vez. La web publicada no cambia un byte hasta
+que el dueño la elija. David lo aceptó con su respuesta.
+
+**Pruebas.** `logoPalette.test.ts`: el suelo del 5 % (4 % no, 5 % sí); el naranja repartido en doce cubos
+al 2,4 % cada uno; el cubo al 21 % de su familia frente al 19 % (media); la banda vecina de la marca
+nunca es segunda (azul con cian); la marca gris; el orden de los píxeles no cambia la respuesta; la tabla
+sobre las siete muestras. e2e «sprint 38 día 3»: la pregunta 1 con `logo-dos-tintas.png` y la web generada
+con `--color-secondary` y `--color-accent` a ΔE ≤ 5 de `#944C23`. Local: los dos DNR, en verde.
+**Saboteos**: ver la PR.

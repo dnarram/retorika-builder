@@ -49,6 +49,7 @@ import { VERB_SCALE } from "../src/editor/chromeScale.ts";
 import { DIALOG_KINDS, MAX_PHOTOS } from "../src/editor/downloadGate.ts";
 import { GUIDE_ZONE } from "../src/editor/guides.ts";
 import { HANDLE_TOUCH } from "../src/editor/handles.ts";
+import { colourDistance, parseHex } from "../src/editor/logoPalette.ts";
 import {
   CANVAS_ZOOM_FLOOR,
   DESKTOP_LAYOUT_WIDTH,
@@ -31805,6 +31806,36 @@ describe("sprint 38 día 3 — los colores del logo son los de la web", () => {
         button: rgb("#FFCD00"),
         buttonWords: rgb("#201A09"),
       });
+
+      // **Two inks, the second one textured** (sprint 40 día 3, encargo 1): the stand-in for David's
+      // DNR logo — navy letters and a thin orange line, the orange split across dozens of buckets of
+      // which none reaches a tenth. Until that day the site came out navy and brown. Now the orange
+      // is the secondary and the accent, its own flat colour within ΔE 5.
+      const twoInks = await generatedWith(
+        await fresh(),
+        "logo-dos-tintas.png",
+        /Hemos sacado los colores de tu logo: serán los de toda la web/,
+      );
+      const roles = await twoInks.locator("html").evaluate((root) => {
+        const style = getComputedStyle(root);
+        return {
+          primary: style.getPropertyValue("--color-primary").trim(),
+          secondary: style.getPropertyValue("--color-secondary").trim(),
+          accent: style.getPropertyValue("--color-accent").trim(),
+        };
+      });
+      expect(
+        colourDistance(parseHex(roles.primary), parseHex("#162642")),
+        roles.primary,
+      ).toBeLessThanOrEqual(5);
+      expect(
+        colourDistance(parseHex(roles.secondary), parseHex("#944C23")),
+        roles.secondary,
+      ).toBeLessThanOrEqual(5);
+      expect(
+        colourDistance(parseHex(roles.accent), parseHex("#944C23")),
+        roles.accent,
+      ).toBeLessThanOrEqual(5);
 
       // The white mark: no colour to take, said, and the neutral start.
       const white = await generatedWith(
