@@ -11019,3 +11019,73 @@ Galería aparece en la unitaria; con `candidates` leyendo las listas sueltas a s
 
 **Lo que deja.** «Foto por entrada» —lo que ADR 0033 no decidió— va al backlog con su coste para el 41:
 esquema (campo de imagen por entrada), renderer, «Listas», fichas y migración, dos días y una ADR.
+
+### Día 2 — el enlace se edita, y la marca y el botón eligen la cabecera (PR de `fix/el-enlace-se-edita`)
+
+**El defecto, medido.** «Al intentar editar un enlace en el lienzo, me lleva a la página y no puedo
+editarlo.» `wireLinks` decidía por **adónde iba** el enlace: página, ficha o sección de otra página
+movían el lienzo estuviera el enlace donde estuviera, y la única guarda —un `#sec-x` de la misma página
+fuera de la cabecera— era la excepción de una regla que nadie había escrito. Un botón apuntado a una
+página, uno reescrito por «A página» (`conversion.ts`), y todo «Ver más» de un avance se iban al primer
+clic, antes del segundo que escribe (ADR 0047). La caminata que guarda «la etiqueta de un enlace se
+sigue editando» usaba el botón `tel:` de Contacto y nunca lo vio. Y dos cosas más no coincidían con su
+propio registro: ADR 0066 §1 decía «la marca y el botón siguen eligiendo la cabecera» y el manejador de
+la cabecera saltaba todo `<a>`, así que los dos navegaban como una entrada; y el único control de la
+barra para un enlace, «Enlace», abría «Campos» de toda la sección.
+
+**Lo que hay ahora** ([ADR 0079](../decisions/0079-a-link-in-the-canvas-is-edited-first-and-followed-on-purpose.md),
+la opción 1 de David con sus dos condiciones y la marca confirmada aparte):
+
+- **`canvasLinkPress` decide por dónde está el enlace**, puro y probado; `wireLinks` solo ejecuta.
+  Dentro de una sección, el clic es el de los dos estados: elige, y escribe al segundo, apunte adonde
+  apunte. El botón de la barra y la marca eligen la cabecera (`selectHeaderNow`) y abren «Menú»; una
+  entrada sigue a su página o sección. El marco no navega nunca: la guarda del sprint 5 sigue.
+- **«A dónde lleva» en la barra del texto**, donde estaba «Enlace»: un `<select>` con las secciones de
+  esta página y las otras páginas, escritas como las escribe el renderer (`#sec-x`, `./slug.html`,
+  `./index.html` para la primera), y la puerta a «Campos» para lo que se escribe libre («Un teléfono, un
+  correo o un enlace de fuera…»), para que `listDeadDestinations` siga con una sola fuente. Cuando el
+  enlace apunta a algo que no está en la lista, una opción deshabilitada enseña adónde apunta («Ahora:
+  …»), el patrón `exact` de las medidas. Elegir escribe el href por `fillSlot`, un paso de historial, con
+  las palabras que el documento tiene en ese momento (la fila se lee al cambiar, no al abrir la barra:
+  enfocar el `select` confirma un texto que se estaba escribiendo).
+- **«Ir»** lleva el lienzo adonde apunta —página, ficha o sección, por el mismo `goToDestination` que
+  usa una entrada de la cabecera— solo cuando hay adónde ir; **«Abrir»** para `http`/`https`, en pestaña
+  nueva; un teléfono o un correo no tienen botón: ausente, no desactivado (ADR 0025).
+- **Ctrl+Intro o ⌘+Intro sobre un enlace elegido** va (`textKeyAction`, la única pulsación con
+  modificador que toma ese módulo; Intro solo escribe, como antes). La línea de ayuda lo dice con la
+  tecla de la máquina, entre «escribir» y «moverlo», y no lo dice en pantalla táctil.
+- «Destino» era la palabra del plan y está en la lista de palabras de oficio (`plainWords.test.ts`): el
+  grupo se llama «A dónde lleva», como la fila de «Campos».
+- `es.json`: siete claves entran (`editor.toolbar.destination*`, `editor.toolbar.go`, `editor.toolbar.open`,
+  `editor.canvas.goHint*`), una sale (`editor.toolbar.link`).
+
+**Medido en la barra, y un defecto encontrado y corregido el mismo día.** Con el `select` a su anchura
+natural, la barra de un botón de portada pasó de 494 a 792 px a 1280, y a 1024 **se partió en dos filas**
+(752 × 65 px, el asa sola en la segunda): un `select` mide lo que su opción más larga, y «Ahora:
+https://reservas.example.com/taberna» es larga. Con tope de 220 px de pantalla (`rb-toolbar-where`) y el
+href entero en `title`: 740 × 38 a 1280 y 728 × 37 a 1024, una fila en las dos. Capturas antes y
+después: [1280 antes](review/2026-11-el-logo-entero/dia2-destino-1280-antes.png) ·
+[1280 después](review/2026-11-el-logo-entero/dia2-destino-1280-despues.png) ·
+[1024 antes](review/2026-11-el-logo-entero/dia2-destino-1024-antes.png) ·
+[1024 después](review/2026-11-el-logo-entero/dia2-destino-1024-despues.png).
+
+**Pruebas.** Unitarias: `canvasLinks.test.ts` gana `canvasLinkPress` (sección → edita apunte adonde
+apunte; botón y marca → cabecera; entrada → sigue; muerta → nada) y `opensOutside`; `twoStates.test.ts`
+gana `go` (Ctrl/Cmd+Intro elegido, nunca escribiendo, nunca con Mayús o Alt) y el barrido de
+modificadores lo nombra como la excepción; `textToolbar.test.ts` lee `destination`; `helpLine.test.ts`
+gana la tecla por máquina y su silencio en táctil. e2e, en la `describe` de la conversión, tres
+caminatas: **un enlace a `./pagina.html` se elige con un clic, la barra enseña su página e «Ir», el
+segundo clic escribe y el lienzo no se mueve**; «Ir» y Ctrl/Cmd+Intro llevan a la página, con Intro
+escribiendo y Esc dejándolo como estaba por el camino; el botón de la barra y la marca eligen la
+cabecera y abren «Menú» sin mover el lienzo. La caminata del sprint 30 día 3 lee lo nuevo en su paso 1
+(«Reservar» elige la cabecera; la entrada del menú de secciones sigue llevando a la sección) y la que
+contaba `.rb-toolbar-link` cuenta el `select`. Cadena corrida: flujos 1, 2, 3 y 5, las dos regresiones y
+el sprint 30 día 3, 13 en verde en 23 s. **Suite entera, 1 776 s: un rojo**, la caminata del sprint 31
+día 4, que pulsaba el botón «Contacto» dentro del raíl esperando ir a la sección; reescrita: el botón
+elige la cabecera también en el raíl y la entrada del menú de secciones lleva a «Dónde estamos». Los
+tres saboteos del navegador (la regla «sección → edita» quitada; «Ir» sin manejador; la cabecera sin
+elegir) pusieron en rojo exactamente las caminatas que los sujetan; el cuarto, Intro a secas yendo en
+vez de escribir, lo sujeta la unitaria de `twoStates`.
+
+**Lo que pierde, nombrado.** Un clic más para ir a una página desde un botón de sección («Ir», o
+Ctrl/Cmd+Intro); «Reservar» ya no es atajo a Contacto en el lienzo; la palabra «Enlace» en la barra.

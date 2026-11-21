@@ -266,3 +266,12 @@ and ADR 0071 puts those in the help line and nowhere over or beside the page. Si
 the focus or the mouse, and says the folded bar's «Menú» as the grip where the canvas lays out under
 the fold; the cards keep only their names and the notes about this window. Nothing of the gesture
 itself moves. Recorded by development at his instruction.
+
+## Note — sprint 40 día 2: the code catches up with §1 (ADR 0079)
+
+§1 wrote «the brand and the button keep choosing the header», and the header's click handler skipped
+every link, so both fell to `wireLinks` and navigated like an entry — the brand to the first page, the
+button to its destination. Since 20 November 2026 (David's decision opening sprint 40, confirmed for the
+brand when asked) a press on either chooses the header through `wireLinks`, which decides by where the
+link is (`canvasLinkPress`); an entry still follows, under the threshold, and past it the press is the
+drag as the amendment above says. Recorded by development at his instruction.

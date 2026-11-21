@@ -297,3 +297,10 @@ in part: the a11y suite gains a twin of twelve documents rather than a dimension
 the menu audit does not change. The button still has no place of its own. §4 stays: where the brand
 went to a rail with the pages, its place in the bar is inert. Recorded by development at his
 instruction.
+
+## Note — sprint 40 día 2: the bar's button chooses the header (ADR 0079)
+
+«A button is a header link like any other to the canvas» (sprint 30 día 3, reading ADR 0057) stopped
+being so on 20 November 2026: the bar's button and the brand choose the header, as ADR 0066 §1 had
+written; an entry of a menu — in the bar, in a rail, in «Ir a…» — still takes the canvas to its section
+or page. Recorded by development at his instruction.

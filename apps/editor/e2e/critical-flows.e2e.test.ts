@@ -1629,6 +1629,90 @@ describe("regression — converting a section, and renaming the page it made", (
       framesBefore,
     );
   });
+
+  /**
+   * **Sprint 40 día 2 — a link inside a section is edited, and goes where it leads on purpose**
+   * (ADR 0079). The avance «A página» left on the first page holds a link to the new page, and
+   * until today the first click on it took the canvas there — before the second click that writes
+   * (the defect David reported: «me lleva a la página y no puedo editarlo»). The walk at «still
+   * lets a link's own label be edited» above edits a `tel:` button and never saw it; this one
+   * edits the link that points at `./pagina.html`, as he asked.
+   */
+  it("chooses a link that points at a page with one click and writes with the second; the canvas stays", async () => {
+    const frame = page.frameLocator(PREVIEW).first();
+    const framesBefore = page.frames().length;
+    await page.locator('[data-testid="page-tabs"] button').first().click();
+    await expect(frame.locator("[data-page]")).toHaveAttribute("data-page", "home");
+
+    const link = frame.locator('[data-preset="teaser"] a[data-id]').first();
+    const href = await link.getAttribute("href");
+    expect(href, "the avance's link points at a page of the site").toMatch(/^\.\/.+\.html$/);
+
+    // One click chooses: the bar opens with «A dónde lleva» on the page it points at, and «Ir».
+    await link.click();
+    await expect(frame.locator("[data-page]")).toHaveAttribute("data-page", "home");
+    await expect(frame.locator('.rb-toolbar-select[aria-label="A dónde lleva"]')).toHaveValue(
+      href ?? "",
+    );
+    await expect(frame.locator('.rb-toolbar [data-action="go"]')).toHaveText("Ir");
+
+    // The second click writes, and the words land in the document.
+    await link.click();
+    await expect(link).toHaveAttribute("contenteditable", "true");
+    await page.keyboard.press("ControlOrMeta+a");
+    await page.keyboard.type("Ver la carta");
+    await editHint(page).click();
+    await expect(frame.locator('[data-preset="teaser"] a[data-id]').first()).toHaveText(
+      "Ver la carta",
+    );
+    await expect(frame.locator("[data-page]")).toHaveAttribute("data-page", "home");
+    expect(page.frames().length, "the preview navigated").toBe(framesBefore);
+  });
+
+  it("goes where the link leads on «Ir», and on Ctrl/Cmd+Intro from the keyboard", async () => {
+    const frame = page.frameLocator(PREVIEW).first();
+    const link = frame.locator('[data-preset="teaser"] a[data-id]').first();
+
+    // «Ir» in the bar of the chosen link.
+    await link.click();
+    await frame.locator('.rb-toolbar [data-action="go"]').click();
+    await expect(frame.locator("[data-page]")).toHaveAttribute("data-page", "page-que-ponemos");
+
+    // Back, and by keyboard: arriving at the link chooses it (ADR 0047), Intro writes as it always
+    // did, Escape leaves the words as they were, and Ctrl/Cmd+Intro goes where it leads.
+    await page.locator('[data-testid="page-tabs"] button').first().click();
+    await expect(frame.locator("[data-page]")).toHaveAttribute("data-page", "home");
+    await link.focus();
+    await page.keyboard.press("Enter");
+    await expect(link).toHaveAttribute("contenteditable", "true");
+    await page.keyboard.press("Escape");
+    await expect(link).not.toHaveAttribute("contenteditable", "true");
+    await expect(frame.locator("[data-page]")).toHaveAttribute("data-page", "home");
+    await link.focus();
+    await page.keyboard.press("ControlOrMeta+Enter");
+    await expect(frame.locator("[data-page]")).toHaveAttribute("data-page", "page-que-ponemos");
+  });
+
+  it("chooses the header on the bar's button and on the brand, as ADR 0066 §1 wrote, and nothing navigates", async () => {
+    const frame = page.frameLocator(PREVIEW).first();
+    const framesBefore = page.frames().length;
+    await expect(frame.locator("[data-page]")).toHaveAttribute("data-page", "page-que-ponemos");
+
+    // On a page that is not the first, the brand is a link home — pressed, it chooses the header.
+    await frame.locator(".rb-header > a.rb-brand").click();
+    await expect(frame.locator(".rb-header")).toHaveClass(/rb-selected/);
+    await expect(page.getByRole("button", { name: "Cerrar el menú" })).toBeVisible();
+    await expect(frame.locator("[data-page]")).toHaveAttribute("data-page", "page-que-ponemos");
+
+    // The bar's button points at the contact section of the first page; pressed, the header.
+    await page.getByRole("button", { name: "Cerrar el menú" }).click();
+    await frame.locator(".rb-header .rb-nav-action").click();
+    await expect(frame.locator(".rb-header")).toHaveClass(/rb-selected/);
+    await expect(page.getByRole("button", { name: "Cerrar el menú" })).toBeVisible();
+    await expect(frame.locator("[data-page]")).toHaveAttribute("data-page", "page-que-ponemos");
+    expect(page.frames().length, "the preview navigated").toBe(framesBefore);
+    await page.getByRole("button", { name: "Cerrar el menú" }).click();
+  });
 });
 
 /**
@@ -3319,7 +3403,10 @@ describe("sprint 9 día 4 — la barra flotante", () => {
         await button.click();
         await expect(frame.locator(".rb-toolbar-swatch")).toHaveCount(1);
         await expect(frame.locator('.rb-toolbar-swatch[data-ref="color.surface"]')).toHaveCount(1);
-        await expect(frame.locator(".rb-toolbar-link")).toHaveCount(1);
+        // «A dónde lleva» since sprint 40 día 2 (ADR 0079), where «Enlace» stood.
+        await expect(frame.locator('.rb-toolbar-select[aria-label="A dónde lleva"]')).toHaveCount(
+          1,
+        );
       }
     } finally {
       await studio.context().close();
@@ -23634,28 +23721,20 @@ describe("sprint 30 día 3 — la cabecera se elige en el lienzo", () => {
       };
 
       // 1. The bar's button — «Reservar», the contact section's own entry since día 5 (ADR 0059)
-      //    — takes the canvas to the contact section and chooses it: no navigation of the frame,
-      //    no second editor. A button is a header link like any other to the canvas.
+      //    — **chooses the header** (ADR 0066 §1, done on sprint 40 día 2, ADR 0079): the button is
+      //    the header's, shaped in «Menú», and a press on it is a press on the header. Until that
+      //    day it took the canvas to the contact section like an entry, which this step asserted.
+      //    No navigation of the frame, no second editor, and the frame does not scroll.
       const framesBefore = visitor.frames().length;
       await expect(frame.locator(".rb-header .rb-nav-action")).toHaveText("Reservar");
       await pressAt(frame.locator(".rb-header .rb-nav-action"));
-      const contact = frame.locator('[data-section="sec-contact"]');
-      await expect(contact).toHaveClass(/rb-selected/);
-      // At the top of the frame — or, for a section near the end, as high as the page can scroll:
-      // «Contacto» is the last but one, and measured at 350px with the frame at its bottom.
-      const landing = () =>
-        contact.evaluate((el) => {
-          const view = el.ownerDocument.defaultView as Window;
-          const max = el.ownerDocument.documentElement.scrollHeight - view.innerHeight;
-          const top = Math.round(el.getBoundingClientRect().top);
-          return {
-            scrolled: view.scrollY > 0,
-            inView: top >= -1 && top < view.innerHeight,
-            atTopOrBottom: Math.abs(top) <= 1 || Math.abs(view.scrollY - max) <= 1,
-          };
-        });
-      await expect.poll(landing).toEqual({ scrolled: true, inView: true, atTopOrBottom: true });
+      await expect(header).toHaveClass(/rb-selected/);
+      await expect(frame.locator('[data-section="sec-contact"]')).not.toHaveClass(/rb-selected/);
+      expect(await frame.locator("body").evaluate(() => window.scrollY)).toBe(0);
       expect(visitor.frames().length).toBe(framesBefore);
+      // The sections menu's entries are still the way to a section from the header.
+      await pressAt(frame.locator('.rb-nav-wide nav[aria-label="Secciones"] a').first());
+      await expect(frame.locator("[data-section].rb-selected")).toHaveCount(1);
       await expect(header).not.toHaveClass(/rb-selected/);
 
       // 2. Pressing the header away from its entries chooses it, unchooses the section, and opens
@@ -24556,15 +24635,22 @@ describe("sprint 31 día 4 — el raíl se elige en el lienzo", () => {
       await expect(frame.locator("[data-section].rb-selected")).toHaveCount(0);
       await expect(page.getByRole("complementary", { name: "El menú de tu web" })).toBeVisible();
 
-      // 2. The rail's way to «Contacto» — the button that went with the pages — takes the canvas to
-      //    the section and chooses it, as the bar's did on sprint 30 día 3.
-      const contact = frame.locator('[data-section="sec-contact"]');
+      // 2. The button that went with the pages — «Contacto» — is the header's wherever it stands:
+      //    pressed in the rail it **chooses the header** and moves nothing (ADR 0066 §1, done on
+      //    sprint 40 día 2, ADR 0079; until then it took the canvas to the section, as the bar's did
+      //    on sprint 30 día 3). The rail's way to a section is an entry of its sections menu, which
+      //    takes the canvas there and chooses it.
       await pressAt(page, rail.locator('a[href="#sec-contact"]').first());
-      await expect(contact).toHaveClass(/rb-selected/);
+      await expect(header).toHaveClass(/rb-selected/);
+      await expect(frame.locator("[data-section].rb-selected")).toHaveCount(0);
+      expect(await frame.locator("body").evaluate(() => window.scrollY)).toBe(0);
+      const location = frame.locator('[data-section="sec-location"]');
+      await pressAt(page, rail.locator('a[href="#sec-location"]').first());
+      await expect(location).toHaveClass(/rb-selected/);
       await expect(header).not.toHaveClass(/rb-selected/);
       await expect
         .poll(() =>
-          contact.evaluate((el) => {
+          location.evaluate((el) => {
             const view = el.ownerDocument.defaultView as Window;
             const top = Math.round(el.getBoundingClientRect().top);
             return { scrolled: view.scrollY > 0, inView: top >= -1 && top < view.innerHeight };
@@ -24576,7 +24662,7 @@ describe("sprint 31 día 4 — el raíl se elige en el lienzo", () => {
       //    first section — and the key legend that arrives with the section stands clear of the
       //    rail, at the right (David's adjustment 3). The cover is chosen first, as on sprint 30
       //    día 3: Tab enters the page at the section the keyboard holds, and step 2 gave it
-      //    «Contacto», five pills further down.
+      //    «Dónde estamos», pills further down.
       await frame.locator("body").evaluate(() => window.scrollTo(0, 0));
       await pressAt(page, cover, 0.02, 0.5);
       await expect(cover).toHaveClass(/rb-selected/);

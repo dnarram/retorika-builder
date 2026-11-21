@@ -86,3 +86,50 @@ export function canvasLinkTarget(
   }
   return { kind: "none" };
 }
+
+/** Where in the canvas a link sits — which is what decides what a click on it does. */
+export type LinkPlace = "section" | "header-entry" | "header-action" | "header-brand" | "elsewhere";
+
+export type CanvasLinkPress =
+  | { kind: "edit" }
+  | { kind: "header" }
+  | { kind: "go"; target: Exclude<CanvasLinkTarget, { kind: "none" }> }
+  | { kind: "none" };
+
+/**
+ * **What a click on a link does, by where the link is** (sprint 40 día 2, ADR 0079).
+ *
+ * Until today `wireLinks` asked only *where the link went*: a page, a ficha or a section of another
+ * page moved the canvas wherever the link sat, and the one guard — a same-page `#sec-x` inside a
+ * section — was the exception that named the rule nobody had written. An owner pressing «Ver más» on
+ * an avance, or a button «A página» had rewritten to `./carta.html`, was taken to that page on the
+ * first click and never reached the second one that writes. David, 20 November 2026: the click edits;
+ * going somewhere is done on purpose.
+ *
+ * - **Inside a section, the click is the two states' (ADR 0047)**: it chooses, then writes. Whatever
+ *   the destination — a page, a ficha, a section, a phone, the outside. The text bar's «Ir» and
+ *   Ctrl/Cmd+Intro go where it leads, on purpose.
+ * - **The header's button and its brand choose the header**, which is what ADR 0066 §1 wrote and the
+ *   code did not do: both are links, and the header's own click handler skipped every link.
+ * - **A header entry follows**, to its page or to its section (ADR 0060, ADR 0066): the menu in the
+ *   preview is the one place where a click is navigation the owner means, and «Menú» is where its
+ *   words are edited. A dead entry does nothing.
+ * - Elsewhere — the skip link — the destination decides, and it names nothing.
+ */
+export function canvasLinkPress(
+  doc: RetorikaDocument,
+  href: string,
+  currentPageId: string | undefined,
+  place: LinkPlace,
+): CanvasLinkPress {
+  if (place === "section") return { kind: "edit" };
+  if (place === "header-action" || place === "header-brand") return { kind: "header" };
+  const target = canvasLinkTarget(doc, href, currentPageId);
+  return target.kind === "none" ? { kind: "none" } : { kind: "go", target };
+}
+
+/** A destination a browser can open outside the site — `http:` or `https:`. A phone number or an
+ * address is not a page to open, and a file of this site is the canvas's own to draw. */
+export function opensOutside(href: string): boolean {
+  return /^https?:\/\//i.test(href.trim());
+}

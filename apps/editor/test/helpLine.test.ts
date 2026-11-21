@@ -53,19 +53,23 @@ describe("the quiet child, which goes with the focus", () => {
 
   it("says no keys on a touched screen, where there are none", () => {
     const says = quietSays(
-      at({ keyboard: "section", touch: true, chosen: { text: true, movable: false } }),
+      at({ keyboard: "section", touch: true, chosen: { text: true, movable: false, goes: false } }),
     );
     expect(says.text).toBe(es["editor.canvas.chosenHint"]);
   });
 
   it("says the chosen element's hint only for what it can do, both halves when both are true", () => {
-    expect(chosenHint({ text: true, movable: false })).toBe(es["editor.canvas.chosenHint"]);
-    expect(chosenHint({ text: false, movable: true })).toBe(es["editor.canvas.moveHint"]);
-    expect(chosenHint({ text: true, movable: true })).toBe(
+    expect(chosenHint({ text: true, movable: false, goes: false })).toBe(
+      es["editor.canvas.chosenHint"],
+    );
+    expect(chosenHint({ text: false, movable: true, goes: false })).toBe(
+      es["editor.canvas.moveHint"],
+    );
+    expect(chosenHint({ text: true, movable: true, goes: false })).toBe(
       `${es["editor.canvas.chosenHint"]} · ${es["editor.canvas.moveHint"]}`,
     );
     // A photograph the tools cannot move: nothing to say, so the idle hint stays.
-    expect(quietSays(at({ chosen: { text: false, movable: false } })).text).toBe(
+    expect(quietSays(at({ chosen: { text: false, movable: false, goes: false } })).text).toBe(
       es["editor.editHint"],
     );
   });
@@ -76,7 +80,7 @@ describe("the quiet child, which goes with the focus", () => {
       keyboard: "section",
       menuNote: "composition",
       bound: { places: 3, list: "Platos" },
-      chosen: { text: true, movable: true },
+      chosen: { text: true, movable: true, goes: false },
       placeholders: 2,
     });
     expect(quietSays(everything).text).toBe(es["editor.drag.order"]);
@@ -93,7 +97,7 @@ describe("the quiet child, which goes with the focus", () => {
     expect(
       quietSays({ ...everything, dragRefused: false, keyboard: null, menuNote: null, bound: null })
         .text,
-    ).toBe(chosenHint({ text: true, movable: true }));
+    ).toBe(chosenHint({ text: true, movable: true, goes: false }));
     // A text being written: its keys yield to the bound sentence, which is what has to be read
     // before the first keystroke; the bar's and the grip's keys do not yield to it.
     const bound = { places: 3, list: "Platos" };
@@ -110,7 +114,7 @@ describe("the quiet child, which goes with the focus", () => {
     for (const patch of [
       { keyboard: "section" as const },
       { keyboard: "hub" as const },
-      { chosen: { text: true, movable: false } },
+      { chosen: { text: true, movable: false, goes: false } },
       { menuNote: "escalate" as const },
       { bound: { places: 2, list: "" } },
       { dragRefused: true },
@@ -175,7 +179,7 @@ describe("the gesture of the control under the hand, and the panel's instruction
       keyboard: "section",
       gesture: "menu",
       panel: "fields",
-      chosen: { text: true, movable: false },
+      chosen: { text: true, movable: false, goes: false },
     });
     expect(quietSays(all).text).toBe(keysFor("section", "other"));
     expect(quietSays({ ...all, keyboard: null }).text).toBe(es["editor.help.gesture.menu"]);
@@ -183,7 +187,7 @@ describe("the gesture of the control under the hand, and the panel's instruction
       es["editor.help.panel.fields"],
     );
     expect(quietSays({ ...all, keyboard: null, gesture: null, panel: null }).text).toBe(
-      chosenHint({ text: true, movable: false }),
+      chosenHint({ text: true, movable: false, goes: false }),
     );
   });
 });
@@ -211,7 +215,7 @@ describe("the offer of the radial menu", () => {
       { keyboard: "writing" as const },
       { menuNote: "composition" as const },
       { bound: { places: 2, list: "" } },
-      { chosen: { text: true, movable: false } },
+      { chosen: { text: true, movable: false, goes: false } },
       { placeholders: 1 },
     ]) {
       expect(quietSays(at({ ...patch, offer: "radial" })), JSON.stringify(patch)).toEqual(
@@ -395,5 +399,25 @@ describe("the logo's colours in the line", () => {
     for (const patch of [{ keyboard: "section" as const }, { placeholders: 2 }]) {
       expect(quietSays(at({ ...patch, offer: "logoColours" }))).toEqual(quietSays(at(patch)));
     }
+  });
+});
+
+describe("a chosen link that leads into the site (sprint 40 día 2, ADR 0079)", () => {
+  it("says the key that goes where it leads, by the machine, between the write and the move", () => {
+    expect(chosenHint({ text: true, movable: false, goes: true }, "other")).toBe(
+      `${es["editor.canvas.chosenHint"]} · ${es["editor.canvas.goHint"]}`,
+    );
+    expect(chosenHint({ text: true, movable: true, goes: true }, "mac")).toBe(
+      `${es["editor.canvas.chosenHint"]} · ${es["editor.canvas.goHintMac"]} · ${es["editor.canvas.moveHint"]}`,
+    );
+    expect(quietSays(at({ chosen: { text: true, movable: false, goes: true } })).text).toBe(
+      `${es["editor.canvas.chosenHint"]} · ${es["editor.canvas.goHint"]}`,
+    );
+  });
+
+  it("names no key on a touched screen, where the bar's «Ir» is the way there", () => {
+    expect(
+      quietSays(at({ chosen: { text: true, movable: false, goes: true }, touch: true })).text,
+    ).toBe(es["editor.canvas.chosenHint"]);
   });
 });

@@ -110,7 +110,13 @@ import {
   stepOf,
 } from "../editor/brandDrag.ts";
 import { holdFor } from "../editor/buildingScreen.ts";
-import { canvasLinkTarget } from "../editor/canvasLinks.ts";
+import {
+  type CanvasLinkTarget,
+  canvasLinkPress,
+  canvasLinkTarget,
+  type LinkPlace,
+  opensOutside,
+} from "../editor/canvasLinks.ts";
 import { CANVAS_STILLNESS } from "../editor/canvasStillness.ts";
 import {
   CHROME_SCALE,
@@ -1190,6 +1196,7 @@ export function Editor({
     onDuplicateSection,
     onEditText,
     onEscalateSection,
+    onFillSlot,
     onInsertSection,
     onMoveItem,
     onMoveSection,
@@ -1211,6 +1218,7 @@ export function Editor({
     onDuplicateSection,
     onEditText,
     onEscalateSection,
+    onFillSlot,
     onInsertSection,
     onMoveItem,
     onMoveSection,
@@ -1539,6 +1547,9 @@ export function Editor({
   /** Registered by `wireSelection`: choose this section as a click would. `wireLinks` lives outside
    * that closure and needs the one `select` there is. */
   const chooseSectionNow = useRef<(section: HTMLElement) => void>(() => {});
+  /** `selectHeader` of `wireSelection`, for the header's button and brand pressed in `wireLinks`
+   * (ADR 0066 §1, done on sprint 40 día 2). */
+  const selectHeaderNow = useRef<(header: HTMLElement) => void>(() => {});
   /** Opens «Menú» — reassigned every render, so a listener wired once calls today's `showRail`. */
   const openMenuPanel = useRef<() => void>(() => {});
   /**
@@ -2678,6 +2689,65 @@ export function Editor({
   const placingElementIdNow = useRef(placingElementId);
   placingElementIdNow.current = placingElementId;
 
+  /**
+   * **The canvas goes to a destination of the document** — a page, a ficha, or a section — which is
+   * navigation the owner means (sprint 30 día 3), done on purpose: a header entry pressed, the text
+   * bar's «Ir», Ctrl/Cmd+Intro on a chosen link (sprint 40 día 2, ADR 0079).
+   *
+   * A section on this page is brought to the top of the frame and chosen — what the header's
+   * sections menu and its button do for a visitor, done for the owner. On another page: the page
+   * is drawn, the section is settled as chosen by the redraw, and `applyPatch` scrolls to it after
+   * putting the page at the top. A ficha: its page, showing that entry. Never a real navigation of
+   * the frame, which is what nested an editor inside the editor (sprint 5).
+   */
+  function goToDestination(
+    iframeDoc: Document,
+    destination: Exclude<CanvasLinkTarget, { kind: "none" }>,
+    from?: Element,
+  ) {
+    const currentPageId = pageIdNow.current ?? docNow.current.pages[0]?.id;
+    if (destination.kind === "section") {
+      if (destination.pageId === currentPageId) {
+        const section = iframeDoc.querySelector<HTMLElement>(
+          `[data-section="${CSS.escape(destination.sectionId)}"]`,
+        );
+        if (!section) return;
+        // **«Ir a…» closes when an entry is chosen** (ADR 0060 §7), as the published page's
+        // script closes it — the canvas carries no script. Taken out on día 4, when the
+        // desktop walk stayed green without it: there the choice was followed by a redraw of
+        // the header from the document, where nothing is open, some 800 ms later. Measured
+        // again on día 6 in the phone view of the canvas, where no such redraw follows and the
+        // panel stayed open over the section chosen. Closed here, at once, wherever it hangs.
+        from?.closest("details")?.removeAttribute("open");
+        section.scrollIntoView({ block: "start" });
+        chooseSectionNow.current(section);
+        return;
+      }
+      selectedSection.current = destination.sectionId;
+      headerChosen.current = false;
+      scrollToSectionAfterPatch.current = destination.sectionId;
+    }
+    if (destination.kind === "entry") {
+      setEntryByPage((previous) => ({
+        ...previous,
+        [destination.pageId]: destination.entryId,
+      }));
+    }
+    propsNow.current.onSelectPage(
+      docNow.current.pages[0]?.id === destination.pageId ? undefined : destination.pageId,
+    );
+  }
+
+  /**
+   * **What a click on a link does, by where the link is** (sprint 40 día 2, ADR 0079; the decision
+   * is `canvasLinkPress`, pure and tested). Inside a section the click is the two states' and edits
+   * — whatever the link points at; until today a `./pagina.html` button or an avance's «Ver más» took
+   * the owner to that page on the first click, before the second one that writes. The header's
+   * button and its brand choose the header, as ADR 0066 §1 wrote and the code did not do. A header
+   * entry follows, to its page or section: the one place a click is navigation the owner means, and
+   * «Menú» is where its words are. The frame itself never navigates: that nested an editor inside
+   * the editor (sprint 5), and `preventDefault` here is the guard the regression walk holds.
+   */
   function wireLinks(iframeDoc: Document) {
     iframeDoc.addEventListener(
       "click",
@@ -2686,67 +2756,32 @@ export function Editor({
         // an `instanceof` against this document's `Element` is false for every one of them.
         const target = event.target as { closest?: (selector: string) => unknown } | null;
         if (typeof target?.closest !== "function") return;
-        const anchor = target.closest("a") as {
-          getAttribute?: (n: string) => string | null;
-        } | null;
+        const anchor = target.closest("a") as Element | null;
         if (!anchor) return;
         event.preventDefault();
 
-        // A menu entry moves the editor to that page, which is the one thing in the preview that
-        // now *does* something. It is navigation the owner means, and the tabs do the same job;
-        // what it must never be is a real navigation of the frame, which is what nested an editor
-        // inside the editor. `./<slug>.html` is the published form, and the slug is the only part
-        // of it anybody here needs.
-        const href = anchor.getAttribute?.("href") ?? "";
+        const href = anchor.getAttribute("href") ?? "";
         const currentPageId = pageIdNow.current ?? docNow.current.pages[0]?.id;
-        const destination = canvasLinkTarget(docNow.current, href, currentPageId);
-        // A card's title link never reaches here: `wireEditing` unwraps it, so the click edits the
-        // title (David's adjustment). What does reach here with an entry's slug is a link the owner
-        // typed by hand to a ficha, and that moves the canvas to the ficha, the way a menu entry
-        // moves it to a page. `canvasLinks.ts` makes the decision and is tested.
-        if (destination.kind === "none") return;
-        /*
-         * **A section: the canvas goes to it and chooses it** (sprint 30 día 3) — what the header's
-         * sections menu and its button do for a visitor, done for the owner. On this page, only from
-         * the header: an owner's own `#sec-x` button inside a section is pressed to edit its words,
-         * and a click that scrolled away instead would be the editor overruling the hand. On another
-         * page from anywhere, as a page link already did: the page is drawn, the section is settled
-         * as chosen by the redraw, and `applyPatch` scrolls to it after putting the page at the top.
-         */
-        if (destination.kind === "section") {
-          const inHeader =
-            typeof (anchor as { closest?: unknown }).closest === "function" &&
-            (anchor as unknown as Element).closest(".rb-header") !== null;
-          if (destination.pageId === currentPageId) {
-            if (!inHeader) return;
-            const section = iframeDoc.querySelector<HTMLElement>(
-              `[data-section="${CSS.escape(destination.sectionId)}"]`,
-            );
-            if (!section) return;
-            // **«Ir a…» closes when an entry is chosen** (ADR 0060 §7), as the published page's
-            // script closes it — the canvas carries no script. Taken out on día 4, when the
-            // desktop walk stayed green without it: there the choice was followed by a redraw of
-            // the header from the document, where nothing is open, some 800 ms later. Measured
-            // again on día 6 in the phone view of the canvas, where no such redraw follows and the
-            // panel stayed open over the section chosen. Closed here, at once, wherever it hangs.
-            (anchor as unknown as Element).closest("details")?.removeAttribute("open");
-            section.scrollIntoView({ block: "start" });
-            chooseSectionNow.current(section);
-            return;
-          }
-          selectedSection.current = destination.sectionId;
-          headerChosen.current = false;
-          scrollToSectionAfterPatch.current = destination.sectionId;
+        const header = anchor.closest<HTMLElement>(".rb-header");
+        const place: LinkPlace = anchor.closest("[data-section]")
+          ? "section"
+          : header
+            ? anchor.matches(".rb-nav-action")
+              ? "header-action"
+              : anchor.closest(".rb-brand")
+                ? "header-brand"
+                : "header-entry"
+            : "elsewhere";
+        const press = canvasLinkPress(docNow.current, href, currentPageId, place);
+        // `edit`: the text's own click handler, in the bubble phase, chooses or writes — this
+        // listener has only kept the frame where it is. A card's title link never reaches here:
+        // `wireEditing` unwraps it (ADR 0040, David's adjustment).
+        if (press.kind === "none" || press.kind === "edit") return;
+        if (press.kind === "header") {
+          if (header) selectHeaderNow.current(header);
+          return;
         }
-        if (destination.kind === "entry") {
-          setEntryByPage((previous) => ({
-            ...previous,
-            [destination.pageId]: destination.entryId,
-          }));
-        }
-        propsNow.current.onSelectPage(
-          docNow.current.pages[0]?.id === destination.pageId ? undefined : destination.pageId,
-        );
+        goToDestination(iframeDoc, press.target, anchor);
       },
       true,
     );
@@ -3687,6 +3722,11 @@ export function Editor({
      * — the verbs and the compositions go with it — draws the outline, and opens «Menú», which is
      * where the header is shaped. Not a Tab stop of its own on día 3: its entries already are, and
      * «Menú» is in the rail.
+     *
+     * Every link is left to `wireLinks`, which runs first, in the capture phase: the entries follow,
+     * and **the bar's button and the brand choose the header through it** (ADR 0066 §1, done on
+     * sprint 40 día 2 — until then this skip left them to navigate like an entry). The brand on the
+     * first page is no link and lands here.
      */
     delegate(iframeDoc, "click", ".rb-header", (header, event) => {
       const target = event.target as { closest?: (selector: string) => unknown } | null;
@@ -3719,6 +3759,7 @@ export function Editor({
       header.classList.add("rb-selected");
       openMenuPanel.current();
     }
+    selectHeaderNow.current = selectHeader;
 
     /*
      * Clicking into a section's text, or Tab-ing to it, moves the keyboard's place as well —
@@ -5413,28 +5454,133 @@ export function Editor({
         measure("borderRadius", controls.measures.borderRadius, es["editor.toolbar.borderRadius"]);
       }
 
-      if (controls.link) {
-        const linkGroup = group(es["editor.toolbar.link"]);
-        const button = chrome(iframeDoc, "button");
-        button.type = "button";
-        button.className = "rb-toolbar-link";
-        button.textContent = es["editor.toolbar.link"];
-        // A second door, not a second mechanism: it opens the panel that already owns
-        // destinations, on this section. Editing an href in the frame would be a second place a
-        // destination can be written, and `listDeadDestinations` would have two sources to chase.
-        //
-        // **Through `showFields` and not `setFieldsFor`, which is a defect this sprint found**
-        // (día 3). Calling the setter straight skipped the half of that function that sends the
-        // rail back to «Secciones», so selecting a word with «Estilo» open and pressing «Enlace»
-        // left **both** side surfaces mounted — and while the drawer was `fixed` it simply covered
-        // the other one. Nothing tested it. In the row they would now compete for one slot, so a
-        // door that bypasses the rule is a door that loses the panel it opened.
-        button.addEventListener("click", () => {
-          dismiss();
-          showFields(sectionId);
+      if (controls.destination) {
+        /**
+         * **«A dónde lleva»: chosen from the site's own pages and sections, and tried with «Ir»**
+         * (sprint 40 día 2, ADR 0079). Until today the bar held one button, «Enlace», that opened
+         * «Campos» on the whole section; and a link that pointed at a page could not be edited in
+         * the canvas at all, because the click followed it. Now the click edits, so this is where
+         * the destination is chosen and tried.
+         *
+         * A `<select>`, as the measures are: a real control inside an iframe, keyboard and all. Its
+         * options are the sections of this page and the other pages — written as the renderer
+         * writes them, `#sec-x` and `./slug.html`, so the document never learns a second form — and
+         * the door to «Campos» for what is typed free: a phone, an address, the outside. Which keeps
+         * `listDeadDestinations` with one source to chase. When the link points at none of the
+         * options, a disabled option shows what it points at (the `exact` pattern of the measures),
+         * so the box never claims a page it is not on.
+         *
+         * **Through `showFields` and not `setFieldsFor`, which is a defect sprint 24 found** (día 3):
+         * calling the setter straight skipped the half of that function that sends the rail back
+         * to «Secciones», and two side surfaces were mounted at once.
+         */
+        const wrapper = group(es["editor.toolbar.destination"]);
+        const currentPageId = pageIdNow.current ?? docNow.current.pages[0]?.id;
+        const href = (el.getAttribute("href") ?? "").trim();
+        const target = canvasLinkTarget(docNow.current, href, currentPageId);
+        const sameTarget = (candidate: string) =>
+          JSON.stringify(canvasLinkTarget(docNow.current, candidate, currentPageId)) ===
+          JSON.stringify(target);
+
+        const select = chrome(iframeDoc, "select");
+        // Capped in width: a select is as wide as its widest option, and a long outside address
+        // in the «Ahora: …» option pushed the bar on to two rows at 1024 (measured, día 2). The
+        // whole address is the control's `title`.
+        select.className = "rb-toolbar-select rb-toolbar-where";
+        select.setAttribute("aria-label", es["editor.toolbar.destination"]);
+        if (href !== "") select.title = href;
+        let selected: string | null = null;
+        const option = (parent: HTMLElement, value: string, label: string) => {
+          const node = chrome(iframeDoc, "option");
+          node.value = value;
+          node.textContent = label;
+          parent.appendChild(node);
+          if (selected === null && target.kind !== "none" && sameTarget(value)) selected = value;
+        };
+        const page = docNow.current.pages.find((candidate) => candidate.id === currentPageId);
+        const here = chrome(iframeDoc, "optgroup");
+        here.label = es["editor.toolbar.destination.here"];
+        for (const section of page?.sections ?? []) {
+          if (section.id === sectionId) continue;
+          option(here, `#${section.id}`, sectionDisplayName(docNow.current, section.id));
+        }
+        if (here.childElementCount > 0) select.appendChild(here);
+        const pages = chrome(iframeDoc, "optgroup");
+        pages.label = es["editor.toolbar.destination.pages"];
+        docNow.current.pages.forEach((candidate, index) => {
+          if (candidate.id === currentPageId || candidate.binding) return;
+          option(pages, index === 0 ? "./index.html" : `./${candidate.slug}.html`, candidate.title);
         });
-        linkGroup.appendChild(button);
-        bar.appendChild(linkGroup);
+        if (pages.childElementCount > 0) select.appendChild(pages);
+        option(select, "external", es["editor.toolbar.destination.external"]);
+        if (selected === null) {
+          const current = chrome(iframeDoc, "option");
+          current.value = "current";
+          current.disabled = true;
+          current.textContent = es["editor.toolbar.destination.current"].replace(
+            "{href}",
+            href === "" ? "—" : href,
+          );
+          select.appendChild(current);
+        }
+        select.value = selected ?? "current";
+        select.addEventListener("change", () => {
+          if (select.value === "current") return;
+          if (select.value === "external") {
+            dismiss();
+            showFields(sectionId);
+            return;
+          }
+          // The row is read now, not when the bar was built: focusing the select commits a text
+          // being written in, and the words written are the ones that must travel with the href.
+          const row = sectionFields(docNow.current, sectionId).find(
+            (candidate) => candidate.elementId === elementId,
+          );
+          if (!row || row.kind !== "link") return;
+          propsNow.current.onFillSlot({
+            sectionId,
+            slot: row.slot,
+            occurrence: row.occurrence,
+            ...(row.item ? { item: row.item } : {}),
+            role: row.role,
+            value: {
+              kind: "link",
+              text: row.text,
+              href: select.value,
+              ...(row.marks && row.marks.length > 0 ? { marks: [...row.marks] } : {}),
+            },
+            slotOrder: row.item
+              ? itemSlotOrderOf(docNow.current, sectionId)
+              : slotOrderOf(docNow.current, sectionId),
+          });
+        });
+        wrapper.appendChild(select);
+
+        // «Ir» only where there is somewhere in the site to go; «Abrir» for the outside, in a new
+        // tab. A phone or an address gets neither: absent, not disabled (ADR 0025).
+        if (target.kind !== "none") {
+          const go = chrome(iframeDoc, "button");
+          go.type = "button";
+          go.className = "rb-toolbar-step";
+          go.dataset["action"] = "go";
+          go.textContent = es["editor.toolbar.go"];
+          go.addEventListener("click", () => {
+            dismiss();
+            goToDestination(iframeDoc, target);
+          });
+          wrapper.appendChild(go);
+        } else if (opensOutside(href)) {
+          const open = chrome(iframeDoc, "button");
+          open.type = "button";
+          open.className = "rb-toolbar-step";
+          open.dataset["action"] = "open";
+          open.textContent = es["editor.toolbar.open"];
+          open.addEventListener("click", () => {
+            iframeDoc.defaultView?.open(href, "_blank", "noopener");
+          });
+          wrapper.appendChild(open);
+        }
+        bar.appendChild(wrapper);
       }
 
       /*
@@ -5872,9 +6018,18 @@ export function Editor({
      * (the same function, so the two cannot disagree) stays on the chosen element's behalf, invisible
      * and covering nothing.
      */
-    const chosen = { text: el.dataset["rbText"] === "1", movable };
+    // A link that leads into the site goes there on Ctrl/Cmd+Intro (ADR 0079), and the hint says
+    // so with the key of this machine, as the line does.
+    const goes =
+      el.tagName === "A" &&
+      canvasLinkTarget(
+        docNow.current,
+        el.getAttribute("href") ?? "",
+        pageIdNow.current ?? docNow.current.pages[0]?.id,
+      ).kind !== "none";
+    const chosen = { text: el.dataset["rbText"] === "1", movable, goes };
     patchHelp({ chosen });
-    const says = chosenHint(chosen);
+    const says = chosenHint(chosen, toolbarShortcutFor(window.navigator));
     if (says === "") return;
 
     const description = chrome(iframeDoc, "span");
@@ -6165,6 +6320,20 @@ export function Editor({
       if (action.kind === "write") {
         event.preventDefault();
         write(el, address, state);
+        return;
+      }
+      if (action.kind === "go") {
+        // Only a link that leads into the site goes anywhere (ADR 0079); for any other chosen text
+        // the press was not ours and reaches whatever it was for.
+        const href = el.tagName === "A" ? (el.getAttribute("href") ?? "") : "";
+        const target = canvasLinkTarget(
+          docNow.current,
+          href,
+          pageIdNow.current ?? docNow.current.pages[0]?.id,
+        );
+        if (target.kind === "none") return;
+        event.preventDefault();
+        goToDestination(iframeDoc, target);
         return;
       }
       if (action.kind === "release") {
@@ -8882,6 +9051,7 @@ export function Editor({
       `  font-size: ${screenPx(12)}; color: #334155; background: #FFFFFF; border: ${screenPx(1)} solid #E3E8F0;`,
       `  border-radius: ${screenPx(7)}; }`,
       `.rb-toolbar-select { padding: 0 ${screenPx(4)}; }`,
+      `.rb-toolbar-where { max-width: ${screenPx(220)}; text-overflow: ellipsis; }`,
       `.rb-toolbar-color { width: ${screenPx(26)}; height: ${screenPx(22)}; padding: 0; border: ${screenPx(1)} solid #E3E8F0;`,
       `  border-radius: ${screenPx(6)}; background: #FFFFFF; cursor: pointer; }`,
       `.rb-toolbar-color.rb-toolbar-on { box-shadow: 0 0 0 ${screenPx(2)} #FFFFFF, 0 0 0 ${screenPx(4)} #156FE7; }`,
