@@ -12,6 +12,7 @@ import { describe, expect, it } from "vitest";
 import {
   type FieldRow,
   fieldCommitFor,
+  fieldValueFor,
   groupedFields,
   sectionFields,
 } from "../src/editor/sectionFields.ts";
@@ -95,12 +96,11 @@ describe("sectionFields", () => {
   });
 
   it("leaves out the roles a text box cannot honestly edit", () => {
-    // The image has its own affordance (click the photo); a list holds items, not a value; and a
-    // map wants coordinates, which do not exist yet. An empty box for any of them would be a
-    // field nobody can fill.
+    // The image has its own affordance (click the photo); a list holds items, not a value. An empty
+    // box for either would be a field nobody can fill. (The map was here too until sprint 40 día 4:
+    // it wanted coordinates; «Cómo llegar» wants only its words, ADR 0080.)
     expect(labels(doc, "sec-cover")).not.toContain("Foto");
     expect(labels(doc, "sec-services")).not.toContain("Tarjetas");
-    expect(labels(doc, "sec-location")).not.toContain("Mapa");
   });
 
   it("gives a link two halves and everything else one", () => {
@@ -546,5 +546,91 @@ describe("the slots of a line", () => {
     expect(SERVICE_LINE_SLOTS).toEqual(
       presetFor("services").itemSlots?.map((slot) => slot.slot) ?? [],
     );
+  });
+});
+
+/**
+ * «Cómo llegar» in «Campos» (ADR 0080, sprint 40 día 4): its words, where it leads — the address of
+ * its section unless a place was written on purpose — and nothing stored that the address already says.
+ */
+describe("the map's row", () => {
+  const mapRow = (document: RetorikaDocument) =>
+    sectionFields(document, "sec-location").find((row) => row.slot === "map");
+
+  it("is listed for a generated site, with its words and no place of its own", () => {
+    expect(mapRow(doc)).toMatchObject({
+      kind: "map",
+      label: "Mapa",
+      text: "Cómo llegar",
+      href: "",
+      required: false,
+    });
+    expect(mapRow(doc)?.dead).toBeUndefined();
+  });
+
+  it("is offered empty on a site saved before it existed, and filling it follows the address", () => {
+    const saved = clearSlot(doc, { sectionId: "sec-location", slot: "map" });
+    const withoutMap: RetorikaDocument = {
+      ...saved,
+      pages: saved.pages.map((page) => ({
+        ...page,
+        sections: page.sections.map((section) =>
+          section.id === "sec-location"
+            ? { ...section, content: section.content.filter((el) => el.slot !== "map") }
+            : section,
+        ),
+      })),
+    };
+    const offered = mapRow(withoutMap);
+    expect(offered).toMatchObject({ kind: "map", text: "", href: "" });
+    expect(offered?.elementId).toBeUndefined();
+    if (!offered) throw new Error("no map row");
+    expect(fieldCommitFor(offered, "Cómo llegar", "")).toEqual({ kind: "fill" });
+    expect(fieldValueFor(offered, "Cómo llegar", "")).toEqual({
+      kind: "map",
+      label: "Cómo llegar",
+    });
+  });
+
+  it("writes a place only when one is typed, and keeps a point the map had", () => {
+    const row = mapRow(doc);
+    if (!row) throw new Error("no map row");
+    expect(fieldCommitFor(row, "Cómo llegar", "Plaza de España, Ronda")).toEqual({ kind: "fill" });
+    expect(fieldValueFor(row, "Cómo llegar", "Plaza de España, Ronda")).toEqual({
+      kind: "map",
+      label: "Cómo llegar",
+      query: "Plaza de España, Ronda",
+    });
+    // Emptied, the place goes and the map follows the address again.
+    expect(fieldValueFor({ ...row, href: "Ronda" }, "Cómo llegar", "  ")).toEqual({
+      kind: "map",
+      label: "Cómo llegar",
+    });
+    const pointed: FieldRow = { ...row, point: { latitude: 36.74, longitude: -5.16 } };
+    expect(fieldValueFor(pointed, "Mapa", "")).toEqual({
+      kind: "map",
+      label: "Mapa",
+      latitude: 36.74,
+      longitude: -5.16,
+    });
+    // Only the words changed: a text edit, which keeps everything else of the value.
+    expect(fieldCommitFor(row, "Ver cómo llegar", "")).toEqual({
+      kind: "text",
+      elementId: "el-map",
+      text: "Ver cómo llegar",
+    });
+  });
+
+  it("is dead when the section shows no address and no place was written", () => {
+    const hidden = clearSlot(doc, { sectionId: "sec-location", slot: "address" });
+    expect(mapRow(hidden)?.dead).toBe(true);
+    const placed = fillSlot(hidden, {
+      sectionId: "sec-location",
+      slot: "map",
+      role: "map",
+      value: { kind: "map", label: "Cómo llegar", query: "Ronda" },
+      slotOrder: presetFor("location").slots.map((slot) => slot.slot),
+    });
+    expect(mapRow(placed)?.dead).toBeUndefined();
   });
 });

@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  type ContentValue,
   type ElementAddress,
   type MarkRun,
   marksAfterTrim,
@@ -12,7 +11,12 @@ import {
 import { useEffect, useId, useRef } from "react";
 import { menuLineFor, type SectionRow } from "../editor/headerState.ts";
 import { Note, PanelHeader, panelCard, panelFrame } from "../editor/panelKit.tsx";
-import { type FieldRow, fieldCommitFor, groupedFields } from "../editor/sectionFields.ts";
+import {
+  type FieldRow,
+  fieldCommitFor,
+  fieldValueFor,
+  groupedFields,
+} from "../editor/sectionFields.ts";
 import { fieldEditFor } from "../editor/textEdits.ts";
 import es from "../locales/es.json" with { type: "json" };
 import type { MenuFocusBlock } from "./MenuPanel.tsx";
@@ -61,9 +65,6 @@ export interface FieldsPanelProps {
 
 /** What a row's two boxes become in the document. A link keeps both halves together: changing a
  * label must not drop the destination, and changing the destination must not drop the label. */
-function valueFor(row: FieldRow, text: string, href: string): ContentValue {
-  return row.kind === "link" ? { kind: "link", text, href } : { kind: "text", text };
-}
 
 export function FieldsPanel({
   sectionName,
@@ -110,7 +111,7 @@ export function FieldsPanel({
     onFill({
       ...address,
       role: row.role,
-      value: valueFor(row, text.trim(), href.trim()),
+      value: fieldValueFor(row, text.trim(), href.trim()),
       slotOrder: row.item ? itemSlotOrder : slotOrder,
     });
   }
@@ -380,7 +381,13 @@ function FieldRowInputs({
         ref={box}
         type="text"
         defaultValue={row.text}
-        placeholder={row.kind === "link" ? es["editor.fields.labelHint"] : ""}
+        placeholder={
+          row.kind === "link"
+            ? es["editor.fields.labelHint"]
+            : row.kind === "map"
+              ? es["editor.fields.map.placeholder"]
+              : ""
+        }
         onFocus={(event) => {
           anchor.current = { marks: row.marks ?? [], text: event.target.value, anchored: true };
         }}
@@ -406,6 +413,43 @@ function FieldRowInputs({
           {row.dead ? (
             <p className="m-0 text-[12px] leading-snug text-ui-danger-deep">
               {es["editor.fields.deadDestination"]}
+            </p>
+          ) : null}
+        </>
+      ) : null}
+      {row.kind === "map" ? (
+        /*
+         * **«Cómo llegar»** (ADR 0080, sprint 40 día 4): its words above, and where it leads said in a
+         * line — the address of this section, read when the page is drawn, or a place written here on
+         * purpose. Emptying the place goes back to the address; emptying the words takes the link off
+         * the page, as every row of this panel does. Only the place is typed: the address is the
+         * section's own row, and the link follows it.
+         */
+        <>
+          {row.text !== "" && !row.dead ? (
+            <Note>
+              {(row.href ?? "") === ""
+                ? es["editor.fields.map.followsAddress"]
+                : es["editor.fields.map.followsPlace"]}
+            </Note>
+          ) : null}
+          <label htmlFor={hrefId} className="mt-1 text-[12px] text-ui-muted">
+            {es["editor.fields.map.place"]}
+          </label>
+          <input
+            id={hrefId}
+            ref={hrefBox}
+            type="text"
+            defaultValue={row.href ?? ""}
+            placeholder={es["editor.fields.map.placeHint"]}
+            onBlur={(event) => onCommit(row, row.text, event.target.value)}
+            className={`h-9 w-full rounded-lg border bg-white px-2.5 text-[13px] phone:text-base text-ui-ink ${
+              row.dead ? "border-[#DC2626]" : "border-ui-border"
+            }`}
+          />
+          {row.dead ? (
+            <p className="m-0 text-[12px] leading-snug text-ui-danger-deep">
+              {es["editor.fields.map.dead"]}
             </p>
           ) : null}
         </>

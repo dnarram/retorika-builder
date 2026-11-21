@@ -1,4 +1,9 @@
-import { type ContentElement, checkAgainstPreset, type Section } from "@retorika/schema";
+import {
+  type ContentElement,
+  checkAgainstPreset,
+  MAP_ADDRESS_SLOT,
+  type Section,
+} from "@retorika/schema";
 import { describe, expect, it } from "vitest";
 import { presetFor, SEARCH_ALIASES } from "../src/index.ts";
 import es from "../src/locales/es.json" with { type: "json" };
@@ -132,5 +137,14 @@ describe("interface language", () => {
     for (const variant of LOCATION_VARIANTS) {
       expect(es).toHaveProperty([`section.location.variant.${variant}`]);
     }
+  });
+});
+
+describe("the slot «Cómo llegar» reads (ADR 0080)", () => {
+  it("is this preset's address, a body, and the map sits beside it", () => {
+    // The schema's `mapHref` follows the address by its slot name, which is the catalog's to own: a
+    // rename here would leave every map leading nowhere, so the two are held equal.
+    expect(LOCATION_SLOTS.find((slot) => slot.slot === MAP_ADDRESS_SLOT)?.role).toBe("body");
+    expect(LOCATION_SLOTS.find((slot) => slot.role === "map")?.slot).toBe("map");
   });
 });

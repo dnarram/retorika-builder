@@ -1,6 +1,7 @@
 import { presetFor } from "@retorika/catalog";
 import catalogEs from "@retorika/catalog/locales/es" with { type: "json" };
 import {
+  type ContentValue,
   findSection,
   type ItemAddress,
   type ListItem,
@@ -45,7 +46,7 @@ import es from "../locales/es.json" with { type: "json" };
  * the photo, ADR 0018); a list holds items rather than a value; and a map wants coordinates,
  * which is ADR 0004's other half and does not exist. Offering an empty box for any of those
  * would be a field that cannot be filled. */
-const EDITABLE_ROLES: readonly Role[] = ["heading", "subheading", "body", "button", "link"];
+const EDITABLE_ROLES: readonly Role[] = ["heading", "subheading", "body", "button", "link", "map"];
 
 export interface FieldRow {
   slot: string;
@@ -53,12 +54,17 @@ export interface FieldRow {
   role: Role;
   /** The catalog's Spanish name for the slot, numbered when a slot holds more than one. */
   label: string;
-  /** A link carries a destination as well as a label; everything else is one box. */
-  kind: "text" | "link";
+  /** A link carries a destination as well as a label; a map («Cómo llegar», ADR 0080) its words and,
+   * optionally, a place written on purpose instead of the address; everything else is one box. */
+  kind: "text" | "link" | "map";
   /** The element's id, when it exists. Absent for a slot the document does not have yet. */
   elementId?: string;
   text: string;
+  /** A link's destination; for a map, the place written on purpose — `""` while it follows the
+   * address its section shows. */
   href?: string;
+  /** A map's point, carried through an edit so a site with one keeps it (ADR 0004's form). */
+  point?: { latitude: number; longitude: number };
   required: boolean;
   /** This link's destination goes nowhere, by the same rule `/api/download` refuses on. */
   dead?: boolean;
@@ -151,7 +157,12 @@ export function sectionFields(doc: RetorikaDocument, sectionId: string): FieldRo
 
   for (const slot of preset.slots) {
     if (!EDITABLE_ROLES.includes(slot.role)) continue;
-    const kind = slot.role === "button" || slot.role === "link" ? "link" : "text";
+    const kind =
+      slot.role === "button" || slot.role === "link"
+        ? "link"
+        : slot.role === "map"
+          ? "map"
+          : "text";
     const existing = found.section.content.filter((element) => element.slot === slot.slot);
 
     const label = (occurrence: number) =>
@@ -168,8 +179,20 @@ export function sectionFields(doc: RetorikaDocument, sectionId: string): FieldRo
           ? value.text
           : value?.kind === "text"
             ? value.text
-            : "";
-      const href = element.hidden ? "" : value?.kind === "link" ? value.href : undefined;
+            : value?.kind === "map"
+              ? value.label
+              : "";
+      const href = element.hidden
+        ? ""
+        : value?.kind === "link"
+          ? value.href
+          : value?.kind === "map"
+            ? (value.query ?? "")
+            : undefined;
+      const point =
+        value?.kind === "map" && value.latitude !== undefined && value.longitude !== undefined
+          ? { latitude: value.latitude, longitude: value.longitude }
+          : undefined;
       const marks = value?.kind === "text" || value?.kind === "link" ? value.marks : undefined;
       rows.push({
         slot: slot.slot,
@@ -179,7 +202,8 @@ export function sectionFields(doc: RetorikaDocument, sectionId: string): FieldRo
         kind,
         elementId: element.id,
         text,
-        ...(kind === "link" ? { href: href ?? "" } : {}),
+        ...(kind !== "text" ? { href: href ?? "" } : {}),
+        ...(point ? { point } : {}),
         required: slot.min > 0,
         ...(deadIds.has(element.id) ? { dead: true } : {}),
         ...(marks ? { marks } : {}),
@@ -197,7 +221,7 @@ export function sectionFields(doc: RetorikaDocument, sectionId: string): FieldRo
         label: label(existing.length),
         kind,
         text: "",
-        ...(kind === "link" ? { href: "" } : {}),
+        ...(kind !== "text" ? { href: "" } : {}),
         required: slot.min > existing.length,
       });
     }
@@ -220,7 +244,12 @@ export function sectionFields(doc: RetorikaDocument, sectionId: string): FieldRo
 
     for (const slot of itemSlots) {
       if (!EDITABLE_ROLES.includes(slot.role)) continue;
-      const kind = slot.role === "button" || slot.role === "link" ? "link" : "text";
+      const kind =
+        slot.role === "button" || slot.role === "link"
+          ? "link"
+          : slot.role === "map"
+            ? "map"
+            : "text";
       const existing = item.elements.filter((element) => element.slot === slot.slot);
 
       // Occurrences are handled rather than assumed away. Every item slot the catalog declares today
@@ -344,8 +373,28 @@ export function fieldCommitFor(row: FieldRow, text: string, href: string): Field
   if (text.trim() === "") return { kind: "clear" };
   // No element yet: there is nothing to edit the text of, and no mark to keep.
   if (row.elementId === undefined) return { kind: "fill" };
-  // A link whose destination changed is a value change, not a text edit. Compared trimmed, because
-  // that is what both paths store.
-  if (row.kind === "link" && href.trim() !== (row.href ?? "").trim()) return { kind: "fill" };
+  // A link whose destination changed — or a map whose own place did — is a value change, not a text
+  // edit. Compared trimmed, because that is what both paths store.
+  if (row.kind !== "text" && href.trim() !== (row.href ?? "").trim()) return { kind: "fill" };
   return { kind: "text", elementId: row.elementId, text: text.trim() };
+}
+
+/**
+ * The value a field's commit writes: a link's words and destination, a text's words — and a map's
+ * words with, when one was written, its own place (ADR 0080). **An empty place writes no `query`**:
+ * the map then follows the address its section shows, which is the state the generator writes and
+ * the one a cleared «A dónde lleva, si no es la dirección» goes back to. A point the map had is kept.
+ */
+export function fieldValueFor(row: FieldRow, text: string, href: string): ContentValue {
+  if (row.kind === "link") return { kind: "link", text, href };
+  if (row.kind === "map") {
+    const place = href.trim();
+    return {
+      kind: "map",
+      label: text,
+      ...(place !== "" ? { query: place } : {}),
+      ...(row.point ?? {}),
+    };
+  }
+  return { kind: "text", text };
 }

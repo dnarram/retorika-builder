@@ -8,6 +8,7 @@ import {
   fineTrack,
   fineTrackSpan,
   GRID_COLUMNS,
+  mapHref,
   mobileSequence,
   overlaps,
   type Page,
@@ -19,7 +20,7 @@ import {
   type StyleProperty,
   tokenToCssVariable,
 } from "@retorika/schema";
-import { cssAttributeValue, cssThemeValue, safeUrl } from "./escape.ts";
+import { cssAttributeValue, cssThemeValue, NEUTRALISED_URL, safeUrl } from "./escape.ts";
 import { fillVars } from "./fill.ts";
 import { fontFaceCss } from "./fonts.ts";
 import { headerCss, headerDrawn, headerMobileCss, headerNodes } from "./header.ts";
@@ -244,6 +245,9 @@ function elementNode(
   bound: Bound,
   /** Whether the section this element sits in is the first on its page. See the image case. */
   aboveTheFold: boolean,
+  /** The section's content, for a map that follows its address (ADR 0080). Top level only: a map
+   * is never a line of a list. */
+  section?: Pick<Section, "content">,
 ): RenderNode | undefined {
   if (el.hidden) return undefined;
 
@@ -340,10 +344,16 @@ function elementNode(
       );
 
     case "map": {
-      // ADR 0004: a map publishes as a static image plus a link to the maps application.
-      // An interactive map would need JavaScript, which counts against the budget.
-      const href = `https://www.openstreetmap.org/?mlat=${value.latitude}&mlon=${value.longitude}`;
-      return element("a", { ...base, href }, [value.label]);
+      // **«Cómo llegar»: one link, nothing fetched, nothing embedded** (ADR 0080, amending ADR 0004's
+      // «static image plus a link»): the visitor's browser goes to the maps application only when
+      // the visitor presses it, and the page opens from a disk with no network. Where it leads is
+      // read now, from the address the section shows — never a stored copy (`mapHref`, shared with
+      // the download's dead-link check). A point still goes to OpenStreetMap, byte for byte as
+      // `contacto-y-horario` always published.
+      // Nowhere to go — no point, no place, no visible address — is `#`, never `""`, which from a
+      // disk reloads the page; the download refuses it anyway, as a dead link (`listDeadDestinations`).
+      const href = mapHref(value, section ?? { content: [] }) || NEUTRALISED_URL;
+      return element("a", { ...base, href: safeUrl(href) }, [value.label]);
     }
 
     case "field":
@@ -488,7 +498,7 @@ function sectionNode(
 
   const emitted: { el: ContentElement; node: RenderNode; placement: Placement | undefined }[] = [];
   for (const el of elements) {
-    const node = elementNode(el, options, level, bound, aboveTheFold);
+    const node = elementNode(el, options, level, bound, aboveTheFold, section);
     if (!node) continue;
 
     // **The accessible name of a teaser's link**, and the one thing on it that is not the owner's

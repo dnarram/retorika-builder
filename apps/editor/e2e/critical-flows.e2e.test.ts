@@ -32892,3 +32892,61 @@ describe("sprint 39 día 6 — la llegada enfocándose, medida", () => {
     }
   }, 240_000);
 });
+
+/**
+ * **Sprint 40 día 4 — «Cómo llegar» sigue a la dirección** (ADR 0080). A generated site is born with
+ * the link under its address, leading to Google Maps with the address the section shows. David's
+ * adjustment 1 approving the sprint: nothing stores a copy of the address, so correcting it in
+ * «Campos» moves the link with it — the sabotage is the generator writing the address as the map's
+ * `query`, which leaves the link on the old address and this walk red. A place written on purpose
+ * wins; emptied, the link follows the address again; emptying its words takes it off the page.
+ */
+describe("sprint 40 día 4 — «Cómo llegar» sigue a la dirección", () => {
+  it("nace con la web, sigue a la dirección corregida, acepta otro sitio y se quita", async () => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    const studio = await context.newPage();
+    try {
+      await intoTheCanvas(studio);
+      const frame = studio.frameLocator(PREVIEW).first();
+      const map = frame.locator('[data-section="sec-location"] a[data-role="map"]');
+      const google = (place: string) =>
+        `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place)}`;
+
+      // 1. Born with the site, under the address, leading to it.
+      await expect(map).toHaveText("Cómo llegar");
+      await expect(map).toHaveAttribute("href", google("Cta. de Santo Domingo, 2, Ronda"));
+
+      // 2. The address corrected in «Campos»: the link follows, nothing else touched.
+      await frame.locator('[data-section="sec-location"]').click();
+      await frame.getByRole("button", { name: "Campos de esta sección" }).click();
+      const address = studio.getByLabel("Dirección", { exact: true });
+      await address.fill("Calle Ánimas, 7 & Plaza, Ronda");
+      await address.press("Tab");
+      await expect(map).toHaveAttribute("href", google("Calle Ánimas, 7 & Plaza, Ronda"));
+      await expect(
+        studio.getByText("Lleva a Google Maps con la dirección de esta sección."),
+      ).toBeVisible();
+
+      // 3. A place written on purpose wins, and the line says so; emptied, the address again.
+      const place = studio.getByLabel("Otro sitio, si no es la dirección", { exact: true });
+      await place.fill("Plaza de España, Ronda");
+      await place.press("Tab");
+      await expect(map).toHaveAttribute("href", google("Plaza de España, Ronda"));
+      await expect(
+        studio.getByText("Lleva a Google Maps con el sitio de abajo, no con la dirección."),
+      ).toBeVisible();
+      await place.fill("");
+      await place.press("Tab");
+      await expect(map).toHaveAttribute("href", google("Calle Ánimas, 7 & Plaza, Ronda"));
+
+      // 4. Its words emptied: off the page, as every row of «Campos» does.
+      const words = studio.getByLabel(/^Mapa/);
+      await words.fill("");
+      await words.press("Tab");
+      await expect(map).toHaveCount(0);
+      await studio.getByRole("button", { name: "Cerrar los campos" }).click();
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
+});

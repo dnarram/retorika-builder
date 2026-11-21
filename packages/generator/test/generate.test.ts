@@ -8,6 +8,7 @@ import { hasSamplePhotos } from "@retorika/photobank";
 import {
   checkAgainstPreset,
   flattenElements,
+  mapHref,
   type RetorikaDocument,
   type Section,
 } from "@retorika/schema";
@@ -163,12 +164,20 @@ describe("location (question 4)", () => {
     expect(sectionsOf(document).some((s) => s.preset.catalogId === "location")).toBe(false);
   });
 
-  it("never carries a map: question 4 collects no coordinates", () => {
+  it("carries «Cómo llegar», which stores its words and nothing of the address (ADR 0080)", () => {
+    // Sprint 40 día 4. Until then the section carried no map: question 4 collects no coordinates.
+    // Now the link follows the address the section shows, read when the page is drawn — so nothing
+    // here may hold a copy of it (David's adjustment 1): no `query`, no point.
     const { document } = generate(
       answers({ businessName: "X", sector: "tienda", address: "Calle Cruz Verde 7, Ronda" }),
     );
     const location = findSection(document, "location");
-    expect(location.content.some((el) => el.role === "map")).toBe(false);
+    const maps = location.content.filter((el) => el.role === "map");
+    expect(maps).toHaveLength(1);
+    expect(maps[0]?.value).toEqual({ kind: "map", label: "Cómo llegar" });
+    expect(mapHref(maps[0]?.value as never, location)).toBe(
+      "https://www.google.com/maps/search/?api=1&query=Calle%20Cruz%20Verde%207%2C%20Ronda",
+    );
   });
 });
 
