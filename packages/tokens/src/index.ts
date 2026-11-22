@@ -22,6 +22,7 @@ export type {
   UnreadablePair,
 } from "./derive.ts";
 export {
+  AAA_NORMAL_TEXT,
   derivePalette,
   GLASS_MIX,
   inkOn,
@@ -30,6 +31,7 @@ export {
   maxChroma,
   paletteLabel,
   validateTheme,
+  withTextMargin,
 } from "./derive.ts";
 export type { Oklch } from "./oklch.ts";
 export { hexToOklch, hexToRgb, inGamut, oklchToHex, rgbToHex, toGamut } from "./oklch.ts";

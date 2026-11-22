@@ -118,6 +118,59 @@ function textOn(hex: string, surface: string, dark: boolean): { hex: string; mov
   return { hex: moved, moved: true };
 }
 
+/** WCAG's enhanced contrast for body text (AAA): the margin a text role is given under a motif. */
+export const AAA_NORMAL_TEXT = 7;
+
+/** The text roles `withTextMargin` moves — the ones a veil is measured for, ink included. */
+const TEXT_ROLES = ["color.ink", "color.primary", "color.secondary", "color.muted"] as const;
+
+/**
+ * **The texts given margin, and the brand's colour kept as the fill** (ADR 0081, sprint 40 día 7 —
+ * decided by development under David's delegation of 22 November 2026: «resuelve lo de la paleta
+ * neutra en el cierre»).
+ *
+ * A veil over a motif has to keep every text role readable over the motif's extremes, so a palette
+ * whose text barely clears AA on the plain surface — the neutral start's primary, Retorika's blue
+ * `#156FE7`, is 4.71:1 on white — leaves no room for any motif at all: a soft cream one needs a veil of
+ * 82. The colour is not the problem, its role is: it is the fill of the buttons and the text of the
+ * headings and links at once. So this applies David's rule of 16 November — **the colour stays exact
+ * and changes its role** (ADR 0074) — to that case: each text role under `ratio` on the surface moves
+ * to the sibling of the same hue and chroma that reaches it, the minimum (`lightnessFor`); and when the
+ * primary moves, the colour it was becomes the fill, written on in the ink it was written on, so every
+ * button, bar and favicon keeps exactly the colour it had. A theme already at `ratio` comes back as the
+ * same object. Nothing calls this on its own: the owner presses for it, and «Deshacer» takes it back.
+ */
+export function withTextMargin<T extends PaletteColors>(theme: T, ratio = AAA_NORMAL_TEXT): T {
+  const surface = theme["color.surface"];
+  const dark = contrastRatio("#000000", surface) < contrastRatio("#FFFFFF", surface);
+  const next: Record<string, string | undefined> = { ...theme };
+  let moved = false;
+  for (const key of TEXT_ROLES) {
+    const hex = theme[key];
+    if (contrastRatio(hex, surface) >= ratio) continue;
+    const colour = hexToOklch(hex);
+    const sibling = dark
+      ? lightnessFor(colour, surface, ratio, colour.L, 1)
+      : lightnessFor(colour, surface, ratio, colour.L, 0);
+    if (sibling === undefined)
+      throw new Error(`No lightness of ${hex} reaches ${ratio} on ${surface}`);
+    next[key] = sibling;
+    moved = true;
+  }
+  if (!moved) return theme;
+  if (next["color.primary"] !== theme["color.primary"] && theme["color.fill"] === undefined) {
+    const { fill, ink } = resolveFillOf(theme);
+    next["color.fill"] = fill;
+    next["color.onFill"] = ink;
+  }
+  return next as T;
+}
+
+function resolveFillOf(theme: PaletteColors): { fill: string; ink: string } {
+  const resolved = resolveFill(theme);
+  return { fill: resolved["color.fill"], ink: resolved["color.onFill"] };
+}
+
 /**
  * The ink drawn on a fill: of the palette's surface and ink, the one with more contrast if it clears
  * AA; otherwise pure black or white, the one with more — one of the two clears 4.585 on any colour.

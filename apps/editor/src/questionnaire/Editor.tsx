@@ -180,7 +180,7 @@ import {
 import { ACCEPTED_IMAGE_ACCEPT } from "../editor/imageBytes.ts";
 import { leave } from "../editor/leaving.ts";
 import { toolbarFamilyLabel } from "../editor/letterGallery.ts";
-import { logoOfferFor, logoPalettesFor } from "../editor/logoColours.ts";
+import { coloursOf, logoOfferFor, logoPalettesFor, originByValues } from "../editor/logoColours.ts";
 import { logoColoursOf, logoLuminanceOf } from "../editor/logoImage.ts";
 import { LOOK_AHEAD_DEADLINE_MS, lookAheadStep } from "../editor/lookAhead.ts";
 import {
@@ -9843,6 +9843,10 @@ export function Editor({
                   legend={es["editor.background.section"]}
                   scope="section"
                   arrival={backgroundArrival}
+                  onGiveMargin={(theme) => {
+                    onSetColours?.(coloursOf(theme), doc.palette ?? originByValues(doc.theme));
+                    announce(es["editor.background.announce.margin"]);
+                  }}
                   theme={doc.theme}
                   current={own}
                   currentUrl={own ? photoUrls.get(own.src) : undefined}
@@ -9954,6 +9958,10 @@ export function Editor({
                 legend={es["editor.background.site"]}
                 scope="site"
                 theme={doc.theme}
+                onGiveMargin={(theme) => {
+                  onSetColours?.(coloursOf(theme), doc.palette ?? originByValues(doc.theme));
+                  announce(es["editor.background.announce.margin"]);
+                }}
                 current={doc.background}
                 currentUrl={doc.background ? photoUrls.get(doc.background.src) : undefined}
                 onUse={(prepared, paint) => {

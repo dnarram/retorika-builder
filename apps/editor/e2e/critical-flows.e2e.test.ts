@@ -33039,7 +33039,7 @@ describe("sprint 40 día 6 — el fondo se sube, se ve con su velo y se elige", 
     }
   }, 240_000);
 
-  it("dice la causa verdadera: los colores justos con un motivo suave, y nada con colores que dejan margen", async () => {
+  it("dice la causa verdadera: los colores justos con un motivo suave, el remedio en un paso, y nada con colores que dejan margen", async () => {
     const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
     const studio = await context.newPage();
     try {
@@ -33055,6 +33055,30 @@ describe("sprint 40 día 6 — el fondo se sube, se ve con su velo y se elige", 
       await expect(block).toContainText(
         "Los textos de tus colores van justos sobre la página lisa",
       );
+
+      // **The remedy the note names** (sprint 40 día 7, decided under David's delegation): the
+      // texts take a sibling at 7:1 and Retorika's blue stays, exactly, on every button. One step,
+      // said in the line, and the motif — still not saved — is no longer veiled at all.
+      const frame = studio.frameLocator(PREVIEW).first();
+      const headline = frame.locator('[data-section="sec-cover"] h1').first();
+      const button = frame.locator('.rb-section a[role="button"]').first();
+      const colourOf = (locator: typeof headline, property: "color" | "backgroundColor") =>
+        locator.evaluate((el, key) => getComputedStyle(el)[key], property);
+      expect(await colourOf(headline, "color")).toBe("rgb(21, 111, 231)");
+      expect(await colourOf(button, "backgroundColor")).toBe("rgb(21, 111, 231)");
+      await block.getByRole("button", { name: "Dar más contraste a los textos" }).click();
+      await expect(preview).toHaveAttribute("data-veil", "0");
+      await expect(block.locator(".text-ui-warn-deep")).toHaveCount(0);
+      await expect(studio.getByTestId("help-line")).toContainText("Textos con más contraste");
+      await expect.poll(() => colourOf(headline, "color")).toBe("rgb(0, 84, 187)");
+      expect(await colourOf(button, "backgroundColor")).toBe("rgb(21, 111, 231)");
+      // «Estilo» goes on naming where the colours came from — the owner changed them, so it says so.
+      await expect(studio.getByText("personalizada").first()).toBeVisible();
+
+      // «Deshacer» gives the colours back, and the note with them.
+      await studio.getByRole("button", { name: "Deshacer", exact: true }).click();
+      await expect.poll(() => colourOf(headline, "color")).toBe("rgb(21, 111, 231)");
+      await expect(preview).toHaveAttribute("data-veil", "82");
       await block.getByRole("button", { name: "Mejor no" }).click();
       await expect(preview).toHaveCount(0);
 

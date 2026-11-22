@@ -180,3 +180,50 @@ measured; whether a site's start should change, or the guarantee be relaxed for 
 background is in «Campos», reached by «Campos de esta sección»; **no ninth verb «Fondo» was added to the
 section's cluster**, whose eight verbs are measured by geometry and by the walks. It is in the backlog for
 the close.
+
+## Note — sprint 40 día 7: the neutral start, resolved; and the section's door
+
+**Decided by development under David's delegation of 22 November 2026** — «Resuelve lo de la paleta
+neutra en el cierre» — **and open to his veto.** Recorded at his instruction; development does not sign.
+
+**What was ruled out, and why.** The two ways the día 6 note named both break a decision already taken.
+*Changing the start* means changing `#156FE7`, and the neutral palette carries Retorika's blue by David's
+decision of 13 October 2026 (`palettes.ts`). *Relaxing the guarantee* means some text over a motif reading
+under 4.5:1, and the primary is not only headings: it writes the section's links (`build.ts`,
+`.rb-section a:not([role=button])`) and the skip link at body size, so 3:1 as large text would be false.
+
+**What was done: the colour stays exact and changes its role** — David's rule of 16 November (ADR 0074),
+applied to the motif. `withTextMargin` (`packages/tokens/src/derive.ts`) moves each text role under 7:1 on
+its surface to the sibling of the same hue and chroma that reaches it, the minimum, by the derivation's own
+`lightnessFor`; when the primary moves, the colour it was becomes `color.fill`, written on in the ink it
+was written on. So every button, bar and favicon keeps exactly its colour, and the headings and links take
+a darker blue of the same hue. On the neutral start: primary `#156FE7` → `#0054BB` (4.71 → 7.03), secondary
+`#105CB1` → `#0857AC` (6.59 → 7.07), fill `#156FE7` on `#FFFFFF`. The veils it frees:
+
+| Motif | Neutral as it is | With the texts given margin |
+|---|---|---|
+| Soft cream leaves | 82 | **0** |
+| Terracotta waves | 95 | **54** |
+| Navy lines, terracotta dots | 98 | 78 |
+
+Swept over the 13 palettes and the derived wheel on both surfaces: every result passes `validateTheme`,
+every text role reaches 7:1, the fill resolved as the renderer resolves it is the colour it was, the hue
+of a moved text stays within 8°, and a theme already at the margin comes back as the same object.
+
+**Where it lives: an offer, never on its own.** The «margin» cause is now **asked, not guessed**: it is the
+colours' exactly when giving the texts margin would bring the veil under 70 (so the waves, which the eye
+reads as a dark motif, are the colours' too: 95 → 54). Under that note the block offers «Dar más contraste a
+los textos», with «Los botones conservan su color; los títulos y los enlaces se oscurecen un poco» under it;
+the press is one step of the history (`onSetColours`, the colour field's own), said in the line, undone by
+«Deshacer»; and «Estilo» goes on naming the palette, «personalizada», because the owner changed it. An
+untouched start records the palette it was matched to, so it reads «Neutra, personalizada» rather than
+nothing. **No saved site, no generated site and no published byte changes** until an owner presses it.
+
+**The alternative, costed for David's veto (0.25 day):** applying it on its own when a background is used
+on the *untouched* start — as a late logo's colours are (ADR 0076, his P2 of sprint 38), «the neutral start
+is nobody's choice» — as a second step «Deshacer» takes back alone. Not done, because a background is not a
+brand: the owner who uploads a pattern did not say anything about the headings' blue.
+
+**The section's door** (what día 6 cut, under adjustment 4): the ninth verb «Fondo» in the section's
+cluster, after «Campos» and before «Borrar». It opens «Campos» on the section and takes the view and the
+keyboard to the background block, also when «Campos» was already open there.

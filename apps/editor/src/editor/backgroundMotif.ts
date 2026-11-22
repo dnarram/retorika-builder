@@ -1,12 +1,12 @@
 import {
   BACKGROUND_MAX_EDGE,
-  contrastRatio,
   type Extremes,
   relativeLuminance,
   type Theme,
   type VeilColours,
   veilFor,
 } from "@retorika/schema";
+import { withTextMargin } from "@retorika/tokens";
 import es from "../locales/es.json" with { type: "json" };
 
 /**
@@ -113,27 +113,22 @@ export const VEIL_NOTE_AT = 70;
 /** A page whose surface is lighter than this is a light page. */
 const LIGHT_PAGE = 0.5;
 
-/** Under this contrast with the page, a motif's extreme is «suave» — close to the page's own tone. */
-const SOFT = 1.5;
-
 export type VeilReason = "dark" | "light" | "margin";
 
 /**
  * **Why the veil is as high as it is**, said truthfully — measured, there are two causes, and the
- * sentence David gave as his example names only one. On a light page, a motif with very dark parts;
- * on a dark page, one with very light parts: «dark» and «light». But under a palette whose text
- * colours barely clear AA on the plain surface — the neutral start's primary is 4.71:1 — even a soft
- * cream motif needs 82 %: that is the colours' margin, not the motif, and telling the owner to soften
- * a motif that is already soft would send them round in a circle. `null` under the threshold.
+ * sentence David gave as his example names only one. **The colours' margin** — a palette whose text
+ * barely clears AA on the plain surface, as the neutral start's primary does at 4.71:1 — leaves no room
+ * for any motif, and telling that owner to soften a motif already soft would send them round in a
+ * circle. Since sprint 40 día 7 this is **asked, not guessed**: the cause is the margin exactly when
+ * giving the texts margin (`withTextMargin`) would bring the veil under the threshold — and then the
+ * panel offers to do it. Otherwise it is the motif: very dark parts on a light page, very light parts on
+ * a dark one. `null` under the threshold.
  */
 export function veilReason(theme: Theme, extremes: Extremes): VeilReason | null {
-  const colours = veilColoursOf(theme);
-  if (veilFor(colours, extremes) < VEIL_NOTE_AT) return null;
-  const surface = colours["color.surface"];
-  const lightPage = relativeLuminance(surface) > LIGHT_PAGE;
-  const far = lightPage ? extremes.darkest : extremes.lightest;
-  if (contrastRatio(far, surface) < SOFT) return "margin";
-  return lightPage ? "dark" : "light";
+  if (veilFor(veilColoursOf(theme), extremes) < VEIL_NOTE_AT) return null;
+  if (veilFor(veilColoursOf(withTextMargin(theme)), extremes) < VEIL_NOTE_AT) return "margin";
+  return relativeLuminance(theme["color.surface"]) > LIGHT_PAGE ? "dark" : "light";
 }
 
 /** The sentence for a reason, from the locale file. */

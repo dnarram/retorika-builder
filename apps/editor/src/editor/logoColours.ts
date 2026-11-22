@@ -1,7 +1,8 @@
 import type { LogoColours } from "@retorika/generator";
-import type { RetorikaDocument, Theme } from "@retorika/schema";
+import type { PaletteOrigin, RetorikaDocument, Theme } from "@retorika/schema";
 import {
   derivePalette,
+  identifyPalette,
   PALETTES,
   type PaletteColors,
   STARTING_PALETTE_ID,
@@ -41,6 +42,26 @@ const NEUTRAL = PALETTES.find((palette) => palette.id === STARTING_PALETTE_ID)?.
 export function isUntouchedStart(doc: RetorikaDocument): boolean {
   if (doc.palette !== undefined || !NEUTRAL) return false;
   return COLOUR_KEYS.every((key) => doc.theme[key] === (NEUTRAL as PaletteColors)[key]);
+}
+
+/** A theme's colours alone — the six and the fill pair when it has one — as a palette's are. */
+export function coloursOf(theme: Theme): PaletteColors {
+  const colours: Record<string, string> = {};
+  for (const key of COLOUR_KEYS) {
+    const value = theme[key];
+    if (value !== undefined) colours[key] = value;
+  }
+  return colours as PaletteColors;
+}
+
+/**
+ * Where a theme's colours came from, when the document recorded none: the predefined palette they
+ * are exactly, or the owner's own. What a step that changes the colours writes when the site was still
+ * untouched (sprint 40 día 7), so «Estilo» goes on naming the palette it came from, «personalizada».
+ */
+export function originByValues(theme: Theme): PaletteOrigin {
+  const palette = identifyPalette(theme);
+  return palette ? { kind: "palette", id: palette.id } : { kind: "own" };
 }
 
 /** The two palettes a logo's colours make: on the light surface (the default) and on the dark one,
