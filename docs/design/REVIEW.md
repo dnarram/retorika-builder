@@ -11254,3 +11254,47 @@ velo). Renderer: `background.test.ts` (la opacidad del CSS es `veilFor`; mosaico
 documento sin fondo emite nada; `cssUrl` rechaza `javascript:`, comillas y `<` y acepta `blob:`) y el de
 Chromium. a11y 2 381 en verde, parity y las 30 goldens, `pnpm size` 9,5 KB para la web nueva,
 `renderer:deps` sin dependencia nueva. **Saboteos**: ver la PR.
+
+### Día 6 — el fondo se sube, se ve con su velo y se elige (PR de `feat/el-fondo-se-sube`)
+
+**Lo que hay ahora** (nota del día 6 en [ADR 0081](../decisions/0081-a-background-with-motifs-carries-its-measured-veil.md)):
+
+- **Preparar** (`prepareBackground`): olfateo por bytes (un SVG con la frase del logo, un HEIC con la suya),
+  ≤ 1 600 px, **PNG si tiene algo de transparencia, JPEG 0,82 si no**, rechazo por encima de 2 MiB ya
+  codificado, aviso por encima de 300 KB. Los extremos se leen **de los bytes codificados, decodificados
+  otra vez al tamaño guardado** (ajuste 2 de David): la unitaria de líneas negras de 1 px sobre blanco da
+  negro y blanco, y nombra el gris `#BFBFBF` que daría una muestra de 64×64 como el caso que no debe pasar.
+- **Verlo velado antes de guardar** (la condición de David): `BackgroundBlock` enseña el mosaico, el velo
+  que pintará la página y una línea de texto de la web encima; «Usar este fondo» escribe un paso de
+  historial y la línea lo anuncia («Fondo puesto. Deshacer lo quita.»); «Mejor no» lo descarta. En mosaico
+  o a sangre; «Cambiar» y «Quitar». En «Estilo» para toda la web, para todos; al pie de «Campos» para una
+  sección.
+- **La nota dice la causa verdadera, desde 70 centésimas.** Medido con tres motivos bajo las 13 paletas:
+  hojas crema suaves 0 en siete paletas y 75–85 en la neutra, la oliva y las tres oscuras; ondas terracota
+  49–96; líneas marino 58–98. Hay **dos causas**, y la frase de ejemplo de David nombraba una: un motivo con
+  partes muy oscuras en una página clara (o muy claras en una oscura), y **unos colores cuyo texto va justo
+  sobre la página lisa** — el primario de la paleta neutra pasa 4,71:1 sobre blanco, y hasta el motivo
+  crema necesita 82. Pedirle a ese dueño un motivo más suave sería mandarle en círculo; la nota le manda a
+  «Colores». Tres frases en `es.json`.
+- **Lo que esto significa, para David**: toda web empieza en la paleta neutra, y bajo ella casi cualquier
+  motivo sale velado al 80 % o más. La garantía es la que eligió y está medida; si quiere cambiar el
+  arranque o relajar la garantía para los motivos, es una decisión suya.
+- **Cortado, y dicho** (su ajuste 4): el fondo de una sección está en «Campos», al que se llega con
+  «Campos de esta sección»; **no se añade un noveno verbo «Fondo» al racimo de la sección**, cuyos ocho
+  están medidos por geometría y por las caminatas. Al backlog del cierre.
+
+**Capturas de «Estilo»**, antes (`a4c8e8a`) y después, con el motivo marino elegido y aún sin guardar:
+[1280 antes](review/2026-11-el-logo-entero/dia6-estilo-1280-antes.png) ·
+[1280 después](review/2026-11-el-logo-entero/dia6-estilo-1280-despues.png) ·
+[1024 antes](review/2026-11-el-logo-entero/dia6-estilo-1024-antes.png) ·
+[1024 después](review/2026-11-el-logo-entero/dia6-estilo-1024-despues.png) ·
+[390 antes](review/2026-11-el-logo-entero/dia6-estilo-390-antes.png) ·
+[390 después](review/2026-11-el-logo-entero/dia6-estilo-390-despues.png).
+
+**Pruebas.** Unitarias (`backgroundMotif.test.ts`): los extremos a resolución guardada y el gris de la
+muestra; lo que no está (alfa < 128); nada visible; PNG o JPEG por la transparencia; el nombre; el tope igual
+al de la descarga; las tres causas y el silencio bajo el umbral. e2e «sprint 40 día 6», tres caminatas: se
+prepara y se ve velado (98, opacidad 0,98) sin escribir nada; se usa y el lienzo lo pinta con el mismo velo;
+mosaico a 160 px y luego a sangre; «Quitar» y «Deshacer»; la nota del margen con el motivo crema bajo la
+neutra, y ninguna bajo «Terracota cálida» (velo 0); el fondo de «Qué ponemos» desde «Campos» encima del de
+la web; el ZIP con las dos imágenes en `assets/` y el velo al 98 % en la hoja. **Saboteos**: ver la PR.

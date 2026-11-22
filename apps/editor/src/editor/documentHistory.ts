@@ -1,6 +1,8 @@
 import { entryPageSection, presetFor, teaserSection } from "@retorika/catalog";
 import catalogEs from "@retorika/catalog/locales/es" with { type: "json" };
 import type {
+  Background,
+  BackgroundScope,
   ElementAddress,
   EntryField,
   Header,
@@ -61,6 +63,7 @@ import {
   renamePage as renamePageInDoc,
   revertSection as revertSectionInDoc,
   sectionToPage as sectionToPageInDoc,
+  setBackground as setBackgroundInDoc,
   setElementImageSrc,
   setElementStyle as setElementStyleInDoc,
   setElementText,
@@ -199,6 +202,12 @@ export type SnapshotCause =
    * toast asking «did somebody write here» must not start saying yes because a domain was typed. */
   | { type: "setSiteDescription" }
   | { type: "setSiteUrl" }
+  /**
+   * A background with motifs put, changed or taken off (ADR 0081, sprint 40 día 6). The site's names
+   * no section; a section's names it, like `setVariant`, and **neither is a content cause**: a
+   * picture under the words writes none of them.
+   */
+  | { type: "setBackground"; sectionId?: string }
   /**
    * The collection causes (ADR 0033). **None of them names a section, and that is right rather
    * than convenient**: a collection belongs to no section — several may show it — so `sectionOf`
@@ -385,6 +394,13 @@ export type HistoryAction =
       patch: Partial<Header> | ((document: RetorikaDocument) => Partial<Header>);
     }
   | { type: "setHeaderAction"; variant: number; action: HeaderAction | null }
+  /** `null` takes the background off. The scope is the site's or one section's (ADR 0081). */
+  | {
+      type: "setBackground";
+      variant: number;
+      scope: BackgroundScope;
+      background: Background | null;
+    }
   /** `null` or an empty string goes back to the derived label. Dispatched on every keystroke that
    * leaves a valid label (or none), and amended while the owner keeps typing into the same field. */
   | { type: "setMenuLabel"; variant: number; target: MenuLabelTarget; label: string | null }
@@ -1258,6 +1274,23 @@ function setHeaderAction(history: History, action: HeaderAction | null): History
   return step(history, document, { type: "setHeaderAction" });
 }
 
+/** One step per background put, changed or taken off; the same value back opens none. */
+function setBackground(
+  history: History,
+  scope: BackgroundScope,
+  background: Background | null,
+): History {
+  const document = setBackgroundInDoc(history.present.document, scope, background);
+  if (document === history.present.document) return history;
+  return step(
+    history,
+    document,
+    scope.kind === "section"
+      ? { type: "setBackground", sectionId: scope.sectionId }
+      : { type: "setBackground" },
+  );
+}
+
 function sameLabel(cause: SnapshotCause, target: MenuLabelTarget): boolean {
   if (cause?.type !== "setMenuLabel") return false;
   if (cause.target.kind === "page" && target.kind === "page") {
@@ -1548,6 +1581,8 @@ function apply(history: History, action: HistoryAction): History {
       return setHeader(history, action.patch);
     case "setHeaderAction":
       return setHeaderAction(history, action.action);
+    case "setBackground":
+      return setBackground(history, action.scope, action.background);
     case "setMenuLabel":
       return setMenuLabel(history, action.target, action.label);
     case "addCollection":

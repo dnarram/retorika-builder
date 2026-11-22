@@ -32959,3 +32959,175 @@ describe("sprint 40 día 4 — «Cómo llegar» sigue a la dirección", () => {
     }
   }, 180_000);
 });
+
+/**
+ * **Sprint 40 día 6 — el fondo se sube, se ve con su velo y se elige** (ADR 0081). The owner brings a
+ * picture with motifs; the panel prepares it and shows it **under the veil the page will draw, before
+ * anything is saved** (David's condition), with a note in plain words when the veil runs high, naming
+ * the cause that is true; «Usar este fondo» makes it the document's, as one step of the history; the
+ * canvas paints it; the ZIP carries the picture and the veil. The motifs are drawn for the purpose:
+ * navy lines (`fixtures/assets/motivo.png`, the corpus's), soft cream leaves and terracotta waves.
+ */
+describe("sprint 40 día 6 — el fondo se sube, se ve con su velo y se elige", () => {
+  const MOTIF = join(import.meta.dirname, "..", "..", "..", "fixtures", "assets", "motivo.png");
+  const PALE = join(import.meta.dirname, "fixtures", "motivo-palido.png");
+  const MEDIUM = join(import.meta.dirname, "fixtures", "motivo-medio.png");
+
+  /** What the canvas paints under the site, read off the frame: the picture, its size, the veil. */
+  const painted = (frame: FrameLocator) =>
+    frame.locator("body").evaluate(() => {
+      const body = getComputedStyle(document.body);
+      const veil = getComputedStyle(document.body, "::before");
+      return {
+        image: body.backgroundImage,
+        size: body.backgroundSize,
+        veil: veil.backgroundColor,
+      };
+    });
+  const alphaOf = (computed: string) => {
+    const slash = /\/\s*([0-9.]+)\s*\)$/.exec(computed);
+    return slash?.[1] ? Number(slash[1]) : 1;
+  };
+
+  it("lo prepara y lo enseña velado antes de guardarlo, lo pone, cambia cómo se pinta, se quita y vuelve", async () => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    const studio = await context.newPage();
+    try {
+      await intoTheCanvas(studio);
+      const frame = studio.frameLocator(PREVIEW).first();
+      await studio.getByRole("button", { name: "Estilo", exact: true }).click();
+      const block = studio.locator('[data-background="site"]');
+      await expect(block).toContainText("Sin fondo: la página es de su color.");
+
+      // 1. Chosen: prepared and shown under its veil — and nothing written yet.
+      await studio.getByTestId("background-input-site").setInputFiles(MOTIF);
+      const preview = block.locator('[data-background-preview="pending"]');
+      await expect(preview).toBeVisible();
+      const veil = Number(await preview.getAttribute("data-veil"));
+      // Navy lines under the neutral start: 98 hundredths, measured on día 5 (ADR 0081).
+      expect(veil).toBe(98);
+      expect(
+        Number(
+          await preview
+            .locator("[data-background-veil]")
+            .evaluate((el) => getComputedStyle(el).opacity),
+        ),
+      ).toBeCloseTo(veil / 100, 2);
+      await expect(block).toContainText("Tu motivo tiene partes muy oscuras para una página clara");
+      expect((await painted(frame)).image).toBe("none");
+
+      // 2. «Usar este fondo»: the document's, painted by the canvas, said in the help line.
+      await block.getByRole("button", { name: "Usar este fondo" }).click();
+      await expect.poll(async () => (await painted(frame)).image).toContain("blob:");
+      expect(alphaOf((await painted(frame)).veil)).toBeCloseTo(veil / 100, 2);
+      await expect(studio.getByTestId("help-line")).toContainText("Fondo puesto");
+      await expect(block.locator('[data-background-preview="current"]')).toBeVisible();
+
+      // 3. How it is painted: tile at its own size, then cover.
+      expect((await painted(frame)).size).toBe("160px 160px");
+      await block.getByText("A sangre", { exact: true }).click();
+      await expect.poll(async () => (await painted(frame)).size).toBe("cover");
+
+      // 4. «Quitar», and «Deshacer» puts it back.
+      await block.getByRole("button", { name: "Quitar" }).click();
+      await expect.poll(async () => (await painted(frame)).image).toBe("none");
+      await expect(block).toContainText("Sin fondo");
+      await studio.getByRole("button", { name: "Deshacer", exact: true }).click();
+      await expect.poll(async () => (await painted(frame)).image).toContain("blob:");
+    } finally {
+      await context.close();
+    }
+  }, 240_000);
+
+  it("dice la causa verdadera: los colores justos con un motivo suave, y nada con colores que dejan margen", async () => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    const studio = await context.newPage();
+    try {
+      await intoTheCanvas(studio);
+      await studio.getByRole("button", { name: "Estilo", exact: true }).click();
+      const block = studio.locator('[data-background="site"]');
+
+      // A soft cream motif under the neutral start, whose primary is 4.71:1 on white: 82, and the
+      // cause is the colours' margin — asking for a softer motif would be false.
+      await studio.getByTestId("background-input-site").setInputFiles(PALE);
+      const preview = block.locator('[data-background-preview="pending"]');
+      await expect(preview).toHaveAttribute("data-veil", "82");
+      await expect(block).toContainText(
+        "Los textos de tus colores van justos sobre la página lisa",
+      );
+      await block.getByRole("button", { name: "Mejor no" }).click();
+      await expect(preview).toHaveCount(0);
+
+      // The same motif once the colours leave margin («Terracota cálida», 7:1 at its thinnest): no
+      // veil at all, and nothing to say.
+      await studio.getByRole("radio", { name: "Terracota cálida" }).check();
+      await studio.getByTestId("background-input-site").setInputFiles(PALE);
+      await expect(preview).toHaveAttribute("data-veil", "0");
+      await expect(block.locator(".text-ui-warn-deep")).toHaveCount(0);
+    } finally {
+      await context.close();
+    }
+  }, 240_000);
+
+  it("pone un fondo a una sección desde «Campos», encima del de la web, y el ZIP lleva la imagen y el velo", async () => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    const studio = await context.newPage();
+    try {
+      await intoTheCanvas(studio);
+      const frame = studio.frameLocator(PREVIEW).first();
+
+      // The site's, first.
+      await studio.getByRole("button", { name: "Estilo", exact: true }).click();
+      await studio.getByTestId("background-input-site").setInputFiles(MOTIF);
+      await studio
+        .locator('[data-background="site"]')
+        .getByRole("button", { name: "Usar este fondo" })
+        .click();
+      await expect.poll(async () => (await painted(frame)).image).toContain("blob:");
+
+      // Then «Qué ponemos»'s own, from its fields.
+      await frame.locator('[data-section="sec-services"]').click();
+      await frame.getByRole("button", { name: "Campos de esta sección" }).click();
+      const block = studio.locator('[data-background="section"]');
+      await expect(block).toContainText("Fondo de esta sección");
+      await studio.getByTestId("background-input-section").setInputFiles(MEDIUM);
+      await block.getByRole("button", { name: "Usar este fondo" }).click();
+      const section = frame.locator('[data-section="sec-services"]');
+      await expect
+        .poll(() => section.evaluate((el) => getComputedStyle(el).backgroundImage))
+        .toContain("blob:");
+      // Over the site's: the section paints its own, and the cover keeps none of its own.
+      expect(
+        await frame
+          .locator('[data-section="sec-cover"]')
+          .evaluate((el) => getComputedStyle(el).backgroundImage),
+      ).toBe("none");
+      await studio.getByRole("button", { name: "Cerrar los campos" }).click();
+
+      // The ZIP: both pictures under `assets/`, and the veils in the page's own stylesheet.
+      const [download] = await Promise.all([
+        studio.waitForEvent("download"),
+        (async () => {
+          await studio.getByRole("button", { name: "Descargar" }).click();
+          const anyway = studio.getByRole("button", { name: "Descargar igualmente" });
+          await anyway.waitFor({ timeout: 10_000 }).catch(() => undefined);
+          if (await anyway.isVisible()) await anyway.click();
+        })(),
+      ]);
+      const dir = mkdtempSync(join(tmpdir(), "retorika-e2e-sprint40-dia6-"));
+      const zipPath = join(dir, download.suggestedFilename());
+      await download.saveAs(zipPath);
+      const entries = listZipEntries(new Uint8Array(readFileSync(zipPath)));
+      const backgrounds = entries.filter((name) => /^assets\/bg-[0-9a-f]{8}\.png$/.test(name));
+      expect(backgrounds, JSON.stringify(entries)).toHaveLength(2);
+      extractAll(new Uint8Array(readFileSync(zipPath)), dir);
+      const html = readFileSync(join(dir, "index.html"), "utf8");
+      expect(html).toContain("color-mix(in srgb, var(--color-surface) 98%, transparent)");
+      expect(html).toMatch(
+        /body \{ position: relative; isolation: isolate;\n {2}background-image: url\("assets\/bg-[0-9a-f]{8}\.png"\);/,
+      );
+    } finally {
+      await context.close();
+    }
+  }, 300_000);
+});

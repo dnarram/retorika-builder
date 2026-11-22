@@ -1,4 +1,16 @@
-import { LOGO_MAX_EDGE } from "@retorika/schema";
+import {
+  BACKGROUND_MAX_EDGE,
+  type Background,
+  type Extremes,
+  LOGO_MAX_EDGE,
+} from "@retorika/schema";
+import {
+  BACKGROUND_MAX_BYTES,
+  BACKGROUND_WARN_BYTES,
+  backgroundExtremes,
+  backgroundSrcFor,
+  backgroundTypeFor,
+} from "./backgroundMotif.ts";
 import { type AcceptedImageType, extensionFor, isAcceptedImage, sniffImage } from "./imageBytes.ts";
 
 /**
@@ -242,6 +254,123 @@ export async function prepareLogo(file: File): Promise<LogoResult> {
       width: drawn.width,
       height: drawn.height,
     },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// A background with motifs (ADR 0081, sprint 40 día 6)
+// ---------------------------------------------------------------------------
+
+/** A background's refusals are the logo's plus two: too heavy once encoded, and nothing visible. */
+export type BackgroundRejection = LogoRejection | { reason: "tooHeavy" } | { reason: "empty" };
+
+export interface PreparedBackground {
+  bytes: Uint8Array;
+  type: "image/png" | "image/jpeg";
+  /** The `src` it will be kept and published under, minted for this upload. */
+  src: string;
+  width: number;
+  height: number;
+  extremes: Extremes;
+  /** Over `BACKGROUND_WARN_BYTES`: kept, and the panel says what it costs. */
+  heavy: boolean;
+}
+
+export type BackgroundResult =
+  | { ok: true; background: PreparedBackground }
+  | { ok: false; error: BackgroundRejection };
+
+/** Decoded pixels of these bytes at their own size — what `backgroundExtremes` must read. */
+async function pixelsAtSavedSize(
+  bytes: Uint8Array<ArrayBuffer>,
+  type: string,
+): Promise<Uint8ClampedArray | undefined> {
+  let bitmap: ImageBitmap;
+  try {
+    bitmap = await createImageBitmap(new Blob([bytes], { type }));
+  } catch {
+    return undefined;
+  }
+  try {
+    const canvas = document.createElement("canvas");
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    const context = canvas.getContext("2d", { willReadFrequently: true });
+    if (!context) return undefined;
+    context.drawImage(bitmap, 0, 0);
+    return context.getImageData(0, 0, bitmap.width, bitmap.height).data;
+  } finally {
+    bitmap.close();
+  }
+}
+
+/**
+ * **A picture from the picker, turned into the background the document will name** (ADR 0081):
+ * sniffed by its bytes (an SVG refused with the logo's sentence, a HEIC with its own), drawn onto a
+ * canvas of at most 1600 px a side — so it carries no metadata, ADR 0018's property — and encoded
+ * **as PNG when it has any transparency, as JPEG at 0.82 when it has none** (David's answer).
+ *
+ * Then its extremes, **read from the encoded bytes decoded again at the size they were saved at**
+ * (David's adjustment 2): not from the canvas before encoding, because a JPEG's ringing is part of
+ * what will be published, and never from a reduced sample, because reducing averages a thin stroke
+ * into a grey and the veil derived from a grey leaves the stroke under the words.
+ *
+ * Refused over 2 MiB once encoded — the bucket's limit and the download's — and kept, with the
+ * panel saying so, over 300 KB.
+ */
+export async function prepareBackground(file: File): Promise<BackgroundResult> {
+  if (file.size > MAX_UPLOAD_BYTES) return { ok: false, error: { reason: "tooLarge" } };
+
+  const original = new Uint8Array(await file.arrayBuffer());
+  const kind = sniffImage(original);
+  if (kind === "image/heic") return { ok: false, error: { reason: "heic" } };
+  if (kind === "image/svg+xml") return { ok: false, error: { reason: "svg" } };
+  if (!isAcceptedImage(kind)) return { ok: false, error: { reason: "unsupported" } };
+
+  const drawn = await drawScaled(original, kind, BACKGROUND_MAX_EDGE);
+  if (!drawn) return { ok: false, error: { reason: "undecodable" } };
+  const context = drawn.canvas.getContext("2d", { willReadFrequently: true });
+  if (!context) return { ok: false, error: { reason: "undecodable" } };
+  const type = backgroundTypeFor(context.getImageData(0, 0, drawn.width, drawn.height).data);
+
+  const blob = await new Promise<Blob | null>((resolve) => {
+    if (type === "image/jpeg") drawn.canvas.toBlob(resolve, type, OUTPUT_QUALITY);
+    else drawn.canvas.toBlob(resolve, type);
+  });
+  if (!blob) return { ok: false, error: { reason: "undecodable" } };
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  if (bytes.byteLength > BACKGROUND_MAX_BYTES) return { ok: false, error: { reason: "tooHeavy" } };
+
+  const saved = await pixelsAtSavedSize(bytes, type);
+  if (!saved) return { ok: false, error: { reason: "undecodable" } };
+  const extremes = backgroundExtremes(saved);
+  if (!extremes) return { ok: false, error: { reason: "empty" } };
+
+  return {
+    ok: true,
+    background: {
+      bytes,
+      type,
+      src: backgroundSrcFor(mintLogoId(), type),
+      width: drawn.width,
+      height: drawn.height,
+      extremes,
+      heavy: bytes.byteLength > BACKGROUND_WARN_BYTES,
+    },
+  };
+}
+
+/** The record the document keeps for a prepared background, painted `paint`. */
+export function backgroundRecord(
+  prepared: Pick<PreparedBackground, "src" | "width" | "height" | "extremes">,
+  paint: Background["paint"],
+): Background {
+  return {
+    src: prepared.src,
+    width: prepared.width,
+    height: prepared.height,
+    paint,
+    extremes: prepared.extremes,
   };
 }
 

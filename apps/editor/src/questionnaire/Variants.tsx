@@ -20,6 +20,9 @@ import {
 import { hasSamplePhotos } from "@retorika/photobank";
 import { render } from "@retorika/renderer";
 import {
+  type Background,
+  type BackgroundPaint,
+  type BackgroundScope,
   type ElementAddress,
   findSection,
   foldsInto,
@@ -82,11 +85,13 @@ import {
 import { listOwnPhotoSrcs } from "../editor/ownPhotos.ts";
 import { photoSources } from "../editor/photoSources.ts";
 import {
+  backgroundRecord,
   clearPhotos,
   loadPhotos,
   logoSrcFor,
   mintLogoId,
   type PhotoScope,
+  type PreparedBackground,
   photoBlob,
   photoSrcFor,
   photoType,
@@ -1410,6 +1415,49 @@ export function Variants({
     toastTimer.current = setTimeout(dismissToast, TOAST_DURATION_MS);
   }
 
+  /**
+   * **«Usar este fondo»** (ADR 0081, sprint 40 día 6): a background the panel prepared and showed
+   * under its veil becomes the document's. The bytes get an object URL at once, so the canvas draws
+   * the picture in the same render that names it; the record goes in as one step of the history; and
+   * the bytes go to this browser's store under the card's scope, which says «No guardado» if it will
+   * not take them — the photographs' pipe, so a reload, the account and the ZIP find them where they
+   * find a photograph.
+   */
+  async function handleUseBackground(
+    variant: number,
+    scope: BackgroundScope,
+    prepared: PreparedBackground,
+    paint: BackgroundPaint,
+  ) {
+    const url = URL.createObjectURL(photoBlob(prepared.bytes, prepared.type));
+    setPhotoUrls((current) => {
+      const next = new Map(current);
+      const forVariant = new Map(next.get(variant) ?? []);
+      forVariant.set(prepared.src, url);
+      next.set(variant, forVariant);
+      return next;
+    });
+    dispatch({
+      type: "setBackground",
+      variant,
+      scope,
+      background: backgroundRecord(prepared, paint),
+    });
+    if (!(await savePhoto(photoScope(variant), prepared.src, prepared.bytes))) {
+      setSaveStatus("unsaved");
+    }
+  }
+
+  /** «Quitar», or the way it is painted changed: one step, and the same value back opens none. The
+   * bytes of a picture taken off stay in the store, unreferenced, like a replaced logo's. */
+  function handleSetBackground(
+    variant: number,
+    scope: BackgroundScope,
+    background: Background | null,
+  ) {
+    dispatch({ type: "setBackground", variant, scope, background });
+  }
+
   /** «Quitar»: the header forgets the logo. The bytes stay in this browser's store, harmless and
    * unreferenced; the account's reconciliation removes its object on the next accepted save, since
    * the document no longer names it. A brand with nothing left in it drops its key. */
@@ -1673,6 +1721,14 @@ export function Variants({
           onRemoveLogo={() => {
             dismissToast();
             handleRemoveLogo(openIndex);
+          }}
+          onUseBackground={(scope, prepared, paint) => {
+            dismissToast();
+            void handleUseBackground(openIndex, scope, prepared, paint);
+          }}
+          onSetBackground={(scope, background) => {
+            dismissToast();
+            handleSetBackground(openIndex, scope, background);
           }}
           onFillSlot={(fill) => {
             dismissToast();
