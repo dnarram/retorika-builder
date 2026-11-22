@@ -3016,11 +3016,18 @@ export function Editor({
      */
     const boundsOf = (bar: HTMLElement, host: HTMLElement): Bounds => {
       const win = iframeDoc.defaultView;
+      // The bar's box as laid out, fractions included: its lengths are screen pixels divided by the
+      // zoom, so its width is rarely whole, and `offsetWidth` rounds it. Placed from a rounded width,
+      // a cluster that starts following the scroll jumped off the stylesheet's `right` by up to half
+      // a pixel of the frame — one of the screen at 1440 — measured when the ninth verb, «Fondo»,
+      // made its width fractional (sprint 40 día 7). The zoom is the frame's own transform, outside
+      // this document, so the box read here is unscaled, as `offsetWidth` is.
+      const box = bar.getBoundingClientRect();
       return {
         hostWidth: host.clientWidth,
         hostHeight: host.clientHeight,
-        barWidth: bar.offsetWidth,
-        barHeight: bar.offsetHeight,
+        barWidth: box.width,
+        barHeight: box.height,
         ...(win
           ? { view: { top: -host.getBoundingClientRect().top, height: win.innerHeight } }
           : {}),
