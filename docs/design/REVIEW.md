@@ -11363,7 +11363,7 @@ hash a los dos lados (`7fd756d0ec6a914c`).
 | `test:a11y` | 2 381 en 217 s |
 | `lighthouse` | 27 de 27 a la primera, en 59 s |
 | `e2e` | 378 y 1 omitida, en 1 811 s, en la segunda vuelta; la primera (1 805 s) encontró el píxel de arriba |
-| auditoría de menús | AUDIT_RESULT |
+| auditoría de menús | 918 combinaciones hechas, ninguna en rojo, en 6 280 s; solo las 716 diferencias permitidas de 0,5 y 1 px entre estimación y medida en el lienzo |
 
 **El navegador real**, con el servidor del editor, Chromium a 1024, 1280 y 1440 solo con el teclado (1280
 con «Reducir movimiento»), un iPad emulado por toque y una vuelta con el logo de dos tintas: **46
