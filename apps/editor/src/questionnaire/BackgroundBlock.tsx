@@ -44,6 +44,12 @@ export interface BackgroundBlockProps {
   currentUrl: string | undefined;
   onUse: (prepared: PreparedBackground, paint: BackgroundPaint) => void;
   onSet: (background: Background | null) => void;
+  /**
+   * A count that rises each time the section's «Fondo» verb is pressed (sprint 40 día 7): the block
+   * then comes into view and its first control takes the keyboard. On the next frame, because «Campos»
+   * gives the keyboard to its own head when it opens, in an effect that runs after this one.
+   */
+  arrival?: number;
 }
 
 interface Pending {
@@ -60,6 +66,7 @@ export function BackgroundBlock({
   currentUrl,
   onUse,
   onSet,
+  arrival = 0,
 }: BackgroundBlockProps) {
   const input = useRef<HTMLInputElement>(null);
   const [pending, setPending] = useState<Pending | null>(null);
@@ -75,6 +82,16 @@ export function BackgroundBlock({
     const url = pending.url;
     return () => URL.revokeObjectURL(url);
   }, [pending]);
+
+  useEffect(() => {
+    if (arrival === 0) return;
+    const frame = requestAnimationFrame(() => {
+      const host = document.querySelector<HTMLElement>(`[data-background="${scope}"]`);
+      host?.scrollIntoView({ block: "nearest" });
+      host?.querySelector<HTMLElement>("button, input:not([type=file])")?.focus();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [arrival, scope]);
 
   async function choose(file: File) {
     turn.current += 1;

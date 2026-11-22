@@ -33130,4 +33130,44 @@ describe("sprint 40 día 6 — el fondo se sube, se ve con su velo y se elige", 
       await context.close();
     }
   }, 300_000);
+
+  /**
+   * **Sprint 40 día 7 — the section's «Fondo» verb**, the door día 6 left for the close (David's
+   * adjustment 4): it opens «Campos» on the section and the keyboard lands in the background block,
+   * not on the panel's head — whether «Campos» was closed, or already open on the same section.
+   */
+  it("el verbo «Fondo» abre «Campos» con el teclado en el bloque del fondo, también si ya estaba abierto", async () => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    const studio = await context.newPage();
+    try {
+      await intoTheCanvas(studio);
+      const frame = studio.frameLocator(PREVIEW).first();
+      await frame.locator('[data-section="sec-services"]').click();
+      const verb = frame.locator(
+        '[data-section="sec-services"] .rb-action[data-action="background"]',
+      );
+      await expect(verb).toHaveAccessibleName("Fondo de esta sección");
+      // After «Campos» and before «Borrar», in the cluster's order.
+      const order = await frame
+        .locator('[data-section="sec-services"] .rb-actions [data-action]')
+        .evaluateAll((els) => els.map((el) => el.getAttribute("data-action")));
+      expect(order.indexOf("background")).toBe(order.indexOf("fields") + 1);
+      expect(order.indexOf("delete")).toBe(order.indexOf("background") + 1);
+      const inBlock = () =>
+        studio.evaluate(
+          () => document.activeElement?.closest('[data-background="section"]') !== null,
+        );
+      await verb.click();
+      await expect(studio.locator('[data-background="section"]')).toBeVisible();
+      await expect.poll(inBlock).toBe(true);
+      // Again with «Campos» already open: the keyboard goes back to the block.
+      await studio.getByLabel("Título", { exact: true }).first().focus();
+      await expect.poll(inBlock).toBe(false);
+      await frame.locator('[data-section="sec-services"]').click();
+      await verb.click();
+      await expect.poll(inBlock).toBe(true);
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
 });

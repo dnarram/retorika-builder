@@ -33,7 +33,8 @@ import {
  * Where a floating bar lands, and what a press on its grip means.
  *
  * Measured against a section the size of a real one: a restaurant's «Comidas» at 1200 × 600 with
- * the eight verbs' 284 × 32 cluster in it. The numbers below are worked from those two rectangles
+ * the eight verbs' 284 × 32 cluster in it (nine since sprint 40 día 7, «Fondo», some 31 px wider: the
+ * arithmetic below does not depend on the width it was measured at). The numbers below are worked from those two rectangles
  * rather than written as constants, so a test cannot agree with itself while the arithmetic drifts.
  */
 const SECTION: Bounds = { hostWidth: 1200, hostHeight: 600, barWidth: 284, barHeight: 32 };
@@ -75,8 +76,8 @@ describe("where a bar starts, and where it is allowed to be", () => {
   });
 
   /**
-   * At 320px the eight verbs are 248 of the 304 there is room for, so this is one verb away from
-   * being the ordinary case rather than the edge one. A negative left would push the bar under the
+   * At 320px the eight verbs were 248 of the 304 there is room for, so this was one verb away from
+   * being the ordinary case rather than the edge one — and sprint 40 día 7 added that verb («Fondo»). A negative left would push the bar under the
    * frame's own `overflow-x: clip`, where it is on the screen and cannot be pressed.
    */
   it("leaves a bar wider than its section at the inset, rather than at a negative left", () => {

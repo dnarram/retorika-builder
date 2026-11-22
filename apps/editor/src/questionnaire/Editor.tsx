@@ -1442,6 +1442,9 @@ export function Editor({
   // selects the section too, and a form sliding in every time someone touches a sentence would
   // be in the way rather than at hand.
   const [fieldsFor, setFieldsFor] = useState<string | null>(null);
+  /** Counts presses of the section's «Fondo» verb: each one takes the keyboard to the background
+   * block of «Campos» (sprint 40 día 7), whether the panel was open already or not. */
+  const [backgroundArrival, setBackgroundArrival] = useState(0);
   const [rail, setRail] = useState<RailItemId>("sections");
   /** Whether the switch's own question — «¿Quieres colocar tú cada elemento?» — is open. State rather
    * than a ref because the popover is React's to draw, unlike everything inside the canvas. */
@@ -3694,6 +3697,26 @@ export function Editor({
           false,
           `<svg ${screenIcon(VERB_SCALE.icon)} viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h10"/><path d="M4 12h16"/><path d="M4 17h7"/><circle cx="18" cy="7" r="2"/><circle cx="15" cy="17" r="2"/></svg>`,
           () => showFields(sectionId),
+        ),
+      );
+      /*
+       * **«Fondo»: the section's background with motifs** (ADR 0081, sprint 40 día 7 — the door día 6
+       * left for the close, as David's adjustment 4 allowed). It opens «Campos» on this section, where
+       * the block lives, and takes the view and the keyboard to the block rather than to the panel's
+       * head: whoever pressed «Fondo» came for the picture, not for the words.
+       */
+      actions.appendChild(
+        action(
+          "background",
+          es["editor.background.section"],
+          es["editor.verb.background"],
+          "move",
+          false,
+          `<svg ${screenIcon(VERB_SCALE.icon)} viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="3"/><path d="M3.5 14l5-5 4 4 3-3 5 5"/><circle cx="15.5" cy="8" r="1.4"/></svg>`,
+          () => {
+            showFields(sectionId);
+            setBackgroundArrival((count) => count + 1);
+          },
         ),
       );
       actions.appendChild(
@@ -9819,6 +9842,7 @@ export function Editor({
                   key={fieldsFor}
                   legend={es["editor.background.section"]}
                   scope="section"
+                  arrival={backgroundArrival}
                   theme={doc.theme}
                   current={own}
                   currentUrl={own ? photoUrls.get(own.src) : undefined}
