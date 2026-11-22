@@ -35,14 +35,31 @@ export type ImageSource =
     }
   /** The header's logo: the owner's bytes, never a sample, its `alt` derived from the site name
    * at render time (ADR 0057 §6) and reported here as that name. */
-  | { kind: "logo"; src: string; alt: string };
+  | { kind: "logo"; src: string; alt: string }
+  /** A background with motifs (ADR 0081): the site's, or one section's. Decoration, so no `alt`. */
+  | {
+      kind: "background";
+      src: string;
+      scope: { kind: "site" } | { kind: "section"; pageId: string; sectionId: string };
+    };
 
 export function imageSourcesOf(doc: RetorikaDocument): ImageSource[] {
   const sources: ImageSource[] = [];
   const logo = doc.header?.brand?.logo;
   if (logo) sources.push({ kind: "logo", src: logo.src, alt: doc.siteName });
+  // The site's background after the logo and before the pages: under everything the visitor meets.
+  if (doc.background) {
+    sources.push({ kind: "background", src: doc.background.src, scope: { kind: "site" } });
+  }
   for (const page of doc.pages) {
     for (const section of page.sections) {
+      if (section.background) {
+        sources.push({
+          kind: "background",
+          src: section.background.src,
+          scope: { kind: "section", pageId: page.id, sectionId: section.id },
+        });
+      }
       for (const element of flattenElements(section.content)) {
         const value = element.value;
         if (value?.kind !== "image") continue;
@@ -94,11 +111,20 @@ export function rewriteImageSources(
     return next;
   };
 
+  /** A background record with its `src` through `map`, or the same record when nothing moved. */
+  const swapBackground = <T extends { src: string }>(background: T): T => {
+    const src = map(background.src);
+    if (src === background.src) return background;
+    changed = true;
+    return { ...background, src };
+  };
+
   const pages = doc.pages.map((page) => ({
     ...page,
     sections: page.sections.map((section) => ({
       ...section,
       content: section.content.map(swap),
+      ...(section.background ? { background: swapBackground(section.background) } : {}),
     })),
   }));
 
@@ -111,7 +137,13 @@ export function rewriteImageSources(
       header = { ...header, brand: { ...header.brand, logo: { ...logo, src } } };
     }
   }
+  const background = doc.background ? swapBackground(doc.background) : undefined;
 
   if (!changed) return doc;
-  return { ...doc, pages, ...(header === undefined ? {} : { header }) };
+  return {
+    ...doc,
+    pages,
+    ...(header === undefined ? {} : { header }),
+    ...(background === undefined ? {} : { background }),
+  };
 }

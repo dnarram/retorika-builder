@@ -237,7 +237,8 @@ for (const file of readdirSync(DOCUMENTS_DIR)
   for (const source of imageSourcesOf(document)) {
     if (source.src.startsWith("data:")) continue;
     assets.set(source.src, new Uint8Array(readFileSync(join(FIXTURES_DIR, source.src))));
-    if (source.kind === "logo") photographs.add(source.src);
+    // The owner's logo and a background with motifs are the owner's bytes (ADR 0059, ADR 0081).
+    if (source.kind === "logo" || source.kind === "background") photographs.add(source.src);
   }
   weigh(file, document, assets, photographs);
 }

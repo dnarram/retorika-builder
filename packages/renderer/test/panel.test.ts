@@ -121,7 +121,7 @@ describe("the panel behind text over an image", () => {
     );
   });
 
-  it("appears exactly in the two sections of the corpus where text overlaps an image", () => {
+  it("appears exactly in the three sections of the corpus where text overlaps an image", () => {
     const panels: string[] = [];
     for (const { name, document } of corpus) {
       const page = parse(render(document, "html").html);
@@ -132,7 +132,10 @@ describe("the panel behind text over an image", () => {
         }
       }
     }
+    // `fondo-con-motivos` (sprint 40 día 5) is `image-background-full`'s cover over its photograph
+    // with a motif under the site: the panel is what keeps the words on the surface there too.
     expect(panels.sort()).toEqual([
+      "fondo-con-motivos/sec-cover-full",
       "hidden-and-embed/sec-cover",
       "image-background-full/sec-cover-full",
     ]);

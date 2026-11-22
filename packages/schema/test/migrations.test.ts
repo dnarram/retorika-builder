@@ -1930,7 +1930,10 @@ describe("1.15.0 — the header is the owner's", () => {
       // 1.15.0 or later: `cabecera-con-marca` moved to 1.16.0 when its logo gained a size, and to
       // 1.17.0 when its row became a position; `marca-grande` was written at 1.19.0, and
       // `logo-amarillo` at 1.20.0 with a bar in its fill (sprint 38 día 1).
-      expect(["1.15.0", "1.16.0", "1.17.0", "1.19.0", "1.20.0"], file).toContain(raw.schemaVersion);
+      // `fondo-con-motivos` at 1.22.0 with a fixed bar over its motif (sprint 40 día 5).
+      expect(["1.15.0", "1.16.0", "1.17.0", "1.19.0", "1.20.0", "1.22.0"], file).toContain(
+        raw.schemaVersion,
+      );
     }
   });
 });
@@ -2587,9 +2590,8 @@ describe("1.21.0 — the map follows the address", () => {
     pages: [{ id: "home", slug: "index", title: "Taberna del Puerto", sections: [location(map)] }],
   });
 
-  it("is registered, and it is the one the chain ends at", () => {
+  it("is registered", () => {
     expect(step("1.21.0").version).toBe("1.21.0");
-    expect(SCHEMA_VERSION).toBe("1.21.0");
   });
 
   it("seals a 1.20.0 document and moves nothing, a map with its point included", () => {
@@ -2668,5 +2670,108 @@ describe("1.21.0 — the map follows the address", () => {
       }
     }
     expect(found.sort()).toEqual(["contacto-y-horario.json", "donde-estamos-con-mapa.json"]);
+  });
+});
+
+/**
+ * `0023` — a background with motifs (ADR 0081, sprint 40 día 5): an optional `background` on the
+ * document and on each section. `up` seals and moves nothing; the record parses and its refusals
+ * are the schema's; `down` strips both keys and keeps everything else.
+ */
+describe("1.22.0 — a background with motifs", () => {
+  const motif = {
+    src: "bg-0a1b2c3d.png",
+    width: 320,
+    height: 320,
+    paint: "tile",
+    extremes: { darkest: "#1B2A4A", lightest: "#F2E8DA" },
+  };
+  const site = (
+    version: string,
+    own?: Record<string, unknown>,
+    section?: Record<string, unknown>,
+  ) => ({
+    schemaVersion: version,
+    id: "doc-fondo",
+    siteName: "Taberna del Puerto",
+    theme,
+    collections: [],
+    ...(own ? { background: own } : {}),
+    pages: [
+      {
+        id: "home",
+        slug: "index",
+        title: "Taberna del Puerto",
+        sections: [
+          {
+            id: "sec-cover",
+            preset: { catalogId: "cover", variantId: "image-right" },
+            source: "catalog",
+            layout: null,
+            content: [],
+            ...(section ? { background: section } : {}),
+          },
+        ],
+      },
+    ],
+  });
+
+  it("is registered, and it is the one the chain ends at", () => {
+    expect(step("1.22.0").version).toBe("1.22.0");
+    expect(SCHEMA_VERSION).toBe("1.22.0");
+  });
+
+  it("seals a 1.21.0 document and moves nothing, because both keys are optional", () => {
+    const before = site("1.21.0");
+    expect(upTo(before, "1.22.0")).toEqual({ ...before, schemaVersion: "1.22.0" });
+    const once = migrateToCurrent(before);
+    expect(migrateToCurrent(once)).toEqual(once);
+  });
+
+  it("parses a background on the site, on a section, and on both", () => {
+    expect(() => parseDocument(site("1.22.0", motif))).not.toThrow();
+    expect(() => parseDocument(site("1.22.0", undefined, motif))).not.toThrow();
+    expect(() => parseDocument(site("1.22.0", motif, { ...motif, paint: "cover" }))).not.toThrow();
+  });
+
+  it("refuses extremes the wrong way round, a vector, a third way to paint, and a size off the edge", () => {
+    const reversed = { ...motif, extremes: { darkest: "#F2E8DA", lightest: "#1B2A4A" } };
+    expect(() => parseDocument(site("1.22.0", reversed))).toThrow(/darkest/);
+    expect(() => parseDocument(site("1.22.0", { ...motif, src: "bg-1.svg" }))).toThrow();
+    expect(() => parseDocument(site("1.22.0", { ...motif, paint: "fixed" }))).toThrow();
+    expect(() => parseDocument(site("1.22.0", { ...motif, width: 1601 }))).toThrow();
+    expect(() =>
+      parseDocument(
+        site("1.22.0", { ...motif, extremes: { darkest: "#000", lightest: "#FFFFFF" } }),
+      ),
+    ).toThrow();
+  });
+
+  /** **`down` is lossy, and this is the loss, named:** both keys go, the pictures' bytes stay. */
+  it("takes both backgrounds away on the way down and keeps everything else", () => {
+    const down = step("1.22.0").down;
+    expect(down, "1.22.0 has no `down`").toBeDefined();
+    const back = down?.(site("1.22.0", motif, { ...motif, paint: "cover" })) ?? {};
+    expect(back).toEqual(site("1.21.0"));
+    expect(() => parseDocument(upTo(back, "1.21.0"))).not.toThrow();
+  });
+
+  it("round-trips a document with no background", () => {
+    const input = site("1.21.0");
+    expect(step("1.22.0").down?.(upTo(input, "1.22.0"))).toEqual(input);
+  });
+
+  it("is the claim it rests on: no corpus fixture stamped before 1.22.0 carries a background", () => {
+    const corpus = readdirSync(DOCUMENTS_DIR).filter((file) => file.endsWith(".json"));
+    const found: string[] = [];
+    for (const file of corpus) {
+      const raw = readFileSync(join(DOCUMENTS_DIR, file), "utf8");
+      const parsed = JSON.parse(raw) as { schemaVersion: string };
+      if (!raw.includes('"background": {')) continue;
+      found.push(file);
+      expect(parsed.schemaVersion, `${file} carries a background`).toBe("1.22.0");
+    }
+    // `fondo-con-motivos` (sprint 40 día 5) is the one that does.
+    expect(found).toEqual(["fondo-con-motivos.json"]);
   });
 });

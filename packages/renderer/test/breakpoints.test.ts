@@ -34,9 +34,16 @@ function styleOf(html: string): string {
  * the third attribute: rule 6's selector always ends `[data-role]` and rule 7's never does, which is
  * the same distinction that makes rule 6's rules outrank everything else. */
 function patchBlock(css: string): string {
+  // A patch addresses an element of a section; a rule 6 style carries `[data-role]`, and a
+  // background with motifs (ADR 0081) addresses the section alone — neither is a patch.
   return css
     .split("\n")
-    .filter((line) => line.includes('[data-section="') && !line.includes("[data-role]"))
+    .filter(
+      (line) =>
+        line.includes('[data-section="') &&
+        line.includes('[data-id="') &&
+        !line.includes("[data-role]"),
+    )
     .join("\n");
 }
 
