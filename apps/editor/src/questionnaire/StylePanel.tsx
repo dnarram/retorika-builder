@@ -15,7 +15,15 @@ import {
   TYPE_PAIRS,
 } from "@retorika/tokens";
 import tokensEs from "@retorika/tokens/locales/es" with { type: "json" };
-import { Fragment, type KeyboardEvent, type PointerEvent, useId, useRef, useState } from "react";
+import {
+  Fragment,
+  type KeyboardEvent,
+  type PointerEvent,
+  type ReactNode,
+  useId,
+  useRef,
+  useState,
+} from "react";
 import { BrandField, ColourField } from "../editor/ColourField.tsx";
 import { EDITABLE_KEYS, type EditableKey } from "../editor/colourField.ts";
 import {
@@ -97,6 +105,8 @@ import es from "../locales/es.json" with { type: "json" };
  */
 
 export interface StylePanelProps {
+  /** The site's background with motifs, drawn after the letter (ADR 0081). */
+  background?: ReactNode;
   theme: Theme;
   /** The fonts the owner brought and the object URLs of their faces, so a row whose half is set in
    * one names it and draws it (sprint 29 día 5). */
@@ -205,6 +215,7 @@ export function StylePanel({
   onPickScale,
   designTools,
   onClose,
+  background,
 }: StylePanelProps) {
   const headingId = useId();
   const typeGroup = useId();
@@ -349,6 +360,10 @@ export function StylePanel({
         ))}
         <Note>{familiesHelpText()}</Note>
       </div>
+
+      {/* The site's background with motifs (ADR 0081, sprint 40 día 6), drawn by `BackgroundBlock`:
+          for everybody, like the letter — it is the owner's own branding, not a professional's tool. */}
+      {background}
 
       {designTools ? (
         <PanelSection legend={es["editor.style.system"]}>

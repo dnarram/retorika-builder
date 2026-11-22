@@ -8,7 +8,7 @@ import {
   type SlotFill,
   shiftMarks,
 } from "@retorika/schema";
-import { useEffect, useId, useRef } from "react";
+import { type ReactNode, useEffect, useId, useRef } from "react";
 import { menuLineFor, type SectionRow } from "../editor/headerState.ts";
 import { Note, PanelHeader, panelCard, panelFrame } from "../editor/panelKit.tsx";
 import {
@@ -35,6 +35,8 @@ import type { MenuFocusBlock } from "./MenuPanel.tsx";
  */
 
 export interface FieldsPanelProps {
+  /** Drawn after the rows: the section's background with motifs (ADR 0081, sprint 40 día 6). */
+  footer?: ReactNode;
   sectionName: string;
   rows: readonly FieldRow[];
   slotOrder: readonly string[];
@@ -78,6 +80,7 @@ export function FieldsPanel({
   onClose,
   menuRow,
   onOpenMenuFor,
+  footer,
 }: FieldsPanelProps) {
   const headingId = useId();
 
@@ -241,6 +244,10 @@ export function FieldsPanel({
           ))}
         </div>
       ))}
+
+      {/* What the panel holds beyond the section's words — its background with motifs (ADR 0081),
+          drawn by `BackgroundBlock` — after everything the section says. */}
+      {footer}
     </aside>
   );
 }

@@ -13,6 +13,9 @@ import catalogEs from "@retorika/catalog/locales/es" with { type: "json" };
 import type { LogoColours } from "@retorika/generator";
 import { buildCss, ownFontsFor, render } from "@retorika/renderer";
 import {
+  type Background,
+  type BackgroundPaint,
+  type BackgroundScope,
   bindList,
   canFoldPage,
   type ElementAddress,
@@ -208,6 +211,7 @@ import {
   takeHistoryText,
 } from "../editor/patchCanvas.ts";
 import { countPhotos, listPhotos, type PhotoState } from "../editor/photoInventory.ts";
+import type { PreparedBackground } from "../editor/photos.ts";
 import { canvasHtml, withFontUrls, withPhotoUrls } from "../editor/previewDocument.ts";
 import { record, serialOf } from "../editor/probe.ts";
 import type { RailLayout } from "../editor/railLayout.ts";
@@ -256,6 +260,7 @@ import { themePreviewer } from "../editor/themePreviewer.ts";
 import { clickAction, textKeyAction } from "../editor/twoStates.ts";
 import { isPhoneViewport } from "../editor/viewport.ts";
 import es from "../locales/es.json" with { type: "json" };
+import { BackgroundBlock } from "./BackgroundBlock.tsx";
 import { CollectionsPanel } from "./CollectionsPanel.tsx";
 import { DesignPanel } from "./DesignPanel.tsx";
 import {
@@ -629,6 +634,8 @@ export function Editor({
   onPickPhoto,
   onPickLogo,
   onRemoveLogo,
+  onUseBackground,
+  onSetBackground,
   onFillSlot,
   onClearSlot,
   onSetSectionInMenu,
@@ -728,6 +735,14 @@ export function Editor({
    * and storing it is `Variants`' business, as it is for a photograph. */
   onPickLogo: (file: File) => void;
   onRemoveLogo: () => void;
+  /** A background with motifs the panel prepared and showed under its veil, made the document's
+   * (ADR 0081, sprint 40 día 6); and one changed or taken off. Storing the bytes is `Variants`'. */
+  onUseBackground: (
+    scope: BackgroundScope,
+    prepared: PreparedBackground,
+    paint: BackgroundPaint,
+  ) => void;
+  onSetBackground: (scope: BackgroundScope, background: Background | null) => void;
   onFillSlot: (fill: SlotFill) => void;
   onClearSlot: (address: SlotAddress) => void;
   /** A section in or out of the menu (ADR 0043). Not a content edit: nothing the section says
@@ -9794,6 +9809,30 @@ export function Editor({
             // from the canvas. Absent still means the diff, the documented floor (ADR 0027 §4b).
             onEditText={onEditText}
             onClose={() => showFields(null)}
+            footer={(() => {
+              // The section's background with motifs (ADR 0081): the same block as the site's, for
+              // this section — painted over the site's own when both exist.
+              const own = findSection(doc, fieldsFor)?.section.background;
+              const scope = { kind: "section" as const, sectionId: fieldsFor };
+              return (
+                <BackgroundBlock
+                  key={fieldsFor}
+                  legend={es["editor.background.section"]}
+                  scope="section"
+                  theme={doc.theme}
+                  current={own}
+                  currentUrl={own ? photoUrls.get(own.src) : undefined}
+                  onUse={(prepared, paint) => {
+                    onUseBackground(scope, prepared, paint);
+                    announce(es["editor.background.announce.used"]);
+                  }}
+                  onSet={(background) => {
+                    onSetBackground(scope, background);
+                    if (background === null) announce(es["editor.background.announce.removed"]);
+                  }}
+                />
+              );
+            })()}
           />
         ) : effectiveRail === "menu" ? (
           <MenuPanel
@@ -9886,6 +9925,23 @@ export function Editor({
             // collapsed at this one boundary and nowhere else.
             designTools={designTools === true}
             onClose={() => showRail("sections")}
+            background={
+              <BackgroundBlock
+                legend={es["editor.background.site"]}
+                scope="site"
+                theme={doc.theme}
+                current={doc.background}
+                currentUrl={doc.background ? photoUrls.get(doc.background.src) : undefined}
+                onUse={(prepared, paint) => {
+                  onUseBackground({ kind: "site" }, prepared, paint);
+                  announce(es["editor.background.announce.used"]);
+                }}
+                onSet={(background) => {
+                  onSetBackground({ kind: "site" }, background);
+                  if (background === null) announce(es["editor.background.announce.removed"]);
+                }}
+              />
+            }
           />
         ) : effectiveRail === "collections" ? (
           <CollectionsPanel
