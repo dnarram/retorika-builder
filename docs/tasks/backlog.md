@@ -12,7 +12,63 @@ drift, and the facilitator's script already says findings go to the decision the
 a separate document nobody reads again». So an item with an ADR points at the ADR; an item with
 an issue points at the issue; and only the things with no other home are described here at all.
 
-Last reviewed: 19 November 2026, **closing sprint 39 — «los paneles, ordenados».** No new feature: David
+Last reviewed: 22 November 2026, **closing sprint 40 — «El logo entero, el enlace que se edita y el
+mapa».** David brought six things: four defects (a logo's second colour lost, links that left the canvas
+instead of being written, a lists offer that ended in «Algo ha fallado», and no way to stretch or move what
+he expected to), and two features (a map, a background with motifs). Seven days in seven PRs (#400–#405
+and the close). What changed for somebody visiting a site: **nothing for the 24 corpus sites —
+byte-identical to the sprint's start** (140 files, the header's script the same hash); a new site with an
+address is born with «Cómo llegar», and a site can now carry a background. For the owner:
+- «Listas» offers only the lists it can make: a Galería's cards carry a photograph and are no longer offered (day 1)
+- a link inside a section is written like any text and followed on purpose — «A dónde lleva», «Ir», Ctrl/Cmd+Intro;
+  the bar's button and the brand choose the header ([ADR 0079](../decisions/0079-a-link-in-the-canvas-is-edited-first-and-followed-on-purpose.md), day 2)
+- a logo's second ink is read by families of hue, so DNR's orange is found (`#944C23`; note in ADR 0076, day 3)
+- «Cómo llegar» leads to Google Maps with the address as it is when the page is drawn
+  ([ADR 0080](../decisions/0080-the-map-is-a-link-to-the-address-and-is-born-with-the-site.md), schema 1.21.0, day 4)
+- a background with motifs for the site or a section, under a veil measured from its darkest and lightest
+  pixels, seen veiled before it is saved, with a note in plain words from 70, the section's own behind the
+  verb «Fondo» ([ADR 0081](../decisions/0081-a-background-with-motifs-carries-its-measured-veil.md), schema 1.22.0, days 5–7)
+- under a palette whose texts barely read on its surface — the neutral start — «Dar más contraste a los
+  textos» gives them 7:1 and keeps the colour exactly on the buttons (day 7, under David's delegation)
+
+The record is `docs/design/REVIEW.md`, sprint 40.
+
+**What sprint 40 leaves open** — the full text is the last section of REVIEW's sprint 40:
+
+1. **Thirty-nine signatures**: 0042, 0043, 0045–0081, all `proposed`, with their pack up to date,
+   [`docs/decisions/signing-2026-11.md`](../decisions/signing-2026-11.md). In 0081, development's day-7 call
+   under David's delegation — the texts' margin offered, never applied on its own — is named for his veto,
+   with the alternative costed (0.25 day: applied on its own on the untouched start, as a late logo's colours are).
+2. **The nine photographs**: the exemption fails on **1 December 2026**, in 9 days.
+   [`docs/tasks/las-nueve-fotos.md`](las-nueve-fotos.md) and `pnpm photos:replace`.
+3. **The CI e2e step at 34.6–37.5 of its 45 minutes** over the sprint's seven PRs, every one green on the
+   first attempt: seven and a half minutes of margin, under the 40 the plan set for proposing `--shard`.
+   Shard or raise stays David's.
+4. **Sprint 41, costed in sprint 40's plan** (David's decision of 20 November moved the first three here):
+   - sections dragged to reorder, and «a una página existente» — 1.5 days, ADR
+   - the photo's focal point, and the list block grabbable by its cards — 1.5 days, schema
+   - the business's name stretched by a gesture, and resizing from the keyboard in the canvas — 1 day (ADR 0050 left it open)
+   - a photo per list entry (ADR 0033 left it open) — 2 days, ADR
+   - the map as a static image (the other half of «Cómo llegar») — 2–3 days, a geocoder and tiles with a key
+     from our own server, OSM's attribution, ADR
+   - **David's question**: the first attempt to drag or stretch in a section from the catalogue offering «a
+     mano» where the hand is — **A, 0.5 day (recommended)**: the edge exists on the chosen element of a
+     catalogue section and a pull past the threshold opens the same anchored offer, nothing moves on accepting;
+     **B, 1 day** + a note in ADR 0048 §7: A, and the gesture continues from where the hand is once accepted;
+     **C, 0.25 day**: no gesture, the help line says the section is from the catalogue and where «Diseñar a mano» is
+5. **Sprint 39's leftovers, still open**: Escape in the fixed rail does not close the panel; the widths in px;
+   «Campos» → «Textos» if David asks; `Chip`; the orphan keys of `KNOWN_ORPHANS`; WebKit's reading-line test
+   waits a fixed 300 ms; the page tab shrinks to a dot at 1024 with a panel open; the questionnaire's screen
+   transition took a press once in a full e2e run.
+6. **Found during sprint 40, said and not changed**:
+   - DNR's exported logos carry the orange at `#944C23`, ΔE 18.8 from the `#B95319` the brand states: the
+     site takes what the file holds (ADR 0076's note). Whether the brand's exports change is DNR's.
+   - a motif with near-black parts stays mostly veiled on a light page even with the texts' margin (navy
+     lines 98 → 78): the guarantee working, and the note says the motif is the cause.
+7. **The editor has still not been seen outside Chromium**; the published site has, in three engines.
+8. **Sprint 41 unplanned.**
+
+The review before that: 19 November 2026, **closing sprint 39 — «los paneles, ordenados».** No new feature: David
 asked for the eight right-hand panels to be put in order — an inventory control by control before any
 code, a verdict for each, every word of the trade said plainly, and the 2026 pieces of sprint 38 applied
 where they answer the hand. Seven days in seven PRs (#392–#397 and the close). What changed for somebody

@@ -11298,3 +11298,139 @@ prepara y se ve velado (98, opacidad 0,98) sin escribir nada; se usa y el lienzo
 mosaico a 160 px y luego a sangre; «Quitar» y «Deshacer»; la nota del margen con el motivo crema bajo la
 neutra, y ninguna bajo «Terracota cálida» (velo 0); el fondo de «Qué ponemos» desde «Campos» encima del de
 la web; el ZIP con las dos imágenes en `assets/` y el velo al 98 % en la hoja. **Saboteos**: ver la PR.
+
+### Día 7 — lo que quedó corto, la paleta neutra y el cierre (PR de `test/el-cierre-del-sprint-40`)
+
+**Lo que quedó corto del día 6: la segunda puerta.** El racimo de la sección gana un noveno verbo, «Fondo»,
+detrás de «Campos» y antes de «Borrar». Abre «Campos» en esa sección y lleva la vista y el teclado al bloque
+del fondo, no a la cabeza del panel. Lo hace también con «Campos» ya abierto en esa sección, que es el caso
+que puede fallar: el panel solo se da el foco al montarse. El racimo medía 248 de los 304 px que tiene a 320;
+con el noveno mide unos 31 más y sigue cabiendo. Caminata nueva y saboteada: sin el aviso de llegada, el
+teclado se queda en la cabecera del panel y la caminata se pone roja.
+
+**La paleta neutra, resuelta por delegación de David** («Resuelve lo de la paleta neutra en el cierre», al
+fusionar la #405), y abierta a su veto. Escrito en la nota del día 7 de la
+[ADR 0081](../decisions/0081-a-background-with-motifs-carries-its-measured-veil.md) y en una nota de la 0074.
+
+- **Lo descartado, con su razón.** Cambiar la paleta de arranque es cambiar `#156FE7`, el azul de Retorika
+  que la neutra lleva por decisión de David del 13 de octubre. Relajar la garantía dejaría los enlaces de las
+  secciones por debajo de 4,5:1: el primario no solo pinta títulos, también escribe enlaces a tamaño de texto.
+- **Lo hecho: el color se queda exacto y cambia de papel**, la regla de David del 16 de noviembre (ADR 0074)
+  aplicada al motivo. `withTextMargin` lleva cada texto por debajo de 7:1 al hermano de su mismo tono que lo
+  alcanza, lo mínimo; si el primario se mueve, el color que era pasa a ser el relleno. Los botones, las barras
+  y el favicon conservan su color exacto; títulos y enlaces se oscurecen un poco. En la neutra, el primario
+  pasa de `#156FE7` a `#0054BB` (4,71 → 7,03) y el relleno se queda en `#156FE7`.
+- **Lo que libera** en la web recién creada: el motivo crema pasa de un velo de 82 a 0, las ondas terracota de
+  95 a 54, las líneas marino de 98 a 78. Probado sobre las 13 paletas y la rueda derivada en las dos
+  superficies: siguen pasando `validateTheme`, todos los textos llegan a 7:1, el relleno es el que era, el tono
+  se mueve 8° como mucho y aplicarlo dos veces no cambia nada.
+- **Es una oferta, nunca va sola.** La causa «margen» se mide ahora en vez de adivinarse: es de los colores
+  cuando darles margen bajaría el velo de 70. Bajo esa nota, el bloque ofrece «Dar más contraste a los
+  textos», con «Los botones conservan su color; los títulos y los enlaces se oscurecen un poco» debajo. Es un
+  paso de historial, la línea lo anuncia, «Deshacer» lo devuelve, y «Estilo» sigue nombrando la paleta,
+  «personalizada». **Ninguna web guardada, generada ni publicada cambia un byte** hasta que el dueño lo pulsa.
+- **La alternativa, costada para el veto de David (0,25 días):** aplicarlo sola sobre el arranque intacto al
+  usar un fondo, como los colores de un logo tardío (ADR 0076). No se hizo porque un fondo no es una marca:
+  quien sube un motivo no ha dicho nada del azul de los títulos.
+- Saboteado dos veces: sin pasar el color al relleno, el barrido y la caminata se ponen rojos (el botón sale
+  `#0054BB`); con la causa adivinada otra vez, dos unitarias en rojo.
+
+**Lo que encontró la primera vuelta entera del e2e, y su arreglo.** La caminata del sprint 28 día 2 se puso
+roja por un píxel: el racimo, al empezar a seguir el desplazamiento, dejaba su borde derecho (1 271 esperado,
+1 272 dibujado, a 1440). `boundsOf` medía el racimo con `offsetWidth`, que redondea; sus medidas son píxeles de
+pantalla divididos por el zoom, casi nunca enteras, y el noveno verbo lo dejó lo bastante fraccionario para que
+el redondeo se viera. Ahora se mide con `getBoundingClientRect`, que no ve el zoom porque el zoom es la
+transformación del propio marco. Medido antes de arreglarlo: con el ancho redondeado la caminata vuelve a
+fallar con las mismas cifras; con la caja, pasa.
+
+**La web publicada no cambia un byte para las 24 del corpus.** Construidas con `build-corpus.mts` en
+`3582dbd`, el principio del sprint, y en la rama: **140 ficheros en 24 webs, cero diferencias**. Solo se
+añaden `donde-estamos-con-mapa` y `fondo-con-motivos`, con 9 ficheros. El script de la cabecera tiene el mismo
+hash a los dos lados (`7fd756d0ec6a914c`).
+
+**Las suites, cada una sola, con `caffeinate -i`:**
+
+| Suite | Resultado |
+|---|---|
+| `typecheck` | verde |
+| `lint` | verde, 83 avisos; los del sprint son claves entre corchetes (la migración 0023, la prueba de marca) |
+| `test` | 4 533 en 209 ficheros |
+| `test:invariants` | 27 |
+| `renderer:deps` | 2 dependencias permitidas |
+| `schema:guard 3582dbd..HEAD` | 1.21.0 y 1.22.0, cada una con su migración, su prueba y su versión |
+| `secrets:scope` | 146 módulos, 35 de cliente, 2 solo de servidor, ningún cruce |
+| `size` | 31 webs dentro del presupuesto; `fondo-con-motivos` 9,5 KB, el motivo en la línea del dueño |
+| `test:a11y` | 2 381 en 217 s |
+| `lighthouse` | 27 de 27 a la primera, en 59 s |
+| `e2e` | 378 y 1 omitida, en 1 811 s, en la segunda vuelta; la primera (1 805 s) encontró el píxel de arriba |
+| auditoría de menús | AUDIT_RESULT |
+
+**El navegador real**, con el servidor del editor, Chromium a 1024, 1280 y 1440 solo con el teclado (1280
+con «Reducir movimiento»), un iPad emulado por toque y una vuelta con el logo de dos tintas: **46
+comprobaciones en verde**.
+
+- «Cómo llegar» lleva a Google Maps con la dirección; se escribe otra en «Campos» con el teclado y el enlace
+  la sigue.
+- Intro sobre «Cómo llegar» lo escribe y el lienzo no se va de su página; Intro sobre el botón de la barra
+  abre «Menú».
+- El motivo crema bajo el arranque: velo 82 y la frase del margen. Intro en «Dar más contraste a los textos»
+  deja el velo en 0, los títulos en `#0054BB` y el botón en `#156FE7`. Intro en «Usar este fondo»: el lienzo lo
+  pinta y la línea lo dice.
+- El verbo «Fondo» con Intro deja el teclado en «Fondo de esta sección».
+- «Listas» ofrece una lista y ninguna para la Galería.
+- «Campos», «Estilo» y «Listas» leídos palabra a palabra: ninguna palabra de oficio, ningún hueco `{…}`.
+- Con «Reducir movimiento», ninguna animación pasa de 0,01 ms. Ningún desplazamiento horizontal a ningún ancho.
+- Con el logo de dos tintas, el acento sale `#934B23`, el naranja (tono 47°), y el primario `#152542`.
+- En el iPad, un toque da margen y pone el motivo, otro lo pone a sangre, y el «Fondo» de la sección abre su
+  bloque.
+
+**La CI, por PR**: las siete, verdes al primer intento. El cierre del 39 necesitó cuatro (el espejo de apt,
+que arregló la #399).
+
+| PR | Paso e2e, de 45 min |
+|---|---|
+| #398, el cierre del 39 | 35,7 |
+| #400, día 1 | 36,9 |
+| #401, día 2 | 34,6 |
+| #402, día 3 | 37,3 |
+| #403, día 4 | 37,0 |
+| #404, día 5 | 37,5 |
+| #405, día 6 | 36,0 |
+
+No pasa de los 40 que el plan ponía para proponer `--shard`.
+
+**Capturas del día 7**: el bloque del fondo con el motivo crema bajo el arranque, antes y después de «Dar más
+contraste a los textos», a 1280 y en una ventana de móvil de 390 × 844
+([1280 antes](review/2026-11-el-logo-entero/dia7-margen-1280-antes.png) ·
+[1280 después](review/2026-11-el-logo-entero/dia7-margen-1280-despues.png) ·
+[390 antes](review/2026-11-el-logo-entero/dia7-margen-390-antes.png) ·
+[390 después](review/2026-11-el-logo-entero/dia7-margen-390-despues.png)); el lienzo con el fondo puesto, los
+títulos en `#0054BB` y los botones en `#156FE7`
+([1280](review/2026-11-el-logo-entero/dia7-margen-1280-lienzo.png)); y el racimo con sus nueve verbos a 1024
+([1024](review/2026-11-el-logo-entero/dia7-verbos-1024.png)).
+
+**`document-rules.md` no cambia**: ninguna de las siete reglas se ha tocado. El fondo es una referencia a un
+fichero y un velo derivado del sistema (regla 6), y el de una sección pertenece a su sección (regla 5).
+**Firmas**: 39, 0042, 0043 y 0045–0081. El paquete gana 0079 (lote A), 0080 (lote D) y 0081 (lote E), y las
+notas del sprint en 0060, 0066, 0074 y 0076. En la 0081 queda la decisión del día 7 tomada por delegación,
+para que David la vete si quiere.
+
+#### Lo que el sprint 40 deja abierto
+
+1. **Treinta y nueve firmas**: 0042, 0043, 0045–0081, con su paquete al día. En la 0081, la oferta de margen
+   decidida por delegación, con la alternativa costada.
+2. **Las nueve fotos**: la exención cae el **1 de diciembre de 2026**, en 9 días.
+3. **El paso e2e de la CI a 34,6–37,5 de sus 45 minutos**: siete minutos y medio de margen. Partirlo o subir
+   el tope, de David.
+4. **El sprint 41, costado en el plan del 40**: secciones arrastradas y «a una página existente» (1,5 días,
+   ADR); punto focal de la foto y bloque-lista agarrable (1,5, esquema); el nombre estirado y redimensionar con
+   el teclado (1); foto por entrada (2, ADR); mapa como imagen (2–3, ADR); y la pregunta de David sobre ofrecer
+   «a mano» al primer intento de estirar: **A, 0,5 días (recomendada)**, B 1 día, C 0,25.
+5. **Lo que dejó el 39, aún abierto**: Escape en el raíl fijo; los anchos en px; «Campos» → «Textos» si lo
+   pide; `Chip`; `KNOWN_ORPHANS`; la espera fija de WebKit; la pestaña a 1024; el clic que tapó la transición
+   del cuestionario.
+6. **Dicho, sin cambiar**: los logos exportados de DNR llevan el naranja a `#944C23`, a ΔE 18,8 del `#B95319`
+   de la marca, y la web toma lo que lleva el fichero; un motivo con partes casi negras sigue muy velado en una
+   página clara aun con margen (marino 98 → 78), y la nota dice que es el motivo.
+7. **El editor sigue sin verse fuera de Chromium**; la web publicada sí, en tres motores.
+8. **El sprint 41, sin planificar.**
