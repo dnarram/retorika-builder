@@ -1,13 +1,15 @@
 import { readFileSync } from "node:fs";
 import { EMPTY_ANSWERS, generate } from "@retorika/generator";
-import { type RetorikaDocument, setTheme } from "@retorika/schema";
-import { PALETTES, validateTheme, withPalette } from "@retorika/tokens";
+import { type RetorikaDocument, setTheme, type Theme } from "@retorika/schema";
+import { PALETTES, STARTING_PALETTE_ID, validateTheme, withPalette } from "@retorika/tokens";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  coloursOf,
   isUntouchedStart,
   loadLogoOfferDismissed,
   logoOfferFor,
   logoPalettesFor,
+  originByValues,
   sameColours,
   saveLogoOfferDismissed,
   withLogoColours,
@@ -162,5 +164,32 @@ describe("the offer", () => {
     const source = readFileSync(new URL("../src/editor/logoColours.ts", import.meta.url), "utf8");
     expect(source).not.toMatch(/autosave/);
     expect(source).toMatch(/"retorika\.logoOffer\.v1"/);
+  });
+});
+
+describe("coloursOf and originByValues (sprint 40 día 7)", () => {
+  const neutral = PALETTES.find((palette) => palette.id === STARTING_PALETTE_ID);
+
+  it("takes a theme's colours alone, the fill pair only when it has one", () => {
+    if (!neutral) throw new Error("no starting palette");
+    const theme = { ...neutral.colors, "font.heading": "serif" } as unknown as Theme;
+    expect(coloursOf(theme)).toEqual(neutral.colors);
+    const filled = { ...theme, "color.fill": "#156FE7", "color.onFill": "#FFFFFF" } as Theme;
+    expect(coloursOf(filled)).toEqual({
+      ...neutral.colors,
+      "color.fill": "#156FE7",
+      "color.onFill": "#FFFFFF",
+    });
+  });
+
+  it("names the predefined palette a theme's colours are, and the owner's own otherwise", () => {
+    if (!neutral) throw new Error("no starting palette");
+    expect(originByValues(neutral.colors as unknown as Theme)).toEqual({
+      kind: "palette",
+      id: STARTING_PALETTE_ID,
+    });
+    expect(
+      originByValues({ ...neutral.colors, "color.primary": "#123456" } as unknown as Theme),
+    ).toEqual({ kind: "own" });
   });
 });

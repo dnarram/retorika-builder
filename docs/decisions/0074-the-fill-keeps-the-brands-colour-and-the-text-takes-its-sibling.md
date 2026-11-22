@@ -103,3 +103,16 @@ fill, and the button inverted on a primary bar against the fill's ink.
   colours of the button and the bar, with and without a fill (`engines.browser.test.ts`).
 - `apps/editor`: `backgroundOf` and `colorRolesFor` read the theme; `styleReview` resolves the fill.
 - Notes in ADR 0054 and ADR 0057.
+
+## Note — sprint 40 día 7: the same role change, for a motif (ADR 0081)
+
+The pair this ADR made is used for a second reason since 22 November 2026. A background with motifs
+(ADR 0081) is veiled until every text role clears 4.5:1 over the motif's extremes, and a palette whose
+text barely clears its plain surface leaves the motif almost hidden — the neutral start's primary,
+Retorika's blue `#156FE7`, is 4.71:1 on white. `withTextMargin` (`packages/tokens/src/derive.ts`) moves
+each text role under 7:1 to the sibling of its hue that reaches it, by this ADR's own `lightnessFor`, and
+when the primary moves it hands the colour it was to `color.fill` with the ink it was written on: the
+buttons, bars and favicon keep the colour exactly, as this ADR keeps a logo's. It runs only when an owner
+presses «Dar más contraste a los textos» under the background's note; no palette, no generated site and
+no saved site changes on its own. Decided by development under David's delegation of 22 November, for
+his veto; the reasoning and the measures are in ADR 0081's día 7 note.

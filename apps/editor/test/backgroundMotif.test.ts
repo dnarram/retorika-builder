@@ -1,5 +1,5 @@
 import type { Theme } from "@retorika/schema";
-import { PALETTES } from "@retorika/tokens";
+import { PALETTES, withTextMargin } from "@retorika/tokens";
 import { describe, expect, it } from "vitest";
 import {
   BACKGROUND_MAX_BYTES,
@@ -140,6 +140,26 @@ describe("veilReason — why the veil is as high as it is", () => {
     expect(veilReason(palette("neutral"), { darkest: "#F2E2C7", lightest: "#E9EFE2" })).toBe(
       "margin",
     );
+  });
+
+  /**
+   * **The margin is asked, not guessed** (sprint 40 día 7): the cause is the colours' exactly when
+   * giving the texts margin would bring the veil under the threshold. Terracotta waves under the neutral
+   * start read as a dark motif to the eye — and are the colours' all the same: 95, and 54 with margin.
+   * Navy lines stay the motif's: 98, and still 78 with margin.
+   */
+  it("counts as the colours' margin what the margin would free, and as the motif's what it would not", () => {
+    const start = palette("neutral");
+    const waves = { darkest: "#CF895B", lightest: "#D08A5C" };
+    const navy = { darkest: "#1A2949", lightest: "#B45309" };
+    const cream = { darkest: "#F2E2C7", lightest: "#E9EFE2" };
+    expect(veilReason(start, waves)).toBe("margin");
+    expect(veilReason(start, navy)).toBe("dark");
+    // And once the texts have their margin, the cream and the waves have nothing left to say.
+    const given = withTextMargin(start);
+    expect(veilReason(given, cream)).toBeNull();
+    expect(veilReason(given, waves)).toBeNull();
+    expect(veilReason(given, navy)).toBe("dark");
   });
 
   it("has a sentence for each reason, in the locale file, and the threshold is the one measured", () => {

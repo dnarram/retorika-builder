@@ -180,7 +180,7 @@ import {
 import { ACCEPTED_IMAGE_ACCEPT } from "../editor/imageBytes.ts";
 import { leave } from "../editor/leaving.ts";
 import { toolbarFamilyLabel } from "../editor/letterGallery.ts";
-import { logoOfferFor, logoPalettesFor } from "../editor/logoColours.ts";
+import { coloursOf, logoOfferFor, logoPalettesFor, originByValues } from "../editor/logoColours.ts";
 import { logoColoursOf, logoLuminanceOf } from "../editor/logoImage.ts";
 import { LOOK_AHEAD_DEADLINE_MS, lookAheadStep } from "../editor/lookAhead.ts";
 import {
@@ -1442,6 +1442,9 @@ export function Editor({
   // selects the section too, and a form sliding in every time someone touches a sentence would
   // be in the way rather than at hand.
   const [fieldsFor, setFieldsFor] = useState<string | null>(null);
+  /** Counts presses of the section's «Fondo» verb: each one takes the keyboard to the background
+   * block of «Campos» (sprint 40 día 7), whether the panel was open already or not. */
+  const [backgroundArrival, setBackgroundArrival] = useState(0);
   const [rail, setRail] = useState<RailItemId>("sections");
   /** Whether the switch's own question — «¿Quieres colocar tú cada elemento?» — is open. State rather
    * than a ref because the popover is React's to draw, unlike everything inside the canvas. */
@@ -3013,11 +3016,18 @@ export function Editor({
      */
     const boundsOf = (bar: HTMLElement, host: HTMLElement): Bounds => {
       const win = iframeDoc.defaultView;
+      // The bar's box as laid out, fractions included: its lengths are screen pixels divided by the
+      // zoom, so its width is rarely whole, and `offsetWidth` rounds it. Placed from a rounded width,
+      // a cluster that starts following the scroll jumped off the stylesheet's `right` by up to half
+      // a pixel of the frame — one of the screen at 1440 — measured when the ninth verb, «Fondo»,
+      // made its width fractional (sprint 40 día 7). The zoom is the frame's own transform, outside
+      // this document, so the box read here is unscaled, as `offsetWidth` is.
+      const box = bar.getBoundingClientRect();
       return {
         hostWidth: host.clientWidth,
         hostHeight: host.clientHeight,
-        barWidth: bar.offsetWidth,
-        barHeight: bar.offsetHeight,
+        barWidth: box.width,
+        barHeight: box.height,
         ...(win
           ? { view: { top: -host.getBoundingClientRect().top, height: win.innerHeight } }
           : {}),
@@ -3694,6 +3704,26 @@ export function Editor({
           false,
           `<svg ${screenIcon(VERB_SCALE.icon)} viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h10"/><path d="M4 12h16"/><path d="M4 17h7"/><circle cx="18" cy="7" r="2"/><circle cx="15" cy="17" r="2"/></svg>`,
           () => showFields(sectionId),
+        ),
+      );
+      /*
+       * **«Fondo»: the section's background with motifs** (ADR 0081, sprint 40 día 7 — the door día 6
+       * left for the close, as David's adjustment 4 allowed). It opens «Campos» on this section, where
+       * the block lives, and takes the view and the keyboard to the block rather than to the panel's
+       * head: whoever pressed «Fondo» came for the picture, not for the words.
+       */
+      actions.appendChild(
+        action(
+          "background",
+          es["editor.background.section"],
+          es["editor.verb.background"],
+          "move",
+          false,
+          `<svg ${screenIcon(VERB_SCALE.icon)} viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="3"/><path d="M3.5 14l5-5 4 4 3-3 5 5"/><circle cx="15.5" cy="8" r="1.4"/></svg>`,
+          () => {
+            showFields(sectionId);
+            setBackgroundArrival((count) => count + 1);
+          },
         ),
       );
       actions.appendChild(
@@ -9819,6 +9849,11 @@ export function Editor({
                   key={fieldsFor}
                   legend={es["editor.background.section"]}
                   scope="section"
+                  arrival={backgroundArrival}
+                  onGiveMargin={(theme) => {
+                    onSetColours?.(coloursOf(theme), doc.palette ?? originByValues(doc.theme));
+                    announce(es["editor.background.announce.margin"]);
+                  }}
                   theme={doc.theme}
                   current={own}
                   currentUrl={own ? photoUrls.get(own.src) : undefined}
@@ -9930,6 +9965,10 @@ export function Editor({
                 legend={es["editor.background.site"]}
                 scope="site"
                 theme={doc.theme}
+                onGiveMargin={(theme) => {
+                  onSetColours?.(coloursOf(theme), doc.palette ?? originByValues(doc.theme));
+                  announce(es["editor.background.announce.margin"]);
+                }}
                 current={doc.background}
                 currentUrl={doc.background ? photoUrls.get(doc.background.src) : undefined}
                 onUse={(prepared, paint) => {

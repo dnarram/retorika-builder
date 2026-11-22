@@ -4,9 +4,11 @@ import {
   BACKGROUND_PAINTS,
   type Background,
   type BackgroundPaint,
+  relativeLuminance,
   type Theme,
   veilFor,
 } from "@retorika/schema";
+import { withTextMargin } from "@retorika/tokens";
 import { useEffect, useId, useRef, useState } from "react";
 import {
   PREVIEW_TILE_MAX,
@@ -44,6 +46,17 @@ export interface BackgroundBlockProps {
   currentUrl: string | undefined;
   onUse: (prepared: PreparedBackground, paint: BackgroundPaint) => void;
   onSet: (background: Background | null) => void;
+  /**
+   * A count that rises each time the section's «Fondo» verb is pressed (sprint 40 día 7): the block
+   * then comes into view and its first control takes the keyboard. On the next frame, because «Campos»
+   * gives the keyboard to its own head when it opens, in an effect that runs after this one.
+   */
+  arrival?: number;
+  /**
+   * The texts given margin, for the palette whose text barely clears its surface (sprint 40 día 7):
+   * offered under the «margin» note, written by the editor as one step that keeps the theme's origin.
+   */
+  onGiveMargin?: (theme: Theme) => void;
 }
 
 interface Pending {
@@ -60,6 +73,8 @@ export function BackgroundBlock({
   currentUrl,
   onUse,
   onSet,
+  arrival = 0,
+  onGiveMargin,
 }: BackgroundBlockProps) {
   const input = useRef<HTMLInputElement>(null);
   const [pending, setPending] = useState<Pending | null>(null);
@@ -75,6 +90,16 @@ export function BackgroundBlock({
     const url = pending.url;
     return () => URL.revokeObjectURL(url);
   }, [pending]);
+
+  useEffect(() => {
+    if (arrival === 0) return;
+    const frame = requestAnimationFrame(() => {
+      const host = document.querySelector<HTMLElement>(`[data-background="${scope}"]`);
+      host?.scrollIntoView({ block: "nearest" });
+      host?.querySelector<HTMLElement>("button, input:not([type=file])")?.focus();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [arrival, scope]);
 
   async function choose(file: File) {
     turn.current += 1;
@@ -159,6 +184,21 @@ export function BackgroundBlock({
             </span>
           </div>
           {reason ? <Note tone="warn">{veilNoteText(reason)}</Note> : null}
+          {reason === "margin" && onGiveMargin ? (
+            // The remedy the note names, for the cause that is the colours' (ADR 0081, día 7): the
+            // colour stays exact on the buttons and the texts take a sibling with margin. One step.
+            <div className="flex flex-col items-start gap-1" data-background-margin="">
+              <SmallButton
+                label={es["editor.background.margin.give"]}
+                onClick={() => onGiveMargin(withTextMargin(theme))}
+              />
+              <Note>
+                {relativeLuminance(theme["color.surface"]) > 0.5
+                  ? es["editor.background.margin.help"]
+                  : es["editor.background.margin.helpDark"]}
+              </Note>
+            </div>
+          ) : null}
           {pending?.prepared.heavy ? (
             <Note tone="warn">
               {es["editor.background.heavy"].replace(
