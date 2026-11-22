@@ -138,3 +138,45 @@ bytes stay where they are until the account's reconciliation sees nothing naming
 - `scripts/size-budget.ts`: the background on the owner's line.
 - `fixtures/assets/motivo.png`, `fixtures/documents/fondo-con-motivos.json` and its golden.
 - The record is `docs/design/REVIEW.md`, sprint 40 día 5.
+
+## Note — sprint 40 día 6: the editor's half, the threshold measured, and two causes where one was named
+
+**What the editor does** (`photos.ts`'s `prepareBackground`, `backgroundMotif.ts`, `BackgroundBlock.tsx`):
+a picture is sniffed by its bytes, drawn to at most 1600 px, encoded PNG when it has any transparency and
+JPEG at 0.82 when it has none, refused over 2 MiB once encoded and kept with a note over 300 KB; its
+extremes are read **from the encoded bytes decoded again at the saved size** — not from the canvas
+before encoding (a JPEG's ringing is published) and never from a sample (David's adjustment 2: 1 px black
+lines on white, reduced to 64×64, read `#BFBFBF`, and `backgroundExtremes.test` names that as the case
+that must not pass). The panel shows the picture **under the veil the page will draw, before anything is
+saved** (David's condition), with a line of the theme's text over both; «Usar este fondo» writes one step
+of the history, and the bytes take the photographs' pipe. The block is in «Estilo» for the site, for
+everybody, and at the foot of «Campos» for a section.
+
+**The threshold, measured: 70 hundredths** (the motif then shows at 30 % or less). Three motifs drawn for
+the purpose, their veils under the thirteen palettes:
+
+| Motif | Extremes | Veils |
+|---|---|---|
+| Soft cream leaves | `#F2E2C7` / `#E9EFE2` | 0 under seven palettes; 19 (classic-blue), 22 (forest-emerald), 37 (ocean); **75–85** under neutral, olive-sand, and the three dark ones |
+| Terracotta waves | `#CF895B` / `#D08A5C` | 49–96 |
+| Navy lines, terracotta dots (the corpus's) | `#1A2949` / `#B45309` | 58–98; **98 under the neutral start** |
+
+**Two causes, where David's example named one.** «Tu motivo tiene partes muy oscuras y muy claras» is
+true of the navy lines on a light page, and of a cream motif on a dark page. It is **false** of the cream
+motif under the neutral start: that motif is already soft, and it needs 82 because the neutral palette's
+primary clears only 4.71:1 on white — any tint at all takes it under 4.5. Olive-sand (4.70) and ocean
+(5.03) behave the same. Telling that owner to soften a soft motif would send them round in a circle. So
+`veilReason` names the cause that is true: the motif's far extreme against the page (contrast ≥ 1.5) on a
+light page is «dark», on a dark page «light»; a far extreme within 1.5 of the page is «margin», and the
+sentence points at «Colores». Three sentences in `es.json`, each asserted by the walk.
+
+**What this means, said plainly and left to David.** Every site starts on the neutral palette, and under
+it nearly every motif is veiled at 80 % or more: the feature shows little until the owner chooses colours
+with margin. The guarantee is the one he chose — every text colour readable over every pixel — and it is
+measured; whether a site's start should change, or the guarantee be relaxed for motifs (for instance only
+`ink` at 4.5, the headings at 3:1 as large text), is his decision, not this note's.
+
+**Cut, and said** (David's adjustment 4 named the section's door as what goes first): the section's
+background is in «Campos», reached by «Campos de esta sección»; **no ninth verb «Fondo» was added to the
+section's cluster**, whose eight verbs are measured by geometry and by the walks. It is in the backlog for
+the close.
