@@ -371,6 +371,7 @@
   "editor.designTools.notRememberedHelp": "Las herramientas están encendidas ahora, pero este navegador no nos deja guardar la preferencia: la próxima vez que entres estarán apagadas.",
   "editor.section.escalate.title": "Esta sección viene colocada de serie",
   "editor.section.escalate.body": "Si la diseñas a mano podrás mover y ensanchar cada elemento dentro de la rejilla. No se mueve nada al empezar, y puedes volver a la original cuando quieras.",
+  "editor.section.escalate.bodyHeld": "Si dices que sí, esta sección pasa a diseñarse a mano y lo que has movido se queda donde lo has soltado. Lo demás no se mueve sin tu sí, y puedes volver a la original cuando quieras.",
   "editor.section.escalate.yes": "Diseñar a mano",
   "editor.section.escalate.no": "Mejor no",
   "editor.section.handmade": "Diseñada a mano",

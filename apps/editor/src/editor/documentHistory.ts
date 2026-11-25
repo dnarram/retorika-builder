@@ -310,6 +310,10 @@ export type HistoryAction =
        * Explicitly `| undefined` because `exactOptionalPropertyTypes` is on and the canvas passes
        * the measurement through whether it got one or not. */
       boxes?: readonly MeasuredBox[] | undefined;
+      /** The gesture that opened the door, landed in the same step (sprint 41 día 3): the element
+       * the hand moved or pulled, where it goes on the fine grid, and its letter if a corner scaled
+       * it. One step, so one «Deshacer» gives the catalog section back whole. */
+      landing?: DoorLanding | undefined;
     }
   | {
       type: "setPlacement";
@@ -970,14 +974,29 @@ function escalateSection(
    * (ADR 0050 §3). The verb writes the fine grid's rows from it; without it the theme's rhythm
    * answers, which is what a test or a headless caller gets. */
   boxes: readonly MeasuredBox[] | undefined,
+  landing?: DoorLanding,
 ): History {
-  const document = escalateSectionInDoc(
-    history.present.document,
-    sectionId,
-    presetOf(history.present.document, sectionId),
-    boxes,
-  );
-  if (document === history.present.document) return history;
+  const before = history.present.document;
+  let document = escalateSectionInDoc(before, sectionId, presetOf(before, sectionId), boxes);
+  if (document === before) return history;
+  if (landing) {
+    // **The door's landing, in the same step** (sprint 41 día 3, David's «nada se mueve sin tu
+    // sí»): the section is escalated and the element the hand carried goes where the hand left it,
+    // and one «Deshacer» gives the catalog section back whole — half of it back would be a
+    // hand-designed section with the element where the catalog had it, which nobody asked for.
+    // The cause is `setPlacement`'s, because the hand laid this section out and
+    // `wasPlacementEverMoved` has to say so when «Volver a la original» asks.
+    document = setPlacementInDoc(document, sectionId, landing.elementId, landing.edit);
+    if (landing.letter?.writes) {
+      document = setElementStyleInDoc(
+        document,
+        { sectionId, elementId: landing.elementId },
+        "fontSize",
+        landing.letter.value,
+      );
+    }
+    return step(history, document, { type: "setPlacement", sectionId });
+  }
   return step(history, document, { type: "escalateSection", sectionId });
 }
 
@@ -1495,6 +1514,16 @@ function unbindList(history: History, sectionId: string, slot: string): History 
   return step(history, document, { type: "unbindList", sectionId });
 }
 
+/** What a drag or a pull begun in a catalog section asked for, written once the section is the
+ * hand's (sprint 41 día 3). */
+export interface DoorLanding {
+  readonly elementId: string;
+  readonly edit: PlacementEdit;
+  readonly letter?:
+    | { readonly writes: boolean; readonly value: StyleValue | undefined }
+    | undefined;
+}
+
 /** One snapshot pushed onto the stack, which every verb above does identically. */
 function step(history: History, document: RetorikaDocument, cause: SnapshotCause): History {
   return {
@@ -1587,7 +1616,7 @@ function apply(history: History, action: HistoryAction): History {
     case "setVariant":
       return setVariant(history, action.sectionId, action.variantId);
     case "escalateSection":
-      return escalateSection(history, action.sectionId, action.boxes);
+      return escalateSection(history, action.sectionId, action.boxes, action.landing);
     case "setPlacement":
       return setPlacement(history, action.sectionId, action.elementId, action.edit);
     case "shapeElement":

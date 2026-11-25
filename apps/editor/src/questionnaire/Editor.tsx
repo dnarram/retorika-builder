@@ -51,6 +51,7 @@ import {
   type PresetShape,
   type RetorikaDocument,
   type RevertImpact,
+  ROW_STEP_PX,
   type Role,
   rangeHasMark,
   revertImpact,
@@ -65,6 +66,7 @@ import {
   shiftMarks,
   styleFor,
   type TextEdit,
+  tokenPx,
   usesOfCollection,
 } from "@retorika/schema";
 import type { FontKey, PaletteColors } from "@retorika/tokens";
@@ -138,6 +140,8 @@ import {
   rowBelowPlacements,
   selectedRowId,
 } from "../editor/designTree.ts";
+import type { DoorLanding } from "../editor/documentHistory.ts";
+import { type DoorRect, doorLanding } from "../editor/doorLanding.ts";
 import {
   type AcceptedWarning,
   type DownloadGate,
@@ -822,7 +826,12 @@ export function Editor({
    * `boxes` is what the canvas measured the instant before (ADR 0050 §3): the fine grid's rows are
    * eight real pixels, so the only way «no se mueve nada al empezar» can be true for a section the
    * catalog had centred is to write the rows the elements actually had. Both doors measure. */
-  onEscalateSection: (sectionId: string, boxes?: readonly MeasuredBox[]) => void;
+  /** `landing`: the gesture that opened the door, landed in the same step (sprint 41 día 3). */
+  onEscalateSection: (
+    sectionId: string,
+    boxes?: readonly MeasuredBox[],
+    landing?: DoorLanding,
+  ) => void;
   /**
    * Whether anybody has laid this section out by hand, which decides whether the return warns.
    *
@@ -1130,6 +1139,25 @@ export function Editor({
    */
   const keepChosenFocus = useRef(false);
   /**
+   * **The gesture a section the catalog draws is holding while its offer is open** (sprint 41 día 3,
+   * David's option B: «nada se mueve sin tu sí»). A drag there used to ask the moment the hand
+   * moved and nothing followed the hand; now the element follows, the question is asked on release
+   * with the element still where the hand left it, and «Diseñar a mano» escalates the section and
+   * lands the element there in one step. «Mejor no», Escape and a click elsewhere put it back and
+   * write nothing. `rect` is the box the hand left, in the frame's pixels relative to the section's
+   * content box — what `doorLanding` turns into units once the section is the hand's; `clear` is
+   * the chrome's way back: the transform, the outline, the letter's preview, the `rb-held` classes.
+   */
+  const door = useRef<{
+    readonly sectionId: string;
+    readonly elementId: string;
+    readonly kind: "move" | "box";
+    readonly rect: DoorRect;
+    readonly letter?: { readonly writes: boolean; readonly value: StyleValue | undefined };
+    readonly clear: () => void;
+    accepted: boolean;
+  } | null>(null);
+  /**
    * **Where a dropped element was drawn when the hand let go** (sprint 35 día 3), so that once the
    * patch has put it in its cell it can settle there from that point rather than jump. Taken by the
    * next patch and only within a second of the drop; a drop that changed nothing leaves nothing.
@@ -1326,7 +1354,10 @@ export function Editor({
    * would be a second door with its own bugs. Re-assigned on every wiring, like everything else
    * that lives per document.
    */
-  const openEscalateOffer = useRef<((sectionId: string, opener: HTMLElement) => void) | null>(null);
+  const openEscalateOffer = useRef<
+    | ((sectionId: string, opener: HTMLElement, held?: NonNullable<typeof door.current>) => void)
+    | null
+  >(null);
   /**
    * How far this section's floating text bar has been pushed from where it would otherwise go.
    *
@@ -2060,7 +2091,12 @@ export function Editor({
   function gestureLive(iframeDoc: Document): boolean {
     const root = iframeDoc.documentElement.classList;
     return (
-      root.contains("rb-dragging") || root.contains("rb-resizing") || root.contains("rb-arrowing")
+      root.contains("rb-dragging") ||
+      root.contains("rb-resizing") ||
+      root.contains("rb-arrowing") ||
+      // A section holding a gesture while its offer is open (sprint 41 día 3): a patch would put
+      // the element back under the hand's question.
+      root.contains("rb-held")
     );
   }
   function applyPatch(iframeDoc: Document) {
@@ -3485,6 +3521,45 @@ export function Editor({
          * may or may not still be drawn. `takeCanvasFocus` tries it and falls back to the section,
          * which is the right answer either way: what changed is the section.
          */
+        const held = door.current;
+        if (held && held.sectionId === sectionId) {
+          /*
+           * **The door where the hand is** (sprint 41 día 3). The chrome comes off first, so the
+           * boxes measured are the catalog's own and not the displaced element's; the landing is
+           * computed from the box the hand left against the fine grid the section is about to
+           * have — its content width and the theme's gutter, which is all the catalog section
+           * knows and all `fineTemplateColumns` will use — and the escalation and the landing are
+           * one step. The element stays chosen, so the next gesture has it.
+           */
+          held.accepted = true;
+          door.current = null;
+          held.clear();
+          const section = iframeDoc.querySelector<HTMLElement>(
+            `[data-section="${CSS.escape(sectionId)}"]`,
+          );
+          const el = section?.querySelector<HTMLElement>(
+            `[data-id="${CSS.escape(held.elementId)}"]`,
+          );
+          const style = section ? iframeDoc.defaultView?.getComputedStyle(section) : null;
+          const px = (value: string | undefined) => Number.parseFloat(value ?? "") || 0;
+          const contentWidth = section
+            ? section.clientWidth - px(style?.paddingLeft) - px(style?.paddingRight)
+            : 0;
+          const edit = doorLanding({
+            contentWidth,
+            gap: tokenPx(docNow.current.theme["space.md"]),
+            rect: held.rect,
+            kind: held.kind,
+          });
+          if (el) markChosen(iframeDoc, el);
+          keepChosenFocus.current = true;
+          propsNow.current.onEscalateSection(sectionId, measurePlaced(iframeDoc, sectionId), {
+            elementId: held.elementId,
+            edit,
+            ...(held.letter ? { letter: held.letter } : {}),
+          });
+          return;
+        }
         armReturn(sectionId, '.rb-actions [data-action="handmade"]');
         // `iframeDoc` and not `liveDoc()`: this handler lives in the document it has to measure,
         // and was wired into it before it became the visible one.
@@ -3521,18 +3596,72 @@ export function Editor({
      * drag there moves nothing at all and asks the question instead — «nada se mueve al empezar» is
      * the offer's own promise, and a drag that silently rewrote a preset's layout would break it.
      */
-    openEscalateOffer.current = (sectionId, opener) => {
+    openEscalateOffer.current = (sectionId, opener, held) => {
       const target = iframeDoc.querySelector<HTMLElement>(
         `[data-section="${CSS.escape(sectionId)}"]`,
       );
-      if (!target || compositionMenuOpen.current) return;
+      if (!target || compositionMenuOpen.current) {
+        held?.clear();
+        return;
+      }
       const offer = escalateOffer(sectionId);
       offer.classList.add(ARRIVES);
+      if (held) {
+        offer.classList.add("rb-escalate-held");
+        door.current?.clear();
+        door.current = held;
+      }
       target.appendChild(offer);
-      anchorPopup(offer, target);
+      if (held) anchorPopupAt(offer, target, held.rect);
+      else anchorPopup(offer, target);
       compositionMenuOpen.current = true;
       wirePopup(offer, opener);
+      if (held) {
+        /*
+         * **Every way the offer leaves without a «sí» is a «no»**: «Mejor no», Escape in the popup,
+         * a click elsewhere that chooses another section, the verb pressed again. They all remove
+         * the offer, and none of them knows about the gesture it was asked for — so the gesture
+         * watches the offer, and puts the element back the moment the offer is gone unanswered.
+         */
+        const watcher = new (iframeDoc.defaultView as Window & typeof globalThis).MutationObserver(
+          () => {
+            if (offer.isConnected) return;
+            watcher.disconnect();
+            if (held.accepted) return;
+            if (door.current === held) door.current = null;
+            held.clear();
+            const el = target.querySelector<HTMLElement>(
+              `[data-id="${CSS.escape(held.elementId)}"]`,
+            );
+            el?.focus({ preventScroll: true });
+          },
+        );
+        watcher.observe(target, { childList: true });
+      }
     };
+
+    /**
+     * The offer under the box the hand left (sprint 41 día 3): where the question is, which is
+     * where the hand is. Inside the section sideways, as `anchorPopup` keeps a menu; below the box,
+     * and above it only when below would hang off the end of the page.
+     */
+    function anchorPopupAt(popup: HTMLElement, host: HTMLElement, rect: DoorRect) {
+      const zoom = zoomOf(iframeDoc);
+      const gap = VERB_SCALE.gap / zoom;
+      const inset = BAR_INSET / zoom;
+      const style = host.ownerDocument.defaultView?.getComputedStyle(host);
+      const padLeft = Number.parseFloat(style?.paddingLeft ?? "") || 0;
+      const padTop = Number.parseFloat(style?.paddingTop ?? "") || 0;
+      const below = padTop + rect.bottom + gap;
+      const above = padTop + rect.top - popup.offsetHeight - gap;
+      const page = host.ownerDocument.documentElement.scrollHeight;
+      const reachable = host.offsetTop + below + popup.offsetHeight <= page;
+      const y = reachable || above < 0 ? below : above;
+      const rightmost = Math.max(inset, host.clientWidth - popup.offsetWidth - inset);
+      popup.style.right = "auto";
+      popup.style.left = `${Math.min(Math.max(padLeft + rect.left, inset), rightmost)}px`;
+      popup.style.top = `${y}px`;
+    }
 
     function select(target: HTMLElement, via: "click" | "restore" | "return" | "other" = "other") {
       record("select", {
@@ -7400,7 +7529,8 @@ export function Editor({
       // A finger is wider than this zone in every direction, so touch gets real handles instead.
       if (event.pointerType === "touch") return null;
       if (deviceNow.current === "mobile") return null;
-      if (!findSection(docNow.current, sectionId)?.section.layout) return null;
+      // A section the catalog draws answers too since sprint 41 día 3: the pull previews with an
+      // outline and asks on release (`doorPull`), where it used to answer nothing at all.
       const found = target(section, sectionId);
       if (!found) return null;
       const zoom = zoomOf(iframeDoc);
@@ -7446,6 +7576,207 @@ export function Editor({
     let pulled: PlacementEdit | null = null;
     /** The letter a corner has scaled to, decided with `pulled` and written with it. */
     let lettered: ScaledLetter | null = null;
+
+    /**
+     * **An edge pulled in a section the catalog draws** (sprint 41 día 3). The section has no fine
+     * grid to preview on, and its own twelve-column area cannot be written in units it does not
+     * have, so the preview is an outline — the box the hand is asking for, drawn in the section —
+     * and for a text's corner the letter itself, which is honest at any grid. On release the
+     * outline stays and the offer asks; on «sí» the box lands through `doorLanding`.
+     */
+    let doorPull: {
+      readonly section: HTMLElement;
+      readonly sectionId: string;
+      readonly el: HTMLElement;
+      readonly edge: Edge;
+      readonly meaning: "letter" | "photo" | "box";
+      /** The element's box at the press, on the screen and relative to the content box. */
+      readonly box: DOMRect;
+      readonly origin: { readonly left: number; readonly top: number };
+      readonly from: Point;
+      readonly basePx: number;
+      readonly current: StyleValue | undefined;
+      readonly fontSize: string;
+      readonly outline: HTMLElement;
+      rect: DoorRect;
+      letter: ScaledLetter | null;
+    } | null = null;
+
+    // The click that follows a pull is the pull's own release, not a choice (ADR 0048 §2): left
+    // alone it would choose the section again, which closes the offer the pull has just asked.
+    let pullJustAsked = false;
+    iframeDoc.addEventListener(
+      "click",
+      (event) => {
+        if (!pullJustAsked) return;
+        pullJustAsked = false;
+        event.stopPropagation();
+        event.preventDefault();
+      },
+      true,
+    );
+
+    const clearDoorPull = () => {
+      if (!doorPull) return;
+      const { el, outline, fontSize } = doorPull;
+      outline.remove();
+      el.style.fontSize = fontSize;
+      el.classList.remove("rb-held");
+      iframeDoc.documentElement.classList.remove("rb-resizing");
+      iframeDoc.documentElement.classList.remove("rb-held");
+      iframeDoc.documentElement.style.cursor = "";
+      showCursor(doorPull.section, el, null);
+      doorPull = null;
+      flushQueuedPatch.current();
+    };
+
+    const drawDoorOutline = (pull: NonNullable<typeof doorPull>) => {
+      const { outline, rect, section } = pull;
+      const style = section.ownerDocument.defaultView?.getComputedStyle(section);
+      const padLeft = Number.parseFloat(style?.paddingLeft ?? "") || 0;
+      const padTop = Number.parseFloat(style?.paddingTop ?? "") || 0;
+      outline.style.left = `${Math.round(padLeft + rect.left)}px`;
+      outline.style.top = `${Math.round(padTop + rect.top)}px`;
+      outline.style.width = `${Math.round(rect.right - rect.left)}px`;
+      outline.style.height = `${Math.round(rect.bottom - rect.top)}px`;
+    };
+
+    const beginDoorPull = (
+      section: HTMLElement,
+      sectionId: string,
+      edge: Edge,
+      el: HTMLElement,
+      event: PointerEvent,
+    ) => {
+      const element = findSection(docNow.current, sectionId)?.section.content.find(
+        (candidate) => candidate.id === el.dataset["id"],
+      );
+      const view = iframeDoc.defaultView;
+      if (!element || !view) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const metrics = gridMetricsOf(section);
+      const box = el.getBoundingClientRect();
+      const outline = chrome(iframeDoc, "div");
+      outline.className = "rb-door";
+      outline.setAttribute("aria-hidden", "true");
+      section.appendChild(outline);
+      doorPull = {
+        section,
+        sectionId,
+        el,
+        edge,
+        meaning: isCorner(edge) ? cornerMeaning(element.role) : "box",
+        box,
+        origin: { left: metrics.left, top: metrics.top },
+        from: { x: event.clientX, y: event.clientY },
+        basePx: Number.parseFloat(view.getComputedStyle(el).fontSize) || 16,
+        current: element.style?.fontSize,
+        fontSize: el.style.fontSize,
+        outline,
+        rect: {
+          left: box.left - metrics.left,
+          top: box.top - metrics.top,
+          right: box.right - metrics.left,
+          bottom: box.bottom - metrics.top,
+        },
+        letter: null,
+      };
+      drawDoorOutline(doorPull);
+      section.setPointerCapture(event.pointerId);
+      iframeDoc.documentElement.classList.add("rb-resizing");
+      iframeDoc.documentElement.style.cursor = cursorFor(edge);
+    };
+
+    /** The box the hand is asking for: the pulled lines at the hand, the others where they were —
+     * or, for a corner that scales, the box scaled from its anchor by the letter's own factor. */
+    const moveDoorPull = (pull: NonNullable<typeof doorPull>, event: PointerEvent) => {
+      const { box, origin, edge } = pull;
+      const now = { x: event.clientX, y: event.clientY };
+      const least = ROW_STEP_PX;
+      if (isCorner(edge) && pull.meaning !== "box") {
+        let factor = scaleFactor({ box, corner: edge, from: pull.from, now });
+        if (pull.meaning === "letter") {
+          pull.letter = scaledLetter({
+            basePx: pull.basePx,
+            factor,
+            theme: docNow.current.theme,
+            current: pull.current,
+          });
+          factor = pull.letter.factor;
+          pull.el.style.fontSize = `${pull.letter.px}px`;
+        }
+        factor = Math.max(factor, least / Math.max(box.width, box.height, least));
+        const width = box.width * factor;
+        const height = box.height * factor;
+        const left = edge === "ne" || edge === "se" ? box.left : box.right - width;
+        const top = edge === "sw" || edge === "se" ? box.top : box.bottom - height;
+        pull.rect = {
+          left: left - origin.left,
+          top: top - origin.top,
+          right: left + width - origin.left,
+          bottom: top + height - origin.top,
+        };
+      } else {
+        const owns = axes(edge);
+        let { left, right, top, bottom } = box;
+        if (owns.horizontal) {
+          if (edge === "left" || edge === "nw" || edge === "sw")
+            left = Math.min(now.x, right - least);
+          else right = Math.max(now.x, left + least);
+        }
+        if (owns.vertical) {
+          if (edge === "top" || edge === "nw" || edge === "ne")
+            top = Math.min(now.y, bottom - least);
+          else bottom = Math.max(now.y, top + least);
+        }
+        pull.rect = {
+          left: left - origin.left,
+          top: top - origin.top,
+          right: right - origin.left,
+          bottom: bottom - origin.top,
+        };
+      }
+      drawDoorOutline(pull);
+    };
+
+    /** On release: the outline and the letter stay, held, and the offer asks (sprint 41 día 3). */
+    const releaseDoorPull = () => {
+      const pull = doorPull;
+      if (!pull) return;
+      const moved =
+        Math.abs(pull.rect.left - (pull.box.left - pull.origin.left)) >= 1 ||
+        Math.abs(pull.rect.right - (pull.box.right - pull.origin.left)) >= 1 ||
+        Math.abs(pull.rect.top - (pull.box.top - pull.origin.top)) >= 1 ||
+        Math.abs(pull.rect.bottom - (pull.box.bottom - pull.origin.top)) >= 1;
+      if (!moved) {
+        clearDoorPull();
+        return;
+      }
+      doorPull = null;
+      pullJustAsked = true;
+      iframeDoc.documentElement.classList.remove("rb-resizing");
+      iframeDoc.documentElement.classList.add("rb-held");
+      iframeDoc.documentElement.style.cursor = "";
+      showCursor(pull.section, pull.el, null);
+      pull.el.classList.add("rb-held");
+      const letter = pull.letter;
+      openEscalateOffer.current?.(pull.sectionId, pull.el, {
+        sectionId: pull.sectionId,
+        elementId: pull.el.dataset["id"] ?? "",
+        kind: "box",
+        rect: pull.rect,
+        ...(pull.meaning === "letter" ? { letter: { writes: true, value: letter?.value } } : {}),
+        accepted: false,
+        clear: () => {
+          pull.outline.remove();
+          pull.el.style.fontSize = pull.fontSize;
+          pull.el.classList.remove("rb-held");
+          iframeDoc.documentElement.classList.remove("rb-held");
+          flushQueuedPatch.current();
+        },
+      });
+    };
 
     /** The cursor, on the element and on the section both, as classes (adjustment 3). */
     const showCursor = (section: HTMLElement, el: HTMLElement | null, edge: Edge | null) => {
@@ -7527,7 +7858,13 @@ export function Editor({
       el: HTMLElement,
       event: PointerEvent,
     ) => {
-      const placement = findSection(docNow.current, sectionId)?.section.layout?.placements.find(
+      const found = findSection(docNow.current, sectionId)?.section;
+      if (found && found.layout === null) {
+        if (door.current) return;
+        beginDoorPull(section, sectionId, edge, el, event);
+        return;
+      }
+      const placement = found?.layout?.placements.find(
         (candidate) => candidate.elementId === el.dataset["id"],
       );
       if (!placement) return;
@@ -7586,6 +7923,10 @@ export function Editor({
     );
 
     delegate(iframeDoc, "pointermove", "[data-section]", (section, event) => {
+      if (doorPull) {
+        if (section === doorPull.section) moveDoorPull(doorPull, event);
+        return;
+      }
       if (!pulling) {
         const sectionId = section.dataset["section"];
         if (!sectionId) return;
@@ -7725,9 +8066,18 @@ export function Editor({
       }
       propsNow.current.onSetPlacement(sectionId, elementId, edit);
     };
-    delegate(iframeDoc, "pointerup", "[data-section]", () => release());
-    delegate(iframeDoc, "pointercancel", "[data-section]", () => stop());
-    delegate(iframeDoc, "lostpointercapture", "[data-section]", () => release());
+    delegate(iframeDoc, "pointerup", "[data-section]", () => {
+      if (doorPull) releaseDoorPull();
+      else release();
+    });
+    delegate(iframeDoc, "pointercancel", "[data-section]", () => {
+      if (doorPull) clearDoorPull();
+      else stop();
+    });
+    delegate(iframeDoc, "lostpointercapture", "[data-section]", () => {
+      if (doorPull) releaseDoorPull();
+      else release();
+    });
 
     // What `markChosen` and the redraw call, found by the document it happened in.
     handlePainter.current = repaintAll;
@@ -7795,8 +8145,9 @@ export function Editor({
     moved: boolean;
     outcome: Drop | null;
     mobileSwap: string | null;
-    gesture: "none" | "move" | "ask";
-    asked: boolean;
+    /** `door`: a section the catalog draws, where the element follows the hand and the offer is
+     * asked on release (sprint 41 día 3). */
+    gesture: "none" | "move" | "door";
     /** The pointer to capture when the gesture arms, for a press that came through a card: taken at
      * once it would turn the click that chooses the card's text into a click on its list. */
     capture: number | null;
@@ -7846,7 +8197,6 @@ export function Editor({
           outcome: null,
           mobileSwap: null,
           gesture: "none",
-          asked: false,
           capture: null,
           pressed: null,
           run: null,
@@ -7910,7 +8260,6 @@ export function Editor({
       state.outcome = null;
       state.mobileSwap = null;
       state.gesture = "none";
-      state.asked = false;
       state.capture = null;
       state.pressed = null;
       tilt.end();
@@ -7949,17 +8298,19 @@ export function Editor({
       if (event.pointerType === "touch" && !chosen) return;
       const layout = findSection(docNow.current, at.sectionId)?.section.layout ?? null;
       if (layout === null) {
-        // A catalog section: a drag past the threshold opens the «Diseñar a mano» offer, anchored
-        // where the hand is — on the card's text when that is what was pressed.
-        state.gesture = "ask";
-        state.from = { x: event.clientX, y: event.clientY };
+        // A catalog section: the element follows the hand, and on release the «Diseñar a mano»
+        // offer is asked with the element where the hand left it (sprint 41 día 3) — anchored on
+        // the card's text when that is what was pressed. A phone reorders, and there is nothing
+        // to hold (ADR 0049 §7).
+        if (deviceNow.current === "mobile") return;
+        state.gesture = "door";
         state.pressed = pressed;
-        return;
+      } else {
+        const found = layout.placements.find((placement) => placement.elementId === at.elementId);
+        if (!found) return;
+        state.moving = found;
+        state.gesture = "move";
       }
-      const found = layout.placements.find((placement) => placement.elementId === at.elementId);
-      if (!found) return;
-      state.moving = found;
-      state.gesture = "move";
       state.from = { x: event.clientX, y: event.clientY };
       const rect = el.getBoundingClientRect();
       state.grab = { x: event.clientX - rect.left, y: event.clientY - rect.top };
@@ -7978,11 +8329,24 @@ export function Editor({
       const now = { x: event.clientX, y: event.clientY };
       if (!isDragBeyond(state.from, now, DRAG_THRESHOLD / zoomOf(iframeDoc)) && !state.moved)
         return;
-      if (state.gesture === "ask") {
-        if (state.asked) return;
-        state.asked = true;
-        openEscalateOffer.current?.(sectionId, state.pressed ?? el);
-        justDragged = true;
+      if (state.gesture === "door") {
+        if (!state.moved) {
+          state.moved = true;
+          if (state.capture !== null) {
+            el.setPointerCapture(state.capture);
+            state.capture = null;
+          }
+          el.classList.add("rb-moving");
+          iframeDoc.documentElement.classList.add("rb-dragging");
+          iframeDoc.getSelection()?.removeAllRanges();
+        }
+        // No guides and no drop: there is no fine grid to read until the section is the hand's.
+        // The element travels by what the hand travelled, as in a free section.
+        tilt.follow(el, now.x);
+        const raw = { x: now.x - state.from.x, y: now.y - state.from.y };
+        el.style.transform = `translate(${raw.x}px, ${raw.y}px)`;
+        el.style.setProperty("--rb-dx", `${raw.x}px`);
+        el.style.setProperty("--rb-dy", `${raw.y}px`);
         return;
       }
       if (!state.moving) return;
@@ -8060,10 +8424,54 @@ export function Editor({
       const at = placedAt(el);
       if (!at) return;
       const wasMoved = state.moved && state.gesture === "move";
+      const wasDoor = state.moved && state.gesture === "door";
       const drop = state.outcome;
       const swapWith = state.mobileSwap;
       // Where the hand left it, still under the drag's transform: the point it settles from.
       const drawn = el.getBoundingClientRect();
+      if (wasDoor) {
+        /*
+         * **Held, not dropped** (sprint 41 día 3): the displacement stays on the element while the
+         * offer asks, and the state is let go of in every other way — a second press would be a
+         * new gesture. The box the hand left, relative to the section's content box, is what
+         * lands on «sí»; `clear` is what «no» does.
+         */
+        const metrics = gridMetricsOf(at.section);
+        const rect: DoorRect = {
+          left: drawn.left - metrics.left,
+          top: drawn.top - metrics.top,
+          right: drawn.right - metrics.left,
+          bottom: drawn.bottom - metrics.top,
+        };
+        const opener = state.pressed ?? el;
+        state.from = null;
+        state.moved = false;
+        state.gesture = "none";
+        state.capture = null;
+        state.pressed = null;
+        tilt.end();
+        el.classList.remove("rb-moving");
+        el.classList.add("rb-held");
+        iframeDoc.documentElement.classList.remove("rb-dragging");
+        iframeDoc.documentElement.classList.add("rb-held");
+        justDragged = true;
+        openEscalateOffer.current?.(at.sectionId, opener, {
+          sectionId: at.sectionId,
+          elementId: at.elementId,
+          kind: "move",
+          rect,
+          accepted: false,
+          clear: () => {
+            el.classList.remove("rb-held");
+            el.style.transform = "";
+            el.style.removeProperty("--rb-dx");
+            el.style.removeProperty("--rb-dy");
+            iframeDoc.documentElement.classList.remove("rb-held");
+            flushQueuedPatch.current();
+          },
+        });
+        return;
+      }
       clear(el, at.section, state);
       if (!wasMoved) return;
       justDragged = true;
@@ -8469,11 +8877,13 @@ export function Editor({
       syncKeyboardPlace(iframeDoc);
       const badge = iframeDoc.querySelector<HTMLElement>(".rb-toolbar-badge");
       patchHelp({
-        menuNote: iframeDoc.querySelector(".rb-escalate")
-          ? "escalate"
-          : iframeDoc.querySelector(".rb-compositions")
-            ? "composition"
-            : null,
+        menuNote: iframeDoc.querySelector(".rb-escalate-held")
+          ? "escalateHeld"
+          : iframeDoc.querySelector(".rb-escalate")
+            ? "escalate"
+            : iframeDoc.querySelector(".rb-compositions")
+              ? "composition"
+              : null,
         dragRefused: iframeDoc.querySelector(".rb-ghost-no") !== null,
         bound: badge
           ? { places: Number(badge.dataset["places"] ?? "1"), list: badge.dataset["list"] ?? "" }
@@ -9065,6 +9475,11 @@ export function Editor({
       // travel under every sibling that comes after it in the document (David's adjustment 5); the
       // shadow is what says «picked up» now that nothing else on screen does.
       `.rb-moving { z-index: 5; box-shadow: ${CHROME_SCALE.shadow2}; }`,
+      // Held where the hand left it while the offer asks (sprint 41 día 3): the same lift as the
+      // drag's, so the element reads as still picked up, and the outline a pull asks with.
+      `.rb-held { z-index: 5; box-shadow: ${CHROME_SCALE.shadow2}; }`,
+      `.rb-door { position: absolute; z-index: 8; pointer-events: none; box-sizing: border-box;`,
+      `  border: ${screenPx(2)} dashed ${CHROME_SCALE.brand}; border-radius: ${screenPx(4)}; }`,
       /*
        * **`touch-action: none` on the chosen element and on nothing else** (ADR 0049).
        *

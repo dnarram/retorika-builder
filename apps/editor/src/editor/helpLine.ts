@@ -71,7 +71,7 @@ export interface HelpLineState {
   dragRefused: boolean;
   keyboard: KeyboardPlace;
   /** A popup with a note of its own open over a section. */
-  menuNote: "composition" | "escalate" | null;
+  menuNote: "composition" | "escalate" | "escalateHeld" | null;
   /** The text bar open over a text bound to a collection. */
   bound: { places: number; list: string } | null;
   /** A chosen element: whether it is a text, whether the arrows can move it, and whether it is a
@@ -228,6 +228,8 @@ export function quietSays(state: HelpLineState): HelpLineSays {
   if (keys && state.keyboard !== "writing") return quiet(keys);
   if (state.menuNote === "composition") return quiet(es["editor.composition.note"]);
   if (state.menuNote === "escalate") return quiet(es["editor.section.escalate.body"]);
+  // The offer asked by a gesture, with the element held where the hand left it (sprint 41 día 3).
+  if (state.menuNote === "escalateHeld") return quiet(es["editor.section.escalate.bodyHeld"]);
   if (state.bound) return quiet(boundSentence(state.bound.places, state.bound.list));
   if (keys) return quiet(keys);
   // The gesture of the control the hand is on, then the open panel's one instruction: what a person

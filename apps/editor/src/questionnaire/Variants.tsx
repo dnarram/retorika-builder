@@ -1805,11 +1805,12 @@ export function Variants({
             railOfferDismissed,
           )}
           onDismissRailOffer={dismissRailOffer}
-          onEscalateSection={(sectionId, boxes) => {
+          onEscalateSection={(sectionId, boxes, landing) => {
             dismissToast();
             // The boxes the canvas measured the instant before the press (ADR 0050 §3): this
             // component never measures anything itself, it only carries what the canvas read.
-            dispatch({ type: "escalateSection", variant: openIndex, sectionId, boxes });
+            // And the gesture the door held, landed in the same step (sprint 41 día 3).
+            dispatch({ type: "escalateSection", variant: openIndex, sectionId, boxes, landing });
           }}
           // Read from the history rather than from the document, which cannot answer it since
           // escalation started measuring the page (ADR 0050, día 2).
