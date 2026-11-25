@@ -78,12 +78,13 @@ describe("the fine grid's stylesheet", () => {
     expect(dom.querySelector("section.rb-section.rb-free")).not.toBeNull();
   });
 
-  it("appears in exactly the two corpus documents that carry a free section", () => {
+  it("appears in exactly the corpus documents that carry a free section", () => {
     const withIt = corpus
       .filter(({ document }) => render(document, "html").html.includes(".rb-section.rb-free"))
       .map(({ name }) => name)
       .sort();
-    expect(withIt).toEqual(["hidden-and-embed", "physio-free-cover"]);
+    // `foto-con-forma` joined on sprint 41 día 4, a free cover with a shaped photograph.
+    expect(withIt).toEqual(["foto-con-forma", "hidden-and-embed", "physio-free-cover"]);
   });
 });
 
