@@ -8325,7 +8325,7 @@ export function Editor({
       if (!state?.from) return;
       const at = placedAt(el);
       if (!at) return;
-      const { section, sectionId, elementId } = at;
+      const { section, elementId } = at;
       const now = { x: event.clientX, y: event.clientY };
       if (!isDragBeyond(state.from, now, DRAG_THRESHOLD / zoomOf(iframeDoc)) && !state.moved)
         return;
