@@ -407,6 +407,63 @@ describe("wasPlacementEverMoved", () => {
   });
 });
 
+describe("escalateSection with a landing — the door where the hand is (sprint 41 día 3)", () => {
+  const sectionOf = (state: Histories) =>
+    state[0]?.present.document.pages[0]?.sections.find((s) => s.id === "sec-cover");
+
+  it("escalates and lands the element in one step, and one undo gives the catalog back whole", () => {
+    const before = start();
+    const catalog = sectionOf(before);
+    expect(catalog?.layout).toBeNull();
+    const landed = run(before, {
+      type: "escalateSection",
+      variant: 0,
+      sectionId: "sec-cover",
+      landing: {
+        elementId: "el-headline",
+        edit: { column: 25, row: 9 },
+        letter: { writes: true, value: { exact: "52px", exception: true } },
+      },
+    });
+    expect(landed[0]?.past.length).toBe((before[0]?.past.length ?? 0) + 1);
+    const free = sectionOf(landed);
+    expect(free?.source).toBe("free");
+    expect(free?.layout?.placements.find((p) => p.elementId === "el-headline")).toMatchObject({
+      column: 25,
+      row: 9,
+    });
+    expect(free?.content.find((e) => e.id === "el-headline")?.style?.fontSize).toEqual({
+      exact: "52px",
+      exception: true,
+    });
+    // The hand laid this section out: the return will ask.
+    expect(wasPlacementEverMoved(landed[0] as Histories[number], "sec-cover")).toBe(true);
+    const undone = run(landed, { type: "undo", variant: 0 });
+    expect(sectionOf(undone)).toEqual(catalog);
+  });
+
+  it("lands without a letter when the gesture did not decide one", () => {
+    const landed = run(start(), {
+      type: "escalateSection",
+      variant: 0,
+      sectionId: "sec-cover",
+      landing: { elementId: "el-headline", edit: { column: 17, columnSpan: 40 } },
+    });
+    const free = sectionOf(landed);
+    expect(free?.layout?.placements.find((p) => p.elementId === "el-headline")).toMatchObject({
+      column: 17,
+      columnSpan: 40,
+    });
+    expect(free?.content.find((e) => e.id === "el-headline")?.style).toBeUndefined();
+  });
+
+  it("is the escalation it always was when nothing is landed", () => {
+    const plain = run(start(), { type: "escalateSection", variant: 0, sectionId: "sec-cover" });
+    expect(plain[0]?.present.cause).toEqual({ type: "escalateSection", sectionId: "sec-cover" });
+    expect(wasPlacementEverMoved(plain[0] as Histories[number], "sec-cover")).toBe(false);
+  });
+});
+
 describe("shapeElement — a corner's scale is one step (ADR 0082)", () => {
   const escalate = (): HistoryAction => ({
     type: "escalateSection",

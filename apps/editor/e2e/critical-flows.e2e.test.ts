@@ -17515,13 +17515,34 @@ describe("sprint 24 día 8 — un elemento se arrastra a su celda", () => {
       await headline.click();
       await expect(headline).toHaveClass(/rb-chosen/);
       const beforeOffer = await placedIn(frame, "sec-cover");
+      const beforeBox = await headline.boundingBox();
       await dragElementBy(page, headline, 200, 0);
-      // The offer, and nothing moved while it was being asked — «nada se mueve al empezar».
-      await expect(frame.getByText("Esta sección viene colocada de serie")).toBeVisible();
+      /**
+       * **The element follows the hand, and the question waits for the release** (sprint 41 día 3,
+       * amending ADR 0048 §7's «nada se mueve al empezar» into «nada se mueve sin tu sí»). While the
+       * hand is down there is no offer yet; on release it asks, with the headline held where the
+       * hand left it and the document untouched. «Mejor no» puts it back and writes nothing — the
+       * door's own walk, sprint 41 día 3, is where the «sí» lands the element.
+       */
+      await expect(frame.getByText("Esta sección viene colocada de serie")).toHaveCount(0);
       await page.mouse.up();
+      await expect(frame.getByText("Esta sección viene colocada de serie")).toBeVisible();
+      expect(await placedIn(frame, "sec-cover")).toEqual(beforeOffer);
+      const heldBox = await headline.boundingBox();
+      expect(
+        Math.abs((heldBox?.x ?? 0) - (beforeBox?.x ?? 0) - 200),
+        "el titular no quedó donde lo dejó la mano",
+      ).toBeLessThanOrEqual(2);
+      await frame.locator(".rb-escalate-no").click();
+      await expect
+        .poll(async () => Math.abs(((await headline.boundingBox())?.x ?? 0) - (beforeBox?.x ?? 0)))
+        .toBeLessThanOrEqual(1);
       expect(await placedIn(frame, "sec-cover")).toEqual(beforeOffer);
 
-      // ---- accept it, and the section becomes one with placements of its own ----
+      // ---- accept it from the verb, and the section becomes one with placements of its own ----
+      await cover.click({ position: { x: 8, y: 8 } });
+      await frame.locator('.rb-action[aria-label="Diseñar a mano"]').first().click();
+      await expect(frame.getByText("Esta sección viene colocada de serie")).toBeVisible();
       await escalated(frame, async () => {
         await frame.locator(".rb-escalate-yes").click();
       });
@@ -33590,6 +33611,226 @@ describe("sprint 41 día 2 — los lados estiran y las esquinas escalan", () => 
       // No `$`: the live region appends a zero-width space on every other sentence so that the same
       // words twice are read twice (ADR 0049 §3).
       await expect(page.locator('p[role="status"]')).toHaveText(/^Foto: \d+ × \d+ px/);
+    } finally {
+      await context.close();
+    }
+  }, 240_000);
+});
+
+/**
+ * **Sprint 41 día 3 — la puerta donde está la mano** (David's option B, planning the sprint; notes in
+ * ADR 0048 §7 and ADR 0025 §7). In a section the catalog draws, a drag or a pull used to ask the
+ * moment the hand moved and nothing followed the hand. Now the element follows, the question is asked
+ * on release with the element held where the hand left it, and «Diseñar a mano» escalates the section
+ * and lands the element there in one step: «nada se mueve sin tu sí».
+ */
+describe("sprint 41 día 3 — la puerta donde está la mano", () => {
+  const VIEWPORT = { width: 1280, height: 900 };
+  const offer = (frame: FrameLocator) => frame.getByText("Esta sección viene colocada de serie");
+
+  /** The frame's pixel per screen pixel, so a hand's travel on the screen is read in the frame. */
+  const inFrame = async (page: Page, screenPx: number) => screenPx / (await canvasZoom(page));
+
+  it("el botón sigue a la mano, la oferta llega al soltar, y con el sí aterriza donde lo dejó; «Mejor no» y Esc lo devuelven", async () => {
+    const context = await browser.newContext({ viewport: VIEWPORT });
+    const page = await context.newPage();
+    try {
+      await intoTheCanvas(page);
+      await studioToolsOn(page);
+      const frame = page.frameLocator(PREVIEW).first();
+      const cover = frame.locator('[data-section="sec-cover"]');
+      const button = cover.locator('[data-role="button"]').first();
+      const buttonId = (await button.getAttribute("data-id")) ?? "";
+      expect(buttonId, "la portada no tiene botón").not.toBe("");
+      await expect(cover).not.toHaveClass(/rb-free/);
+
+      const before = await boxesInSection(frame, "sec-cover");
+      const serialBefore = await editSerialOf(page);
+      const DX = 90;
+      const DY = 110;
+
+      // ---- «Mejor no»: the button follows the hand, the offer asks on release, and «no» puts it back ----
+      const from = await pointIn(button);
+      await carry(page, from, { x: from.x + DX, y: from.y + DY }, false);
+      // While the hand is down: the element has travelled, and nobody has been asked yet.
+      await expect(offer(frame)).toHaveCount(0);
+      const travelled = await boxOf(frame, "sec-cover", buttonId);
+      const was = before.find((box) => box.id === buttonId);
+      expect(
+        Math.abs((travelled?.x ?? 0) - (was?.x ?? 0) - (await inFrame(page, DX))),
+        "el botón no siguió a la mano",
+      ).toBeLessThanOrEqual(2);
+      await page.mouse.up();
+      await expect(offer(frame)).toBeVisible();
+      await expect(page.getByText(/lo que has movido se queda donde lo has soltado/)).toBeVisible();
+      // Still held where the hand left it (the lean of the carry is gone, so the box is read
+      // again rather than compared with the one read mid-flight), still a catalog section,
+      // nothing written.
+      const heldBox = await boxOf(frame, "sec-cover", buttonId);
+      expect(
+        Math.abs((heldBox?.x ?? 0) - (was?.x ?? 0) - (await inFrame(page, DX))),
+      ).toBeLessThanOrEqual(2);
+      expect(
+        Math.abs((heldBox?.y ?? 0) - (was?.y ?? 0) - (await inFrame(page, DY))),
+      ).toBeLessThanOrEqual(2);
+      await expect(cover).not.toHaveClass(/rb-free/);
+      expect(await editSerialOf(page)).toBe(serialBefore);
+      await frame.locator(".rb-escalate-no").click();
+      await expect(offer(frame)).toHaveCount(0);
+      await expect
+        .poll(async () =>
+          Math.abs(((await boxOf(frame, "sec-cover", buttonId))?.x ?? 0) - (was?.x ?? 0)),
+        )
+        .toBeLessThanOrEqual(1);
+      expect(await editSerialOf(page)).toBe(serialBefore);
+
+      // ---- Escape in the offer is the same «no» ----
+      await carry(page, from, { x: from.x + DX, y: from.y + DY });
+      await expect(offer(frame)).toBeVisible();
+      await page.keyboard.press("Escape");
+      await expect(offer(frame)).toHaveCount(0);
+      await expect
+        .poll(async () =>
+          Math.abs(((await boxOf(frame, "sec-cover", buttonId))?.x ?? 0) - (was?.x ?? 0)),
+        )
+        .toBeLessThanOrEqual(1);
+      expect(await editSerialOf(page)).toBe(serialBefore);
+
+      // ---- «sí»: escalated and landed, in one step ----
+      await carry(page, from, { x: from.x + DX, y: from.y + DY });
+      await expect(offer(frame)).toBeVisible();
+      const held = await boxOf(frame, "sec-cover", buttonId);
+      await escalated(frame, () => frame.locator(".rb-escalate-yes").click());
+      await waitForBankPhoto(frame);
+      await expect(cover).toHaveClass(/rb-free/);
+      const after = await boxesInSection(frame, "sec-cover");
+      const landed = after.find((box) => box.id === buttonId);
+      // Within a unit sideways and a row down of where the hand left it: the fine grid's step.
+      const step = await columnStepOf(frame, "sec-cover");
+      const unit = ((await inFrame(page, step)) - 16) / FINE_PER_COLUMN;
+      expect(
+        Math.abs((landed?.x ?? 0) - (held?.x ?? 0)),
+        `el botón aterrizó a ${(landed?.x ?? 0) - (held?.x ?? 0)} px de la mano a lo ancho`,
+      ).toBeLessThanOrEqual(unit);
+      expect(
+        Math.abs((landed?.y ?? 0) - (held?.y ?? 0)),
+        `el botón aterrizó a ${(landed?.y ?? 0) - (held?.y ?? 0)} px de la mano a lo alto`,
+      ).toBeLessThanOrEqual(ROW_STEP_PX);
+      // Everybody else stays where the catalog had them, to the measured escalation's four pixels.
+      for (const box of before) {
+        if (box.id === buttonId) continue;
+        const now = after.find((candidate) => candidate.id === box.id);
+        expect(
+          Math.abs((now?.x ?? 0) - box.x),
+          `${box.id} se movió a lo ancho`,
+        ).toBeLessThanOrEqual(1);
+        expect(Math.abs((now?.y ?? 0) - box.y), `${box.id} se movió a lo alto`).toBeLessThanOrEqual(
+          4,
+        );
+      }
+      // The button is the chosen one, so the next gesture has it.
+      await expect(button).toHaveClass(/rb-chosen/);
+
+      // ---- one «Deshacer» gives the catalog section back whole ----
+      await afterTheEdit(page, () =>
+        page.getByRole("button", { name: "Deshacer", exact: true }).click(),
+      );
+      await expect(cover).not.toHaveClass(/rb-free/);
+      const back = await boxOf(frame, "sec-cover", buttonId);
+      expect(Math.abs((back?.x ?? 0) - (was?.x ?? 0))).toBeLessThanOrEqual(1);
+      expect(Math.abs((back?.y ?? 0) - (was?.y ?? 0))).toBeLessThanOrEqual(1);
+    } finally {
+      await context.close();
+    }
+  }, 240_000);
+
+  it("un borde y una esquina del titular también preguntan, y con el sí la caja y la letra aterrizan", async () => {
+    const context = await browser.newContext({ viewport: VIEWPORT });
+    const page = await context.newPage();
+    try {
+      await intoTheCanvas(page);
+      await studioToolsOn(page);
+      const frame = page.frameLocator(PREVIEW).first();
+      const cover = frame.locator('[data-section="sec-cover"]');
+      const headline = cover.locator('[data-id="el-headline"]');
+      await headline.click();
+      await expect(headline).toHaveClass(/rb-chosen/);
+      const serialBefore = await editSerialOf(page);
+
+      // ---- the right edge: the cursor says so in a catalog section too, the outline previews ----
+      const box = await headline.boundingBox();
+      if (!box) throw new Error("el titular no está dibujado");
+      const right = { x: box.x + box.width - 2, y: box.y + 8 };
+      await page.mouse.move(right.x, right.y);
+      await expect.poll(() => cursorOn(headline)).toBe("ew-resize");
+      const step = await columnStepOf(frame, "sec-cover");
+      await page.mouse.move(right.x, right.y);
+      await page.mouse.down();
+      await page.mouse.move(right.x + step, right.y, { steps: 10 });
+      const outline = cover.locator(".rb-door");
+      await expect(outline).toHaveCount(1);
+      const asked = await outline.boundingBox();
+      expect(
+        Math.abs((asked?.x ?? 0) + (asked?.width ?? 0) - (right.x + step)),
+      ).toBeLessThanOrEqual(3);
+      await page.mouse.up();
+      await expect(offer(frame)).toBeVisible();
+      await expect(outline).toHaveCount(1);
+      expect(await editSerialOf(page)).toBe(serialBefore);
+      await escalated(frame, () => frame.locator(".rb-escalate-yes").click());
+      await expect(cover).toHaveClass(/rb-free/);
+      await expect(outline).toHaveCount(0);
+      const wider = await headline.boundingBox();
+      // The right edge where the hand left it, within a unit; the left edge where it was.
+      const unit = (step - 16 * (await canvasZoom(page))) / FINE_PER_COLUMN;
+      expect(
+        Math.abs((wider?.x ?? 0) + (wider?.width ?? 0) - (right.x + step)),
+        "el borde derecho no aterrizó donde la mano",
+      ).toBeLessThanOrEqual(unit + 1);
+      expect(Math.abs((wider?.x ?? 0) - box.x)).toBeLessThanOrEqual(1);
+      await afterTheEdit(page, () =>
+        page.getByRole("button", { name: "Deshacer", exact: true }).click(),
+      );
+      await expect(cover).not.toHaveClass(/rb-free/);
+
+      // ---- the south-east corner: the letter previews while held, and lands with the box ----
+      // Still chosen from the landing (the element stays the hand's): a click now would be the
+      // second one, which writes (ADR 0047), and a text being written in has a two-pixel zone.
+      if (!/rb-chosen/.test((await headline.getAttribute("class")) ?? "")) await headline.click();
+      await expect(headline).toHaveClass(/rb-chosen/);
+      await expect(headline).not.toHaveAttribute("contenteditable", "true");
+      const again = await headline.boundingBox();
+      if (!again) throw new Error("el titular no está dibujado");
+      const corner = { x: again.x + again.width - 2, y: again.y + again.height - 2 };
+      await page.mouse.move(corner.x, corner.y);
+      await expect.poll(() => cursorOn(headline)).toBe("nwse-resize");
+      const letterPx = () =>
+        headline.evaluate((el) => Number.parseFloat(getComputedStyle(el).fontSize));
+      expect(await letterPx()).toBe(40);
+      // Two edits since the walk began — the edge's landing and its undo — so the serial is read again.
+      const serialNow = await editSerialOf(page);
+      await page.mouse.move(corner.x, corner.y);
+      await page.mouse.down();
+      await page.mouse.move(corner.x + again.width * 0.3, corner.y + again.height * 0.3, {
+        steps: 10,
+      });
+      await expect.poll(letterPx).toBeGreaterThan(40);
+      await page.mouse.up();
+      await expect(offer(frame)).toBeVisible();
+      // Held: the preview stays while the question is open, and the document is untouched.
+      expect(await letterPx()).toBeGreaterThan(40);
+      expect(await editSerialOf(page)).toBe(serialNow);
+      await escalated(frame, () => frame.locator(".rb-escalate-yes").click());
+      await expect(cover).toHaveClass(/rb-free/);
+      const landedPx = await letterPx();
+      expect(Math.abs(landedPx - 52)).toBeLessThanOrEqual(1);
+      // From the document: the preview is gone and the size is the element's own.
+      expect(await headline.evaluate((el) => (el as HTMLElement).style.fontSize)).toBe("");
+      await afterTheEdit(page, () =>
+        page.getByRole("button", { name: "Deshacer", exact: true }).click(),
+      );
+      await expect(cover).not.toHaveClass(/rb-free/);
+      expect(await letterPx()).toBe(40);
     } finally {
       await context.close();
     }
