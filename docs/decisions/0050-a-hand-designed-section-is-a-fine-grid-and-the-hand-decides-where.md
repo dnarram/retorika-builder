@@ -394,6 +394,12 @@ funcionan los cuadros de texto insertados en un documento de Word)».
 
 ### 1. A zone and a cursor, no handles with a mouse
 
+> **Amended by [ADR 0082](0082-the-sides-stretch-the-box-and-the-corners-scale-what-is-inside.md)
+> (sprint 41 día 2, 25 November 2026):** the four sides still stretch the box as this section says;
+> a **corner** of a text scales its letter with the box following, and a corner of a photograph
+> scales the photograph with its shape. Only a list's, a field's and an embed's corner still
+> stretches the box on both axes. The zone, the cursors and the guides for a side are unchanged.
+
 Six pixels either side of the border of the element the hand is already working on — the chosen one,
 written in or not — and the pointer changes to one of the platform's four (`ew-resize`, `ns-resize`,
 `nwse-resize`, `nesw-resize`). That is David's own prescription, and the reason is in it: «para que
@@ -627,6 +633,12 @@ Two of David's four conditions close here, and neither of them is visible on thi
 el solape».
 
 ### 1. Forty-four pixels, on the chosen element, and only where there is a finger
+
+> **Amended by [ADR 0082](0082-the-sides-stretch-the-box-and-the-corners-scale-what-is-inside.md)
+> (sprint 41 día 2):** a corner handle is a second door to the same gesture, so on a text or a
+> photograph it scales rather than stretches. An element small enough to get corners only can
+> therefore only be scaled by a finger; stretching it stays «Colocación»'s, as this section already
+> names for the element whose handles meet over it.
 
 A finger is about eleven millimetres wide, so the ±6 px zone of día 4 is not a target it can hit at
 all — it would only steal the drag the finger already has. Under `(pointer: coarse)` the chosen

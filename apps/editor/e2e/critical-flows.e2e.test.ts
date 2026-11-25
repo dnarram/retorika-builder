@@ -18781,19 +18781,6 @@ describe("sprint 25 día 4 — los bordes estiran la caja", () => {
     return page.frameLocator(PREVIEW).first();
   }
 
-  /** El cursor que el editor ha puesto en el elemento, que es todo el aviso que hay. */
-  function cursorOn(target: Locator): Promise<string> {
-    return target.evaluate((node) => getComputedStyle(node as HTMLElement).cursor);
-  }
-
-  /** Arrastra desde un punto, en pasos, y suelta. */
-  async function pull(page: Page, from: Point, dx: number, dy: number): Promise<void> {
-    await page.mouse.move(from.x, from.y);
-    await page.mouse.down();
-    await page.mouse.move(from.x + dx, from.y + dy, { steps: 10 });
-    await page.mouse.up();
-  }
-
   it("ensancha por el borde derecho, mueve por el izquierdo, y el cursor lo dice", async () => {
     const context = await browser.newContext({ viewport: VIEWPORT });
     const page = await context.newPage();
@@ -19610,12 +19597,19 @@ describe("sprint 25 día 7 — las asas en táctil, y el móvil sin solape", () 
       await expect(section.locator(".rb-handle")).toHaveCount(0);
       await expect(frame.locator(".rb-chosen")).toHaveCount(0);
 
-      // ---- un dedo en el asa de abajo a la derecha estira la caja ----
+      // ---- un dedo en el asa de la esquina escala la letra y la caja (ADR 0082, sprint 41 día 2) ----
+      // Until sprint 41 the corner stretched: sixteen exact units, the same number día 4 got from
+      // the mouse. A corner on a text now scales what is inside — the handle is still the same door
+      // to the same `begin`, which is why the gesture's meaning changed here the day it changed
+      // for the mouse. A headline this size has corners only (`handles.ts`), so by finger it can only
+      // be scaled; the stretch by finger is measured on the photograph's side handle below.
       await headline.tap();
       await expect(headline).toHaveClass(/rb-chosen/);
       const before = (await placedIn(frame, "sec-cover")).find((e) => e.id === "el-headline");
       expect(before, "el titular no tiene colocación").toBeDefined();
-      const step = await columnStepOf(frame, "sec-cover");
+      const letterPx = () =>
+        headline.evaluate((el) => Number.parseFloat(getComputedStyle(el).fontSize));
+      expect(await letterPx()).toBe(40);
 
       const corner = section.locator(".rb-handle-se");
       await corner.scrollIntoViewIfNeeded();
@@ -19624,56 +19618,83 @@ describe("sprint 25 día 7 — las asas en táctil, y el móvil sin solape", () 
         x: (spot?.x ?? 0) + (spot?.width ?? 0) / 2,
         y: (spot?.y ?? 0) + (spot?.height ?? 0) / 2,
       };
-      // Desde dónde tira la mano: el asa está centrada en la esquina de la caja azul, que es dónde
+      // A third of the box again, along its diagonal, on the screen: the factor asked for is 1.3.
+      const headBox = await headline.boundingBox();
+      const FACTOR = 1.3;
+      await finger(context, page, grab, {
+        x: grab.x + (headBox?.width ?? 0) * (FACTOR - 1),
+        y: grab.y + (headBox?.height ?? 0) * (FACTOR - 1),
+      });
+      const placedNow = async () =>
+        (await placedIn(frame, "sec-cover")).find((e) => e.id === "el-headline");
+      await expect
+        .poll(letterPx, { message: "el asa de la esquina no escaló la letra" })
+        .toBeGreaterThan(40);
+      expect(Math.abs((await letterPx()) - 40 * FACTOR)).toBeLessThanOrEqual(1);
+      const scaled = await placedNow();
+      expect(
+        Math.abs((scaled?.columnSpan ?? 0) - Math.round((before?.columnSpan ?? 0) * FACTOR)),
+        "la caja no siguió a la letra a lo ancho",
+      ).toBeLessThanOrEqual(1);
+      expect(
+        Math.abs((scaled?.rowSpan ?? 0) - Math.round((before?.rowSpan ?? 0) * FACTOR)),
+        "la caja no siguió a la letra a lo alto",
+      ).toBeLessThanOrEqual(1);
+      expect(scaled?.column, "la esquina de abajo movió el borde izquierdo").toBe(before?.column);
+      expect(scaled?.row, "la esquina de abajo movió el borde superior").toBe(before?.row);
+
+      // Un gesto, un paso: la letra y la caja vuelven con el mismo «Deshacer».
+      await page.getByRole("button", { name: "Deshacer", exact: true }).click();
+      await expect.poll(letterPx, { message: "la letra no volvió" }).toBe(40);
+      expect(await placedNow()).toEqual(before);
+
+      // ---- un dedo en el asa de un lado estira la caja: la foto, que es grande y tiene lados ----
+      const photo = frame.locator('[data-section="sec-cover"] [data-id="el-image"]');
+      await photo.focus();
+      await expect(photo).toHaveClass(/rb-chosen/);
+      const photoBefore = (await placedIn(frame, "sec-cover")).find((e) => e.id === "el-image");
+      const side = section.locator(".rb-handle-bottom");
+      await expect(side, "la foto no ofrece el asa de abajo").toBeAttached();
+      await side.scrollIntoViewIfNeeded();
+      const sideSpot = await side.boundingBox();
+      const sideGrab = {
+        x: (sideSpot?.x ?? 0) + (sideSpot?.width ?? 0) / 2,
+        y: (sideSpot?.y ?? 0) + (sideSpot?.height ?? 0) / 2,
+      };
+      // Desde dónde tira la mano: el asa está centrada en el borde de la caja azul, que es dónde
       // el dedo aterriza y por tanto dónde empieza la cuenta hacia abajo.
-      const held = await boxOf(frame, "sec-cover", "el-headline");
+      const held = await boxOf(frame, "sec-cover", "el-image");
       const DROP = 120;
       // El dedo baja 120 px de pantalla; el área se mide en el marco, donde eso es `120 / zoom`.
       const zoom = await canvasZoom(page);
-      await finger(context, page, grab, { x: grab.x + step * 2, y: grab.y + DROP });
-
-      const placedNow = async () =>
-        (await placedIn(frame, "sec-cover")).find((e) => e.id === "el-headline");
-      /**
-       * **Dieciséis unidades exactas**, que es el mismo número que el día 4 saca del ratón: el asa
-       * es una puerta más al redimensionado, no otro redimensionado — `resizeTo` es la misma
-       * función pura y `begin` el mismo gesto, y lo que cambia es que un dedo aterriza en un
-       * objetivo de cuarenta y cuatro en vez de cerca de una línea de seis.
-       */
+      await finger(context, page, sideGrab, { x: sideGrab.x, y: sideGrab.y + DROP });
+      const photoNow = async () =>
+        (await placedIn(frame, "sec-cover")).find((e) => e.id === "el-image");
       await expect
-        .poll(async () => (await placedNow())?.columnSpan, {
-          message: "el asa no ensanchó dos columnas",
-        })
-        .toBe((before?.columnSpan ?? 0) + 2 * FINE_PER_COLUMN);
-      const pulled = await placedNow();
-      expect(pulled?.column, "la esquina de abajo movió el borde izquierdo").toBe(before?.column);
-      expect(pulled?.row, "la esquina de abajo movió el borde superior").toBe(before?.row);
+        .poll(async () => (await photoNow())?.rowSpan, { message: "el asa no estiró hacia abajo" })
+        .toBeGreaterThan(photoBefore?.rowSpan ?? 0);
+      const pulled = await photoNow();
+      expect(pulled?.column, "el asa de abajo movió el borde izquierdo").toBe(photoBefore?.column);
+      expect(pulled?.columnSpan, "el asa de abajo cambió el ancho").toBe(photoBefore?.columnSpan);
+      expect(pulled?.row, "el asa de abajo movió el borde superior").toBe(photoBefore?.row);
       /**
        * **Y hacia abajo el área acaba donde estaba la mano, con la precisión de una fila** — la
        * mitad vertical, que el día 4 asevera en las pruebas de `resizeTo` y no en el navegador.
-       *
-       * Se mide el área y no el `rowSpan`, y eso es la caminata habiendo aprendido algo: la
-       * primera versión tiraba cuarenta y ocho píxeles y aseveraba que las filas crecían, y no
-       * crecían — el área del titular ya era cuarenta y cuatro píxeles más alta que su caja azul
-       * (la carrera de la tipografía, arriba), así que el tirón entero cabía dentro de lo que ya
-       * estaba reservado. Contar filas habría dado un número que no significa nada; el fondo del
-       * área siguiendo al dedo es lo que David pidió.
+       * Se mide el área y no el `rowSpan` (la foto acaba cuatro píxeles por encima de su área, como
+       * la caminata del ratón del día 4 cuenta), y el fondo del área siguiendo al dedo es lo que
+       * David pidió.
        */
-      const bottom = await areaBottomOf(frame, "el-headline");
-      expect(pulled?.rowSpan ?? 0, "el área no creció hacia abajo").toBeGreaterThan(
-        before?.rowSpan ?? 0,
-      );
+      const bottom = await areaBottomOf(frame, "el-image");
       expect(
         Math.abs(bottom - ((held?.y ?? 0) + (held?.h ?? 0) + DROP / zoom)),
         "el fondo del área no acabó donde la mano",
       ).toBeLessThanOrEqual(ROW_STEP_PX);
 
-      // Un gesto, un paso: el ancho y el alto vuelven con el mismo «Deshacer».
+      // Un gesto, un paso.
       await page.getByRole("button", { name: "Deshacer", exact: true }).click();
       await expect
-        .poll(async () => (await placedNow())?.columnSpan, { message: "el ancho no volvió" })
-        .toBe(before?.columnSpan);
-      expect((await placedNow())?.rowSpan, "el alto volvió en otro paso").toBe(before?.rowSpan);
+        .poll(async () => (await photoNow())?.rowSpan, { message: "el alto no volvió" })
+        .toBe(photoBefore?.rowSpan);
     } finally {
       await context.close();
     }
@@ -26026,6 +26047,20 @@ async function rowGround(frame: FrameLocator) {
   return left > right
     ? { x: box.x + left / 2, y: first.y + first.height / 2 }
     : { x: (last.x + last.width + box.x + box.width) / 2, y: last.y + last.height / 2 };
+}
+
+/** The cursor the editor has put on an element, which is all the notice there is of an edge. */
+function cursorOn(target: Locator): Promise<string> {
+  return target.evaluate((node) => getComputedStyle(node as HTMLElement).cursor);
+}
+
+/** Pull from a point, in steps, and let go — an edge or a corner of the chosen element's box.
+ * Shared by the sprint 25 día 4 walks and sprint 41's since día 2, when the corner's meaning changed. */
+async function pull(page: Page, from: Point, dx: number, dy: number): Promise<void> {
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move(from.x + dx, from.y + dy, { steps: 10 });
+  await page.mouse.up();
 }
 
 /** Press, cross the threshold, travel to `to` and, unless told otherwise, let go. */
@@ -33334,4 +33369,229 @@ describe("sprint 41 día 1b — la lista se coge por cualquier tarjeta", () => {
       await context.close();
     }
   }, 180_000);
+});
+
+/**
+ * **Sprint 41 día 2 — los lados estiran y las esquinas escalan** (ADR 0082). David's own words
+ * planning the sprint: «La esquina de un texto escala la letra», «La esquina de la foto escala la
+ * foto (puede hacerla más pequeña o más grande)… estilo Canva». A side still does what sprint 25
+ * día 4 built; a corner scales what is inside the box, and the box with it, in one step.
+ */
+describe("sprint 41 día 2 — los lados estiran y las esquinas escalan", () => {
+  const VIEWPORT = { width: 1280, height: 900 };
+
+  async function handDesigned(page: Page): Promise<FrameLocator> {
+    await intoTheCanvas(page);
+    await studioToolsOn(page);
+    const frame = page.frameLocator(PREVIEW).first();
+    await frame.locator('[data-section="sec-cover"]').click();
+    await escalated(frame, async () => {
+      await frame.locator('.rb-action[aria-label="Diseñar a mano"]').first().click();
+      await frame.locator(".rb-escalate-yes").click();
+    });
+    await waitForBankPhoto(frame);
+    await fontsReady(frame);
+    return page.frameLocator(PREVIEW).first();
+  }
+
+  /** The letter as drawn, the inline preview (empty once committed), and how many lines. */
+  function letterOf(target: Locator) {
+    return target.evaluate((node) => {
+      const el = node as HTMLElement;
+      const style = getComputedStyle(el);
+      return {
+        px: Number.parseFloat(style.fontSize),
+        inline: el.style.fontSize,
+        lines: Math.round(el.getBoundingClientRect().height / Number.parseFloat(style.lineHeight)),
+      };
+    });
+  }
+
+  /** What the document stores for the headline's own size, polled: autosave is debounced. */
+  function storedSizeOf(page: Page, elementId: string) {
+    return page.evaluate((id) => {
+      const raw = localStorage.getItem("retorika.session.v1");
+      if (!raw) return null;
+      const session = JSON.parse(raw) as {
+        openIndex: number;
+        documents: {
+          pages: { sections: { content: { id: string; style?: { fontSize?: unknown } }[] }[] }[];
+        }[];
+      };
+      const element = session.documents[session.openIndex]?.pages[0]?.sections[0]?.content.find(
+        (c) => c.id === id,
+      );
+      return element?.style?.fontSize ?? null;
+    }, elementId);
+  }
+
+  const placed = async (frame: FrameLocator, id: string) =>
+    (await placedIn(frame, "sec-cover")).find((e) => e.id === id);
+
+  it("escala la letra y la caja por la esquina, el lado no toca la letra, y el imán escribe la referencia", async () => {
+    const context = await browser.newContext({ viewport: VIEWPORT });
+    const page = await context.newPage();
+    try {
+      const frame = await handDesigned(page);
+      const headline = frame.locator('[data-section="sec-cover"] [data-id="el-headline"]');
+      await headline.click();
+      await expect(headline).toHaveClass(/rb-chosen/);
+      const before = await placed(frame, "el-headline");
+      const letterBefore = await letterOf(headline);
+      expect(before, "el titular no tiene colocación").toBeDefined();
+      // The heading's size at the default scale, with no size of its own.
+      expect(letterBefore.px).toBe(40);
+      expect(await storedSizeOf(page, "el-headline")).toBeNull();
+
+      // ---- the south-east corner: the cursor says a corner, and the pull is along the diagonal ----
+      const box = await headline.boundingBox();
+      if (!box) throw new Error("el titular no está dibujado");
+      const corner = { x: box.x + box.width - 2, y: box.y + box.height - 2 };
+      await page.mouse.move(corner.x, corner.y);
+      await expect.poll(() => cursorOn(headline)).toBe("nwse-resize");
+      // A third of the box again, along its own diagonal: the factor the hand asks for is 1.3.
+      const FACTOR = 1.3;
+      await afterTheEdit(page, () =>
+        pull(page, corner, box.width * (FACTOR - 1), box.height * (FACTOR - 1)),
+      );
+
+      // The letter × 1.3, the box × 1.3, and the same lines — bigger, not rewrapped.
+      const letterAfter = await letterOf(headline);
+      expect(Math.abs(letterAfter.px - 40 * FACTOR)).toBeLessThanOrEqual(1);
+      // From the document, not from the preview: the inline size the gesture drew with is gone.
+      expect(letterAfter.inline).toBe("");
+      await expect
+        .poll(() => storedSizeOf(page, "el-headline"), { timeout: 10_000 })
+        .toEqual({ exact: `${letterAfter.px}px`, exception: true });
+      const after = await placed(frame, "el-headline");
+      expect(
+        Math.abs((after?.columnSpan ?? 0) - Math.round((before?.columnSpan ?? 0) * FACTOR)),
+      ).toBeLessThanOrEqual(1);
+      expect(
+        Math.abs((after?.rowSpan ?? 0) - Math.round((before?.rowSpan ?? 0) * FACTOR)),
+      ).toBeLessThanOrEqual(1);
+      expect(after?.column).toBe(before?.column);
+      expect(after?.row).toBe(before?.row);
+      expect(letterAfter.lines).toBe(letterBefore.lines);
+      await expect(page.locator('p[role="status"]')).toHaveText(`Letra: ${letterAfter.px} px`);
+
+      // ---- one gesture, one step: «Deshacer» gives back the letter and the box together ----
+      await afterTheEdit(page, () =>
+        page.getByRole("button", { name: "Deshacer", exact: true }).click(),
+      );
+      expect((await letterOf(headline)).px).toBe(40);
+      expect(await placed(frame, "el-headline")).toEqual(before);
+      await expect.poll(() => storedSizeOf(page, "el-headline"), { timeout: 10_000 }).toBeNull();
+
+      // ---- the right side still stretches the box and leaves the letter alone ----
+      await headline.click();
+      await expect(headline).toHaveClass(/rb-chosen/);
+      const step = await columnStepOf(frame, "sec-cover");
+      const sideBox = await headline.boundingBox();
+      if (!sideBox) throw new Error("el titular no está dibujado");
+      const right = { x: sideBox.x + sideBox.width - 2, y: sideBox.y + 8 };
+      await page.mouse.move(right.x, right.y);
+      await expect.poll(() => cursorOn(headline)).toBe("ew-resize");
+      await afterTheEdit(page, () => pull(page, right, step, 0));
+      expect((await placed(frame, "el-headline"))?.columnSpan).toBe(
+        (before?.columnSpan ?? 0) + FINE_PER_COLUMN,
+      );
+      expect((await letterOf(headline)).px).toBe(40);
+      await afterTheEdit(page, () =>
+        page.getByRole("button", { name: "Deshacer", exact: true }).click(),
+      );
+
+      // ---- the magnet: a hand that lands near the subheading's 24 px writes the reference ----
+      await headline.click();
+      await expect(headline).toHaveClass(/rb-chosen/);
+      const again = await headline.boundingBox();
+      if (!again) throw new Error("el titular no está dibujado");
+      const nw = { x: again.x + 2, y: again.y + 2 };
+      await page.mouse.move(nw.x, nw.y);
+      await expect.poll(() => cursorOn(headline)).toBe("nwse-resize");
+      // 40 × 0.61 = 24.4: within two pixels of the subheading's 24.
+      const SHRINK = 0.61;
+      await afterTheEdit(page, () =>
+        pull(page, nw, again.width * (1 - SHRINK), again.height * (1 - SHRINK)),
+      );
+      expect((await letterOf(headline)).px).toBe(24);
+      await expect
+        .poll(() => storedSizeOf(page, "el-headline"), { timeout: 10_000 })
+        .toEqual({ ref: "size.subheading" });
+      await expect(page.locator('p[role="status"]')).toHaveText("Letra: Mediano");
+      // The north-west corner moved the start and left the far edge where it was.
+      const shrunk = await placed(frame, "el-headline");
+      expect((shrunk?.column ?? 0) + (shrunk?.columnSpan ?? 0)).toBe(
+        (before?.column ?? 0) + (before?.columnSpan ?? 0),
+      );
+      expect((shrunk?.row ?? 0) + (shrunk?.rowSpan ?? 0)).toBe(
+        (before?.row ?? 0) + (before?.rowSpan ?? 0),
+      );
+    } finally {
+      await context.close();
+    }
+  }, 240_000);
+
+  it("escala mientras se escribe sin perder una palabra, y la esquina de la foto conserva su proporción", async () => {
+    const context = await browser.newContext({ viewport: VIEWPORT });
+    const page = await context.newPage();
+    try {
+      const frame = await handDesigned(page);
+      const headline = frame.locator('[data-section="sec-cover"] [data-id="el-headline"]');
+
+      // ---- writing: the words first, then the letter and the box (ADR 0050 día 4's order) ----
+      await headline.click();
+      await intoWriting(headline);
+      await page.keyboard.type("Mesas en la plaza");
+      await expect(headline).toHaveText("Mesas en la plaza");
+      const box = await headline.boundingBox();
+      if (!box) throw new Error("el titular no está dibujado");
+      // Three pixels outside the corner: the writing zone's generous half.
+      const outside = { x: box.x + box.width + 3, y: box.y + box.height + 3 };
+      await page.mouse.move(outside.x, outside.y);
+      await expect.poll(() => cursorOn(headline)).toBe("nwse-resize");
+      await afterTheEdit(page, () => pull(page, outside, box.width * 0.3, box.height * 0.3));
+      const written = frame.locator('[data-section="sec-cover"] [data-id="el-headline"]');
+      await expect(written).toHaveText("Mesas en la plaza");
+      await expect(written).toHaveAttribute("contenteditable", "true");
+      await expect
+        .poll(() => written.evaluate((el) => Number.parseFloat(getComputedStyle(el).fontSize)))
+        .toBeGreaterThan(40);
+      await page.keyboard.press("Escape");
+
+      // ---- the photograph: the corner keeps its shape, half the box is half the photo ----
+      const photo = frame.locator('[data-section="sec-cover"] [data-id="el-image"]');
+      await photo.focus();
+      await expect(photo).toHaveClass(/rb-chosen/);
+      const before = await placed(frame, "el-image");
+      const shape = await photo.boundingBox();
+      if (!shape) throw new Error("la foto no está dibujada");
+      const corner = { x: shape.x + shape.width - 2, y: shape.y + shape.height - 2 };
+      await page.mouse.move(corner.x, corner.y);
+      await expect.poll(() => cursorOn(photo)).toBe("nwse-resize");
+      await afterTheEdit(page, () => pull(page, corner, -shape.width / 2, -shape.height / 2));
+      const after = await placed(frame, "el-image");
+      expect(
+        Math.abs((after?.columnSpan ?? 0) - Math.round((before?.columnSpan ?? 0) / 2)),
+      ).toBeLessThanOrEqual(1);
+      expect(
+        Math.abs((after?.rowSpan ?? 0) - Math.round((before?.rowSpan ?? 0) / 2)),
+      ).toBeLessThanOrEqual(1);
+      expect(after?.column).toBe(before?.column);
+      expect(after?.row).toBe(before?.row);
+      // The photograph itself: half as wide, the same shape (the catalog's 4:3 until día 4).
+      const grown = frame.locator('[data-section="sec-cover"] [data-id="el-image"]');
+      const now = await grown.boundingBox();
+      if (!now) throw new Error("la foto no está dibujada");
+      expect(Math.abs(now.width / shape.width - 0.5)).toBeLessThanOrEqual(0.08);
+      expect(Math.abs(now.height / now.width - shape.height / shape.width)).toBeLessThanOrEqual(
+        0.03,
+      );
+      // No `$`: the live region appends a zero-width space on every other sentence so that the same
+      // words twice are read twice (ADR 0049 §3).
+      await expect(page.locator('p[role="status"]')).toHaveText(/^Foto: \d+ × \d+ px/);
+    } finally {
+      await context.close();
+    }
+  }, 240_000);
 });
