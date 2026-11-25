@@ -4352,7 +4352,7 @@ describe("sprint 10 día 7 — el recorrido completo del sprint", () => {
         "Comer, Muy beber <script>bad()</script> y quedarse un rato",
       );
 
-      // ---- day 6: an exact size big enough to overflow at 320px, on purpose ----
+      // ---- day 6: an exact size, and an exact spacing big enough to overflow at 320px ----
       await studio.getByRole("switch", { name: "Herramientas de diseño" }).click();
       await studio.getByRole("button", { name: "Sí, enciéndelas" }).click();
 
@@ -4364,6 +4364,20 @@ describe("sprint 10 día 7 — el recorrido completo del sprint", () => {
       await expect(studio.getByText("Guardado en este navegador")).toBeVisible();
       await expect
         .poll(() => headline.evaluate((el) => getComputedStyle(el).fontSize))
+        .toBe("200px");
+      /*
+       * **The letter alone no longer overflows on a phone** (ADR 0083, sprint 41 día 1a): an exact
+       * size above the theme's heading comes down to it under 720 px. Until then this walk overflowed
+       * with the 200 px letter, which was the defect; the spacing is what a person can still push
+       * past a phone's edge, and `padding` is where the box itself grows rather than its words.
+       */
+      const paddingInput = frame.locator('.rb-toolbar-exact[aria-label^="Espaciado"]');
+      await headline.click();
+      await paddingInput.fill("200");
+      await paddingInput.dispatchEvent("change");
+      await expect(studio.getByText("Guardado en este navegador")).toBeVisible();
+      await expect
+        .poll(() => headline.evaluate((el) => getComputedStyle(el).padding))
         .toBe("200px");
 
       // ---- the download: the photo warning first, then the overflow warning, and a cautious
@@ -4392,14 +4406,15 @@ describe("sprint 10 día 7 — el recorrido completo del sprint", () => {
       await studio.getByRole("button", { name: "Volver", exact: true }).click();
       await expect(studio.getByText("Algo se sale en el móvil")).toHaveCount(0);
 
-      // Fixed, by dropping the exception — back to the system's own size.
+      // Fixed, by dropping the spacing's exception — back to the system's own.
       await headline.click();
-      await sizeInput.fill("");
-      await sizeInput.dispatchEvent("change");
+      await paddingInput.fill("");
+      await paddingInput.dispatchEvent("change");
       await expect(studio.getByText("Guardado en este navegador")).toBeVisible();
 
       // A fresh press re-evaluates from the document as it now stands (`requestDownload`'s own
-      // contract) rather than remembering the overflow that no longer exists.
+      // contract) rather than remembering the overflow that no longer exists — and the 200 px
+      // letter, still in the document, is not one (ADR 0083).
       await studio.getByRole("button", { name: "Descargar", exact: true }).click();
       const photoWarning = studio.getByRole("button", { name: "Descargar igualmente" });
       await photoWarning.waitFor();
@@ -4451,12 +4466,20 @@ describe("sprint 10 día 7 — el recorrido completo del sprint", () => {
         await expect(publishedSub.locator("strong")).toHaveCount(1);
         await expect(publishedSub.locator("em")).toHaveCount(1);
 
-        // The exact size was dropped, not merely overridden: the published headline is back to
-        // whatever size.subheading resolves to for this palette, not a literal 200px.
-        const headlineFontSize = await offlinePage
-          .locator('[data-id="el-headline"]')
-          .evaluate((el) => getComputedStyle(el).fontSize);
-        expect(headlineFontSize).not.toBe("200px");
+        // The spacing's exception was dropped, not merely overridden: the published headline's
+        // padding is the system's again, not a literal 200px. The letter stays as written on a
+        // computer — this page is 1280 wide — and only a phone brings it down (ADR 0083).
+        const publishedHeadline = offlinePage.locator('[data-id="el-headline"]');
+        expect(await publishedHeadline.evaluate((el) => getComputedStyle(el).padding)).not.toBe(
+          "200px",
+        );
+        expect(await publishedHeadline.evaluate((el) => getComputedStyle(el).fontSize)).toBe(
+          "200px",
+        );
+        await offlinePage.setViewportSize({ width: 390, height: 844 });
+        await expect
+          .poll(() => publishedHeadline.evaluate((el) => getComputedStyle(el).fontSize))
+          .not.toBe("200px");
 
         // And the whole promise ADR 0001 makes: every byte the page needed was inside the ZIP.
         expect(failed).toEqual([]);
@@ -16621,9 +16644,11 @@ describe("nada sobresale en un móvil", () => {
       {
         kind: "overflows",
         title: "Algo se sale en el móvil",
-        // 200 px, which is what the sprint 10 walk types into the toolbar's size field: the
-        // renderer breaks a long word rather than letting it run out, so a word alone does not.
-        doc: () => styled({ fontSize: { exact: "200px", exception: true } }),
+        // 200 px of exact spacing, which is what the sprint 10 walk types into the toolbar's
+        // «Espaciado»: the box itself grows past the phone. Not a letter: the renderer breaks a long
+        // word rather than letting it run out, and since ADR 0083 an exact letter above the heading
+        // comes down to it on a phone, so a letter alone does not.
+        doc: () => styled({ padding: { exact: "200px", exception: true } }),
       },
       {
         kind: "textOverText",
