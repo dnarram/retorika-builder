@@ -77,6 +77,20 @@ function checkSection(section: Section, path: string, violations: Violation[]): 
         message: `column ${placement.column} + span ${placement.columnSpan} overflows the ${columns}-unit grid`,
       });
     }
+
+    // A shape is a photograph's (ADR 0084): `aspect-ratio` on a text would clip its words, and on a
+    // list it would crop its cards. Refused here rather than ignored by the renderer, so a document
+    // that says it is never one the page quietly disagrees with.
+    if (placement.ratio !== undefined) {
+      const element = elements.find((candidate) => candidate.id === placement.elementId);
+      if (element && element.value?.kind !== "image") {
+        violations.push({
+          rule: 4,
+          path: `${at}.ratio`,
+          message: `element "${placement.elementId}" is not a photograph, and only a photograph has a shape`,
+        });
+      }
+    }
   }
 
   // Rule 7: a patch is a difference against the desktop, so it can only refer to

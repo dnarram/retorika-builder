@@ -292,3 +292,55 @@ describe("an exact letter on a phone (ADR 0083)", () => {
     }
   });
 });
+
+/**
+ * **A photograph's shape and its point, as the browser draws them** (ADR 0084, sprint 41 día 4). The
+ * claims are about specificity and geometry: the shape outranks the catalog's 4:3, the crop is a
+ * crop and not a squash, the point is the one stored, and a phone draws the shape at its limit.
+ */
+describe("a photograph's shape and its point (ADR 0084)", () => {
+  /** The photograph's box and the three properties that decide what it shows. */
+  function photo(page: Page, elementId: string) {
+    return page.evaluate((id) => {
+      const el = document.querySelector<HTMLImageElement>(`[data-id="${id}"]`);
+      if (!el) throw new Error(`no photograph ${id}`);
+      const box = el.getBoundingClientRect();
+      const style = getComputedStyle(el);
+      return {
+        ratio: box.width / box.height,
+        fit: style.objectFit,
+        position: style.objectPosition,
+      };
+    }, elementId);
+  }
+
+  it("keeps the shape given by hand over the catalog's, crops it, and keeps its point", async () => {
+    const page = await open(fixture("foto-con-forma"), 1280);
+    try {
+      const cover = await photo(page, "el-image");
+      // 4:1, where `.rb-cover img` alone would draw 4:3.
+      expect(cover.ratio).toBeCloseTo(4, 1);
+      expect(cover.fit).toBe("cover");
+      expect(cover.position).toBe("30% 70%");
+      // A card's photograph keeps the team's square and takes its own point.
+      const member = await photo(page, "el-member-1-photo");
+      expect(member.ratio).toBeCloseTo(1, 1);
+      expect(member.position).toBe("50% 20%");
+      // And a photograph with no point is still centred.
+      expect((await photo(page, "el-member-2-photo")).position).toBe("50% 50%");
+    } finally {
+      await page.context().close();
+    }
+  });
+
+  it("draws a shape wider than 3:1 at 3:1 on a phone", async () => {
+    const page = await open(fixture("foto-con-forma"), 390);
+    try {
+      const cover = await photo(page, "el-image");
+      expect(cover.ratio).toBeCloseTo(3, 1);
+      expect(cover.position).toBe("30% 70%");
+    } finally {
+      await page.context().close();
+    }
+  });
+});

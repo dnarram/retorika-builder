@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "1.22.0",
+  "schemaVersion": "1.23.0",
   "document": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
@@ -1579,6 +1579,26 @@
                                   "type": "integer",
                                   "minimum": 1,
                                   "maximum": 9007199254740991
+                                },
+                                "ratio": {
+                                  "type": "object",
+                                  "properties": {
+                                    "width": {
+                                      "type": "integer",
+                                      "minimum": 1,
+                                      "maximum": 9999
+                                    },
+                                    "height": {
+                                      "type": "integer",
+                                      "minimum": 1,
+                                      "maximum": 9999
+                                    }
+                                  },
+                                  "required": [
+                                    "width",
+                                    "height"
+                                  ],
+                                  "additionalProperties": false
                                 }
                               },
                               "required": [
@@ -1997,6 +2017,26 @@
                   "sample": {
                     "type": "string",
                     "minLength": 1
+                  },
+                  "focus": {
+                    "type": "object",
+                    "properties": {
+                      "x": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 100
+                      },
+                      "y": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 100
+                      }
+                    },
+                    "required": [
+                      "x",
+                      "y"
+                    ],
+                    "additionalProperties": false
                   }
                 },
                 "required": [

@@ -18,6 +18,7 @@ import {
   revertPlanFor,
   revertSection,
   setMobilePatch,
+  setPhotoShape,
   setPlacement,
 } from "../src/index.ts";
 import { type Theme, TOKEN_KEYS } from "../src/tokens.ts";
@@ -763,5 +764,89 @@ describe("rule 7 — the three mobile adjustments", () => {
       expect(mobilePatchFor(free(), "sec-nope", "el-b")).toBeUndefined();
       expect(mobilePatchFor(free(), "sec-demo", "el-nope")).toBeUndefined();
     });
+  });
+});
+
+describe("setPhotoShape — a photograph's shape, given by hand (ADR 0084)", () => {
+  /** The demo preset with a photograph beside the heading, so a placement can carry a shape. */
+  const withPhoto: PresetShape = {
+    ...preset,
+    slots: [...preset.slots, { slot: "image", role: "image", min: 0, max: 1 }],
+  };
+  const photo: ContentElement = {
+    id: "el-p",
+    role: "image",
+    hidden: false,
+    slot: "image",
+    value: { kind: "image", src: "assets/foto.jpg", alt: "Una foto" },
+  };
+  const free = () =>
+    escalateSection(
+      documentWith({ ...section(), content: [...section().content, photo] }),
+      "sec-demo",
+      withPhoto,
+    );
+  const shapeOf = (doc: RetorikaDocument) =>
+    sectionOf(doc, "sec-demo")?.layout?.placements.find((p) => p.elementId === "el-p")?.ratio;
+
+  it("writes the shape in its lowest terms, and leaves the four numbers alone", () => {
+    const before = free();
+    const after = setPhotoShape(before, "sec-demo", "el-p", { width: 448, height: 300 });
+    expect(shapeOf(after)).toEqual({ width: 112, height: 75 });
+    const { ratio: _shape, ...numbers } =
+      sectionOf(after, "sec-demo")?.layout?.placements.find((p) => p.elementId === "el-p") ?? {};
+    expect(numbers).toEqual(
+      sectionOf(before, "sec-demo")?.layout?.placements.find((p) => p.elementId === "el-p"),
+    );
+  });
+
+  it("is no change when the same shape comes back, however it is written", () => {
+    const shaped = setPhotoShape(free(), "sec-demo", "el-p", { width: 16, height: 9 });
+    expect(setPhotoShape(shaped, "sec-demo", "el-p", { width: 32, height: 18 })).toBe(shaped);
+  });
+
+  it("gives back the catalog's shape with undefined, and an untouched photograph has none", () => {
+    expect(shapeOf(free())).toBeUndefined();
+    const shaped = setPhotoShape(free(), "sec-demo", "el-p", { width: 3, height: 1 });
+    expect(shapeOf(setPhotoShape(shaped, "sec-demo", "el-p", undefined))).toBeUndefined();
+  });
+
+  it("keeps the shape through a move, which spreads the four numbers and nothing else", () => {
+    const shaped = setPhotoShape(free(), "sec-demo", "el-p", { width: 4, height: 1 });
+    const edit: PlacementEdit = { columnSpan: 40, row: 5 };
+    expect(shapeOf(setPlacement(shaped, "sec-demo", "el-p", edit))).toEqual({
+      width: 4,
+      height: 1,
+    });
+  });
+
+  it("refuses a catalog section, a text, a missing placement and a shape of zero", () => {
+    const catalog = documentWith({ ...section(), content: [...section().content, photo] });
+    expect(() => setPhotoShape(catalog, "sec-demo", "el-p", { width: 4, height: 3 })).toThrow(
+      /drawn by the catalog/,
+    );
+    expect(() => setPhotoShape(free(), "sec-demo", "el-h", { width: 4, height: 3 })).toThrow(
+      /not a photograph/,
+    );
+    expect(() => setPhotoShape(free(), "sec-demo", "el-x", { width: 4, height: 3 })).toThrow(
+      /no placement/,
+    );
+    expect(() => setPhotoShape(free(), "sec-demo", "el-p", { width: 0, height: 3 })).toThrow(
+      /width must be a whole number/,
+    );
+  });
+
+  it("goes with the layout when the section goes back to the catalog", () => {
+    const shaped = setPhotoShape(free(), "sec-demo", "el-p", { width: 4, height: 1 });
+    expect(sectionOf(revertSection(shaped, "sec-demo", withPhoto), "sec-demo")?.layout).toBeNull();
+  });
+
+  it("is refused by the document on anything but a photograph (rule 4)", () => {
+    const shaped = setPhotoShape(free(), "sec-demo", "el-p", { width: 4, height: 3 });
+    const forged = JSON.parse(JSON.stringify(shaped)) as RetorikaDocument;
+    const placements = forged.pages[0]?.sections[0]?.layout?.placements ?? [];
+    const onText = placements.find((p) => p.elementId === "el-h");
+    if (onText) Object.assign(onText, { ratio: { width: 4, height: 3 } });
+    expect(() => parseDocument(forged)).toThrow(/only a photograph has a shape/);
   });
 });

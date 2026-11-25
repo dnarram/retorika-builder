@@ -7,6 +7,7 @@ import {
   mobilePatchFor,
   mobileSequence,
   type Placement,
+  type PlacementEdit,
   type RetorikaDocument,
 } from "@retorika/schema";
 
@@ -170,9 +171,7 @@ export function rowBelowPlacements(doc: RetorikaDocument, sectionId: string): nu
   );
 }
 
-export function boundsFor(
-  placement: Placement,
-): Record<keyof Omit<Placement, "elementId">, StepperBounds> {
+export function boundsFor(placement: Placement): Record<keyof PlacementEdit, StepperBounds> {
   return {
     column: { min: 1, max: FINE_COLUMNS - placement.columnSpan + 1 },
     columnSpan: { min: 1, max: FINE_COLUMNS - placement.column + 1 },
@@ -193,7 +192,7 @@ export function boundsFor(
  */
 export function stepTo(
   placement: Placement,
-  field: keyof Omit<Placement, "elementId">,
+  field: keyof PlacementEdit,
   delta: number,
 ): number | undefined {
   const bounds = boundsFor(placement)[field];

@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fisioterapia Ribera — foto con forma</title>
+<meta property="og:title" content="Fisioterapia Ribera — foto con forma">
+<style>
+:root {
+  --color-accent: #FF3A72;
+  --color-ink: #0F172A;
+  --color-muted: #475569;
+  --color-primary: #156FE7;
+  --color-secondary: #105CB1;
+  --color-surface: #FFFFFF;
+  --font-body: system-ui, sans-serif;
+  --font-heading: Georgia, serif;
+  --radius-lg: 16px;
+  --radius-md: 8px;
+  --radius-sm: 4px;
+  --size-body: 1rem;
+  --size-heading: 2.5rem;
+  --size-subheading: 1.5rem;
+  --space-lg: 24px;
+  --space-md: 16px;
+  --space-sm: 8px;
+  --space-xl: 48px;
+  --space-xs: 4px;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; font-family: var(--font-body); color: var(--color-ink);
+  background: var(--color-surface); }
+html { --rb-measure: 1200px; }
+.rb-section { display: grid; grid-template-columns: repeat(12, 1fr);
+  gap: var(--space-md); align-items: center;
+  padding: calc(1.5 * var(--space-xl)) max(var(--space-xl), calc((100% - var(--rb-measure)) / 2)); }
+.rb-section img { width: 100%; height: auto; border-radius: var(--radius-lg); }
+.rb-section :is(h1, h2, h3, h4, h5, h6, p, a) { overflow-wrap: break-word; }
+.rb-section :is(h1, h2, h3, h4, h5, h6, p.rb-subtitle) { -webkit-hyphens: auto;
+  hyphens: auto; }
+.rb-section h1 { font-family: var(--font-heading); font-size: var(--size-heading);
+  color: var(--color-primary); margin: 0; line-height: 1.15; letter-spacing: -0.01em;
+  text-wrap: balance; }
+.rb-section h2 { font-family: var(--font-heading); font-size: var(--size-subheading);
+  color: var(--color-secondary); margin: 0; line-height: 1.15; letter-spacing: -0.01em;
+  text-wrap: balance; }
+.rb-section p.rb-subtitle { font-family: var(--font-heading);
+  font-size: var(--size-subheading); color: var(--color-secondary); margin: 0; }
+.rb-section h3 { font-family: var(--font-heading); font-size: var(--size-body);
+  color: var(--color-ink); margin: 0; }
+.rb-list { display: grid; gap: var(--space-md); margin: 0; padding: 0; list-style: none;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); }
+.rb-item { display: flex; flex-direction: column; gap: var(--space-xs);
+  padding-top: var(--space-sm); border-top: 1px solid var(--color-muted); }
+.rb-prices .rb-list { grid-template-columns: 1fr; gap: var(--space-sm); }
+.rb-gallery .rb-item img { aspect-ratio: 4 / 3; object-fit: cover; }
+.rb-team .rb-item img { aspect-ratio: 1 / 1; object-fit: cover; }
+.rb-cover img { aspect-ratio: 4 / 3; object-fit: cover; object-position: center; }
+.rb-cover.rb-image-background img { aspect-ratio: 3 / 2; }
+.rb-section p { font-size: var(--size-body); color: var(--color-muted); margin: 0;
+  line-height: 1.6; }
+.rb-section a:not([role=button]) { color: var(--color-primary); text-decoration: underline; }
+.rb-section [role=button] { display: inline-block; padding: var(--space-sm) var(--space-lg);
+  background: var(--color-primary); color: var(--color-surface); font-family: var(--font-heading);
+  font-weight: 700; border-radius: 999px; text-decoration: none; }
+.rb-panel { align-self: stretch; margin: calc(-1.5 * var(--space-md)); z-index: 1;
+  background: var(--color-surface); border-radius: var(--radius-lg); pointer-events: none;
+  box-shadow: 0 24px 48px -24px color-mix(in srgb, var(--color-ink) 40%, transparent); }
+.rb-panel ~ :not(img) { z-index: 2; }
+
+html { --rb-ease: cubic-bezier(0.2, 0, 0, 1); --rb-fast: 200ms; --rb-base: 400ms; }
+@keyframes rb-rise { from { opacity: 0; transform: translateY(16px); } }
+@keyframes rb-reveal { from { transform: translateY(16px); } }
+@media (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: view()) {
+    main > .rb-section:not(:first-child) > * { animation: rb-reveal linear none;
+      animation-timeline: view(); animation-range: entry 0% entry 160px;
+      overflow-anchor: none; }
+  }
+  main > .rb-cover:first-child > :is(h1, p, a[role=button]) {
+    animation: rb-rise var(--rb-base) var(--rb-ease) backwards;
+    animation-delay: var(--rb-delay, 0ms); overflow-anchor: none; }
+  main > .rb-cover:first-child > p { --rb-delay: 80ms; }
+  main > .rb-cover:first-child > a[role=button] { --rb-delay: 160ms; }
+  @view-transition { navigation: auto; }
+  ::view-transition-old(root), ::view-transition-new(root) { animation-duration: var(--rb-fast); }
+  .rb-section [role=button] { transition: transform var(--rb-fast) var(--rb-ease),
+    box-shadow var(--rb-fast) var(--rb-ease); }
+}
+@media (hover: hover) {
+  .rb-section [role=button]:hover { transform: translateY(-1px); box-shadow: 0 8px 24px -16px var(--color-ink); }
+}
+
+@media (max-width: 720px) {
+  .rb-section { grid-template-columns: 1fr; padding: var(--space-lg); }
+  .rb-section > * { grid-column: 1 / -1 !important; grid-row: auto !important; }
+  .rb-section > img { order: -1; }
+  .rb-panel { display: none; }
+}
+
+.rb-section.rb-free { grid-template-columns: repeat(11, minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) var(--space-md)) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
+  column-gap: 0; row-gap: 0; grid-auto-rows: minmax(8px, auto);
+  align-items: start; }
+@media (max-width: 720px) {
+  .rb-section.rb-free { grid-template-columns: 1fr; row-gap: var(--space-md);
+    grid-auto-rows: auto; }
+}
+
+/* a photograph's shape and the point its crop keeps (ADR 0084) */
+  [data-section="sec-cover"] [data-id="el-image"][data-role] { aspect-ratio: 4 / 1; object-fit: cover; object-position: 30% 70%; }
+  [data-section="sec-team"] [data-id="el-member-1-photo"][data-role] { object-position: 50% 20%; }
+
+/* on a phone, a shape between 3:4 and 3:1 */
+@media (max-width: 720px) {
+  [data-section="sec-cover"] [data-id="el-image"][data-role] { aspect-ratio: 3 / 1; }
+}
+
+@media (max-width: 720px) {
+  [data-section="sec-cover"] [data-id="el-body"] { order: 3; }
+  [data-section="sec-cover"] [data-id="el-image"] { order: 2; }
+  [data-section="sec-cover"] [data-id="el-headline"] { order: 1; }
+}
+</style>
+</head>
+<body>
+<main class="rb-page" data-page="home" id="rb-main">
+  <section class="rb-section rb-cover rb-image-right rb-free" data-preset="cover" data-section="sec-cover" data-variant="image-right" id="sec-cover">
+    <h1 data-id="el-headline" data-role="heading" data-slot="headline" style="grid-column:46/span 62;grid-row:1/span 1">
+      Vuelve a moverte sin dolor
+    </h1>
+    <p data-id="el-body" data-role="body" data-slot="body" style="grid-column:46/span 62;grid-row:4/span 1">
+      Sesiones de cuarenta y cinco minutos, primera valoración incluida.
+    </p>
+    <img alt="Sala de tratamiento" data-id="el-image" data-role="image" data-slot="image" src="assets/physio.svg" style="grid-column:1/span 44;grid-row:1/span 7">
+  </section>
+  <section class="rb-section rb-team rb-stacked" data-preset="team" data-section="sec-team" data-variant="stacked" id="sec-team">
+    <h2 data-id="el-team-headline" data-role="heading" data-slot="headline" style="grid-column:1/span 12;grid-row:1/span 1">
+      Quién te atiende
+    </h2>
+    <p data-id="el-team-intro" data-role="body" data-slot="intro" style="grid-column:1/span 8;grid-row:2/span 1">
+      El equipo de la clínica.
+    </p>
+    <ul class="rb-list" data-id="el-members" data-role="list" data-slot="members" role="list" style="grid-column:1/span 12;grid-row:3/span 1">
+      <li class="rb-item" data-item="item-1">
+        <img alt="Rosario, en la consulta" data-id="el-member-1-photo" data-role="image" data-slot="photo" loading="lazy" src="assets/rosario.svg">
+        <h3 data-id="el-member-1-name" data-role="heading" data-slot="name">
+          Rosario Martín
+        </h3>
+        <p data-id="el-member-1-job" data-role="body" data-slot="job">
+          Fisioterapeuta y dueña
+        </p>
+      </li>
+      <li class="rb-item" data-item="item-2">
+        <img alt="Pedro, en recepción" data-id="el-member-2-photo" data-role="image" data-slot="photo" loading="lazy" src="assets/pedro.svg">
+        <h3 data-id="el-member-2-name" data-role="heading" data-slot="name">
+          Pedro Salas
+        </h3>
+      </li>
+    </ul>
+  </section>
+</main>
+</body>
+</html>

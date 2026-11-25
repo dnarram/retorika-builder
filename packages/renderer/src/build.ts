@@ -977,6 +977,95 @@ function elementStyleCss(doc: RetorikaDocument): string[] {
   ];
 }
 
+/** The narrowest and the widest a shaped photograph is drawn on a phone (ADR 0084): a tall strip at
+ * the phone's full width would be three screens of one picture, and a thin band would be a line. */
+const PHONE_RATIO_MIN = { width: 3, height: 4 };
+const PHONE_RATIO_MAX = { width: 3, height: 1 };
+
+/**
+ * **A photograph's shape and the point its crop keeps** (ADR 0084, sprint 41 día 4).
+ *
+ * Two facts the document stores and this stylesheet draws, per photograph and only where they are:
+ *
+ * - a placement's `ratio` — the shape given by hand in a hand-designed section — becomes
+ *   `aspect-ratio: W / H; object-fit: cover`, so the photograph keeps that shape at every width,
+ *   cropped rather than squashed, where `.rb-section img` would otherwise hand it its own;
+ * - an image's `focus` becomes `object-position: X% Y%`, which is what decides what a cropped
+ *   photograph shows — the shaped one, and the ones the catalog already crops (the cover's 4:3,
+ *   a gallery's 4:3, a team's square), where `object-position: center` was the only answer.
+ *
+ * The same `(0,3,0)` selector as rule 6's own block, which outranks the catalog's `(0,2,1)` crops
+ * (`.rb-cover.rb-image-background img`, `.rb-gallery .rb-item img`) without one `!important`, and
+ * none of the three properties is `width`, `display` or `order`: «Foto menor» still narrows a shaped
+ * photograph on a phone, and its height follows. **On a phone a shape outside 3:4 – 3:1 is drawn at
+ * the nearer limit**, in a query after the rule it patches. A hidden photograph draws nothing and
+ * gets no rule; a document with neither fact publishes exactly the bytes it did.
+ */
+function photoShapeCss(doc: RetorikaDocument): string[] {
+  const rules: string[] = [];
+  const phone: string[] = [];
+
+  const walk = (
+    sectionId: string,
+    elements: readonly ContentElement[],
+    shapes: ReadonlyMap<string, { readonly width: number; readonly height: number }>,
+  ): void => {
+    for (const el of elements) {
+      if (!el.hidden && el.value?.kind === "image") {
+        const ratio = shapes.get(el.id);
+        const focus = el.value.focus;
+        const declarations = [
+          ...(ratio ? [`aspect-ratio: ${ratio.width} / ${ratio.height}`, "object-fit: cover"] : []),
+          ...(focus ? [`object-position: ${focus.x}% ${focus.y}%`] : []),
+        ];
+        if (declarations.length > 0) {
+          const selector =
+            `[data-section="${cssAttributeValue(sectionId)}"] ` +
+            `[data-id="${cssAttributeValue(el.id)}"][data-role]`;
+          rules.push(`  ${selector} { ${declarations.join("; ")}; }`);
+          if (ratio) {
+            const wide =
+              ratio.width * PHONE_RATIO_MAX.height > PHONE_RATIO_MAX.width * ratio.height;
+            const tall =
+              ratio.width * PHONE_RATIO_MIN.height < PHONE_RATIO_MIN.width * ratio.height;
+            const limit = wide ? PHONE_RATIO_MAX : tall ? PHONE_RATIO_MIN : null;
+            if (limit)
+              phone.push(`  ${selector} { aspect-ratio: ${limit.width} / ${limit.height}; }`);
+          }
+        }
+      }
+      for (const item of el.items ?? []) walk(sectionId, item.elements, shapes);
+    }
+  };
+
+  for (const page of doc.pages) {
+    for (const section of page.sections) {
+      const shapes = new Map(
+        (section.layout?.placements ?? []).flatMap((placement) =>
+          placement.ratio ? [[placement.elementId, placement.ratio] as const] : [],
+        ),
+      );
+      walk(section.id, section.content, shapes);
+    }
+  }
+
+  if (rules.length === 0) return [];
+  return [
+    "/* a photograph's shape and the point its crop keeps (ADR 0084) */",
+    ...rules,
+    "",
+    ...(phone.length === 0
+      ? []
+      : [
+          "/* on a phone, a shape between 3:4 and 3:1 */",
+          "@media (max-width: 720px) {",
+          ...phone,
+          "}",
+          "",
+        ]),
+  ];
+}
+
 /**
  * **The page's own motion** (ADR 0062, sprint 32 día 2): a closed vocabulary, with no byte of script.
  *
@@ -1266,6 +1355,7 @@ export function buildCss(doc: RetorikaDocument, target: "html" | "dom"): string 
     // stylesheet should read in the order somebody would explain it.
     ...fineGridCss(doc),
     ...elementStyleCss(doc),
+    ...photoShapeCss(doc),
     ...breakpointCss(doc),
     // A background with motifs under a section or the site, with its veil (ADR 0081). Last, so its
     // own phone rule follows the shared one; `[]` for every document without one, which is every

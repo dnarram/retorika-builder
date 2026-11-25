@@ -72,7 +72,7 @@ function Stepper({
 }: {
   label: string;
   placement: Placement;
-  field: keyof Omit<Placement, "elementId">;
+  field: keyof PlacementEdit;
   onStep: (edit: PlacementEdit) => void;
 }) {
   const bounds = boundsFor(placement)[field];

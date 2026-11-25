@@ -196,8 +196,13 @@ export function revertImpact(
   };
 }
 
-/** The part of a placement a caller may change. `elementId` is which placement, not what it says. */
-export type PlacementEdit = Partial<Omit<Placement, "elementId">>;
+/**
+ * The part of a placement a caller may move: the four numbers of rule 4. `elementId` is which
+ * placement, not what it says; and a photograph's `ratio` is its shape, changed only by
+ * `setPhotoShape` — narrowed here on purpose (ADR 0084), so that a drag or a stepper, which build
+ * their edit from these four, cannot carry a shape along by accident or drop one by spreading.
+ */
+export type PlacementEdit = Partial<Pick<Placement, "column" | "columnSpan" | "row" | "rowSpan">>;
 
 /**
  * One element moved or resized inside its section's grid — what the professional came for.
@@ -283,6 +288,75 @@ export function setPlacement(
   ) {
     return doc;
   }
+
+  return withSection(doc, found.page.id, sectionId, {
+    ...found.section,
+    layout: {
+      ...layout,
+      placements: layout.placements.map((placement) =>
+        placement.elementId === elementId ? next : placement,
+      ),
+    },
+  });
+}
+
+/** The greatest common divisor, for a ratio written in its lowest terms. */
+function gcd(a: number, b: number): number {
+  return b === 0 ? a : gcd(b, a % b);
+}
+
+/**
+ * **A photograph given a shape by hand** (ADR 0084, sprint 41 día 4) — or, with `undefined`, given
+ * back the catalog's own.
+ *
+ * The ratio is written in its lowest terms, so the same shape is one value whatever two numbers
+ * the hand happened to produce: 448 × 300 and 112 × 75 are the same photograph. Refused for a
+ * section the catalog draws (it has no placements), for an element with none, and for an element
+ * that is not a photograph — `checkInvariants` would refuse the result anyway, and the caller is
+ * the one that needs to hear which. The same shape back is no change, so no step opens.
+ */
+export function setPhotoShape(
+  doc: RetorikaDocument,
+  sectionId: string,
+  elementId: string,
+  ratio: { readonly width: number; readonly height: number } | undefined,
+): RetorikaDocument {
+  const found = sectionOrThrow(doc, sectionId, "setPhotoShape");
+  const layout = found.section.layout;
+  if (layout === null) {
+    throw new Error(
+      `setPhotoShape: section "${sectionId}" is drawn by the catalog, so its photograph keeps the ` +
+        "catalog's shape. Design it by hand first (escalateSection).",
+    );
+  }
+  const current = layout.placements.find((placement) => placement.elementId === elementId);
+  if (!current) {
+    throw new Error(`setPhotoShape: element "${elementId}" has no placement in "${sectionId}"`);
+  }
+  const element = found.section.content.find((candidate) => candidate.id === elementId);
+  if (element?.value?.kind !== "image") {
+    throw new Error(`setPhotoShape: element "${elementId}" is not a photograph`);
+  }
+
+  let next: Placement;
+  if (ratio === undefined) {
+    const { ratio: _dropped, ...rest } = current;
+    next = rest;
+  } else {
+    for (const [field, value] of [
+      ["width", ratio.width],
+      ["height", ratio.height],
+    ] as const) {
+      if (!Number.isInteger(value) || value < 1) {
+        throw new Error(
+          `setPhotoShape: ${field} must be a whole number of at least 1, not ${value}`,
+        );
+      }
+    }
+    const divisor = gcd(ratio.width, ratio.height);
+    next = { ...current, ratio: { width: ratio.width / divisor, height: ratio.height / divisor } };
+  }
+  if (JSON.stringify(next.ratio) === JSON.stringify(current.ratio)) return doc;
 
   return withSection(doc, found.page.id, sectionId, {
     ...found.section,
