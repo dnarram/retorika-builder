@@ -28,7 +28,7 @@ import {
 } from "@retorika/schema";
 import { contrastRatio } from "@retorika/tokens";
 import type { NodeResult } from "axe-core";
-import { afterAll, beforeAll, describe, it } from "vitest";
+import { afterAll, beforeAll, it, describe as vitestDescribe } from "vitest";
 import { headerSnapshot } from "../../../packages/renderer/test/menu-checks.ts";
 import { canvasDocument } from "../audit/canvas-document.ts";
 import {
@@ -67,7 +67,8 @@ import {
   toolsRing,
 } from "../src/editor/radialMenu.ts";
 import { RAIL_ORDER } from "../src/editor/railLayout.ts";
-import { BASE_URL, QUESTIONNAIRE_URL, startEditorServer, stopEditorServer } from "./server.ts"; /**
+import { BASE_URL, QUESTIONNAIRE_URL, startEditorServer, stopEditorServer } from "./server.ts";
+import { inShard, parseShard, shardedDescribe } from "./shard.ts"; /**
  * The preview frame. One per editor, three on the landing page's cards.
  *
  * This was `iframe:not([data-buffered])` from 6 October 2026 until sprint 27 día 1, because
@@ -1083,10 +1084,19 @@ async function spillingInsideTheCanvas(
 let browser: Browser;
 let page: Page;
 
+/**
+ * Which half of the walks this job runs (`RETORIKA_E2E_SHARD`, `shard.ts`), and the `describe` that
+ * knows it. Every walk runs when the variable is unset, which is every local run.
+ */
+const SHARD = parseShard(process.env["RETORIKA_E2E_SHARD"]);
+const describe = shardedDescribe(vitestDescribe, SHARD);
+
 beforeAll(async () => {
   await startEditorServer();
   browser = await chromium.launch();
-  page = await (await browser.newContext()).newPage();
+  // Only the job that runs the journey gets the shared page: a block elsewhere that reached for it
+  // by mistake fails there by name, instead of passing locally and failing in the other half.
+  if (inShard(0, SHARD)) page = await (await browser.newContext()).newPage();
 }, 90_000);
 
 afterAll(async () => {
@@ -1219,7 +1229,7 @@ async function sessionHolds(
     .toBe(true);
 }
 
-describe("critical flow 1 — cuestionario hasta web generada", () => {
+describe.journey("critical flow 1 — cuestionario hasta web generada", () => {
   it("produces three real, generated sites from the five answers", async () => {
     await page.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
 
@@ -1253,7 +1263,7 @@ describe("critical flow 1 — cuestionario hasta web generada", () => {
   });
 });
 
-describe("critical flow 2 — edición de un texto y recarga", () => {
+describe.journey("critical flow 2 — edición de un texto y recarga", () => {
   it("commits a click-to-edit change and survives a reload", async () => {
     await page.getByText("Ver a tamaño real →").first().click();
     await sceneOver(page);
@@ -1321,7 +1331,7 @@ describe("critical flow 2 — edición de un texto y recarga", () => {
   });
 });
 
-describe("critical flow 3 — cambio de paleta", () => {
+describe.journey("critical flow 3 — cambio de paleta", () => {
   it("recolours the whole preview from the Estilo panel, and undo reverts it", async () => {
     const frame = page.frameLocator(PREVIEW).first();
     // `--color-primary` is what a click actually has to move for "recolours" to mean anything —
@@ -1449,7 +1459,7 @@ function listZipEntries(bytes: Uint8Array): string[] {
   return names;
 }
 
-describe("critical flow 5 — descarga del ZIP y el HTML abre sin servidor", () => {
+describe.journey("critical flow 5 — descarga del ZIP y el HTML abre sin servidor", () => {
   it("downloads a real ZIP and its index.html opens from disk with no server", async () => {
     // Two different things happen when this button is clicked, and each needs its own capture.
     // `Editor.tsx`'s download() does `fetch("/api/download")`, reads the response as a blob,
@@ -1520,7 +1530,7 @@ describe("critical flow 5 — descarga del ZIP y el HTML abre sin servidor", () 
  * document where the anchors resolve correctly, and the published ZIP genuinely works. The bug
  * lived in the one place none of them look: the editor's own canvas.
  */
-describe("regression — the preview is a canvas, not a browsable site", () => {
+describe.journey("regression — the preview is a canvas, not a browsable site", () => {
   it("does not navigate, or nest a second editor, when a menu entry is clicked", async () => {
     await page.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
     const frame = page.frameLocator(PREVIEW).first();
@@ -1582,7 +1592,7 @@ describe("regression — the preview is a canvas, not a browsable site", () => {
  * there» ran as a callback ref with a fresh identity, so it re-ran on every render and every
  * keystroke re-selected the whole field — typing «Nuestra carta» left the page called «a».
  */
-describe("regression — converting a section, and renaming the page it made", () => {
+describe.journey("regression — converting a section, and renaming the page it made", () => {
   it("adds a tab, leaves an avance, and lets the new page be renamed", async () => {
     await page.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
     const frame = page.frameLocator(PREVIEW).first();
@@ -1733,163 +1743,166 @@ describe("regression — converting a section, and renaming the page it made", (
  * through flow 6 already edited — so the ZIP this downloads is not a fresh fixture but the actual
  * accumulated state of a real editing session.
  */
-describe("día 7 — dos conversiones desde el editor, y el ZIP resultante abierto sin servidor", () => {
-  it("converts a second section, downloads, and every page's own navigation works from file://", async () => {
-    // The previous test left the canvas on the page the menu click switched to. Back to the first
-    // tab — home — because «Dónde estamos» is a section of the home page, not of that one.
-    const frame = page.frameLocator(PREVIEW).first();
-    await page.locator('[data-testid="page-tabs"] button').first().click();
-    await expect(frame.locator('[data-section="sec-cover"]')).toBeVisible();
+describe.journey(
+  "día 7 — dos conversiones desde el editor, y el ZIP resultante abierto sin servidor",
+  () => {
+    it("converts a second section, downloads, and every page's own navigation works from file://", async () => {
+      // The previous test left the canvas on the page the menu click switched to. Back to the first
+      // tab — home — because «Dónde estamos» is a section of the home page, not of that one.
+      const frame = page.frameLocator(PREVIEW).first();
+      await page.locator('[data-testid="page-tabs"] button').first().click();
+      await expect(frame.locator('[data-section="sec-cover"]')).toBeVisible();
 
-    const tabs = page.locator('[data-testid="page-tabs"] button');
-    await expect(tabs).toHaveCount(2);
+      const tabs = page.locator('[data-testid="page-tabs"] button');
+      await expect(tabs).toHaveCount(2);
 
-    await frame.locator('[data-section="sec-location"]').click();
-    await frame
-      .locator(
-        '[data-section="sec-location"] .rb-action[aria-label="Hacer página con esta sección"]',
-      )
-      .click();
+      await frame.locator('[data-section="sec-location"]').click();
+      await frame
+        .locator(
+          '[data-section="sec-location"] .rb-action[aria-label="Hacer página con esta sección"]',
+        )
+        .click();
 
-    await expect(tabs).toHaveCount(3);
-    await expect(tabs.nth(2)).toHaveText("Dónde estamos");
-    // The second avance gets its own id — `mintSectionId` tried "sec-avance" first and found it
-    // taken by day 6's conversion — and it shows the destination's own words, read at render time
-    // exactly as the first one does.
-    await expect(frame.locator('[data-section="sec-avance-2"]')).toContainText("Dónde estamos");
+      await expect(tabs).toHaveCount(3);
+      await expect(tabs.nth(2)).toHaveText("Dónde estamos");
+      // The second avance gets its own id — `mintSectionId` tried "sec-avance" first and found it
+      // taken by day 6's conversion — and it shows the destination's own words, read at render time
+      // exactly as the first one does.
+      await expect(frame.locator('[data-section="sec-avance-2"]')).toContainText("Dónde estamos");
 
-    // Same reason as flow 5: the cover is still the placeholder, so the warning opens first.
-    await page.getByRole("button", { name: "Descargar" }).click();
-    const downloadAnyway = page.getByRole("button", { name: "Descargar igualmente" });
-    await downloadAnyway.waitFor();
+      // Same reason as flow 5: the cover is still the placeholder, so the warning opens first.
+      await page.getByRole("button", { name: "Descargar" }).click();
+      const downloadAnyway = page.getByRole("button", { name: "Descargar igualmente" });
+      await downloadAnyway.waitFor();
 
-    const [download, response] = await Promise.all([
-      page.waitForEvent("download"),
-      page.waitForResponse((candidate) => candidate.url().includes("/api/download")),
-      downloadAnyway.click(),
-    ]);
-    expect(response.status()).toBe(200);
-
-    const dir = mkdtempSync(join(tmpdir(), "retorika-e2e-multipage-"));
-    const zipPath = join(dir, download.suggestedFilename());
-    await download.saveAs(zipPath);
-    const bytes = new Uint8Array(readFileSync(zipPath));
-
-    const entries = listZipEntries(bytes);
-    // The cover of a restaurante-bar site has been a bank photograph since 8 October 2026, so the
-    // bundle carries one file under `assets/`. **Asserted by shape, not by name**: which of the
-    // nine the seed picks is `pickIndex`'s business and would change under this test every time
-    // the sector grows. That there is exactly one, and that it is a sample rather than an upload,
-    // is what this walk has to say.
-    const samples = [...entries].filter((entry) => entry.startsWith("assets/muestra-"));
-    // Five since 12 October 2026: the cover and the bank's gallery of four (ADR 0039).
-    expect(samples).toHaveLength(1 + GALLERY_SAMPLE_COUNT);
-
-    // Exactly the files this document should produce: no sitemap.xml (no «Dirección de tu web»
-    // was typed in this walk; with one there would be, ADR 0029 amended 13 October 2026), no stray
-    // page, nothing from an earlier fixture — and, since
-    // sprint 11 day 6, the two faces this restaurant's type pair asks for **with the OFL text beside
-    // them**, which is the condition rather than a detail. And since sprint 28 day 4 the tab's icon
-    // at the root, which every page links (ADR 0054).
-    expect([...entries].filter((entry) => !entry.startsWith("assets/muestra-")).sort()).toEqual(
-      [
-        "donde-estamos.html",
-        "favicon.svg",
-        "fonts/OFL-EBGaramond.txt",
-        "fonts/eb-garamond-latin-400-normal.woff2",
-        "fonts/eb-garamond-latin-700-normal.woff2",
-        "index.html",
-        "que-ponemos.html",
-        "robots.txt",
-      ].sort(),
-    );
-
-    for (const entry of entries) {
-      const filePath = join(dir, entry);
-      mkdirSync(dirname(filePath), { recursive: true });
-      writeFileSync(filePath, extractFileBytes(bytes, entry));
-    }
-
-    const offlinePage = await (await browser.newContext()).newPage();
-    const failed: string[] = [];
-    offlinePage.on("requestfailed", (request) => failed.push(request.url()));
-    try {
-      await offlinePage.goto(`file://${join(dir, "index.html")}`, { waitUntil: "load" });
-      await expect(offlinePage).toHaveTitle("Taberna Santo Domingo");
-      await expect(offlinePage.locator("h1")).toHaveText(HEADLINE_EDIT);
-      /**
-       * **Two menus since ADR 0043, and what each one keeps.** Until sprint 23 this was one strip
-       * and the claim was ADR 0023's: converting a section moved nothing in it. Pages and anchors
-       * are two lists now, so the entry a conversion makes moves from one to the other — that is
-       * what the split gave up, and the ADR says so.
-       *
-       * What is still true, and is what these two assertions pin: the two pages keep the order
-       * their avances have on the home page, and the two sections that were not converted keep
-       * theirs.
-       */
-      await expect(offlinePage.locator('.rb-nav-wide nav[aria-label="Páginas"] a')).toHaveText([
-        "Nuestra carta",
-        "Dónde estamos",
+      const [download, response] = await Promise.all([
+        page.waitForEvent("download"),
+        page.waitForResponse((candidate) => candidate.url().includes("/api/download")),
+        downloadAnyway.click(),
       ]);
-      await expect(offlinePage.locator('.rb-nav-wide nav[aria-label="Secciones"] a')).toHaveText([
-        // By the short name of each kind, never by the heading (ADR 0057): the bank's gallery is
-        // «Galería», whatever its headline says. The contact section is not in the strip: it is the
-        // bar's one button, with the restaurant's own word for it (ADR 0059, día 5).
-        "Galería",
-      ]);
-      await expect(offlinePage.locator(".rb-header .rb-nav-action")).toHaveText("Reservar");
-      await expect(offlinePage.locator(".rb-header .rb-nav-action")).toHaveAttribute(
-        "href",
-        "#sec-contact",
-      );
-      // No «Inicio» on the page it would link to — a link that reloads the page you are on.
-      await expect(offlinePage.locator(".rb-nav-wide a", { hasText: "Inicio" })).toHaveCount(0);
+      expect(response.status()).toBe(200);
 
-      await Promise.all([
-        offlinePage.waitForURL(/que-ponemos\.html$/),
-        offlinePage.locator(".rb-nav-wide a", { hasText: "Nuestra carta" }).click(),
-      ]);
-      await expect(offlinePage).toHaveTitle("Nuestra carta — Taberna Santo Domingo");
-      // The page's own heading is the owner's real content — the services section's headline —
-      // and it is untouched by the rename: renaming a page changes the chrome that names it
-      // (the tab, the menu, the <title>), never the words the owner wrote on the page itself.
-      await expect(offlinePage.locator("h1")).toHaveText("Qué ponemos");
-      await expect(offlinePage.locator('.rb-nav-wide a[aria-current="page"]')).toHaveText(
-        "Nuestra carta",
+      const dir = mkdtempSync(join(tmpdir(), "retorika-e2e-multipage-"));
+      const zipPath = join(dir, download.suggestedFilename());
+      await download.saveAs(zipPath);
+      const bytes = new Uint8Array(readFileSync(zipPath));
+
+      const entries = listZipEntries(bytes);
+      // The cover of a restaurante-bar site has been a bank photograph since 8 October 2026, so the
+      // bundle carries one file under `assets/`. **Asserted by shape, not by name**: which of the
+      // nine the seed picks is `pickIndex`'s business and would change under this test every time
+      // the sector grows. That there is exactly one, and that it is a sample rather than an upload,
+      // is what this walk has to say.
+      const samples = [...entries].filter((entry) => entry.startsWith("assets/muestra-"));
+      // Five since 12 October 2026: the cover and the bank's gallery of four (ADR 0039).
+      expect(samples).toHaveLength(1 + GALLERY_SAMPLE_COUNT);
+
+      // Exactly the files this document should produce: no sitemap.xml (no «Dirección de tu web»
+      // was typed in this walk; with one there would be, ADR 0029 amended 13 October 2026), no stray
+      // page, nothing from an earlier fixture — and, since
+      // sprint 11 day 6, the two faces this restaurant's type pair asks for **with the OFL text beside
+      // them**, which is the condition rather than a detail. And since sprint 28 day 4 the tab's icon
+      // at the root, which every page links (ADR 0054).
+      expect([...entries].filter((entry) => !entry.startsWith("assets/muestra-")).sort()).toEqual(
+        [
+          "donde-estamos.html",
+          "favicon.svg",
+          "fonts/OFL-EBGaramond.txt",
+          "fonts/eb-garamond-latin-400-normal.woff2",
+          "fonts/eb-garamond-latin-700-normal.woff2",
+          "index.html",
+          "que-ponemos.html",
+          "robots.txt",
+        ].sort(),
       );
 
-      await Promise.all([
-        offlinePage.waitForURL(/index\.html$/),
-        offlinePage.locator(".rb-nav-wide a", { hasText: "Inicio" }).click(),
-      ]);
-      await expect(offlinePage.locator("h1")).toHaveText(HEADLINE_EDIT);
+      for (const entry of entries) {
+        const filePath = join(dir, entry);
+        mkdirSync(dirname(filePath), { recursive: true });
+        writeFileSync(filePath, extractFileBytes(bytes, entry));
+      }
 
-      await Promise.all([
-        offlinePage.waitForURL(/donde-estamos\.html$/),
-        offlinePage.locator(".rb-nav-wide a", { hasText: "Dónde estamos" }).click(),
-      ]);
-      await expect(offlinePage).toHaveTitle("Dónde estamos — Taberna Santo Domingo");
-      await expect(offlinePage.locator("h1")).toHaveText("Dónde estamos");
-      await expect(offlinePage.getByText("Cta. de Santo Domingo, 2, Ronda")).toBeVisible();
-      await expect(offlinePage.locator('.rb-nav-wide a[aria-current="page"]')).toHaveText(
-        "Dónde estamos",
-      );
+      const offlinePage = await (await browser.newContext()).newPage();
+      const failed: string[] = [];
+      offlinePage.on("requestfailed", (request) => failed.push(request.url()));
+      try {
+        await offlinePage.goto(`file://${join(dir, "index.html")}`, { waitUntil: "load" });
+        await expect(offlinePage).toHaveTitle("Taberna Santo Domingo");
+        await expect(offlinePage.locator("h1")).toHaveText(HEADLINE_EDIT);
+        /**
+         * **Two menus since ADR 0043, and what each one keeps.** Until sprint 23 this was one strip
+         * and the claim was ADR 0023's: converting a section moved nothing in it. Pages and anchors
+         * are two lists now, so the entry a conversion makes moves from one to the other — that is
+         * what the split gave up, and the ADR says so.
+         *
+         * What is still true, and is what these two assertions pin: the two pages keep the order
+         * their avances have on the home page, and the two sections that were not converted keep
+         * theirs.
+         */
+        await expect(offlinePage.locator('.rb-nav-wide nav[aria-label="Páginas"] a')).toHaveText([
+          "Nuestra carta",
+          "Dónde estamos",
+        ]);
+        await expect(offlinePage.locator('.rb-nav-wide nav[aria-label="Secciones"] a')).toHaveText([
+          // By the short name of each kind, never by the heading (ADR 0057): the bank's gallery is
+          // «Galería», whatever its headline says. The contact section is not in the strip: it is the
+          // bar's one button, with the restaurant's own word for it (ADR 0059, día 5).
+          "Galería",
+        ]);
+        await expect(offlinePage.locator(".rb-header .rb-nav-action")).toHaveText("Reservar");
+        await expect(offlinePage.locator(".rb-header .rb-nav-action")).toHaveAttribute(
+          "href",
+          "#sec-contact",
+        );
+        // No «Inicio» on the page it would link to — a link that reloads the page you are on.
+        await expect(offlinePage.locator(".rb-nav-wide a", { hasText: "Inicio" })).toHaveCount(0);
 
-      await Promise.all([
-        offlinePage.waitForURL(/index\.html$/),
-        offlinePage.locator(".rb-nav-wide a", { hasText: "Inicio" }).click(),
-      ]);
-      await expect(offlinePage.locator("h1")).toHaveText(HEADLINE_EDIT);
+        await Promise.all([
+          offlinePage.waitForURL(/que-ponemos\.html$/),
+          offlinePage.locator(".rb-nav-wide a", { hasText: "Nuestra carta" }).click(),
+        ]);
+        await expect(offlinePage).toHaveTitle("Nuestra carta — Taberna Santo Domingo");
+        // The page's own heading is the owner's real content — the services section's headline —
+        // and it is untouched by the rename: renaming a page changes the chrome that names it
+        // (the tab, the menu, the <title>), never the words the owner wrote on the page itself.
+        await expect(offlinePage.locator("h1")).toHaveText("Qué ponemos");
+        await expect(offlinePage.locator('.rb-nav-wide a[aria-current="page"]')).toHaveText(
+          "Nuestra carta",
+        );
 
-      // The whole round trip — three pages, five navigations, zero requests to anything but the
-      // files sitting on disk next to each other. This is ADR 0001's promise, extended by this
-      // sprint from "one page opens" to "every page's own links actually go somewhere real".
-      expect(failed).toEqual([]);
-    } finally {
-      await offlinePage.context().close();
-    }
-  });
-});
+        await Promise.all([
+          offlinePage.waitForURL(/index\.html$/),
+          offlinePage.locator(".rb-nav-wide a", { hasText: "Inicio" }).click(),
+        ]);
+        await expect(offlinePage.locator("h1")).toHaveText(HEADLINE_EDIT);
+
+        await Promise.all([
+          offlinePage.waitForURL(/donde-estamos\.html$/),
+          offlinePage.locator(".rb-nav-wide a", { hasText: "Dónde estamos" }).click(),
+        ]);
+        await expect(offlinePage).toHaveTitle("Dónde estamos — Taberna Santo Domingo");
+        await expect(offlinePage.locator("h1")).toHaveText("Dónde estamos");
+        await expect(offlinePage.getByText("Cta. de Santo Domingo, 2, Ronda")).toBeVisible();
+        await expect(offlinePage.locator('.rb-nav-wide a[aria-current="page"]')).toHaveText(
+          "Dónde estamos",
+        );
+
+        await Promise.all([
+          offlinePage.waitForURL(/index\.html$/),
+          offlinePage.locator(".rb-nav-wide a", { hasText: "Inicio" }).click(),
+        ]);
+        await expect(offlinePage.locator("h1")).toHaveText(HEADLINE_EDIT);
+
+        // The whole round trip — three pages, five navigations, zero requests to anything but the
+        // files sitting on disk next to each other. This is ADR 0001's promise, extended by this
+        // sprint from "one page opens" to "every page's own links actually go somewhere real".
+        expect(failed).toEqual([]);
+      } finally {
+        await offlinePage.context().close();
+      }
+    });
+  },
+);
 
 /**
  * Sprint 6 day 1. A regression, and one only a browser can state: the defect is the distance
@@ -1915,7 +1928,7 @@ describe("día 7 — dos conversiones desde el editor, y el ZIP resultante abier
  * claim is about what an insertion does, not about what survives a restart, and the flow above
  * already leaves the editor holding exactly the state this one needs.
  */
-describe("regression — a section is added to the page you are looking at", () => {
+describe.journey("regression — a section is added to the page you are looking at", () => {
   it("adds it to the converted page, and leaves the home page alone", async () => {
     // Continues from the live editor the previous flow left behind — the sequential model this
     // file's own docstring describes — rather than reloading. Two pages have been made by
