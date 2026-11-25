@@ -7829,9 +7829,9 @@ export function Editor({
       for (const point of section.querySelectorAll(".rb-focus")) point.remove();
       if (deviceNow.current === "mobile" || pulling || designToolsNow.current !== true) return;
       const found = target(section, sectionId);
-      if (!found || found.el.tagName !== "IMG") return;
+      if (found?.el.tagName !== "IMG") return;
       const view = iframeDoc.defaultView;
-      if (!view || view.getComputedStyle(found.el).objectFit !== "cover") return;
+      if (view?.getComputedStyle(found.el).objectFit !== "cover") return;
       const element = findSection(docNow.current, sectionId)?.section.content.find(
         (candidate) => candidate.id === found.el.dataset["id"],
       );
