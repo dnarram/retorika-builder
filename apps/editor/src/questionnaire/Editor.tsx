@@ -204,6 +204,7 @@ import {
 } from "../editor/overflowCheck.ts";
 import { type FontFileHandle, ownFontFiles, type StoredFontFile } from "../editor/ownFonts.ts";
 import {
+  CHROME_ATTRIBUTE,
   chrome,
   HISTORY_TOUCHED_ATTRIBUTE,
   type PatchCause,
@@ -7660,6 +7661,11 @@ export function Editor({
     mobileSwap: string | null;
     gesture: "none" | "move" | "ask";
     asked: boolean;
+    /** The pointer to capture when the gesture arms, for a press that came through a card: taken at
+     * once it would turn the click that chooses the card's text into a click on its list. */
+    capture: number | null;
+    /** The element the hand pressed, which is where a catalog section's offer is anchored. */
+    pressed: HTMLElement | null;
     run: ArrowRun | null;
     runTimer: number | undefined;
   }
@@ -7705,6 +7711,8 @@ export function Editor({
           mobileSwap: null,
           gesture: "none",
           asked: false,
+          capture: null,
+          pressed: null,
           run: null,
           runTimer: undefined,
         };
@@ -7717,6 +7725,24 @@ export function Editor({
       const sectionId = section?.dataset["section"];
       const elementId = el.dataset["id"];
       return section && sectionId && elementId ? { section, sectionId, elementId } : null;
+    };
+    /**
+     * **What a press takes hold of** (ADR 0086, sprint 41 día 1b): the element pressed if its
+     * section places it, and otherwise the placed element it sits inside. A card's title, words or
+     * photograph has a `data-id` of its own and no placement — it moves with its list (ADR 0048) —
+     * so a press on it used to find nothing to carry, and a list could only be taken by the gaps
+     * between its cards. Now the card is a handle for the whole block; what is inside the card
+     * stays where the catalog draws it. Every pointer handler asks this, so the gesture's state
+     * lives on one element whichever child the next event happens to land on.
+     */
+    const heldBy = (pressed: HTMLElement): HTMLElement => {
+      const section = pressed.closest("[data-section]");
+      if (!section) return pressed;
+      let node: HTMLElement | null = pressed;
+      while (node && node.parentElement !== section) {
+        node = node.parentElement?.closest<HTMLElement>("[data-id]") ?? null;
+      }
+      return node ?? pressed;
     };
 
     // A click right after a drag is the drag's own release, not a choice (ADR 0048 §2).
@@ -7749,6 +7775,8 @@ export function Editor({
       state.mobileSwap = null;
       state.gesture = "none";
       state.asked = false;
+      state.capture = null;
+      state.pressed = null;
       tilt.end();
       el.classList.remove("rb-moving");
       // The displacement is chrome and lives on the element for exactly as long as the hand does.
@@ -7765,23 +7793,31 @@ export function Editor({
       }
     };
 
-    delegate(iframeDoc, "pointerdown", "[data-id]", (el, event) => {
+    delegate(iframeDoc, "pointerdown", "[data-id]", (pressed, event) => {
       if (designToolsNow.current !== true) return;
       // Writing wins: inside a text being written in, a drag selects words (ADR 0047).
-      if (el.isContentEditable) return;
+      if (pressed.isContentEditable) return;
+      // A card's «antes», «después» and «quitar» are the editor's own buttons inside the list: a
+      // press on them is theirs, never the start of carrying the list.
+      if ((event.target as Element | null)?.closest?.(`[${CHROME_ATTRIBUTE}]`)) return;
+      const el = heldBy(pressed);
       const at = placedAt(el);
       if (!at) return;
       const state = stateOf(el);
+      // Chosen is the list itself, or the card's text the hand chose before taking hold of it.
       const chosen =
         chosenText.current?.sectionId === at.sectionId &&
-        chosenText.current?.elementId === at.elementId;
+        (chosenText.current?.elementId === at.elementId ||
+          chosenText.current?.elementId === pressed.dataset["id"]);
       // A finger drags only what it has chosen; otherwise one finger scrolls (ADR 0049 §7).
       if (event.pointerType === "touch" && !chosen) return;
       const layout = findSection(docNow.current, at.sectionId)?.section.layout ?? null;
       if (layout === null) {
-        // A catalog section: a drag past the threshold opens the «Diseñar a mano» offer.
+        // A catalog section: a drag past the threshold opens the «Diseñar a mano» offer, anchored
+        // where the hand is — on the card's text when that is what was pressed.
         state.gesture = "ask";
         state.from = { x: event.clientX, y: event.clientY };
+        state.pressed = pressed;
         return;
       }
       const found = layout.placements.find((placement) => placement.elementId === at.elementId);
@@ -7792,10 +7828,12 @@ export function Editor({
       const rect = el.getBoundingClientRect();
       state.grab = { x: event.clientX - rect.left, y: event.clientY - rect.top };
       state.took = { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom };
-      el.setPointerCapture(event.pointerId);
+      if (el === pressed) el.setPointerCapture(event.pointerId);
+      else state.capture = event.pointerId;
     });
 
-    delegate(iframeDoc, "pointermove", "[data-id]", (el, event) => {
+    delegate(iframeDoc, "pointermove", "[data-id]", (moved, event) => {
+      const el = heldBy(moved);
       const state = states.get(el);
       if (!state?.from) return;
       const at = placedAt(el);
@@ -7807,13 +7845,17 @@ export function Editor({
       if (state.gesture === "ask") {
         if (state.asked) return;
         state.asked = true;
-        openEscalateOffer.current?.(sectionId, el);
+        openEscalateOffer.current?.(sectionId, state.pressed ?? el);
         justDragged = true;
         return;
       }
       if (!state.moving) return;
       if (!state.moved) {
         state.moved = true;
+        if (state.capture !== null) {
+          el.setPointerCapture(state.capture);
+          state.capture = null;
+        }
         el.classList.add("rb-moving");
         iframeDoc.documentElement.classList.add("rb-dragging");
         iframeDoc.getSelection()?.removeAllRanges();
@@ -7912,9 +7954,9 @@ export function Editor({
         row: drop.at.row,
       });
     };
-    delegate(iframeDoc, "pointerup", "[data-id]", (el) => release(el));
-    delegate(iframeDoc, "pointercancel", "[data-id]", (el) => release(el));
-    delegate(iframeDoc, "lostpointercapture", "[data-id]", (el) => release(el));
+    delegate(iframeDoc, "pointerup", "[data-id]", (el) => release(heldBy(el)));
+    delegate(iframeDoc, "pointercancel", "[data-id]", (el) => release(heldBy(el)));
+    delegate(iframeDoc, "lostpointercapture", "[data-id]", (el) => release(heldBy(el)));
 
     // A run of arrows is one movement and one step (ADR 0050 día 6): written on keyup, after
     // 300 ms of quiet, or on blur — the net for the press whose keyup never comes.

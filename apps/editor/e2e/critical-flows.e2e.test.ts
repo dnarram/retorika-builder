@@ -33220,3 +33220,105 @@ describe("sprint 40 día 6 — el fondo se sube, se ve con su velo y se elige", 
     }
   }, 180_000);
 });
+
+/**
+ * Sprint 41 día 1b — **the list is taken by any of its cards** (ADR 0086). A card's title, words and
+ * photograph carry a `data-id` of their own and no placement (they move with their list, ADR 0048),
+ * so in a hand-designed section a press on them used to find nothing to carry: «Qué hago» could only
+ * be dragged by the gaps between its cards. The walk takes it by the first card's title.
+ */
+describe("sprint 41 día 1b — la lista se coge por cualquier tarjeta", () => {
+  it("lleva la lista entera por el título de una tarjeta, un clic quieto sigue eligiendo el texto, y el cromo de la tarjeta sigue siendo suyo", async () => {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    const page = await context.newPage();
+    try {
+      await intoTheCanvas(page);
+      await studioToolsOn(page);
+      const frame = page.frameLocator(PREVIEW).first();
+      const services = frame.locator('[data-section="sec-services"]');
+      await services.click({ position: { x: 8, y: 8 } });
+      await services.locator('.rb-action[aria-label="Diseñar a mano"]').click();
+      await escalated(frame, () => frame.locator(".rb-escalate-yes").click());
+      await expect(services).toHaveClass(/rb-free/);
+
+      const list = services.locator(":scope > .rb-list");
+      const listId = await list.getAttribute("data-id");
+      expect(listId, "«Qué hago» no tiene lista").toBeTruthy();
+      const cards = list.locator("[data-item]");
+      const title = cards.first().locator('[data-slot="title"]');
+      const titleId = await title.getAttribute("data-id");
+      const words = await title.textContent();
+      await title.scrollIntoViewIfNeeded();
+
+      // ---- carried by the card's title, sixty pixels down ----
+      const before = await placedIn(frame, "sec-services");
+      const listBefore = before.find((placed) => placed.id === listId);
+      expect(listBefore, "la lista no tiene colocación").toBeDefined();
+      // The title is not placed, which is the whole case: it moves with its list.
+      expect(before.some((placed) => placed.id === titleId)).toBe(false);
+      // Down and not sideways: «Qué hago» spans all ninety-six units, so sideways there is no room
+      // and a drag right is clamped to where it already is (ADR 0048 §4) — which is what the first
+      // version of this walk measured, as a drop that wrote nothing.
+      expect(listBefore?.columnSpan).toBe(96);
+      const from = await pointIn(title, 0.3, 0.5);
+      await afterTheEdit(page, () => carry(page, from, { x: from.x, y: from.y + 60 }));
+      const after = await placedIn(frame, "sec-services");
+      const listAfter = after.find((placed) => placed.id === listId);
+      // It went down, and kept its column and both of its spans: a drag moves, it never resizes
+      // (ADR 0050 día 3).
+      expect(listAfter?.row ?? 0).toBeGreaterThan(listBefore?.row ?? 0);
+      expect(listAfter?.column).toBe(listBefore?.column);
+      expect(listAfter?.columnSpan).toBe(listBefore?.columnSpan);
+      expect(listAfter?.rowSpan).toBe(listBefore?.rowSpan);
+      // Nobody else moved, and the card's own text is the text it was.
+      expect(after.filter((placed) => placed.id !== listId)).toEqual(
+        before.filter((placed) => placed.id !== listId),
+      );
+      await expect(title).toHaveText(words ?? "");
+      // The words the first pixels of the press began to select were dropped when it armed.
+      expect(
+        await frame
+          .locator("body")
+          .evaluate((body) => body.ownerDocument.getSelection()?.toString() ?? ""),
+      ).toBe("");
+      // What the hand let go of is chosen: the list, not the title it was taken by.
+      await expect(list).toHaveClass(/rb-chosen/);
+
+      // One «Deshacer» puts it back.
+      await afterTheEdit(page, () =>
+        page.getByRole("button", { name: "Deshacer", exact: true }).click(),
+      );
+      expect(await placedIn(frame, "sec-services")).toEqual(before);
+
+      // ---- a click that does not move still chooses the title, and a second one writes ----
+      await title.click();
+      await expect(title).toHaveClass(/rb-chosen/);
+      await expect(list).not.toHaveClass(/rb-chosen/);
+      expect(await placedIn(frame, "sec-services")).toEqual(before);
+      await title.click();
+      await expect(title).toHaveAttribute("contenteditable", "true");
+      await page.keyboard.press("Escape");
+
+      // ---- the card's own «Poner esta línea después» is the card's, not the start of a drag ----
+      // This restaurant was born with one service, so a second card first, by its own button.
+      await expect(cards).toHaveCount(1);
+      await afterTheEdit(page, () => services.locator(".rb-line-add").click());
+      await expect(cards).toHaveCount(2);
+      const placedWithTwo = await placedIn(frame, "sec-services");
+      const second = await cards.nth(1).locator('[data-slot="title"]').textContent();
+      expect(second, "la tarjeta nueva no tiene título").not.toBe(words);
+      const later = cards.first().getByRole("button", { name: "Poner esta línea después" });
+      const press = await pointIn(later);
+      await afterTheEdit(page, async () => {
+        await page.mouse.move(press.x, press.y);
+        await page.mouse.down();
+        await page.mouse.up();
+      });
+      await expect(cards.first().locator('[data-slot="title"]')).toHaveText(second ?? "");
+      await expect(cards.nth(1).locator('[data-slot="title"]')).toHaveText(words ?? "");
+      expect(await placedIn(frame, "sec-services")).toEqual(placedWithTwo);
+    } finally {
+      await context.close();
+    }
+  }, 180_000);
+});
