@@ -11564,6 +11564,13 @@ derecho enrutado a escalar (rojo en la caminata: la letra deja de ser 40); el fa
 (rojo en la unitaria «ignores travel across the diagonal»; la caminata tira justo por la diagonal, donde la x
 sola coincide, y por eso ese caso se sujeta con la unitaria y se dice aquí).
 
+**La suite entera lo vio antes que nadie.** Las 380 caminatas en verde menos una: la del sprint 25 día 7
+estiraba el titular por su asa táctil `se` y pedía dieciséis unidades exactas; con la esquina escalando dio
+65 de 64. Es el cambio de modelo visto desde el dedo, y la caminata cambia con él: el asa de la esquina
+escala la letra (× 1,3, la caja la sigue, un «Deshacer» para las dos) y el estirón por asa se mide en la
+**foto**, por su asa de abajo —el titular es demasiado bajo para tener lados—, con el fondo del área donde
+acabó el dedo, como antes.
+
 **Lo que deja.** Estirar en diagonal un texto o una foto de un solo tirón: ahora son dos lados. Con el dedo,
 un elemento pequeño solo tiene esquinas, así que solo escala; estirarlo sigue siendo de «Colocación» (ADR
 0050 día 7 ya lo nombraba); las asas laterales en cajas bajas, 0,25 días, no se construyen. El alto propio

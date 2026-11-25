@@ -142,6 +142,11 @@ scales.
   photograph to the scale, previews the letter, announces; `Variants.tsx` dispatches.
 - `apps/editor/src/locales/es.json`: `editor.scale.letter`, `.letterRef`, `.photo`; the sentence in
   `editor.design.placementHelp`.
+- The e2e walk of ADR 0050 día 7 («el elegido enseña asas…») stretched the headline by its `se`
+  handle and asked for sixteen exact units; it came out 65 of 64 against this day, which is the
+  corner scaling. It now scales the letter by that handle (× 1.3, the box following, one «Deshacer»
+  for both) and stretches the **photograph** by its bottom handle — the side handle a headline is
+  too low to offer — with the area's bottom still ending where the finger did.
 - The e2e: «sprint 41 día 2» — the letter × 1.3 with the box and the same lines, from the document
   and not the preview, one «Deshacer» for both, the side leaving the letter alone, the magnet writing
   `size.subheading` from the north-west corner with the far edge still, the words intact while

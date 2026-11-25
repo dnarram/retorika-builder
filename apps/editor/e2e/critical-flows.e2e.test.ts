@@ -19597,12 +19597,19 @@ describe("sprint 25 día 7 — las asas en táctil, y el móvil sin solape", () 
       await expect(section.locator(".rb-handle")).toHaveCount(0);
       await expect(frame.locator(".rb-chosen")).toHaveCount(0);
 
-      // ---- un dedo en el asa de abajo a la derecha estira la caja ----
+      // ---- un dedo en el asa de la esquina escala la letra y la caja (ADR 0082, sprint 41 día 2) ----
+      // Until sprint 41 the corner stretched: sixteen exact units, the same number día 4 got from
+      // the mouse. A corner on a text now scales what is inside — the handle is still the same door
+      // to the same `begin`, which is why the gesture's meaning changed here the day it changed
+      // for the mouse. A headline this size has corners only (`handles.ts`), so by finger it can only
+      // be scaled; the stretch by finger is measured on the photograph's side handle below.
       await headline.tap();
       await expect(headline).toHaveClass(/rb-chosen/);
       const before = (await placedIn(frame, "sec-cover")).find((e) => e.id === "el-headline");
       expect(before, "el titular no tiene colocación").toBeDefined();
-      const step = await columnStepOf(frame, "sec-cover");
+      const letterPx = () =>
+        headline.evaluate((el) => Number.parseFloat(getComputedStyle(el).fontSize));
+      expect(await letterPx()).toBe(40);
 
       const corner = section.locator(".rb-handle-se");
       await corner.scrollIntoViewIfNeeded();
@@ -19611,56 +19618,83 @@ describe("sprint 25 día 7 — las asas en táctil, y el móvil sin solape", () 
         x: (spot?.x ?? 0) + (spot?.width ?? 0) / 2,
         y: (spot?.y ?? 0) + (spot?.height ?? 0) / 2,
       };
-      // Desde dónde tira la mano: el asa está centrada en la esquina de la caja azul, que es dónde
+      // A third of the box again, along its diagonal, on the screen: the factor asked for is 1.3.
+      const headBox = await headline.boundingBox();
+      const FACTOR = 1.3;
+      await finger(context, page, grab, {
+        x: grab.x + (headBox?.width ?? 0) * (FACTOR - 1),
+        y: grab.y + (headBox?.height ?? 0) * (FACTOR - 1),
+      });
+      const placedNow = async () =>
+        (await placedIn(frame, "sec-cover")).find((e) => e.id === "el-headline");
+      await expect
+        .poll(letterPx, { message: "el asa de la esquina no escaló la letra" })
+        .toBeGreaterThan(40);
+      expect(Math.abs((await letterPx()) - 40 * FACTOR)).toBeLessThanOrEqual(1);
+      const scaled = await placedNow();
+      expect(
+        Math.abs((scaled?.columnSpan ?? 0) - Math.round((before?.columnSpan ?? 0) * FACTOR)),
+        "la caja no siguió a la letra a lo ancho",
+      ).toBeLessThanOrEqual(1);
+      expect(
+        Math.abs((scaled?.rowSpan ?? 0) - Math.round((before?.rowSpan ?? 0) * FACTOR)),
+        "la caja no siguió a la letra a lo alto",
+      ).toBeLessThanOrEqual(1);
+      expect(scaled?.column, "la esquina de abajo movió el borde izquierdo").toBe(before?.column);
+      expect(scaled?.row, "la esquina de abajo movió el borde superior").toBe(before?.row);
+
+      // Un gesto, un paso: la letra y la caja vuelven con el mismo «Deshacer».
+      await page.getByRole("button", { name: "Deshacer", exact: true }).click();
+      await expect.poll(letterPx, { message: "la letra no volvió" }).toBe(40);
+      expect(await placedNow()).toEqual(before);
+
+      // ---- un dedo en el asa de un lado estira la caja: la foto, que es grande y tiene lados ----
+      const photo = frame.locator('[data-section="sec-cover"] [data-id="el-image"]');
+      await photo.focus();
+      await expect(photo).toHaveClass(/rb-chosen/);
+      const photoBefore = (await placedIn(frame, "sec-cover")).find((e) => e.id === "el-image");
+      const side = section.locator(".rb-handle-bottom");
+      await expect(side, "la foto no ofrece el asa de abajo").toBeAttached();
+      await side.scrollIntoViewIfNeeded();
+      const sideSpot = await side.boundingBox();
+      const sideGrab = {
+        x: (sideSpot?.x ?? 0) + (sideSpot?.width ?? 0) / 2,
+        y: (sideSpot?.y ?? 0) + (sideSpot?.height ?? 0) / 2,
+      };
+      // Desde dónde tira la mano: el asa está centrada en el borde de la caja azul, que es dónde
       // el dedo aterriza y por tanto dónde empieza la cuenta hacia abajo.
-      const held = await boxOf(frame, "sec-cover", "el-headline");
+      const held = await boxOf(frame, "sec-cover", "el-image");
       const DROP = 120;
       // El dedo baja 120 px de pantalla; el área se mide en el marco, donde eso es `120 / zoom`.
       const zoom = await canvasZoom(page);
-      await finger(context, page, grab, { x: grab.x + step * 2, y: grab.y + DROP });
-
-      const placedNow = async () =>
-        (await placedIn(frame, "sec-cover")).find((e) => e.id === "el-headline");
-      /**
-       * **Dieciséis unidades exactas**, que es el mismo número que el día 4 saca del ratón: el asa
-       * es una puerta más al redimensionado, no otro redimensionado — `resizeTo` es la misma
-       * función pura y `begin` el mismo gesto, y lo que cambia es que un dedo aterriza en un
-       * objetivo de cuarenta y cuatro en vez de cerca de una línea de seis.
-       */
+      await finger(context, page, sideGrab, { x: sideGrab.x, y: sideGrab.y + DROP });
+      const photoNow = async () =>
+        (await placedIn(frame, "sec-cover")).find((e) => e.id === "el-image");
       await expect
-        .poll(async () => (await placedNow())?.columnSpan, {
-          message: "el asa no ensanchó dos columnas",
-        })
-        .toBe((before?.columnSpan ?? 0) + 2 * FINE_PER_COLUMN);
-      const pulled = await placedNow();
-      expect(pulled?.column, "la esquina de abajo movió el borde izquierdo").toBe(before?.column);
-      expect(pulled?.row, "la esquina de abajo movió el borde superior").toBe(before?.row);
+        .poll(async () => (await photoNow())?.rowSpan, { message: "el asa no estiró hacia abajo" })
+        .toBeGreaterThan(photoBefore?.rowSpan ?? 0);
+      const pulled = await photoNow();
+      expect(pulled?.column, "el asa de abajo movió el borde izquierdo").toBe(photoBefore?.column);
+      expect(pulled?.columnSpan, "el asa de abajo cambió el ancho").toBe(photoBefore?.columnSpan);
+      expect(pulled?.row, "el asa de abajo movió el borde superior").toBe(photoBefore?.row);
       /**
        * **Y hacia abajo el área acaba donde estaba la mano, con la precisión de una fila** — la
        * mitad vertical, que el día 4 asevera en las pruebas de `resizeTo` y no en el navegador.
-       *
-       * Se mide el área y no el `rowSpan`, y eso es la caminata habiendo aprendido algo: la
-       * primera versión tiraba cuarenta y ocho píxeles y aseveraba que las filas crecían, y no
-       * crecían — el área del titular ya era cuarenta y cuatro píxeles más alta que su caja azul
-       * (la carrera de la tipografía, arriba), así que el tirón entero cabía dentro de lo que ya
-       * estaba reservado. Contar filas habría dado un número que no significa nada; el fondo del
-       * área siguiendo al dedo es lo que David pidió.
+       * Se mide el área y no el `rowSpan` (la foto acaba cuatro píxeles por encima de su área, como
+       * la caminata del ratón del día 4 cuenta), y el fondo del área siguiendo al dedo es lo que
+       * David pidió.
        */
-      const bottom = await areaBottomOf(frame, "el-headline");
-      expect(pulled?.rowSpan ?? 0, "el área no creció hacia abajo").toBeGreaterThan(
-        before?.rowSpan ?? 0,
-      );
+      const bottom = await areaBottomOf(frame, "el-image");
       expect(
         Math.abs(bottom - ((held?.y ?? 0) + (held?.h ?? 0) + DROP / zoom)),
         "el fondo del área no acabó donde la mano",
       ).toBeLessThanOrEqual(ROW_STEP_PX);
 
-      // Un gesto, un paso: el ancho y el alto vuelven con el mismo «Deshacer».
+      // Un gesto, un paso.
       await page.getByRole("button", { name: "Deshacer", exact: true }).click();
       await expect
-        .poll(async () => (await placedNow())?.columnSpan, { message: "el ancho no volvió" })
-        .toBe(before?.columnSpan);
-      expect((await placedNow())?.rowSpan, "el alto volvió en otro paso").toBe(before?.rowSpan);
+        .poll(async () => (await photoNow())?.rowSpan, { message: "el alto no volvió" })
+        .toBe(photoBefore?.rowSpan);
     } finally {
       await context.close();
     }
