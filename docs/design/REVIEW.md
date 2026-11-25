@@ -11669,3 +11669,33 @@ foto conservando el punto, y la invariante quitada.
 **Lo que deja.** Las puertas del editor —el borde inferior que escribe la forma, la esquina que la conserva,
 el punto arrastrable y «Forma original»— son del día 5. Ninguna web guardada lleva forma ni punto, así que
 ninguna cambia.
+
+### Día 5 — la foto toma el alto que le das (PR de `feat/la-foto-toma-el-alto`, enmienda en ADR 0084)
+
+**Lo que hay ahora.** En una sección a mano, el lado de arriba o de abajo de una foto le da alto de verdad
+y el de la izquierda o la derecha, ancho: el área y la forma en **un paso** (`shapeElement` gana `ratio`),
+con la vista previa de la propia foto recortada. La esquina la escala y conserva la forma que se le dio.
+Sobre la foto elegida y recortada aparece **el punto que se conserva**: un objetivo de 44 px con un anillo,
+en su `focus` o en el centro; se arrastra o se mueve con las flechas (1 %, Mayús 10 %), un gesto o una
+flecha sostenida es un paso, y el punto conserva el teclado tras el parche. «Forma original» en
+«Colocación», solo en una foto con forma, devuelve la del catálogo.
+
+**Medido en la portada generada a 1280.** Borde inferior +80 px: la foto 80 ± 8 px más alta, el mismo
+ancho, `cover`, la forma guardada; a 1440 la misma proporción (± 0,02); la esquina a un cuarto conserva la
+proporción (± 0,03); dos «Deshacer» devuelven la del catálogo y «Rehacer» la forma; «Forma original»
+devuelve 4:3 y desaparece. El punto: dibujado en el centro con `50% 50%`; arrastrado a un quinto y cuatro
+quintos guarda `{x: 20, y: 80}` y lo dice; tres flechas sostenidas, un paso, `{x: 23, y: 80}`, con el
+teclado aún en el punto; dos «Deshacer» devuelven el arrastre y luego ningún punto.
+
+**Pruebas.** `focalPoint.test.ts` (cinco). Dos caminatas nuevas. **Saboteos**, los tres rojos: el lado
+escribiendo solo las filas («no creció ochenta»), el punto escrito en cada tecla (tres pasos), «Forma
+original» siempre presente.
+
+**Dos cosas de la caminata.** El panel «Diseño» elige su primera fila hasta que se pulsa otra, y
+«Colocación» empieza plegada: la caminata elige «Foto» y la abre. Y una flecha sostenida en Playwright es
+`keyboard.down` repetido —llega con `repeat`— y un solo `up`; pulsar y soltar tres veces son tres gestos.
+
+**Lo que no cabe en el día, dicho.** La decisión *j* del plan decía que el punto no pediría las
+herramientas de diseño. En el lienzo sí las pide: una foto solo se elige con ellas encendidas (ADR 0049
+§5). La otra puerta —el punto en cada foto del panel «Fotos», sin herramientas y también para **la foto de
+una tarjeta**— no se construye; es el corte que el plan nombraba para este día. Medio día, para el cierre.

@@ -116,3 +116,27 @@ to the catalog's shape, centred, and nothing else moves. Round-tripped in `migra
   and a team member's photograph with a point) and its golden.
 - `docs/document-rules.md`: a note under rule 4.
 - The record is `docs/design/REVIEW.md`, sprint 41 día 4.
+
+## Amendment — the editor's doors (sprint 41 día 5, 26 November 2026)
+
+**A side gives the shape.** In a hand-designed section a top or bottom side of a photograph writes its
+height and a left or right side its width, as a `ratio` beside the area's spans in **one** step
+(`shapeElement` gains `ratio`); the preview is the photograph's own `aspect-ratio`, cropped, as the
+page draws it. Its corner scales it and keeps the shape it was given (ADR 0082). Measured at 1280: the
+bottom side pulled 80 px makes the photograph 80 ± 8 px taller and not a pixel wider, `object-fit:
+cover`, and the same proportion at 1440 within 0.02.
+
+**The point is drawn on the chosen photograph** — a 44 px target with a ring, at its `focus` or the
+middle — only where a crop is (`object-fit: cover`). Dragged, or moved with the arrows (one percent,
+ten with Shift); a drag is one step and a held arrow one step, written on release; the point keeps the
+keyboard through the patch. The help line says what was kept: «Se conserva lo que está a 20 % desde la
+izquierda y 80 % desde arriba».
+
+**«Forma original»** in «Colocación», present only on a shaped photograph, gives the catalog's back.
+
+**What the plan's default *j* could not keep, said.** *j* said the point would not need the design
+tools; in the canvas it does, because a photograph is chosen only with them on (ADR 0049 §5: arriving
+by Tab chooses it, and Tab reaches a photograph only with the tools). The other door — the point
+dragged on each photograph in the «Fotos» panel, which needs no tools and reaches **a card's
+photograph** too — is not built; the plan's cut rule named the card's point as the half to cut, and
+it is the half that went. Costed for the close: half a day.
