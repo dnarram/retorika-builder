@@ -298,7 +298,9 @@ function replaceImageSrc(
       // in the direction that makes the warning untrustworthy. Destructured out rather than set to
       // undefined: the strict schema and `exactOptionalPropertyTypes` both treat an absent key and
       // a present-but-undefined one as different things.
-      const { sample: _replaced, ...value } = element.value;
+      // **And its `focus`** (ADR 0084): the point the owner chose was a point of the photograph
+      // that was there, and the new one has its own middle.
+      const { sample: _replaced, focus: _point, ...value } = element.value;
       return { ...element, value: { ...value, src } };
     }
     if (!element.items) return element;
@@ -350,4 +352,73 @@ export function setElementImageSrc(
     );
   }
   return { ...doc, pages };
+}
+
+/** The photograph's own point, by id, anywhere in a section — a card's photo included. */
+function replaceImageFocus(
+  elements: readonly ContentElement[],
+  elementId: string,
+  focus: { readonly x: number; readonly y: number } | undefined,
+): ContentElement[] | undefined {
+  let found = false;
+  const next = elements.map((element) => {
+    if (element.id === elementId) {
+      if (element.value?.kind !== "image") return element;
+      found = true;
+      const { focus: _old, ...value } = element.value;
+      return { ...element, value: focus === undefined ? value : { ...value, focus } };
+    }
+    if (!element.items) return element;
+    let changedItems = false;
+    const items = element.items.map((item) => {
+      const replaced = replaceImageFocus(item.elements, elementId, focus);
+      if (!replaced) return item;
+      changedItems = true;
+      return { ...item, elements: replaced };
+    });
+    if (!changedItems) return element;
+    found = true;
+    return { ...element, items };
+  });
+  return found ? next : undefined;
+}
+
+/**
+ * **The point of a photograph that survives its crop** (ADR 0084, sprint 41 día 4).
+ *
+ * Whole percent across and down, clamped to 0..100; **the middle is stored as no point at all**, so
+ * a photograph somebody centred by hand and one nobody touched are the same document and publish
+ * the same bytes. Works on any photograph — a placed one, a card's in a gallery — because what a
+ * crop keeps is a fact about the photograph, wherever it is drawn. Throws on a miss, as
+ * `setElementImageSrc` does. The same point back is no change, so no step opens.
+ */
+export function setImageFocus(
+  doc: RetorikaDocument,
+  address: ElementAddress,
+  focus: { readonly x: number; readonly y: number } | undefined,
+): RetorikaDocument {
+  const clamp = (value: number) => Math.min(100, Math.max(0, Math.round(value)));
+  const point = focus === undefined ? undefined : { x: clamp(focus.x), y: clamp(focus.y) };
+  const stored = point === undefined || (point.x === 50 && point.y === 50) ? undefined : point;
+  let found = false;
+  let changed = false;
+  const pages = doc.pages.map((page) => ({
+    ...page,
+    sections: page.sections.map((section) => {
+      if (section.id !== address.sectionId) return section;
+      const before = JSON.stringify(section.content);
+      const content = replaceImageFocus(section.content, address.elementId, stored);
+      if (!content) return section;
+      found = true;
+      if (JSON.stringify(content) === before) return section;
+      changed = true;
+      return { ...section, content };
+    }),
+  }));
+  if (!found) {
+    throw new Error(
+      `setImageFocus: no image element "${address.elementId}" in section "${address.sectionId}"`,
+    );
+  }
+  return changed ? { ...doc, pages } : doc;
 }

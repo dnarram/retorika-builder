@@ -1482,7 +1482,7 @@ describe("1.12.0 — a free section is a fine grid", () => {
     expect(back.placements[1]).toMatchObject({ column: 6, columnSpan: 7 });
   });
 
-  it("is the claim it rests on: two corpus fixtures carry a layout, and both now parse as the fine grid", () => {
+  it("is the claim it rests on: every corpus fixture with a layout parses as the fine grid", () => {
     const corpus = readdirSync(DOCUMENTS_DIR).filter((file) => file.endsWith(".json"));
     const withLayout: string[] = [];
     for (const file of corpus) {
@@ -1496,7 +1496,13 @@ describe("1.12.0 — a free section is a fine grid", () => {
         }
       }
     }
-    expect(withLayout.sort()).toEqual(["hidden-and-embed.json", "physio-free-cover.json"]);
+    // The two this migration converted, and `foto-con-forma` (sprint 41 día 4), written at 1.23.0
+    // from `physio-free-cover`'s layout already in units.
+    expect(withLayout.sort()).toEqual([
+      "foto-con-forma.json",
+      "hidden-and-embed.json",
+      "physio-free-cover.json",
+    ]);
   });
 });
 
@@ -1931,9 +1937,11 @@ describe("1.15.0 — the header is the owner's", () => {
       // 1.17.0 when its row became a position; `marca-grande` was written at 1.19.0, and
       // `logo-amarillo` at 1.20.0 with a bar in its fill (sprint 38 día 1).
       // `fondo-con-motivos` at 1.22.0 with a fixed bar over its motif (sprint 40 día 5).
-      expect(["1.15.0", "1.16.0", "1.17.0", "1.19.0", "1.20.0", "1.22.0"], file).toContain(
-        raw.schemaVersion,
-      );
+      // `letra-exacta-grande` (sprint 41 día 1a) and `foto-con-forma` (día 4) carry a header too.
+      expect(
+        ["1.15.0", "1.16.0", "1.17.0", "1.19.0", "1.20.0", "1.22.0", "1.23.0"],
+        file,
+      ).toContain(raw.schemaVersion);
     }
   });
 });
@@ -2716,9 +2724,8 @@ describe("1.22.0 — a background with motifs", () => {
     ],
   });
 
-  it("is registered, and it is the one the chain ends at", () => {
+  it("is registered", () => {
     expect(step("1.22.0").version).toBe("1.22.0");
-    expect(SCHEMA_VERSION).toBe("1.22.0");
   });
 
   it("seals a 1.21.0 document and moves nothing, because both keys are optional", () => {
@@ -2773,5 +2780,152 @@ describe("1.22.0 — a background with motifs", () => {
     }
     // `fondo-con-motivos` (sprint 40 día 5) is the one that does.
     expect(found).toEqual(["fondo-con-motivos.json"]);
+  });
+});
+
+/**
+ * `0024` — a photograph has a shape and a point (ADR 0084, sprint 41 día 4): an optional `ratio` on a
+ * placement and an optional `focus` on an image value. `up` seals; `down` drops both, everywhere.
+ */
+describe("1.23.0 — a photograph has a shape and a point", () => {
+  const photo = (focus?: Record<string, unknown>) => ({
+    id: "el-image",
+    role: "image",
+    hidden: false,
+    slot: "image",
+    value: { kind: "image", src: "foto.jpg", alt: "Una foto", ...(focus ? { focus } : {}) },
+  });
+  const site = (
+    version: string,
+    opts: {
+      ratio?: Record<string, unknown>;
+      focus?: Record<string, unknown>;
+      card?: Record<string, unknown>;
+    } = {},
+  ) => ({
+    schemaVersion: version,
+    id: "doc-forma",
+    siteName: "Taberna del Puerto",
+    theme,
+    collections: [],
+    pages: [
+      {
+        id: "home",
+        slug: "index",
+        title: "Taberna del Puerto",
+        sections: [
+          {
+            id: "sec-cover",
+            preset: { catalogId: "cover", variantId: "image-right" },
+            source: "free",
+            layout: {
+              grid: { columns: 96 },
+              placements: [
+                {
+                  elementId: "el-image",
+                  column: 49,
+                  columnSpan: 48,
+                  row: 1,
+                  rowSpan: 40,
+                  ...(opts.ratio ? { ratio: opts.ratio } : {}),
+                },
+              ],
+              breakpoints: {},
+            },
+            content: [photo(opts.focus)],
+          },
+          {
+            id: "sec-gallery",
+            preset: { catalogId: "gallery", variantId: "grid" },
+            source: "catalog",
+            layout: null,
+            content: [
+              {
+                id: "el-list",
+                role: "list",
+                hidden: false,
+                slot: "photos",
+                items: [
+                  {
+                    id: "item-1",
+                    elements: [
+                      {
+                        id: "el-card",
+                        role: "image",
+                        hidden: false,
+                        slot: "photo",
+                        value: {
+                          kind: "image",
+                          src: "plato.jpg",
+                          alt: "Un plato",
+                          ...(opts.card ? { focus: opts.card } : {}),
+                        },
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  });
+  const shaped = {
+    ratio: { width: 16, height: 9 },
+    focus: { x: 30, y: 70 },
+    card: { x: 20, y: 40 },
+  };
+
+  it("is registered, and it is the one the chain ends at", () => {
+    expect(step("1.23.0").version).toBe("1.23.0");
+    expect(SCHEMA_VERSION).toBe("1.23.0");
+  });
+
+  // `step(…).up` and not `upTo`: this document's cover is a free section already on the fine grid,
+  // and `upTo` replays the whole chain from the first migration — `0013` would multiply it by eight.
+  it("seals a 1.22.0 document and moves nothing, because both keys are optional", () => {
+    const before = site("1.22.0");
+    expect(step("1.23.0").up(before)).toEqual({ ...before, schemaVersion: "1.23.0" });
+    const once = migrateToCurrent(before);
+    expect(migrateToCurrent(once)).toEqual(once);
+  });
+
+  it("parses a shape and a point on a placed photograph, and a point on a card's", () => {
+    expect(() => parseDocument(site("1.23.0", shaped))).not.toThrow();
+  });
+
+  it("refuses a shape of zero or with a fraction, and a point off 0..100", () => {
+    expect(() => parseDocument(site("1.23.0", { ratio: { width: 0, height: 9 } }))).toThrow();
+    expect(() => parseDocument(site("1.23.0", { ratio: { width: 1.5, height: 1 } }))).toThrow();
+    expect(() => parseDocument(site("1.23.0", { focus: { x: -1, y: 50 } }))).toThrow();
+    expect(() => parseDocument(site("1.23.0", { focus: { x: 50, y: 50, z: 1 } }))).toThrow();
+  });
+
+  /** **`down` is lossy, and this is the loss, named:** every shape and every point goes. */
+  it("takes every shape and every point away on the way down, a card's included, and keeps the rest", () => {
+    const down = step("1.23.0").down;
+    expect(down, "1.23.0 has no `down`").toBeDefined();
+    const back = down?.(site("1.23.0", shaped)) ?? {};
+    expect(back).toEqual(site("1.22.0"));
+    expect(() => parseDocument(back)).not.toThrow();
+  });
+
+  it("round-trips a document with neither", () => {
+    const input = site("1.22.0");
+    expect(step("1.23.0").down?.(step("1.23.0").up(input))).toEqual(input);
+  });
+
+  it("is the claim it rests on: no corpus fixture stamped before 1.23.0 carries a shape or a point", () => {
+    const corpus = readdirSync(DOCUMENTS_DIR).filter((file) => file.endsWith(".json"));
+    const found: string[] = [];
+    for (const file of corpus) {
+      const raw = readFileSync(join(DOCUMENTS_DIR, file), "utf8");
+      if (!raw.includes('"ratio": {') && !raw.includes('"focus": {')) continue;
+      found.push(file);
+      expect((JSON.parse(raw) as { schemaVersion: string }).schemaVersion, file).toBe("1.23.0");
+    }
+    // `foto-con-forma` (sprint 41 día 4) is the one that does.
+    expect(found).toEqual(["foto-con-forma.json"]);
   });
 });

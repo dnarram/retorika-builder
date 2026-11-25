@@ -77,6 +77,7 @@ export {
   listEditableFields,
   setElementImageSrc,
   setElementText,
+  setImageFocus,
 } from "./fields.ts";
 export type { MeasuredBox } from "./fineGrid.ts";
 export {
@@ -169,6 +170,7 @@ export {
   revertPlanFor,
   revertSection,
   setMobilePatch,
+  setPhotoShape,
   setPlacement,
 } from "./layout.ts";
 export { addressOf, MAP_ADDRESS_SLOT, mapHref } from "./map.ts";

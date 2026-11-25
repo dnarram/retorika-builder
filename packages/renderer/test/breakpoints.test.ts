@@ -102,7 +102,9 @@ describe("the patches the renderer now reads", () => {
     // the patch block alone since day 3 of this sprint, because `estilo-por-elemento` carries rule
     // 6 rules and no patches — a fixture that would have failed this for being about the other rule.
     for (const entry of corpus) {
-      if (entry.name === "physio-free-cover") continue;
+      // `foto-con-forma` (sprint 41 día 4) is built on `physio-free-cover`'s layout, its patches
+      // included: the same two fixtures, one cover.
+      if (entry.name === "physio-free-cover" || entry.name === "foto-con-forma") continue;
       expect(patchBlock(styleOf(render(entry.document, "html").html)), entry.name).toBe("");
     }
   });

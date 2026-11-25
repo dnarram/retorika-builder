@@ -5,6 +5,7 @@ import {
   listEditableFields,
   setElementImageSrc,
   setElementText,
+  setImageFocus,
 } from "../src/fields.ts";
 import { parseDocument } from "../src/parse.ts";
 import { type Theme, TOKEN_KEYS } from "../src/tokens.ts";
@@ -337,6 +338,14 @@ describe("setElementImageSrc", () => {
     ).toThrow(/no image element/);
   });
 
+  it("takes the point away with the photograph it was a point of (ADR 0084)", () => {
+    const address = { sectionId: "sec-cover", elementId: "el-image" };
+    const pointed = setImageFocus(withImage, address, { x: 20, y: 80 });
+    const replaced = setElementImageSrc(pointed, address, "otra.jpg");
+    const element = replaced.pages[0]?.sections[0]?.content.find((el) => el.id === "el-image");
+    expect(element?.value?.kind === "image" && "focus" in element.value).toBe(false);
+  });
+
   it("throws for an element that does not exist", () => {
     expect(() =>
       setElementImageSrc(withImage, { sectionId: "sec-cover", elementId: "el-nope" }, "a.jpg"),
@@ -419,5 +428,129 @@ describe("replacing a photo stops it being a sample", () => {
       "otra.jpg",
     );
     expect(after.pages[0]?.sections[0]?.content[0]?.value).toMatchObject({ alt: "Muestra" });
+  });
+});
+
+describe("setImageFocus — the point a crop keeps (ADR 0084)", () => {
+  /** A cover photograph and a gallery card's photograph, so both kinds of address are asked. */
+  const doc: RetorikaDocument = parseDocument({
+    schemaVersion: "1.23.0",
+    id: "doc-1",
+    siteName: "Barbería El Corte",
+    theme,
+    collections: [],
+    pages: [
+      {
+        id: "home",
+        slug: "index",
+        title: "Inicio",
+        sections: [
+          {
+            id: "sec-cover",
+            preset: { catalogId: "cover", variantId: "image-right" },
+            source: "catalog",
+            layout: null,
+            content: [
+              {
+                id: "el-image",
+                role: "image",
+                hidden: false,
+                slot: "image",
+                value: { kind: "image", src: "foto.jpg", alt: "Una foto" },
+              },
+            ],
+          },
+          {
+            id: "sec-gallery",
+            preset: { catalogId: "gallery", variantId: "grid" },
+            source: "catalog",
+            layout: null,
+            content: [
+              {
+                id: "el-list",
+                role: "list",
+                hidden: false,
+                slot: "photos",
+                items: [
+                  {
+                    id: "item-1",
+                    elements: [
+                      {
+                        id: "el-card-photo",
+                        role: "image",
+                        hidden: false,
+                        slot: "photo",
+                        value: { kind: "image", src: "plato.jpg", alt: "Un plato" },
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  });
+  const cover = { sectionId: "sec-cover", elementId: "el-image" };
+  const card = { sectionId: "sec-gallery", elementId: "el-card-photo" };
+  const focusOf = (next: RetorikaDocument, at: { sectionId: string; elementId: string }) => {
+    const walk = (
+      elements: readonly { id: string; value?: unknown; items?: unknown }[],
+    ): unknown => {
+      for (const element of elements) {
+        if (element.id === at.elementId) return (element.value as { focus?: unknown }).focus;
+        const items = element.items as { elements: typeof elements }[] | undefined;
+        for (const item of items ?? []) {
+          const found = walk(item.elements);
+          if (found !== undefined) return found;
+        }
+      }
+      return undefined;
+    };
+    const section = next.pages[0]?.sections.find((s) => s.id === at.sectionId);
+    return walk(section?.content ?? []);
+  };
+
+  it("writes the point on a placed photograph and on a card's", () => {
+    expect(focusOf(setImageFocus(doc, cover, { x: 30, y: 70 }), cover)).toEqual({ x: 30, y: 70 });
+    expect(focusOf(setImageFocus(doc, card, { x: 10, y: 90 }), card)).toEqual({ x: 10, y: 90 });
+  });
+
+  it("rounds and clamps to whole percent, and stores the middle as no point at all", () => {
+    expect(focusOf(setImageFocus(doc, cover, { x: 33.6, y: 140 }), cover)).toEqual({
+      x: 34,
+      y: 100,
+    });
+    const pointed = setImageFocus(doc, cover, { x: 30, y: 70 });
+    expect(focusOf(setImageFocus(pointed, cover, { x: 50, y: 50 }), cover)).toBeUndefined();
+    expect(focusOf(setImageFocus(pointed, cover, undefined), cover)).toBeUndefined();
+  });
+
+  it("is no change when the same point comes back, or the middle on an untouched photograph", () => {
+    const pointed = setImageFocus(doc, cover, { x: 30, y: 70 });
+    expect(setImageFocus(pointed, cover, { x: 30, y: 70 })).toBe(pointed);
+    expect(setImageFocus(doc, cover, { x: 50, y: 50 })).toBe(doc);
+  });
+
+  it("throws for an element that is not a photograph, or that does not exist", () => {
+    expect(() =>
+      setImageFocus(doc, { sectionId: "sec-gallery", elementId: "el-list" }, { x: 1, y: 1 }),
+    ).toThrow(/no image element/);
+    expect(() =>
+      setImageFocus(doc, { sectionId: "sec-cover", elementId: "el-nada" }, { x: 1, y: 1 }),
+    ).toThrow(/no image element/);
+  });
+
+  it("is refused by the schema outside 0..100 and off a whole number", () => {
+    const raw = JSON.parse(JSON.stringify(doc)) as {
+      pages: { sections: { content: { value: Record<string, unknown> }[] }[] }[];
+    };
+    const value = raw.pages[0]?.sections[0]?.content[0]?.value;
+    if (!value) throw new Error("no photograph");
+    value["focus"] = { x: 101, y: 0 };
+    expect(() => parseDocument(raw)).toThrow();
+    value["focus"] = { x: 10.5, y: 0 };
+    expect(() => parseDocument(raw)).toThrow();
   });
 });

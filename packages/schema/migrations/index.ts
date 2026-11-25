@@ -22,6 +22,7 @@ import theBrandHasASizeAndAPlace from "./0020-the-brand-has-a-size-and-a-place.t
 import theFillKeepsTheBrandsColour from "./0021-the-fill-keeps-the-brands-colour.ts";
 import theMapFollowsTheAddress from "./0022-the-map-follows-the-address.ts";
 import aBackgroundWithMotifs from "./0023-a-background-with-motifs.ts";
+import aPhotoHasAShapeAndAPoint from "./0024-a-photo-has-a-shape-and-a-point.ts";
 
 export interface Migration {
   version: string;
@@ -55,6 +56,7 @@ export const MIGRATIONS: readonly Migration[] = [
   theFillKeepsTheBrandsColour,
   theMapFollowsTheAddress,
   aBackgroundWithMotifs,
+  aPhotoHasAShapeAndAPoint,
 ];
 
 /** `1.2.0` → `[1, 2, 0]`, for comparing two versions without a dependency. A missing or

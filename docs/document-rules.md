@@ -75,6 +75,13 @@ left implicit.
    > section's grid, there is still no `x` and no `y`, the published page is still a grid that
    > reflows, and rule 7 still derives the phone from it. What the three askings had in common was
    > never the grid; it was a grid too coarse to feel like the hand.
+   >
+   > *And a photograph's height, 25 November 2026 (sprint 41 día 4, ADR 0084).* «La foto toma el
+   > alto que le des» is answered without a pixel of height: a placement may carry a photograph's
+   > **shape** — width to height in whole numbers — which the page draws as `aspect-ratio` at every
+   > width, cropped around a **point** stored on the photograph. A height in pixels would crop
+   > differently at every width the page is drawn at; a shape is the same everywhere, and on a
+   > phone it is held between 3:4 and 3:1. Still no `x`, no `y`, no width or height in pixels.
 
 5. **There are no orphan elements: every element belongs to a section, every section to a
    page.** This closes the hole free placement would otherwise open — there is no floating layer

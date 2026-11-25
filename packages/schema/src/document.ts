@@ -18,7 +18,7 @@ import {
  * role or a token is additive and bumps the minor; removing or renaming one breaks and
  * bumps the major.
  */
-export const SCHEMA_VERSION = "1.22.0";
+export const SCHEMA_VERSION = "1.23.0";
 
 const idSchema = z.string().min(1).max(128);
 
@@ -99,6 +99,24 @@ const contentValueSchema = z.union([
      * with its own test). ADR 0011 asked for exactly this, and for the migration it costs.
      */
     sample: z.string().min(1).optional(),
+    /**
+     * **The point of the photograph that survives its crop** (ADR 0084, sprint 41 día 4): how far
+     * across and how far down, in whole percent, the part the owner wants kept sits. Emitted as
+     * `object-position`, so it decides what a cropped photograph shows — the cover's catalog ratio,
+     * a gallery's 4:3 or a team's square, and a shape given by hand.
+     *
+     * **On the value and not on the placement**, because it is a fact about the photograph: a card's
+     * photo has no placement and is cropped all the same, and a new photograph has its own middle —
+     * replacing the photo removes the field, as it removes `sample` (`setElementImageSrc`).
+     * **Absent is the middle**, which is what every photograph drew before 1.23.0; the verb stores
+     * 50/50 as absent, so «nobody chose» and «somebody chose the middle» are the same state.
+     */
+    focus: z
+      .strictObject({
+        x: z.number().int().min(0).max(100),
+        y: z.number().int().min(0).max(100),
+      })
+      .optional(),
   }),
   z
     .strictObject({
@@ -211,6 +229,24 @@ export const placementSchema = z.strictObject({
   columnSpan: z.number().int().min(1).max(FINE_COLUMNS),
   row: z.number().int().min(1),
   rowSpan: z.number().int().min(1),
+  /**
+   * **The shape a photograph was given by hand** (ADR 0084, sprint 41 día 4, David's «la foto toma
+   * el alto que le des»): width to height in whole numbers, reduced. Emitted as `aspect-ratio` with
+   * `object-fit: cover`, so the photograph keeps this shape at every width and on a phone, cropped
+   * around its `focus` — never a height in pixels, which would crop differently at every width.
+   *
+   * **Absent is the photograph nobody shaped**, which keeps the catalog's own ratio and draws
+   * exactly what it drew before 1.23.0: the distinction between «untouched» and «given a shape» is
+   * a stored fact, not a guess. Only on a photograph's placement (`checkInvariants`, rule 4), and
+   * only in a hand-designed section, since only those have placements; `revertSection` drops it
+   * with the layout.
+   */
+  ratio: z
+    .strictObject({
+      width: z.number().int().min(1).max(9999),
+      height: z.number().int().min(1).max(9999),
+    })
+    .optional(),
 });
 export type Placement = z.infer<typeof placementSchema>;
 

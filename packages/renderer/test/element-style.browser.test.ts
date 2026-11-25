@@ -292,3 +292,71 @@ describe("an exact letter on a phone (ADR 0083)", () => {
     }
   });
 });
+
+/**
+ * **A photograph's shape and its point, as the browser draws them** (ADR 0084, sprint 41 día 4). The
+ * claims are about specificity and geometry: the shape outranks the catalog's 4:3, the crop is a
+ * crop and not a squash, the point is the one stored, and a phone draws the shape at its limit.
+ */
+describe("a photograph's shape and its point (ADR 0084)", () => {
+  /** The photograph's box and the three properties that decide what it shows. */
+  function photo(page: Page, elementId: string) {
+    return page.evaluate((id) => {
+      const el = document.querySelector<HTMLImageElement>(`[data-id="${id}"]`);
+      if (!el) throw new Error(`no photograph ${id}`);
+      const box = el.getBoundingClientRect();
+      const style = getComputedStyle(el);
+      return {
+        ratio: box.width / box.height,
+        fit: style.objectFit,
+        position: style.objectPosition,
+      };
+    }, elementId);
+  }
+
+  it("keeps the shape given by hand over the catalog's, crops it, and keeps its point", async () => {
+    const page = await open(fixture("foto-con-forma"), 1280);
+    try {
+      const cover = await photo(page, "el-image");
+      // 4:1, where `.rb-cover img` alone would draw 4:3.
+      expect(cover.ratio).toBeCloseTo(4, 1);
+      expect(cover.fit).toBe("cover");
+      expect(cover.position).toBe("30% 70%");
+      // A card's photograph keeps the team's square and takes its own point.
+      const member = await photo(page, "el-member-1-photo");
+      expect(member.ratio).toBeCloseTo(1, 1);
+      expect(member.position).toBe("50% 20%");
+      // And a photograph with no point is still centred.
+      expect((await photo(page, "el-member-2-photo")).position).toBe("50% 50%");
+    } finally {
+      await page.context().close();
+    }
+  });
+
+  it("outranks the catalog's (0,2,1) crop of a cover whose photograph is its background", async () => {
+    // `.rb-cover.rb-image-background img` asks for 3:2 at (0,2,1): a selector of two attributes,
+    // (0,2,0), would lose to it and the shape would be silently ignored. The third attribute is
+    // what this case is for — the image-right cover above is outranked by two.
+    const raw = JSON.parse(JSON.stringify(fixture("foto-con-forma"))) as RetorikaDocument;
+    const cover = raw.pages[0]?.sections[0];
+    if (!cover) throw new Error("no cover");
+    cover.preset = { ...cover.preset, variantId: "image-background" };
+    const page = await open(parseDocument(raw), 1280);
+    try {
+      expect((await photo(page, "el-image")).ratio).toBeCloseTo(4, 1);
+    } finally {
+      await page.context().close();
+    }
+  });
+
+  it("draws a shape wider than 3:1 at 3:1 on a phone", async () => {
+    const page = await open(fixture("foto-con-forma"), 390);
+    try {
+      const cover = await photo(page, "el-image");
+      expect(cover.ratio).toBeCloseTo(3, 1);
+      expect(cover.position).toBe("30% 70%");
+    } finally {
+      await page.context().close();
+    }
+  });
+});

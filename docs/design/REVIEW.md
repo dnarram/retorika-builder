@@ -11624,3 +11624,48 @@ escribe, y una zona de 2 px; la caminata pulsa solo si no está elegido.
 
 **Lo que deja.** El teclado en una sección de serie sigue sin abrir la puerta (día 6). Las asas táctiles en
 sección de serie no se dibujan (`paintHandles` pide `rb-free`): el corte que el plan nombraba, y se dice.
+
+### Día 4 — la foto tiene forma y un punto que se conserva (PR de `feat/la-foto-tiene-forma`, ADR 0084, esquema 1.23.0)
+
+**El hueco.** El alto de una foto nunca era del dueño: `.rb-section img` es `width: 100%; height: auto` y
+el catálogo recorta donde la foto decidiría la página (portada 4:3, 3:2 detrás del texto, galería 4:3,
+equipo 1:1), siempre por el centro. Tirar del borde inferior de una foto en una sección a mano agrandaba
+su área y nada visible. Y qué parte sobrevive al recorte llevaba en el backlog desde el 9 de octubre.
+
+**Lo que hay ahora, solo el modelo y el renderer** (el editor es el día 5). Dos hechos opcionales:
+- `ratio` en la colocación —la forma dada a mano, ancho a alto en enteros reducidos (`setPhotoShape`)—.
+  **Ausente es la foto que nadie formó**: conserva el recorte del catálogo y pinta lo de siempre. Una
+  proporción y no un alto en píxeles, que recortaría distinto en cada ancho (decisión *a*). Solo en una
+  foto: `checkInvariants` la rechaza en cualquier otra colocación (regla 4). `PlacementEdit` se estrecha a
+  los cuatro números, para que un arrastre o un paso no puedan llevarse ni tirar una forma al extenderse.
+- `focus` en el valor de la imagen —el punto, en tanto por ciento entero, que conserva el recorte
+  (`setImageFocus`)—. **El centro se guarda como ningún punto**, y **cambiar la foto lo quita**, en la misma
+  línea que quita `sample` (decisión *b*). Vale para la foto de una tarjeta, que no tiene colocación.
+
+El renderer los pinta como `aspect-ratio` + `object-fit: cover` y `object-position`, con el selector
+(0,3,0) de la regla 6, que gana a los recortes (0,2,1) del catálogo sin `!important`; ninguna de las tres
+propiedades es `width`, `display` ni `order`, así que «Foto menor» sigue estrechando en el móvil. **En el
+móvil una forma fuera de 3:4 – 3:1 se pinta en el límite más cercano** (decisión *c*). Migración `0024`:
+`up` sella; `down` quita las dos cosas, la de las tarjetas incluida, y lo dice.
+
+**Medido en Chromium.** La fixture nueva, `foto-con-forma`: la portada a mano de la fisioterapia con su
+foto a 4:1 y el punto en 30 % 70 %, y un equipo con la foto de una persona en 50 % 20 %. A 1280 la foto de
+portada mide 4,0 de ancho por cada alto, `object-fit: cover`, `object-position: 30% 70%`; la de equipo
+sigue cuadrada con su punto; la que no tiene punto sigue en `50% 50%`. Con la portada pasada a la variante
+de foto de fondo, la forma sigue ganando a su 3:2. A 390, la 4:1 se pinta a 3:1 con el mismo punto.
+
+**Las goldens.** Las 27 existentes, idénticas byte a byte; una nueva. La prueba de la migración `0013` que
+contaba «dos fixtures con layout» pasa a contar tres, y dice por qué.
+
+**Pruebas.** Esquema: `setPhotoShape` (reducción, sin cambio, quitar, sobrevive a un movimiento, cuatro
+rechazos, se va con la vuelta al catálogo, la invariante), `setImageFocus` (tarjeta y foto colocada, redondeo
+y centro, sin cambio, rechazos, el esquema fuera de 0..100), `setElementImageSrc` quita el punto, y el bloque
+de la migración con su ida y vuelta. Renderer: `photo-shape.test.ts` y cuatro casos en navegador. **Saboteos,
+los cinco rojos**: emitir para toda foto (28 goldens), el selector de dos atributos (rojo solo en la portada
+de foto de fondo, que es justo el caso que el primer intento no tenía —en una «image-right» dos atributos
+bastan, y la prueba se añadió por eso—), los límites del móvil cambiados (unitaria y navegador), cambiar la
+foto conservando el punto, y la invariante quitada.
+
+**Lo que deja.** Las puertas del editor —el borde inferior que escribe la forma, la esquina que la conserva,
+el punto arrastrable y «Forma original»— son del día 5. Ninguna web guardada lleva forma ni punto, así que
+ninguna cambia.
