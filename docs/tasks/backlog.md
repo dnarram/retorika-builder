@@ -41,9 +41,12 @@ The record is `docs/design/REVIEW.md`, sprint 40.
    with the alternative costed (0.25 day: applied on its own on the untouched start, as a late logo's colours are).
 2. **The nine photographs**: the exemption fails on **1 December 2026**, in 9 days.
    [`docs/tasks/las-nueve-fotos.md`](las-nueve-fotos.md) and `pnpm photos:replace`.
-3. **The CI e2e step at 34.6–37.5 of its 45 minutes** over the sprint's seven PRs, every one green on the
+3. ~~**The CI e2e step at 34.6–37.5 of its 45 minutes** over the sprint's seven PRs, every one green on the
    first attempt: seven and a half minutes of margin, under the 40 the plan set for proposing `--shard`.
-   Shard or raise stays David's.
+   Shard or raise stays David's.~~ **Sharded on 25 November 2026, by David's decision**: PR #408 ran the
+   step at 36m58s and 39m32s. Two jobs, `e2e 1/2` and `e2e 2/2`, each half of the walks by top-level
+   `describe` with the shared journey kept together (`apps/editor/e2e/shard.ts`, `RETORIKA_E2E_SHARD`);
+   1182 s and 1129 s of #408's 2311. The step's limit 30, the job's 40.
 4. **Sprint 41, costed in sprint 40's plan** (David's decision of 20 November moved the first three here):
    - sections dragged to reorder, and «a una página existente» — 1.5 days, ADR
    - the photo's focal point, and the list block grabbable by its cards — 1.5 days, schema
