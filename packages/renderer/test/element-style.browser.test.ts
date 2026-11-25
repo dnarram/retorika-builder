@@ -333,6 +333,22 @@ describe("a photograph's shape and its point (ADR 0084)", () => {
     }
   });
 
+  it("outranks the catalog's (0,2,1) crop of a cover whose photograph is its background", async () => {
+    // `.rb-cover.rb-image-background img` asks for 3:2 at (0,2,1): a selector of two attributes,
+    // (0,2,0), would lose to it and the shape would be silently ignored. The third attribute is
+    // what this case is for — the image-right cover above is outranked by two.
+    const raw = JSON.parse(JSON.stringify(fixture("foto-con-forma"))) as RetorikaDocument;
+    const cover = raw.pages[0]?.sections[0];
+    if (!cover) throw new Error("no cover");
+    cover.preset = { ...cover.preset, variantId: "image-background" };
+    const page = await open(parseDocument(raw), 1280);
+    try {
+      expect((await photo(page, "el-image")).ratio).toBeCloseTo(4, 1);
+    } finally {
+      await page.context().close();
+    }
+  });
+
   it("draws a shape wider than 3:1 at 3:1 on a phone", async () => {
     const page = await open(fixture("foto-con-forma"), 390);
     try {
