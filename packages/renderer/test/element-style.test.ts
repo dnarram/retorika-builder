@@ -1,4 +1,5 @@
 import { parseDocument, type RetorikaDocument, type Section } from "@retorika/schema";
+import { SCALES } from "@retorika/tokens";
 import { describe, expect, it } from "vitest";
 import { buildCss } from "../src/build.ts";
 import { render } from "../src/index.ts";
@@ -13,6 +14,10 @@ import { loadCorpus } from "./corpus.ts";
 const corpus = loadCorpus();
 const styled = corpus.find((entry) => entry.name === "estilo-por-elemento");
 if (!styled) throw new Error("the estilo-por-elemento fixture is missing from the corpus");
+const large = corpus.find((entry) => entry.name === "letra-exacta-grande");
+if (!large) throw new Error("the letra-exacta-grande fixture is missing from the corpus");
+/** The corpus documents that carry an element's own style on purpose. */
+const STYLED = new Set(["estilo-por-elemento", "letra-exacta-grande"]);
 
 /** The rule 6 block only, so a change to the shared stylesheet cannot make these pass or fail. */
 function styleRules(doc: RetorikaDocument): string[] {
@@ -73,7 +78,7 @@ describe("rule 6 in the stylesheet", () => {
     // The condition the whole golden corpus rests on: a site that uses none of this publishes
     // exactly the bytes it always did, down to the absence of a comment line.
     for (const entry of corpus) {
-      if (entry.name === "estilo-por-elemento") continue;
+      if (STYLED.has(entry.name)) continue;
       expect(buildCss(entry.document, "html"), entry.name).not.toContain("rule 6");
     }
   });
@@ -94,6 +99,100 @@ describe("rule 6 in the stylesheet", () => {
     expect(line).toMatch(/style="grid-column:/);
     expect(line).not.toContain("color:");
     expect(line).not.toContain("font-size:");
+  });
+});
+
+/** The phone block of ADR 0083, its selectors and declarations only. */
+function phoneCaps(doc: RetorikaDocument): string[] {
+  const lines = buildCss(doc, "html").split("\n");
+  const start = lines.indexOf(
+    "/* rule 6 on a phone: an exact letter above the heading comes down to it */",
+  );
+  if (start === -1) return [];
+  expect(lines[start + 1]).toBe("@media (max-width: 720px) {");
+  const rest = lines.slice(start + 2);
+  return rest.slice(0, rest.indexOf("}")).map((line) => line.trim());
+}
+
+/** The same document under another theme's heading size. */
+function withHeading(doc: RetorikaDocument, heading: string): RetorikaDocument {
+  return parseDocument({ ...doc, theme: { ...doc.theme, "size.heading": heading } });
+}
+
+const CAP_HEADLINE =
+  '[data-section="sec-cover"] [data-id="el-headline"][data-role] { font-size: var(--size-heading); }';
+const CAP_CARD =
+  '[data-section="sec-services"] [data-id="el-card-1-title"][data-role] { font-size: var(--size-heading); }';
+const CAP_SERVICES =
+  '[data-section="sec-services"] [data-id="el-services-headline"][data-role] { font-size: var(--size-heading); }';
+
+describe("an exact letter above the heading comes down to it on a phone (ADR 0083)", () => {
+  it("caps the 96 px headline and the 56 px card title, and nothing at or below 40", () => {
+    // `letra-exacta-grande` at the default scale, heading 2.5rem = 40 px: 96 and 56 are above it,
+    // the services headline's 40 is equal to it and the body's 28 is under it.
+    expect(phoneCaps(large.document)).toEqual([CAP_HEADLINE, CAP_CARD]);
+  });
+
+  it("judges against the theme's own heading, in each of the three scales", () => {
+    // Written out per scale rather than derived with the comparison under test: the compact
+    // heading is 2rem = 32 px, so the 40 px services headline is above it there and only there.
+    const expected: Record<string, string[]> = {
+      compact: [CAP_HEADLINE, CAP_SERVICES, CAP_CARD],
+      default: [CAP_HEADLINE, CAP_CARD],
+      generous: [CAP_HEADLINE, CAP_CARD],
+    };
+    expect(SCALES.map((scale) => scale.id).sort()).toEqual(Object.keys(expected).sort());
+    for (const scale of SCALES) {
+      const heading = scale.sizes["size.heading"];
+      expect(phoneCaps(withHeading(large.document, heading)), scale.id).toEqual(expected[scale.id]);
+    }
+  });
+
+  it("never caps a reference, nor an exact value of another property", () => {
+    // `estilo-por-elemento` carries a 28 px radius, an exact colour and a size by reference — the
+    // three things a cap that read the wrong property, or the reference arm, would catch.
+    expect(phoneCaps(styled.document)).toEqual([]);
+    expect(buildCss(styled.document, "html")).not.toContain("rule 6 on a phone");
+  });
+
+  it("publishes nothing for a hidden element, however large its letter", () => {
+    const section = large.document.pages[0]?.sections[0];
+    if (!section) throw new Error("no cover");
+    const hidden = parseDocument({
+      ...large.document,
+      pages: [
+        {
+          ...large.document.pages[0],
+          sections: [
+            {
+              ...section,
+              content: section.content.map((el) =>
+                el.id === "el-headline" ? { ...el, hidden: true } : el,
+              ),
+            },
+            ...(large.document.pages[0]?.sections.slice(1) ?? []),
+          ],
+        },
+      ],
+    });
+    expect(phoneCaps(hidden)).toEqual([CAP_CARD]);
+  });
+
+  it("is in no other document of the corpus, so every other site keeps its bytes", () => {
+    for (const entry of corpus) {
+      if (entry.name === "letra-exacta-grande") continue;
+      expect(buildCss(entry.document, "html"), entry.name).not.toContain("rule 6 on a phone");
+    }
+  });
+
+  it("carries no !important, and comes after the rules it patches", () => {
+    const css = buildCss(large.document, "html");
+    const block = css.slice(css.indexOf("/* rule 6 on a phone"));
+    expect(block.slice(0, block.indexOf("}\n"))).not.toContain("!important");
+    // A media query adds no specificity, so the same selector wins only by coming later.
+    expect(css.indexOf("/* rule 6 on a phone")).toBeGreaterThan(
+      css.indexOf('[data-id="el-headline"][data-role] { font-size: 96px; }'),
+    );
   });
 });
 

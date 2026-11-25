@@ -11434,3 +11434,59 @@ para que David la vete si quiere.
    página clara aun con margen (marino 98 → 78), y la nota dice que es el motivo.
 7. **El editor sigue sin verse fuera de Chromium**; la web publicada sí, en tres motores.
 8. **El sprint 41, sin planificar.**
+
+## Sprint 41 — «Estirar, agrandar y mover» (desde el 25 de noviembre de 2026)
+
+El encargo de David: «centrarnos en las opciones para estirar, agrandar, empequeñecer y mover todos los
+elementos textuales y no textuales dentro de las secciones». Es el hueco que el inventario del sprint 40
+dejó costado. Sus respuestas, en dos rondas: la puerta de una sección de serie pregunta y, con el sí, el
+gesto se queda donde lo dejó la mano; la lista se coge por cualquier tarjeta y una tarjeta cambia de orden
+por su asa; **los lados estiran la caja y las esquinas escalan lo que hay dentro**, estilo Canva, la foto
+incluida («la foto toma el alto que le des»); `+` y `−` escalan y `E` estira con el teclado; traer al frente
+y enviar atrás, con aviso si algo queda tapado; las secciones se arrastran en «Páginas» y en el lienzo, y
+van a una página que ya existe; el nombre del negocio se estira por su borde. Todo en este sprint, doce días,
+Fable los días 2 y 3. Al rechazar el primer plan añadió tres ajustes —las capas tienen techo, lo tapado no es
+solo texto, y qué hace el asa en una lista vinculada— y pasó el día 1b de Sonnet a Opus. El plan está copiado
+íntegro en la memoria del proyecto. Criterios de todo el sprint: ninguna web guardada cambia de aspecto sin
+decisión escrita; la publicada no cambia un byte salvo en las que usen lo nuevo, y el ZIP del corpus lo
+demuestra al cierre; HTML y CSS estáticos; un gesto es un paso de historial y trae su teclado en el sprint.
+
+### Día 1a — una letra exacta grande baja al titular en el móvil (PR de `fix/la-letra-exacta-en-el-movil`, ADR 0083)
+
+**El defecto, medido.** Nada en la hoja de estilo hacía más pequeña una letra exacta en un teléfono: los tres
+tamaños del sistema son rem planos, `styleDeclarations` escribe el px tal cual y el bloque de menos de 720 px
+no toca `font-size`. En la fixture nueva, un titular de 96 px a 390 medía **cuatro líneas y 441 px, con
+«Reformamos» partido en tres** («Refor- / ma- / mos»). El día 2 va a convertir la esquina de un texto en un
+gesto que escribe justo ese valor, así que el tope va primero y solo, como aviso que bloquea en su propia PR.
+
+**Lo que hay ahora.** Toda letra exacta **mayor que el titular del tema** baja al titular por debajo de 720 px:
+el mismo selector (0,3,0) en una consulta detrás de su regla, sin `!important`. Igual o menor, nada; una
+referencia, nada. El titular se lee del tema al pintar (compacta 32, normal 40, amplia 48). A 390 el titular
+mide **dos líneas y 92 px, sin palabra partida**; a 1280, los 96 px que escribió el dueño. **Una web guardada
+cambia**: la que lleve una letra exacta por encima del titular la verá bajar en el móvil en su próxima
+descarga. Es la decisión escrita que pide el criterio, y es la *e* de las que David podía vetar al aprobar.
+Capturas: [390 antes](review/2026-11-estirar/dia1a-letra-390-antes.png) ·
+[390 después](review/2026-11-estirar/dia1a-letra-390-despues.png) ·
+[1280 después](review/2026-11-estirar/dia1a-letra-1280-despues.png).
+
+**Corrección al plan.** El plan decía que quitar el umbral pondría roja `estilo-por-elemento` por sus 28 px:
+esos 28 px son un radio de esquina, no una letra, y **el corpus no lleva ninguna letra exacta**. Las 26 goldens
+quedan idénticas byte a byte; `letra-exacta-grande` es la nueva (96 y 56 px por encima, 40 igual, 28 debajo).
+
+**Pruebas.** `element-style.test.ts`: el bloque lleva exactamente el titular y la tarjeta; por escala, escrito
+a mano (en la compacta entra también el de 40); nunca una referencia ni otra propiedad (`estilo-por-elemento`
+no lleva bloque); nada de un elemento oculto; ningún otro documento del corpus; sin `!important` y después de
+las reglas. `element-style.browser.test.ts`: 40 px a 390 y lo escrito a 1280, sin palabra partida a 390 (antes
+del arreglo, rojo con `96px`). **Saboteos**: `>=` por `>` (rojo en la unitaria; el navegador no puede verlo,
+porque 40 exactos y el titular pintan lo mismo), sin umbral (rojo en las dos), el bloque antes de las reglas
+(rojo en las dos).
+
+**Dos caminatas se apoyaban en el defecto.** La del sprint 10 y la de las puertas de descarga provocaban «Algo
+se sale en el móvil» con una letra de 200 px; con el tope, esa letra ya no se sale. Ahora lo provoca un
+espaciado exacto de 200 px, y la del sprint 10 asevera además que, quitado el espaciado, **la letra de 200 px
+sola ya no abre la puerta** y que la web descargada la pinta a 200 en un ordenador y más pequeña a 390.
+Saboteado el tope, esa caminata se pone roja: la puerta vuelve a abrirse y la descarga no llega.
+
+**Lo que deja.** La cabecera admite su propia letra exacta por parte (hasta 200 px en «Menú») y este tope no la
+alcanza: la cabecera tiene sus propias derivaciones de móvil y su pliegue (ADR 0067). Sin medir; va al backlog
+para el cierre del sprint.

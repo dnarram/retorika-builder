@@ -374,6 +374,13 @@ repair would be an interface for it. See ADR 0026.
 > prototype documents, all of them `px` or hex, so the narrowing moved no data. `0` keeps its place
 > without a unit, because `0` is a length and the one value for which a unit is noise.
 
+> **An exact letter above the heading comes down to it on a phone** (25 November 2026, ADR 0083). An
+> exact `fontSize` larger than the theme's `size.heading` is published as written above 720 px and as
+> `var(--size-heading)` under it, by the same selector in a query after it — no `!important`, and only
+> for the documents that carry one. Rule 6 is unchanged: the exception is still stored and still
+> published as written where there is room for it. Measured before: a 96 px headline was four lines and
+> 441 px on a 390 phone, with a word hyphenated over three of them.
+
 ---
 
 ## The two marks
