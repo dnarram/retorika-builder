@@ -97,6 +97,16 @@ before it, which is the only honest thing it can mean.
 
 ### 7. The escalation is still offered and never done on its own
 
+> **Amended on sprint 41 día 3 (25 November 2026), decided by David planning the sprint — option B
+> of the three he was given for the door:** the escalation is still offered and never done on its
+> own, but **the gesture that asks is not lost**. The element follows the hand as it does in a
+> hand-designed section, an edge or a corner previews with an outline, the offer is asked **on
+> release** with the element held where the hand left it, and «Diseñar a mano» escalates the
+> section and lands the element there in one step (`doorLanding`, the `escalateSection` action's
+> `landing`). «Mejor no», Escape and a click elsewhere put it back and write nothing. «No se mueve
+> nada al empezar» reads from here as **«nada se mueve sin tu sí»**. The record is
+> `docs/design/REVIEW.md`, sprint 41 día 3.
+
 ADR 0025 §7 is not amended. A drag in a section the catalog draws **moves nothing and asks the
 question instead**, through the same offer the section's own «A mano» button opens — one door, not a
 second copy of it. «No se mueve nada al empezar» is that offer's own promise, and a drag that quietly

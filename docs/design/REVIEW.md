@@ -11575,3 +11575,52 @@ acabó el dedo, como antes.
 un elemento pequeño solo tiene esquinas, así que solo escala; estirarlo sigue siendo de «Colocación» (ADR
 0050 día 7 ya lo nombraba); las asas laterales en cajas bajas, 0,25 días, no se construyen. El alto propio
 de la foto y su punto, días 4 y 5; el teclado, día 6; la esquina en una sección de serie, día 3.
+
+### Día 3 — la puerta donde está la mano (PR de `feat/la-puerta-donde-esta-la-mano`, notas en ADR 0048 §7 y 0025 §7)
+
+**El hueco, medido.** En una sección de serie el arrastre abría la oferta «Diseñar a mano» al cruzar el
+umbral, sin que nada siguiera a la mano, y al aceptar nada se movía: había que repetir el gesto. Tirar de
+un borde no hacía nada: `edgeUnder` devolvía `null` sin `layout`. Es la opción B que David eligió al
+planificar: la oferta también al tirar de un borde, y **al aceptar, el gesto se queda donde lo dejó la mano**.
+
+**Lo que hay ahora.** El elemento sigue a la mano con el mismo `transform` que en una sección a mano; un lado
+o una esquina se previsualizan con un contorno discontinuo (`.rb-door`) —el área en línea de una sección de
+doce columnas no puede escribirse en unidades finas— y la esquina de un texto, además, con su letra. La
+oferta llega **al soltar**, anclada bajo la caja que dejó la mano, con el elemento retenido (`rb-held`,
+que `gestureLive` cuenta para que ningún parche lo devuelva mientras pregunta). Con el sí, el cromo se quita,
+se miden las cajas, `doorLanding` calcula el aterrizaje **sin DOM** —las 107 pistas que la sección va a
+tener salen de su ancho de contenido y del `space.md` del tema, exactamente como `fineTemplateColumns` las
+pinta, y las filas del paso de 8 px— y la acción `escalateSection` lleva `landing`: escalada y aterrizaje
+en **un paso**, con la causa `setPlacement` para que «Volver a la original» pregunte. «Mejor no», Esc y un clic
+en otra parte devuelven el elemento y no escriben nada: el gesto vigila la oferta con un `MutationObserver`,
+porque cada forma de cerrarla es ajena a él. La línea de ayuda dice la promesa nueva mientras la oferta
+retiene algo (`editor.section.escalate.bodyHeld`). Sin esquema ni renderer.
+
+**Medido en la portada generada a 1280.** El botón llevado 90 × 110 px de pantalla: mientras la mano está
+abajo no hay oferta y el botón ha viajado (±2 px); al soltar la oferta está, el botón sigue donde la mano, la
+sección no es `rb-free` y el serial no cambia. «Mejor no» lo devuelve (±1 px) sin escribir; Esc, igual. Con
+el sí: `rb-free`, el botón a **menos de una unidad (10,5 px) y una fila (8 px)** de donde lo dejó la mano, los
+demás a ≤ 1 px de ancho y ≤ 4 px de alto de donde estaban, el botón elegido; un «Deshacer» devuelve la
+sección de serie con el botón en su sitio. El borde derecho del titular: cursor `ew-resize` también en una
+sección de serie, el contorno acaba donde la mano (±3 px), la oferta al soltar con el contorno aún puesto,
+y con el sí el borde derecho a menos de una unidad de la mano y el izquierdo quieto. La esquina sureste: la
+letra pasa de 40 durante el gesto y sigue así retenida, y con el sí aterriza en 52 ± 1 leída del documento.
+
+**Pruebas.** `doorLanding.test.ts` (seis: las 107 pistas suman el ancho y cada novena es el hueco; el
+movimiento por unidad y fila; el imán a la línea más cercana; la caja con el borde derecho contra el final
+de la unidad; el recorte sin invertir). `documentHistory.test.ts` (un paso y un deshacer que devuelve la
+sección de serie entera; sin letra; sin `landing` es la escalada de siempre). Dos caminatas nuevas y la del
+sprint 24 día 8 actualizada (la oferta llega al soltar; «Mejor no» devuelve). **Saboteos**: dos pasos en el
+reductor (rojo en la unitaria y en la caminata, en el «Deshacer»); sin aterrizaje al aceptar (rojo: «el botón
+aterrizó a −114 px de la mano»); **medir con el `transform` aún puesto se queda en verde**, y se dice: el
+aterrizaje sobrescribe columna y fila del único elemento desplazado, así que el orden «primero el cromo
+fuera, luego medir» no lo sujeta ninguna aserción; se mantiene por principio —`measurePlaced` mide la página
+del catálogo— y queda nombrado como lo que es.
+
+**Dos defectos de arnés, dichos.** El clic que sigue a un tirón de borde elegía la sección y cerraba la oferta
+recién abierta —la misma lección de ADR 0048 §2 para el arrastre—; ahora el tirón lo suprime como el
+arrastre. Y tras aterrizar, el elemento queda elegido: un `click()` de la caminata sería el segundo, el que
+escribe, y una zona de 2 px; la caminata pulsa solo si no está elegido.
+
+**Lo que deja.** El teclado en una sección de serie sigue sin abrir la puerta (día 6). Las asas táctiles en
+sección de serie no se dibujan (`paintHandles` pide `rb-free`): el corte que el plan nombraba, y se dice.

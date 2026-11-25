@@ -148,6 +148,12 @@ since sprint 1.
 
 ### 7. Escalation is per section, and the return is one click
 
+> **Note, sprint 41 día 3 (25 November 2026):** the offer's promise «No se mueve nada al empezar»
+> gains a second form for the offer a gesture asks: «lo que has movido se queda donde lo has soltado;
+> lo demás no se mueve sin tu sí». Escalation is still per section and still never done on its own;
+> what changes is that the drag or the pull that asked lands with the «sí», in the same step, so
+> one «Deshacer» gives the catalog section back whole. ADR 0048 §7 carries the amendment.
+
 - **A section is of the catalog or it is free**, one at a time. «La profundidad es por sección. Una
   web normal es una mezcla.»
 - **Escalating moves nothing.** `escalate` copies the layout the catalog was already drawing, so the
