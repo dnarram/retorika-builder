@@ -11521,3 +11521,50 @@ segundo clic no escribe), sin la guarda del cromo (la flecha no hace nada).
 
 **Lo que deja.** Ningún camino de teclado del texto de una tarjeta a su lista: Tab llega a la lista y las
 flechas la mueven, como antes. El asa de la tarjeta y la lista vinculada son del día 8, que completa la ADR.
+
+### Día 2 — los lados estiran y las esquinas escalan (PR de `feat/las-esquinas-escalan`, ADR 0082)
+
+**El cambio de modelo, solo y primero.** Desde el sprint 25 los ocho puntos de la caja hacían una sola
+cosa: estirarla. Un titular tirado por su esquina salía con la misma letra de 40 px en una caja del
+doble, con las palabras recolocadas. David lo pidió «estilo Canva»: la esquina escala **lo que hay dentro**,
+y la caja la sigue. Es un cambio del modelo de interacción, así que va en su propia PR antes de lo que se
+apoya en él (días 3, 5 y 6).
+
+**Lo que hay ahora.** `cornerMeaning(role)`: la esquina de un texto, botón, enlace o «Cómo llegar» escala
+la letra; la de una foto, la foto con su forma; la de una lista, un campo o un embed, la caja en los dos
+ejes, como hasta hoy. Los lados no cambian. El factor es la proyección del recorrido de la mano sobre la
+diagonal de la caja (`scaleFactor`): la esquina de enfrente se queda quieta, y una mano que cruza la
+diagonal no cambia nada. La letra es `base × factor` entre **12** y 200 px, guardada como excepción
+marcada; a ±2 px de uno de los tres tamaños del tema se guarda la **referencia** (la regla 6 la prefiere);
+y si la mano cae en el tamaño con el que el elemento ya se pintaba sin tamaño propio, no se guarda nada.
+Los dos tramos toman el factor de la letra, redondeados, con la esquina de enfrente quieta y recortados en
+el borde (`scaledBox`). **Un gesto, un paso**: `shapeElement` compone `setPlacement` y `setElementStyle`
+en una sola instantánea, y un «Deshacer» devuelve letra y caja juntas. La vista previa es la propia letra y
+el área del elemento, repuestas al soltar; la línea de ayuda dice lo hecho una vez por gesto («Letra: 52
+px», «Letra: Mediano», «Foto: 284 × 213 px»). `handles.ts` no cambia: el asa de esquina del dedo entra por
+el mismo `begin` y escala. Sin esquema, sin renderer: la web publicada no cambia un byte.
+
+**Medido en la portada generada a 1280.** Esquina sureste del titular tirada un tercio de la diagonal: letra
+52 px (40 × 1,3), `{exact: "52px", exception: true}` leído del documento guardado con la vista previa ya
+repuesta (`el.style.fontSize === ""`), los dos tramos × 1,3 ± 1 unidad, columna y fila quietas, **las mismas
+líneas** antes y después. Un «Deshacer»: 40 px, la colocación de antes y ningún `fontSize`. El lado derecho
+ensancha una columna y la letra sigue en 40. La esquina noroeste a 0,61: 24 px, `{ref: "size.subheading"}`,
+«Letra: Mediano», y el borde de enfrente en la misma unidad y la misma fila. Escribiendo «Mesas en la
+plaza» y tirando de la esquina tres píxeles por fuera: las palabras intactas, se sigue escribiendo y la
+letra es mayor. La foto, a la mitad por su esquina: tramos a la mitad ± 1, ancho × 0,5 ± 0,08 y la misma
+proporción ± 0,03.
+
+**Pruebas.** `scaleBox.test.ts` (quince: la tabla por papel contra `ROLES` entero, el factor por
+diagonal y por esquina, el imán por escala, suelo y techo, los tramos y el borde de enfrente, el recorte);
+`documentHistory.test.ts` (un paso y un deshacer para los dos; `undefined` quita la letra; sin decidir la
+letra se deja; nada cambiado, ningún paso; `wasPlacementEverMoved` lo cuenta). Dos caminatas nuevas,
+«sprint 41 día 2». `pull` y `cursorOn` suben de la caminata del sprint 25 día 4 a helpers del fichero.
+**Saboteos**: dos pasos en el reductor (rojo en dos unitarias y en la caminata, en el «Deshacer»); el lado
+derecho enrutado a escalar (rojo en la caminata: la letra deja de ser 40); el factor leyendo solo la x
+(rojo en la unitaria «ignores travel across the diagonal»; la caminata tira justo por la diagonal, donde la x
+sola coincide, y por eso ese caso se sujeta con la unitaria y se dice aquí).
+
+**Lo que deja.** Estirar en diagonal un texto o una foto de un solo tirón: ahora son dos lados. Con el dedo,
+un elemento pequeño solo tiene esquinas, así que solo escala; estirarlo sigue siendo de «Colocación» (ADR
+0050 día 7 ya lo nombraba); las asas laterales en cajas bajas, 0,25 días, no se construyen. El alto propio
+de la foto y su punto, días 4 y 5; el teclado, día 6; la esquina en una sección de serie, día 3.
