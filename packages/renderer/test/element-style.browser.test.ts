@@ -229,3 +229,66 @@ describe("rule 6 — an element's own style, as the browser resolves it", () => 
     }
   });
 });
+
+/**
+ * **An exact letter larger than the theme's heading comes down to the heading on a phone**
+ * (ADR 0083, sprint 41 día 1a). The size tokens are flat rem, `styleDeclarations` writes an exact
+ * length as it is, and the shared block under 720 px never touches `font-size` — so before this a
+ * 96 px headline was 96 px on a 390 phone too. Measured on `letra-exacta-grande`, whose theme's
+ * heading is 40 px: one exact letter above it on the cover, one on a card, one equal to it and one
+ * below it.
+ */
+describe("an exact letter on a phone (ADR 0083)", () => {
+  /** The headline's box, and whether any of its words was broken across two lines. */
+  function headline(page: Page) {
+    return page.evaluate(() => {
+      const el = document.querySelector<HTMLElement>('[data-id="el-headline"]');
+      if (!el) throw new Error("no headline");
+      const lineHeight = Number.parseFloat(getComputedStyle(el).lineHeight);
+      const range = document.createRange();
+      const node = el.firstChild;
+      if (!node) throw new Error("an empty headline");
+      // Each word's own client rects: a word drawn on two lines has two.
+      const broken = [...(node.textContent ?? "").matchAll(/\S+/g)].filter((match) => {
+        range.setStart(node, match.index);
+        range.setEnd(node, match.index + match[0].length);
+        return range.getClientRects().length > 1;
+      }).length;
+      return {
+        height: el.getBoundingClientRect().height,
+        lines: Math.round(el.getBoundingClientRect().height / lineHeight),
+        broken,
+      };
+    });
+  }
+
+  it("comes down to the heading at 390, above it and only above it", async () => {
+    const page = await open(fixture("letra-exacta-grande"), 390);
+    try {
+      const measured = await headline(page);
+      // The record, before and after, read off this line rather than reasoned about.
+      console.info(`letra-exacta-grande at 390: ${JSON.stringify(measured)}`);
+      expect(await computed(page, "el-headline", "font-size")).toBe("40px");
+      expect(await computed(page, "el-card-1-title", "font-size")).toBe("40px");
+      // Equal to the heading is not above it, and below it is the owner's to keep.
+      expect(await computed(page, "el-services-headline", "font-size")).toBe("40px");
+      expect(await computed(page, "el-body", "font-size")).toBe("28px");
+      // What the cap is for: no word of «Reformamos tu casa» broken in two on a phone.
+      expect(measured.broken).toBe(0);
+    } finally {
+      await page.context().close();
+    }
+  });
+
+  it("keeps every exact letter as it was written above 720 px", async () => {
+    const page = await open(fixture("letra-exacta-grande"), 1280);
+    try {
+      expect(await computed(page, "el-headline", "font-size")).toBe("96px");
+      expect(await computed(page, "el-card-1-title", "font-size")).toBe("56px");
+      expect(await computed(page, "el-services-headline", "font-size")).toBe("40px");
+      expect(await computed(page, "el-body", "font-size")).toBe("28px");
+    } finally {
+      await page.context().close();
+    }
+  });
+});

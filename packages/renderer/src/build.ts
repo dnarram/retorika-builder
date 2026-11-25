@@ -19,6 +19,7 @@ import {
   type Section,
   SORTED_TOKEN_KEYS,
   type StyleProperty,
+  tokenPx,
   tokenToCssVariable,
   type VeilColours,
   veilFor,
@@ -912,6 +913,10 @@ function fineGridCss(doc: RetorikaDocument): string[] {
  */
 function elementStyleCss(doc: RetorikaDocument): string[] {
   const rules: string[] = [];
+  const phoneCaps: string[] = [];
+  // Read only when an exact letter is there to be compared with it, so a document with none never
+  // asks `tokenPx` about a theme it has no reason to judge.
+  let headingPx: number | undefined;
 
   const walk = (sectionId: string, elements: readonly ContentElement[]): void => {
     for (const el of elements) {
@@ -923,11 +928,18 @@ function elementStyleCss(doc: RetorikaDocument): string[] {
         // longer fire for a document that parsed — which is the right relationship between a gate
         // and a guard, not a reason to drop the guard.
         const declarations = styleDeclarations(el.style, el.id);
+        const selector =
+          `[data-section="${cssAttributeValue(sectionId)}"] ` +
+          `[data-id="${cssAttributeValue(el.id)}"][data-role]`;
         if (declarations.length > 0) {
-          rules.push(
-            `  [data-section="${cssAttributeValue(sectionId)}"] ` +
-              `[data-id="${cssAttributeValue(el.id)}"][data-role] { ${declarations.join("; ")}; }`,
-          );
+          rules.push(`  ${selector} { ${declarations.join("; ")}; }`);
+        }
+        const fontSize = el.style.fontSize;
+        if (fontSize && "exact" in fontSize) {
+          headingPx ??= tokenPx(doc.theme["size.heading"]);
+          if (tokenPx(fontSize.exact) > headingPx) {
+            phoneCaps.push(`  ${selector} { font-size: var(--size-heading); }`);
+          }
         }
       }
       for (const item of el.items ?? []) walk(sectionId, item.elements);
@@ -938,7 +950,31 @@ function elementStyleCss(doc: RetorikaDocument): string[] {
     for (const section of page.sections) walk(section.id, section.content);
   }
 
-  return rules.length === 0 ? [] : ["/* rule 6: an element's own style */", ...rules, ""];
+  if (rules.length === 0) return [];
+  return [
+    "/* rule 6: an element's own style */",
+    ...rules,
+    "",
+    // **An exact letter larger than the theme's heading comes down to the heading on a phone**
+    // (ADR 0083, sprint 41 día 1a). The size tokens are flat rem and an exact length is written as
+    // it is, so nothing else in this stylesheet would ever make a 96 px headline smaller on a 390
+    // phone, where it measured four lines, 441 px and a word broken in two. The same selector, in
+    // a query after the rules it patches: a media query adds no specificity, so source order is
+    // what wins — no `!important`, as the block above promises. The heading and not a fraction of
+    // the exact value: the heading is the largest letter the system draws at every width, and it
+    // is the brand name's own answer to the same phone (`brandSizeToken`). Equal to the heading is
+    // not above it, and a letter below it is the owner's to keep. Only for the documents that carry
+    // one, so every other site publishes exactly the bytes it did.
+    ...(phoneCaps.length === 0
+      ? []
+      : [
+          "/* rule 6 on a phone: an exact letter above the heading comes down to it */",
+          "@media (max-width: 720px) {",
+          ...phoneCaps,
+          "}",
+          "",
+        ]),
+  ];
 }
 
 /**
