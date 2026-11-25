@@ -66,7 +66,13 @@ The record is `docs/design/REVIEW.md`, sprint 40.
    - a motif with near-black parts stays mostly veiled on a light page even with the texts' margin (navy
      lines 98 → 78): the guarantee working, and the note says the motif is the cause.
 7. **The editor has still not been seen outside Chromium**; the published site has, in three engines.
-8. **Sprint 41 unplanned.**
+8. **Sprint 41 — «Estirar, agrandar y mover» — planned 25 November 2026**, twelve days; the plan and David's
+   decisions are in `docs/design/REVIEW.md`, sprint 41. Found on its way, and not decided yet:
+   - **The header's own exact letter on a phone.** `header.style` admits an exact `fontSize` per part
+     (up to 200 px in «Menú») and ADR 0083's cap, which brings an element's exact letter above the
+     heading down to it under 720 px, does not reach the header: it is outside rule 7 and has its own
+     phone derivations and fold (ADR 0067). What a 200 px brand name does to a phone's bar is not
+     measured. For sprint 41's close.
 
 The review before that: 19 November 2026, **closing sprint 39 — «los paneles, ordenados».** No new feature: David
 asked for the eight right-hand panels to be put in order — an inventory control by control before any
