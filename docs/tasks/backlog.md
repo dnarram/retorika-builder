@@ -3114,7 +3114,10 @@ rather than about photographs, and it has no home but this row. **Closed 4 Novem
 content by padding from 1296 up, the background still edge to edge; the full-width cover is 1200 wide
 at 1440 and at 2560.
 
-**3. The owner cannot choose how their own photograph is cropped — 9 October 2026.**
+**3. The owner cannot choose how their own photograph is cropped — 9 October 2026.** *The model half
+was built on 25 November 2026 (sprint 41 día 4, [ADR 0084](../decisions/0084-a-photograph-has-a-shape-and-a-point-its-crop-keeps.md)):
+an optional `focus` on the image value, schema 1.23.0, drawn as `object-position`; día 5 is the
+point dragged on the photograph. The row stays below as it was written, because it is why.*
 
 The cover started cropping on that date, because letting the photograph's shape decide the
 section's height gave a 3005px cover to anyone who uploaded a portrait phone photo. The crop is
