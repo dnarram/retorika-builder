@@ -166,6 +166,7 @@ import {
   type SavedWhere,
   type SaveStatus,
 } from "../editor/EditorShell.tsx";
+import { type Focus, focusAt, focusKey, MIDDLE, pointOf, shapeOf } from "../editor/focalPoint.ts";
 import { ghostTilt } from "../editor/ghostTilt.ts";
 import { GUIDE_ZONE, type Guide, guidesFor, type Rect } from "../editor/guides.ts";
 import { HANDLE_TOUCH, handlesFor } from "../editor/handles.ts";
@@ -680,6 +681,8 @@ export function Editor({
   onRevertSection,
   onSetPlacement,
   onShapeElement,
+  onSetImageFocus,
+  onClearPhotoShape,
   onSetMobilePatch,
   onMoveUpOnMobile,
   pageId,
@@ -859,7 +862,13 @@ export function Editor({
     elementId: string,
     edit: PlacementEdit,
     letter: { readonly writes: boolean; readonly value: StyleValue | undefined },
+    /** A photograph's shape after a side pull (ADR 0084), in the same step. */
+    ratio?: { readonly width: number; readonly height: number },
   ) => void;
+  /** The point a photograph's crop keeps (ADR 0084, sprint 41 día 5); `undefined` is the middle. */
+  onSetImageFocus: (address: ElementAddress, focus: Focus | undefined) => void;
+  /** «Forma original»: a photograph given back the catalog's shape (ADR 0084). */
+  onClearPhotoShape: (sectionId: string, elementId: string) => void;
   /**
    * Rule 7's three adjustments, and no fourth: `breakpointPatchSchema` is a strict object of exactly
    * `hidden`, `order` and `columnSpan`, so the mobile view cannot quietly grow into the second design
@@ -1138,6 +1147,8 @@ export function Editor({
    * David asked for exactly that assertion when he approved the sprint.
    */
   const keepChosenFocus = useRef(false);
+  /** The photograph's point had the keyboard before its write repainted it (sprint 41 día 5). */
+  const keepFocusPoint = useRef(false);
   /**
    * **The gesture a section the catalog draws is holding while its offer is open** (sprint 41 día 3,
    * David's option B: «nada se mueve sin tu sí»). A drag there used to ask the moment the hand
@@ -1273,6 +1284,7 @@ export function Editor({
     onSetPlacement,
     onSetVariant,
     onShapeElement,
+    onSetImageFocus,
     onUnbindList,
   });
   propsNow.current = {
@@ -1296,6 +1308,7 @@ export function Editor({
     onSetPlacement,
     onSetVariant,
     onShapeElement,
+    onSetImageFocus,
     onUnbindList,
   };
 
@@ -2372,6 +2385,7 @@ export function Editor({
     focusLineAfterChange(iframeDoc);
     observeSections(iframeDoc);
     handlePainter.current?.();
+    keepFocusPoint.current = false;
     return Math.round((performance.now() - started) * 10) / 10;
   }
   /**
@@ -7572,8 +7586,21 @@ export function Editor({
         readonly current: StyleValue | undefined;
         readonly fontSize: string;
       } | null;
+      /**
+       * **A side of a photograph gives it a shape** (ADR 0084, sprint 41 día 5): «la foto toma el
+       * alto que le des». The photograph's box at the press, and its inline crop to put back. A
+       * left or right side changes the width and keeps the height; a top or bottom side the other
+       * way round; the preview is the photograph's own `aspect-ratio`, cropped, as the page draws it.
+       */
+      readonly photo: {
+        readonly box: DOMRect;
+        readonly aspectRatio: string;
+        readonly objectFit: string;
+      } | null;
     } | null = null;
     let pulled: PlacementEdit | null = null;
+    /** The shape a photograph's side has given it, decided with `pulled` and written with it. */
+    let shaped: { width: number; height: number } | null = null;
     /** The letter a corner has scaled to, decided with `pulled` and written with it. */
     let lettered: ScaledLetter | null = null;
 
@@ -7789,9 +7816,102 @@ export function Editor({
       }
     };
 
+    /**
+     * **The point a photograph's crop keeps, over the chosen photograph** (ADR 0084, sprint 41 día
+     * 5). Drawn only where a crop is — `object-fit: cover`, the catalog's own or a shape given by
+     * hand — at the photograph's `focus`, the middle when it has none. Dragged, or moved with the
+     * arrows (one percent, ten with Shift), and written once on release or when the keys stop: one
+     * gesture, one step. A button, so the keyboard reaches it after the photograph.
+     */
+    let focusing: { readonly el: HTMLElement; readonly sectionId: string; focus: Focus } | null =
+      null;
+    const paintFocus = (section: HTMLElement, sectionId: string) => {
+      for (const point of section.querySelectorAll(".rb-focus")) point.remove();
+      if (deviceNow.current === "mobile" || pulling || designToolsNow.current !== true) return;
+      const found = target(section, sectionId);
+      if (!found || found.el.tagName !== "IMG") return;
+      const view = iframeDoc.defaultView;
+      if (!view || view.getComputedStyle(found.el).objectFit !== "cover") return;
+      const element = findSection(docNow.current, sectionId)?.section.content.find(
+        (candidate) => candidate.id === found.el.dataset["id"],
+      );
+      if (element?.value?.kind !== "image") return;
+      const stored: Focus = element.value.focus ?? MIDDLE;
+      const host = section.getBoundingClientRect();
+      const box = found.el.getBoundingClientRect();
+      const point = chrome(iframeDoc, "button");
+      point.type = "button";
+      point.className = "rb-focus";
+      point.setAttribute("aria-label", es["editor.photo.focus"]);
+      const place = (focus: Focus) => {
+        const at = pointOf(focus, box);
+        point.style.left = `${Math.round(at.x - host.left)}px`;
+        point.style.top = `${Math.round(at.y - host.top)}px`;
+        found.el.style.objectPosition = `${focus.x}% ${focus.y}%`;
+      };
+      place(stored);
+      found.el.style.objectPosition = "";
+      const write = () => {
+        const done = focusing;
+        focusing = null;
+        iframeDoc.documentElement.classList.remove("rb-resizing");
+        if (!done) return;
+        found.el.style.objectPosition = "";
+        flushQueuedPatch.current();
+        const elementId = done.el.dataset["id"];
+        if (!elementId || (done.focus.x === stored.x && done.focus.y === stored.y)) return;
+        keepFocusPoint.current = true;
+        propsNow.current.onSetImageFocus({ sectionId, elementId }, done.focus);
+        announce(
+          es["editor.photo.focusSaid"]
+            .replace("{x}", String(done.focus.x))
+            .replace("{y}", String(done.focus.y)),
+        );
+      };
+      point.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        point.setPointerCapture(event.pointerId);
+        focusing = { el: found.el, sectionId, focus: stored };
+        iframeDoc.documentElement.classList.add("rb-resizing");
+      });
+      point.addEventListener("pointermove", (event) => {
+        if (!focusing) return;
+        focusing.focus = focusAt({ x: event.clientX, y: event.clientY }, box);
+        place(focusing.focus);
+      });
+      point.addEventListener("pointerup", write);
+      point.addEventListener("pointercancel", () => {
+        focusing = null;
+        iframeDoc.documentElement.classList.remove("rb-resizing");
+        place(stored);
+        found.el.style.objectPosition = "";
+      });
+      point.addEventListener("keydown", (event) => {
+        const next = focusKey(focusing?.focus ?? stored, event);
+        if (!next) return;
+        event.preventDefault();
+        event.stopPropagation();
+        focusing = { el: found.el, sectionId, focus: next };
+        iframeDoc.documentElement.classList.add("rb-resizing");
+        place(next);
+      });
+      point.addEventListener("keyup", (event) => {
+        if (event.key.startsWith("Arrow")) write();
+      });
+      point.addEventListener("blur", () => {
+        if (focusing) write();
+      });
+      section.appendChild(point);
+      // Every repaint until the write's own patch lands hands the keyboard back; the redraw after
+      // that patch is what lets go of the wish (a repaint before it would otherwise spend it).
+      if (keepFocusPoint.current) point.focus({ preventScroll: true });
+    };
+
     const paintHandles = (section: HTMLElement) => {
       const sectionId = section.dataset["section"];
       if (!sectionId) return;
+      if (!focusing) paintFocus(section, sectionId);
       for (const handle of section.querySelectorAll(".rb-handle")) handle.remove();
       if (!coarse || deviceNow.current === "mobile" || pulling) return;
       if (designToolsNow.current !== true) return;
@@ -7840,6 +7960,10 @@ export function Editor({
       el.style.gridColumn = pulling.column;
       el.style.gridRow = pulling.row;
       if (pulling.scale) el.style.fontSize = pulling.scale.fontSize;
+      if (pulling.photo) {
+        el.style.aspectRatio = pulling.photo.aspectRatio;
+        el.style.objectFit = pulling.photo.objectFit;
+      }
       for (const guide of section.querySelectorAll(".rb-guide")) guide.remove();
       showCursor(section, el, null);
       iframeDoc.documentElement.classList.remove("rb-resizing");
@@ -7848,6 +7972,7 @@ export function Editor({
       pulling = null;
       pulled = null;
       lettered = null;
+      shaped = null;
       repaintAll();
     };
 
@@ -7898,9 +8023,18 @@ export function Editor({
                 fontSize: el.style.fontSize,
               }
             : null,
+        photo:
+          !isCorner(edge) && meaning === "photo"
+            ? {
+                box: el.getBoundingClientRect(),
+                aspectRatio: el.style.aspectRatio,
+                objectFit: el.style.objectFit,
+              }
+            : null,
       };
       pulled = null;
       lettered = null;
+      shaped = null;
       section.setPointerCapture(event.pointerId);
       for (const handle of section.querySelectorAll(".rb-handle")) handle.remove();
       iframeDoc.documentElement.classList.add("rb-resizing");
@@ -7998,6 +8132,23 @@ export function Editor({
         next.columnSpan,
       )}`;
       pulling.el.style.gridRow = `${next.row}/span ${next.rowSpan}`;
+      if (pulling.photo) {
+        // The width is the grid's, read back after the area moved; the height is the hand's on
+        // a top or bottom side and the press's on a left or right one.
+        const { box } = pulling.photo;
+        const width = pulling.el.getBoundingClientRect().width;
+        const height =
+          pulling.edge === "bottom"
+            ? y - box.top
+            : pulling.edge === "top"
+              ? box.bottom - y
+              : box.height;
+        shaped = shapeOf(width, Math.max(ROW_STEP_PX, height));
+        if (shaped) {
+          pulling.el.style.aspectRatio = `${shaped.width} / ${shaped.height}`;
+          pulling.el.style.objectFit = "cover";
+        }
+      }
     });
 
     const release = () => {
@@ -8006,6 +8157,7 @@ export function Editor({
       const elementId = el.dataset["id"];
       const edit = pulled;
       const letter = lettered;
+      const shape = pulling.photo ? shaped : null;
       const wasWriting = el.isContentEditable;
       // What the hand made of a photograph, read while the preview is still on it.
       const shown = scale?.meaning === "photo" ? el.getBoundingClientRect() : null;
@@ -8052,6 +8204,23 @@ export function Editor({
               .replace("{h}", String(Math.round(shown.height))),
           );
         }
+        return;
+      }
+      if (shape) {
+        // A photograph's side: the area and the shape in one step (ADR 0084).
+        keepChosenFocus.current = true;
+        propsNow.current.onShapeElement(
+          sectionId,
+          elementId,
+          edit,
+          { writes: false, value: undefined },
+          shape,
+        );
+        announce(
+          es["editor.scale.photo"]
+            .replace("{w}", String(shape.width))
+            .replace("{h}", String(shape.height)),
+        );
         return;
       }
       if (Object.keys(edit).length === 0) return;
@@ -9478,6 +9647,15 @@ export function Editor({
       // Held where the hand left it while the offer asks (sprint 41 día 3): the same lift as the
       // drag's, so the element reads as still picked up, and the outline a pull asks with.
       `.rb-held { z-index: 5; box-shadow: ${CHROME_SCALE.shadow2}; }`,
+      // The point a photograph's crop keeps (ADR 0084): a target of the screen's 44 px, centred on
+      // the point, with a ring the eye finds on any photograph — white inside, brand outside.
+      `.rb-focus { position: absolute; z-index: 11; width: ${screenPx(HANDLE_TOUCH)};`,
+      `  height: ${screenPx(HANDLE_TOUCH)}; margin: ${screenPx(-HANDLE_TOUCH / 2)} 0 0 ${screenPx(-HANDLE_TOUCH / 2)};`,
+      "  padding: 0; border: 0; background: transparent; display: grid; place-items: center;",
+      "  cursor: grab; touch-action: none; }",
+      `.rb-focus::before { content: ""; width: ${screenPx(18)}; height: ${screenPx(18)}; border-radius: 50%;`,
+      `  border: ${screenPx(3)} solid #FFFFFF; box-shadow: 0 0 0 ${screenPx(2)} ${CHROME_SCALE.brand}, ${CHROME_SCALE.shadow1}; }`,
+      ".rb-resizing .rb-focus { cursor: grabbing; }",
       `.rb-door { position: absolute; z-index: 8; pointer-events: none; box-sizing: border-box;`,
       `  border: ${screenPx(2)} dashed ${CHROME_SCALE.brand}; border-radius: ${screenPx(4)}; }`,
       /*
@@ -10654,6 +10832,9 @@ export function Editor({
             }
             onSetPlacement={(elementId, edit) => {
               if (designSectionId) onSetPlacement(designSectionId, elementId, edit);
+            }}
+            onClearPhotoShape={(elementId) => {
+              if (designSectionId) onClearPhotoShape(designSectionId, elementId);
             }}
             onSetMobilePatch={(elementId, edit) => {
               if (designSectionId) onSetMobilePatch(designSectionId, elementId, edit);

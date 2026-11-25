@@ -1828,7 +1828,7 @@ export function Variants({
             dismissToast();
             dispatch({ type: "setPlacement", variant: openIndex, sectionId, elementId, edit });
           }}
-          onShapeElement={(sectionId, elementId, edit, letter) => {
+          onShapeElement={(sectionId, elementId, edit, letter, ratio) => {
             dismissToast();
             dispatch({
               type: "shapeElement",
@@ -1838,7 +1838,16 @@ export function Variants({
               edit,
               fontSize: letter.value,
               writesLetter: letter.writes,
+              ...(ratio ? { ratio } : {}),
             });
+          }}
+          onSetImageFocus={(address, focus) => {
+            dismissToast();
+            dispatch({ type: "setImageFocus", variant: openIndex, address, focus });
+          }}
+          onClearPhotoShape={(sectionId, elementId) => {
+            dismissToast();
+            dispatch({ type: "clearPhotoShape", variant: openIndex, sectionId, elementId });
           }}
           onSetMobilePatch={(sectionId, elementId, edit) => {
             dismissToast();

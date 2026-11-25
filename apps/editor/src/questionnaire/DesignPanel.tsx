@@ -234,6 +234,7 @@ export function DesignPanel({
   selectedElementId,
   onSelectElement,
   onSetPlacement,
+  onClearPhotoShape,
   onSetMobilePatch,
   onMoveUpOnMobile,
   onPreviewMobile,
@@ -249,6 +250,8 @@ export function DesignPanel({
   selectedElementId: string | null;
   onSelectElement: (elementId: string) => void;
   onSetPlacement: (elementId: string, edit: PlacementEdit) => void;
+  /** «Forma original» (ADR 0084): the photograph given back the catalog's shape. */
+  onClearPhotoShape: (elementId: string) => void;
   /** Rule 7's first and third adjustments. `undefined` for a field takes that adjustment away, which
    * is how «Ocultar aquí» turns itself back off. */
   onSetMobilePatch: (elementId: string, edit: MobilePatchEdit) => void;
@@ -423,6 +426,17 @@ export function DesignPanel({
                   «Columna 25» with no explanation is a number somebody has to guess the meaning of.
                   It also says what the canvas's arrows are worth, because the two controls are the
                   same act and a person who finds one should know about the other. */}
+              {/* **«Forma original»** (ADR 0084, sprint 41 día 5): present only on a photograph a
+                  side has given a shape of its own — absent, not disabled, on every other. */}
+              {selected.placement.ratio ? (
+                <button
+                  type="button"
+                  onClick={() => onClearPhotoShape(selected.elementId)}
+                  className="ui-interactive self-start cursor-pointer rounded-ui-sm border border-ui-border bg-ui-surface px-2 py-1 text-[11px] font-medium text-ui-ink hover:border-ui-border-strong hover:bg-ui-bg"
+                >
+                  {es["editor.design.originalShape"]}
+                </button>
+              ) : null}
               <p className="m-0 text-[11px] leading-snug text-ui-muted">
                 {es["editor.design.placementHelp"]}
               </p>
