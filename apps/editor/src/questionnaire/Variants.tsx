@@ -1827,6 +1827,18 @@ export function Variants({
             dismissToast();
             dispatch({ type: "setPlacement", variant: openIndex, sectionId, elementId, edit });
           }}
+          onShapeElement={(sectionId, elementId, edit, letter) => {
+            dismissToast();
+            dispatch({
+              type: "shapeElement",
+              variant: openIndex,
+              sectionId,
+              elementId,
+              edit,
+              fontSize: letter.value,
+              writesLetter: letter.writes,
+            });
+          }}
           onSetMobilePatch={(sectionId, elementId, edit) => {
             dismissToast();
             dispatch({ type: "setMobilePatch", variant: openIndex, sectionId, elementId, edit });

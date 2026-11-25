@@ -391,6 +391,109 @@ describe("wasPlacementEverMoved", () => {
     const undone = historiesReducer(moved, { type: "undo", variant: 0 });
     expect(wasPlacementEverMoved(undone[0] as Histories[number], "sec-cover")).toBe(true);
   });
+
+  it("counts a corner's scale as the hand laying the section out", () => {
+    const free = run(start(), escalate());
+    const shaped = run(free, {
+      type: "shapeElement",
+      variant: 0,
+      sectionId: "sec-cover",
+      elementId: firstPlaced(free),
+      edit: { columnSpan: 40 },
+      fontSize: { exact: "52px", exception: true },
+      writesLetter: true,
+    });
+    expect(wasPlacementEverMoved(shaped[0] as Histories[number], "sec-cover")).toBe(true);
+  });
+});
+
+describe("shapeElement — a corner's scale is one step (ADR 0082)", () => {
+  const escalate = (): HistoryAction => ({
+    type: "escalateSection",
+    variant: 0,
+    sectionId: "sec-cover",
+  });
+  const elementOf = (state: Histories, id: string) =>
+    state[0]?.present.document.pages[0]?.sections
+      .find((s) => s.id === "sec-cover")
+      ?.content.find((e) => e.id === id);
+  const placementOf = (state: Histories, id: string) =>
+    state[0]?.present.document.pages[0]?.sections
+      .find((s) => s.id === "sec-cover")
+      ?.layout?.placements.find((p) => p.elementId === id);
+
+  it("writes the letter and the box in one step, and one undo takes both back", () => {
+    const free = run(start(), escalate());
+    const before = placementOf(free, "el-headline");
+    expect(before).toBeDefined();
+    const shaped = run(free, {
+      type: "shapeElement",
+      variant: 0,
+      sectionId: "sec-cover",
+      elementId: "el-headline",
+      edit: { columnSpan: (before?.columnSpan ?? 0) + 8, rowSpan: (before?.rowSpan ?? 0) + 2 },
+      fontSize: { exact: "52px", exception: true },
+      writesLetter: true,
+    });
+    expect(shaped[0]?.past.length).toBe((free[0]?.past.length ?? 0) + 1);
+    expect(placementOf(shaped, "el-headline")).toMatchObject({
+      columnSpan: (before?.columnSpan ?? 0) + 8,
+      rowSpan: (before?.rowSpan ?? 0) + 2,
+    });
+    expect(elementOf(shaped, "el-headline")?.style?.fontSize).toEqual({
+      exact: "52px",
+      exception: true,
+    });
+    const undone = run(shaped, { type: "undo", variant: 0 });
+    expect(placementOf(undone, "el-headline")).toEqual(before);
+    expect(elementOf(undone, "el-headline")?.style?.fontSize).toBeUndefined();
+  });
+
+  it("takes a size away with `undefined`, and leaves it alone when the gesture did not decide it", () => {
+    const free = run(start(), escalate());
+    const sized = run(free, {
+      type: "setElementStyle",
+      variant: 0,
+      address: { sectionId: "sec-cover", elementId: "el-headline" },
+      property: "fontSize",
+      value: { ref: "size.subheading" },
+    });
+    const kept = run(sized, {
+      type: "shapeElement",
+      variant: 0,
+      sectionId: "sec-cover",
+      elementId: "el-headline",
+      edit: { columnSpan: 40 },
+      writesLetter: false,
+    });
+    expect(elementOf(kept, "el-headline")?.style?.fontSize).toEqual({ ref: "size.subheading" });
+    const cleared = run(sized, {
+      type: "shapeElement",
+      variant: 0,
+      sectionId: "sec-cover",
+      elementId: "el-headline",
+      edit: { columnSpan: 40 },
+      fontSize: undefined,
+      writesLetter: true,
+    });
+    expect(elementOf(cleared, "el-headline")?.style?.fontSize).toBeUndefined();
+    expect(cleared[0]?.past.length).toBe((sized[0]?.past.length ?? 0) + 1);
+  });
+
+  it("opens no step at all when neither the box nor the letter changed", () => {
+    const free = run(start(), escalate());
+    expect(
+      run(free, {
+        type: "shapeElement",
+        variant: 0,
+        sectionId: "sec-cover",
+        elementId: "el-headline",
+        edit: {},
+        fontSize: undefined,
+        writesLetter: true,
+      }),
+    ).toBe(free);
+  });
 });
 
 describe("wasSectionEverEdited", () => {

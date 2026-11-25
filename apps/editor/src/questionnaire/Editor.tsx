@@ -129,6 +129,7 @@ import {
   VERB_SCALE,
 } from "../editor/chromeScale.ts";
 import { collectionCandidates, sectionDisplayName } from "../editor/collectionCandidates.ts";
+import { cornerMeaning } from "../editor/cornerMeaning.ts";
 import { delegate } from "../editor/delegate.ts";
 import type { SwitchNotice } from "../editor/designTools.ts";
 import {
@@ -232,6 +233,14 @@ import {
   edgeAt,
   resizeTo,
 } from "../editor/resizeBox.ts";
+import {
+  type Corner,
+  isCorner,
+  type ScaledLetter,
+  scaledBox,
+  scaledLetter,
+  scaleFactor,
+} from "../editor/scaleBox.ts";
 import { sectionFields } from "../editor/sectionFields.ts";
 import {
   placeAfterRebuild,
@@ -666,6 +675,7 @@ export function Editor({
   placementWasMoved,
   onRevertSection,
   onSetPlacement,
+  onShapeElement,
   onSetMobilePatch,
   onMoveUpOnMobile,
   pageId,
@@ -833,6 +843,14 @@ export function Editor({
    * because one press of a stepper is one number; the panel never sends a value `setPlacement`
    * would refuse, which is what keeps that refusal a backstop rather than a path. */
   onSetPlacement: (sectionId: string, elementId: string, edit: PlacementEdit) => void;
+  /** A corner pulled: the box and, for a text, its letter, in one step (ADR 0082). `letter.writes`
+   * says whether the gesture decided the letter at all; `undefined` in `value` takes it away. */
+  onShapeElement: (
+    sectionId: string,
+    elementId: string,
+    edit: PlacementEdit,
+    letter: { readonly writes: boolean; readonly value: StyleValue | undefined },
+  ) => void;
   /**
    * Rule 7's three adjustments, and no fourth: `breakpointPatchSchema` is a strict object of exactly
    * `hidden`, `order` and `columnSpan`, so the mobile view cannot quietly grow into the second design
@@ -1226,6 +1244,7 @@ export function Editor({
     onSetMark,
     onSetPlacement,
     onSetVariant,
+    onShapeElement,
     onUnbindList,
   });
   propsNow.current = {
@@ -1248,6 +1267,7 @@ export function Editor({
     onSetMark,
     onSetPlacement,
     onSetVariant,
+    onShapeElement,
     onUnbindList,
   };
 
@@ -7405,8 +7425,27 @@ export function Editor({
       readonly from: Placement;
       readonly column: string;
       readonly row: string;
+      /**
+       * **A corner scales what is inside the box** (ADR 0082, sprint 41 día 2): present when the
+       * edge is a corner of a text or a photograph, absent for a side and for the elements whose
+       * corner still stretches the box on both axes (`cornerMeaning`). The box and the pointer at
+       * the press are what the factor is read against; the letter as the browser drew it is the
+       * base the scaled one is a multiple of; and the inline `font-size` is put back on `stop`,
+       * as the grid area is.
+       */
+      readonly scale: {
+        readonly meaning: "letter" | "photo";
+        readonly corner: Corner;
+        readonly box: DOMRect;
+        readonly from: Point;
+        readonly basePx: number;
+        readonly current: StyleValue | undefined;
+        readonly fontSize: string;
+      } | null;
     } | null = null;
     let pulled: PlacementEdit | null = null;
+    /** The letter a corner has scaled to, decided with `pulled` and written with it. */
+    let lettered: ScaledLetter | null = null;
 
     /** The cursor, on the element and on the section both, as classes (adjustment 3). */
     const showCursor = (section: HTMLElement, el: HTMLElement | null, edge: Edge | null) => {
@@ -7469,6 +7508,7 @@ export function Editor({
       // the patch, and a cancelled one must leave no trace.
       el.style.gridColumn = pulling.column;
       el.style.gridRow = pulling.row;
+      if (pulling.scale) el.style.fontSize = pulling.scale.fontSize;
       for (const guide of section.querySelectorAll(".rb-guide")) guide.remove();
       showCursor(section, el, null);
       iframeDoc.documentElement.classList.remove("rb-resizing");
@@ -7476,6 +7516,7 @@ export function Editor({
       iframeDoc.documentElement.style.cursor = "";
       pulling = null;
       pulled = null;
+      lettered = null;
       repaintAll();
     };
 
@@ -7495,6 +7536,11 @@ export function Editor({
       // menu over a gesture that is about one element's own box.
       event.preventDefault();
       event.stopPropagation();
+      const element = findSection(docNow.current, sectionId)?.section.content.find(
+        (candidate) => candidate.id === el.dataset["id"],
+      );
+      const meaning = element ? cornerMeaning(element.role) : "box";
+      const view = iframeDoc.defaultView;
       pulling = {
         section,
         sectionId,
@@ -7503,8 +7549,21 @@ export function Editor({
         from: placement,
         column: el.style.gridColumn,
         row: el.style.gridRow,
+        scale:
+          isCorner(edge) && meaning !== "box" && view
+            ? {
+                meaning,
+                corner: edge,
+                box: el.getBoundingClientRect(),
+                from: { x: event.clientX, y: event.clientY },
+                basePx: Number.parseFloat(view.getComputedStyle(el).fontSize) || 16,
+                current: element?.style?.fontSize,
+                fontSize: el.style.fontSize,
+              }
+            : null,
       };
       pulled = null;
+      lettered = null;
       section.setPointerCapture(event.pointerId);
       for (const handle of section.querySelectorAll(".rb-handle")) handle.remove();
       iframeDoc.documentElement.classList.add("rb-resizing");
@@ -7540,6 +7599,38 @@ export function Editor({
         return;
       }
       if (section !== pulling.section) return;
+      if (pulling.scale) {
+        // A corner of a text or a photograph: one factor from the hand's travel along the box's
+        // diagonal, the letter and the box together (ADR 0082). No guides — the result is a size,
+        // not a line to line up with — and the preview is the element's own letter and grid area,
+        // so the words rewrap at their new size exactly as the page will draw them.
+        const { scale } = pulling;
+        const hand = scaleFactor({
+          box: scale.box,
+          corner: scale.corner,
+          from: scale.from,
+          now: { x: event.clientX, y: event.clientY },
+        });
+        let factor = hand;
+        if (scale.meaning === "letter") {
+          lettered = scaledLetter({
+            basePx: scale.basePx,
+            factor: hand,
+            theme: docNow.current.theme,
+            current: scale.current,
+          });
+          factor = lettered.factor;
+          pulling.el.style.fontSize = `${lettered.px}px`;
+        }
+        pulled = scaledBox(pulling.from, scale.corner, factor);
+        const next = { ...pulling.from, ...pulled };
+        pulling.el.style.gridColumn = `${fineTrack(next.column)}/span ${fineTrackSpan(
+          next.column,
+          next.columnSpan,
+        )}`;
+        pulling.el.style.gridRow = `${next.row}/span ${next.rowSpan}`;
+        return;
+      }
       // The live preview is the element's own grid area, rewritten — not a transform — so a text
       // rewraps as it narrows and a photograph's area grows without the photograph stretching.
       const metrics = gridMetricsOf(section);
@@ -7570,14 +7661,59 @@ export function Editor({
 
     const release = () => {
       if (!pulling) return;
-      const { el, sectionId } = pulling;
+      const { el, sectionId, scale } = pulling;
       const elementId = el.dataset["id"];
       const edit = pulled;
+      const letter = lettered;
       const wasWriting = el.isContentEditable;
+      // What the hand made of a photograph, read while the preview is still on it.
+      const shown = scale?.meaning === "photo" ? el.getBoundingClientRect() : null;
       stop();
       // For the probe: what the gesture decided, before the document is asked to change.
-      record("resize", { sectionId, elementId, edge: pulling?.edge ?? null, edit, wasWriting });
-      if (!elementId || !edit || Object.keys(edit).length === 0) return;
+      record("resize", {
+        sectionId,
+        elementId,
+        edge: pulling?.edge ?? null,
+        edit,
+        wasWriting,
+        letter: letter?.value ?? null,
+      });
+      if (!elementId || !edit) return;
+      if (scale) {
+        // A corner's scale: the letter may have changed where the spans, rounded, did not; and
+        // the same spans with the same letter is no change, which the reducer answers with no step.
+        const writes = scale.meaning === "letter";
+        const sameLetter = JSON.stringify(letter?.value) === JSON.stringify(scale.current);
+        if (Object.keys(edit).length === 0 && (!writes || sameLetter)) return;
+        if (wasWriting) {
+          keepWriting.current = { sectionId, elementId };
+          el.blur();
+        } else {
+          keepChosenFocus.current = true;
+        }
+        propsNow.current.onShapeElement(sectionId, elementId, edit, {
+          writes,
+          value: letter?.value,
+        });
+        if (writes && letter) {
+          const ref = letter.value && "ref" in letter.value ? letter.value.ref : null;
+          const sizeName = (token: string): string =>
+            (es as Record<string, string | undefined>)[`editor.toolbar.sizeOf.${token}`] ?? token;
+          announce(
+            ref
+              ? es["editor.scale.letterRef"].replace("{name}", sizeName(ref))
+              : es["editor.scale.letter"].replace("{px}", String(letter.px)),
+          );
+        } else if (shown) {
+          announce(
+            es["editor.scale.photo"]
+              .replace("{w}", String(Math.round(shown.width)))
+              .replace("{h}", String(Math.round(shown.height))),
+          );
+        }
+        return;
+      }
+      if (Object.keys(edit).length === 0) return;
       if (wasWriting) {
         // The words come first, and then the box (ADR 0050 día 4): this editor commits a text on
         // blur, so the text is committed the way clicking away commits it, and the writing is

@@ -319,6 +319,20 @@ export type HistoryAction =
       edit: PlacementEdit;
     }
   | {
+      /** A corner scaled what is inside the box and the box with it (ADR 0082): the placement and,
+       * for a text, its letter, in **one** step — one gesture, one «Deshacer». */
+      type: "shapeElement";
+      variant: number;
+      sectionId: string;
+      elementId: string;
+      edit: PlacementEdit;
+      /** `fontSize` after the scale: a reference, an exact value, or `undefined` for the element's
+       * own size again. Absent when the gesture scaled a photograph or a box, which have no letter. */
+      fontSize?: StyleValue | undefined;
+      /** Whether `fontSize` was decided at all — `undefined` in it means «take the size away». */
+      writesLetter: boolean;
+    }
+  | {
       type: "setMobilePatch";
       variant: number;
       sectionId: string;
@@ -1016,6 +1030,35 @@ function setPlacement(
 }
 
 /**
+ * One corner pulled: the box and what is inside it, together (ADR 0082, sprint 41 día 2).
+ *
+ * **One step, where `setPlacement` after `setElementStyle` would be two.** A hand that takes a
+ * headline's corner and makes it bigger has done one thing, and one «Deshacer» has to give back
+ * both the letter and the box — half of it back would be a headline of forty pixels in a box made
+ * for sixty, which nobody asked for. The cause is `setPlacement`'s, because that is what the step
+ * is for everything that asks about it: `wasPlacementEverMoved` sees a scale as the hand laying
+ * the section out, which it is.
+ *
+ * The two schema verbs each return the identical document when nothing changed, so a corner barely
+ * touched — the same size, the same spans — opens no step at all.
+ */
+function shapeElement(
+  history: History,
+  sectionId: string,
+  elementId: string,
+  edit: PlacementEdit,
+  letter: { readonly writes: boolean; readonly value: StyleValue | undefined },
+): History {
+  const before = history.present.document;
+  let document = setPlacementInDoc(before, sectionId, elementId, edit);
+  if (letter.writes) {
+    document = setElementStyleInDoc(document, { sectionId, elementId }, "fontSize", letter.value);
+  }
+  if (document === before) return history;
+  return step(history, document, { type: "setPlacement", sectionId });
+}
+
+/**
  * One property of one element's own style (rule 6), from the floating toolbar.
  *
  * **Its own step, like every other small deliberate adjustment.** Choosing a colour and then a size
@@ -1547,6 +1590,11 @@ function apply(history: History, action: HistoryAction): History {
       return escalateSection(history, action.sectionId, action.boxes);
     case "setPlacement":
       return setPlacement(history, action.sectionId, action.elementId, action.edit);
+    case "shapeElement":
+      return shapeElement(history, action.sectionId, action.elementId, action.edit, {
+        writes: action.writesLetter,
+        value: action.fontSize,
+      });
     case "setMobilePatch":
       return setMobilePatch(history, action.sectionId, action.elementId, action.edit);
     case "setElementStyle":
