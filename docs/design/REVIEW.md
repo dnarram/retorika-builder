@@ -11490,3 +11490,34 @@ Saboteado el tope, esa caminata se pone roja: la puerta vuelve a abrirse y la de
 **Lo que deja.** La cabecera admite su propia letra exacta por parte (hasta 200 px en «Menú») y este tope no la
 alcanza: la cabecera tiene sus propias derivaciones de móvil y su pliegue (ADR 0067). Sin medir; va al backlog
 para el cierre del sprint.
+
+### Día 1b — la lista se coge por cualquier tarjeta (PR de `feat/la-lista-se-coge-por-una-tarjeta`, ADR 0086)
+
+**El hueco, medido.** En una sección a mano una lista se coloca como un solo elemento y sus tarjetas fluyen
+dentro (ADR 0048). El título, el texto y la foto de una tarjeta llevan `data-id` propio —para elegirlos y
+escribir en ellos— y ninguna colocación. El arrastre buscaba su elemento con `closest("[data-id]")`: una
+pulsación sobre el título de una tarjeta encontraba el título, no encontraba su colocación y no hacía nada.
+«Qué hago» solo se podía llevar por los huecos entre tarjetas.
+
+**Lo que hay ahora.** Una pulsación coge el elemento colocado en el que está (`heldBy`): la tarjeta entera es
+asa de su lista, y lo de dentro de la tarjeta sigue donde lo pinta el catálogo. El puntero se captura **al
+armar el gesto**, no al pulsar, porque capturarlo al pulsar redirige el clic a la lista: **un clic quieto
+sigue eligiendo el texto de la tarjeta y un segundo clic escribe** (ADR 0047). Escribiendo, gana la selección
+de palabras. En una sección de serie, la oferta «Diseñar a mano» se ancla donde pulsó la mano.
+
+**Un defecto que ya estaba en `main`, encontrado al sabotear.** En una sección a mano, «Poner esta línea
+antes», «después» y «Quitar» de una tarjeta no hacían nada: esos botones están dentro de la lista, la pulsación
+resolvía a la lista, la lista capturaba el puntero y el clic se perdía. Ahora una pulsación sobre el cromo de la
+tarjeta nunca arma un arrastre, y la caminata pulsa «después» en la sección a mano y lee el orden cambiado.
+
+**Pruebas.** Caminata «sprint 41 día 1b»: en el restaurante, «Qué hago» a mano; la lista ocupa las 96 unidades,
+así que se lleva **60 px hacia abajo** por el título de su primera tarjeta (la primera versión la llevaba a la
+derecha y midió un arrastre recortado a donde ya estaba: con 96 unidades no hay sitio de lado). La lista baja,
+conserva columna y tramos, nadie más se mueve, el título no cambia, no queda texto seleccionado, la lista queda
+elegida y un «Deshacer» la devuelve. Un clic quieto elige el título y no la lista; un segundo escribe. Con una
+segunda tarjeta añadida por su botón, «Poner esta línea después» cambia el orden y ninguna colocación.
+**Saboteos**, los tres rojos: sin subir a la lista (el arrastre no escribe nada), la captura al pulsar (el
+segundo clic no escribe), sin la guarda del cromo (la flecha no hace nada).
+
+**Lo que deja.** Ningún camino de teclado del texto de una tarjeta a su lista: Tab llega a la lista y las
+flechas la mueven, como antes. El asa de la tarjeta y la lista vinculada son del día 8, que completa la ADR.
