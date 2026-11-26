@@ -34172,3 +34172,87 @@ describe("sprint 41 día 6 — estirar y agrandar con el teclado", () => {
     }
   }, 240_000);
 });
+
+/**
+ * **Sprint 41 día 7 — traer al frente y enviar atrás** (ADR 0085). In a hand-designed section the
+ * button dragged onto the photograph sits above it, as every word always has; «Enviar atrás» puts it
+ * under, the download says so by naming the button (David's adjustment 2: not only texts), and
+ * «Traer al frente» brings it back. The verbs are there only for an element that crosses another.
+ */
+describe("sprint 41 día 7 — traer al frente y enviar atrás", () => {
+  it("envía el botón detrás de la foto, el aviso lo nombra, y traerlo al frente lo devuelve", async () => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    const page = await context.newPage();
+    try {
+      await intoTheCanvas(page);
+      await studioToolsOn(page);
+      const frame = page.frameLocator(PREVIEW).first();
+      const cover = frame.locator('[data-section="sec-cover"]');
+      await cover.click({ position: { x: 8, y: 8 } });
+      await escalated(frame, async () => {
+        await cover.locator('.rb-action[aria-label="Diseñar a mano"]').click();
+        await frame.locator(".rb-escalate-yes").click();
+      });
+      await waitForBankPhoto(frame);
+      const button = cover.locator('[data-role="button"]').first();
+      const photo = cover.locator('[data-id="el-image"]');
+
+      // ---- the panel offers nothing to stack while the button crosses nothing ----
+      await page.getByRole("button", { name: "Diseño", exact: true }).click();
+      const aside = page.locator("aside");
+      await aside.getByRole("button", { name: "Botón principal", exact: true }).click();
+      await aside.getByRole("button", { name: /^Colocación/ }).click();
+      await expect(aside.getByRole("button", { name: "Enviar atrás" })).toHaveCount(0);
+
+      // ---- carried onto the photograph: it crosses it, and paints above it, as words always have ----
+      const from = await pointIn(button);
+      const to = await pointIn(photo, 0.5, 0.6);
+      await afterTheEdit(page, () => carry(page, from, to));
+      const topAt = (target: typeof button) =>
+        target.evaluate((el) => {
+          const box = el.getBoundingClientRect();
+          const hit = el.ownerDocument.elementFromPoint(
+            box.left + box.width / 2,
+            box.top + box.height / 2,
+          );
+          return hit?.closest<HTMLElement>("[data-id]")?.dataset["id"] ?? null;
+        });
+      const buttonId = await button.getAttribute("data-id");
+      expect(await topAt(button)).toBe(buttonId);
+      await expect(aside.getByRole("button", { name: "Enviar atrás" })).toBeVisible();
+
+      // ---- «Enviar atrás»: one step, and the photograph is what the pointer meets ----
+      await afterTheEdit(page, () => aside.getByRole("button", { name: "Enviar atrás" }).click());
+      await expect.poll(() => topAt(button)).toBe("el-image");
+      await expect(cover).toHaveClass(/rb-layered/);
+
+      // ---- the download names it: «El botón «…», debajo de la foto «…»» ----
+      await page.getByRole("button", { name: "Descargar", exact: true }).click();
+      const covered = page.getByText("Hay algo tapado por una foto");
+      for (let i = 0; i < 5 && !(await covered.isVisible()); i += 1) {
+        const anyway = page.getByRole("button", { name: "Descargar igualmente" });
+        await anyway.waitFor();
+        if (await covered.isVisible()) break;
+        await anyway.click();
+      }
+      await expect(covered).toBeVisible();
+      const words = (await button.textContent())?.trim() ?? "";
+      await expect(page.getByRole("alertdialog")).toContainText(`El botón «${words}»`);
+      await page.getByRole("button", { name: "Volver", exact: true }).click();
+
+      // ---- «Traer al frente» gives it back, and the stack is the default again: no layer left ----
+      await afterTheEdit(page, () =>
+        aside.getByRole("button", { name: "Traer al frente" }).click(),
+      );
+      await expect.poll(() => topAt(button)).toBe(buttonId);
+      await expect(cover).not.toHaveClass(/rb-layered/);
+      // One «Deshacer» per press: back under the photograph.
+      await afterTheEdit(page, () =>
+        page.getByRole("button", { name: "Deshacer", exact: true }).click(),
+      );
+      await expect.poll(() => topAt(button)).toBe("el-image");
+    } finally {
+      await context.close();
+    }
+  }, 240_000);
+});

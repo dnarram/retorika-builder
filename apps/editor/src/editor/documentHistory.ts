@@ -33,6 +33,7 @@ import {
   addOwnFont as addOwnFontToDoc,
   applyMark as applyMarkInDoc,
   bindList as bindListInDoc,
+  bringToFront as bringToFrontInDoc,
   clearSlot as clearSlotInDoc,
   collectionFromList as collectionFromListInDoc,
   deleteCollection as deleteCollectionFromDoc,
@@ -63,6 +64,7 @@ import {
   renamePage as renamePageInDoc,
   revertSection as revertSectionInDoc,
   sectionToPage as sectionToPageInDoc,
+  sendToBack as sendToBackInDoc,
   setBackground as setBackgroundInDoc,
   setElementImageSrc,
   setElementStyle as setElementStyleInDoc,
@@ -346,6 +348,13 @@ export type HistoryAction =
       variant: number;
       address: ElementAddress;
       focus: { readonly x: number; readonly y: number } | undefined;
+    }
+  | {
+      /** «Traer al frente» and «Enviar atrás» (ADR 0085): one press, one step. */
+      type: "bringToFront" | "sendToBack";
+      variant: number;
+      sectionId: string;
+      elementId: string;
     }
   | {
       /** «Forma original»: a photograph given back the catalog's shape (ADR 0084). */
@@ -1657,6 +1666,13 @@ function apply(history: History, action: HistoryAction): History {
         type: "setElementStyle",
         sectionId: action.address.sectionId,
       });
+    }
+    case "bringToFront":
+    case "sendToBack": {
+      const verb = action.type === "bringToFront" ? bringToFrontInDoc : sendToBackInDoc;
+      const document = verb(history.present.document, action.sectionId, action.elementId);
+      if (document === history.present.document) return history;
+      return step(history, document, { type: "setPlacement", sectionId: action.sectionId });
     }
     case "clearPhotoShape": {
       const document = setPhotoShapeInDoc(

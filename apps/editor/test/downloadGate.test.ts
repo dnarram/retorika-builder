@@ -743,6 +743,84 @@ describe("two texts on top of each other", () => {
     expect(downloadGateFor(counts({}), stacked(), new Set(["layout"]))).toEqual({ kind: "ready" });
   });
 
+  /**
+   * **And anything a photograph paints over** (ADR 0085, sprint 41 día 7, David's adjustment 2): a
+   * button sent under a photograph keeps the keyboard's focus and cannot be seen, so the same
+   * warning names it — by its kind and its words — even with no two texts crossing.
+   */
+  it("warns about a button under a photograph, naming it, and never blocks", () => {
+    const headline = section.content[0];
+    if (!headline) throw new Error("the fixture section has no headline");
+    const covered = parseDocument({
+      schemaVersion: SCHEMA_VERSION,
+      id: "doc-1",
+      siteName: "Barbería El Corte",
+      theme,
+      collections: [],
+      pages: [
+        {
+          id: "home",
+          slug: "index",
+          title: "Inicio",
+          sections: [
+            {
+              ...section,
+              source: "free",
+              content: [
+                headline,
+                {
+                  id: "el-image",
+                  role: "image",
+                  hidden: false,
+                  slot: "image",
+                  value: { kind: "image", src: "foto.jpg", alt: "El local" },
+                },
+                {
+                  id: "el-cta",
+                  role: "button",
+                  hidden: false,
+                  slot: "primaryAction",
+                  value: { kind: "link", text: "Reservar", href: "#contacto" },
+                },
+              ],
+              layout: {
+                grid: { columns: FINE_COLUMNS },
+                placements: [
+                  {
+                    elementId: "el-headline",
+                    column: 49,
+                    columnSpan: 48,
+                    row: 1,
+                    rowSpan: 7,
+                    layer: 3,
+                  },
+                  {
+                    elementId: "el-image",
+                    column: 1,
+                    columnSpan: 48,
+                    row: 1,
+                    rowSpan: 30,
+                    layer: 2,
+                  },
+                  { elementId: "el-cta", column: 9, columnSpan: 24, row: 10, rowSpan: 4, layer: 1 },
+                ],
+                breakpoints: { mobile: [] },
+              },
+            },
+          ],
+        },
+      ],
+    });
+    const gate = downloadGateFor(counts({}), covered);
+    expect(gate.kind).toBe("textOverText");
+    if (gate.kind !== "textOverText") return;
+    expect(gate.findings).toEqual([]);
+    expect(gate.covered.map((c) => [c.elementId, c.role, c.words, c.photo.alt])).toEqual([
+      ["el-cta", "button", "Reservar", "El local"],
+    ]);
+    expect(downloadGateFor(counts({}), covered, new Set(["layout"]))).toEqual({ kind: "ready" });
+  });
+
   it("says nothing about the same site laid out by the catalog", () => {
     expect(downloadGateFor(counts({}), plain)).toEqual({ kind: "ready" });
   });

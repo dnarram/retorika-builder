@@ -1845,6 +1845,15 @@ export function Variants({
             dismissToast();
             dispatch({ type: "setImageFocus", variant: openIndex, address, focus });
           }}
+          onStack={(sectionId, elementId, to) => {
+            dismissToast();
+            dispatch({
+              type: to === "front" ? "bringToFront" : "sendToBack",
+              variant: openIndex,
+              sectionId,
+              elementId,
+            });
+          }}
           onClearPhotoShape={(sectionId, elementId) => {
             dismissToast();
             dispatch({ type: "clearPhotoShape", variant: openIndex, sectionId, elementId });

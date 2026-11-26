@@ -6,6 +6,7 @@ import {
   listHeaderStyleExceptions,
   listStyleExceptions,
   type MobilePatchEdit,
+  overlaps,
   type Placement,
   type PlacementEdit,
   type RetorikaDocument,
@@ -235,6 +236,7 @@ export function DesignPanel({
   onSelectElement,
   onSetPlacement,
   onClearPhotoShape,
+  onStack,
   onSetMobilePatch,
   onMoveUpOnMobile,
   onPreviewMobile,
@@ -252,6 +254,8 @@ export function DesignPanel({
   onSetPlacement: (elementId: string, edit: PlacementEdit) => void;
   /** «Forma original» (ADR 0084): the photograph given back the catalog's shape. */
   onClearPhotoShape: (elementId: string) => void;
+  /** «Traer al frente» / «Enviar atrás» (ADR 0085). */
+  onStack: (elementId: string, to: "front" | "back") => void;
   /** Rule 7's first and third adjustments. `undefined` for a field takes that adjustment away, which
    * is how «Ocultar aquí» turns itself back off. */
   onSetMobilePatch: (elementId: string, edit: MobilePatchEdit) => void;
@@ -428,6 +432,27 @@ export function DesignPanel({
                   same act and a person who finds one should know about the other. */}
               {/* **«Forma original»** (ADR 0084, sprint 41 día 5): present only on a photograph a
                   side has given a shape of its own — absent, not disabled, on every other. */}
+              {/* **«Traer al frente» y «Enviar atrás»** (ADR 0085, sprint 41 día 7): present only
+                  on an element that crosses another — absent, not disabled, where there is nothing
+                  to stack it against. Each press is one step. */}
+              {rows.some(
+                (row) =>
+                  row.elementId !== selected.elementId &&
+                  overlaps(row.placement, selected.placement),
+              ) ? (
+                <div className="flex gap-1.5">
+                  {(["front", "back"] as const).map((to) => (
+                    <button
+                      key={to}
+                      type="button"
+                      onClick={() => onStack(selected.elementId, to)}
+                      className="ui-interactive cursor-pointer rounded-ui-sm border border-ui-border bg-ui-surface px-2 py-1 text-[11px] font-medium text-ui-ink hover:border-ui-border-strong hover:bg-ui-bg"
+                    >
+                      {to === "front" ? es["editor.design.toFront"] : es["editor.design.toBack"]}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
               {selected.placement.ratio ? (
                 <button
                   type="button"

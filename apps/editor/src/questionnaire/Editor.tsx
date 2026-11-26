@@ -684,6 +684,7 @@ export function Editor({
   onShapeElement,
   onSetImageFocus,
   onClearPhotoShape,
+  onStack,
   onSetMobilePatch,
   onMoveUpOnMobile,
   pageId,
@@ -870,6 +871,8 @@ export function Editor({
   onSetImageFocus: (address: ElementAddress, focus: Focus | undefined) => void;
   /** «Forma original»: a photograph given back the catalog's shape (ADR 0084). */
   onClearPhotoShape: (sectionId: string, elementId: string) => void;
+  /** «Traer al frente» / «Enviar atrás» (ADR 0085, sprint 41 día 7). */
+  onStack: (sectionId: string, elementId: string, to: "front" | "back") => void;
   /**
    * Rule 7's three adjustments, and no fourth: `breakpointPatchSchema` is a strict object of exactly
    * `hidden`, `order` and `columnSpan`, so the mobile view cannot quietly grow into the second design
@@ -10628,6 +10631,7 @@ export function Editor({
           {downloadDialog?.kind === "textOverText" ? (
             <StackedTextDialog
               findings={downloadDialog.findings}
+              covered={downloadDialog.covered}
               onDownloadAnyway={() => acceptAndContinue("layout")}
               onCancel={() => setDownloadDialog(null)}
             />
@@ -11042,6 +11046,9 @@ export function Editor({
             }}
             onClearPhotoShape={(elementId) => {
               if (designSectionId) onClearPhotoShape(designSectionId, elementId);
+            }}
+            onStack={(elementId, to) => {
+              if (designSectionId) onStack(designSectionId, elementId, to);
             }}
             onSetMobilePatch={(elementId, edit) => {
               if (designSectionId) onSetMobilePatch(designSectionId, elementId, edit);

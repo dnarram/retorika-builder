@@ -1,6 +1,7 @@
 "use client";
 
 import type {
+  CoveredByPhoto,
   ElementAddress,
   OverlappingTexts,
   RetorikaDocument,
@@ -726,21 +727,41 @@ export function OverflowDialog({
  * photograph under a heading is fine — the renderer draws a panel behind the words — and two
  * sentences are not, because there is no contrast between a sentence and another sentence.
  */
+/** What a covered thing is called in the review: its kind and its own words (ADR 0085). */
+function coveredName(item: CoveredByPhoto): string {
+  const table = es as Record<string, string | undefined>;
+  const key = `editor.download.covered.role.${item.role}`;
+  return (table[key] ?? es["editor.download.covered.role.body"]).replace("{words}", item.words);
+}
+
 export function StackedTextDialog({
   findings,
+  covered = [],
   onDownloadAnyway,
   onCancel,
 }: {
   findings: readonly OverlappingTexts[];
+  /** What a photograph paints over (ADR 0085, sprint 41 día 7): not only text — David's
+   * adjustment 2 — because a button or a field under a photograph still takes the keyboard. */
+  covered?: readonly CoveredByPhoto[];
   onDownloadAnyway: () => void;
   onCancel: () => void;
 }) {
   const titleId = useId();
   const container = useFocusTrap(true, onCancel);
-  const body =
-    findings.length === 1
-      ? es["editor.download.stacked.body.one"]
-      : es["editor.download.stacked.body.many"].replace("{n}", String(findings.length));
+  const stackedBody =
+    findings.length === 0
+      ? null
+      : findings.length === 1
+        ? es["editor.download.stacked.body.one"]
+        : es["editor.download.stacked.body.many"].replace("{n}", String(findings.length));
+  const coveredBody =
+    covered.length === 0
+      ? null
+      : covered.length === 1
+        ? es["editor.download.covered.body.one"]
+        : es["editor.download.covered.body.many"].replace("{n}", String(covered.length));
+  const body = [stackedBody, coveredBody].filter((part) => part !== null).join(" ");
 
   return (
     <div className="fixed inset-0 z-20 flex items-center justify-center bg-[#0F172A]/45 p-5">
@@ -753,7 +774,9 @@ export function StackedTextDialog({
         className="flex max-h-full w-full max-w-[520px] flex-col rounded-2xl bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.28)]"
       >
         <h2 id={titleId} className="m-0 text-[17px] font-bold text-ui-ink">
-          {es["editor.download.stacked.title"]}
+          {findings.length > 0
+            ? es["editor.download.stacked.title"]
+            : es["editor.download.covered.title"]}
         </h2>
         <p className="mt-2 mb-0 text-[14px] leading-snug text-ui-muted">{body}</p>
 
@@ -772,10 +795,24 @@ export function StackedTextDialog({
               </span>
             </div>
           ))}
+          {covered.map((item) => (
+            <div
+              key={`${item.sectionId}/${item.elementId}`}
+              className="rounded-[9px] border border-ui-border px-3 py-2.5"
+            >
+              <span className="block truncate text-[13px] text-ui-ink">
+                {es["editor.download.covered.item"]
+                  .replace("{what}", coveredName(item))
+                  .replace("{photo}", item.photo.alt)}
+              </span>
+            </div>
+          ))}
         </div>
 
         <p className="mt-4 mb-0 text-[12px] leading-snug text-ui-muted">
-          {es["editor.download.stacked.foot"]}
+          {findings.length > 0
+            ? es["editor.download.stacked.foot"]
+            : es["editor.download.covered.foot"]}
         </p>
 
         <div className="mt-5 flex justify-end gap-2.5">
