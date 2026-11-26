@@ -69,6 +69,8 @@ export interface HelpLineState {
   photoError: string | null;
   /** The phone's reorder gesture refusing a drop (`rb-ghost-no`). */
   dragRefused: boolean;
+  /** «Estirando» (sprint 41 día 6): the chosen element's arrows change its size, until E or Escape. */
+  stretching: boolean;
   keyboard: KeyboardPlace;
   /** A popup with a note of its own open over a section. */
   menuNote: "composition" | "escalate" | "escalateHeld" | null;
@@ -165,6 +167,8 @@ export function chosenHint(
         : es["editor.canvas.goHint"]
       : "",
     chosen.movable ? es["editor.canvas.moveHint"] : "",
+    // And its size, with the keys the corner and the sides have since sprint 41 día 6 (ADR 0082).
+    chosen.movable ? es["editor.canvas.shapeHint"] : "",
   ]
     .filter((part) => part !== "")
     .join(" · ");
@@ -220,6 +224,7 @@ export function quietSays(state: HelpLineState): HelpLineSays {
     tone,
   });
   if (state.dragRefused) return quiet(es["editor.drag.order"]);
+  if (state.stretching) return quiet(es["editor.help.keys.stretch"]);
   // The keys of a control the focus is on — a section, the bar, its grip — before anything else;
   // the keys of a text being written *after* the bound sentence, because «si lo cambias, cambia en
   // todos» is what has to be read before the first keystroke, and the bar's badge already says it
@@ -285,6 +290,7 @@ export const HELP_AT_REST: HelpLineState = {
   download: "idle",
   photoError: null,
   dragRefused: false,
+  stretching: false,
   keyboard: null,
   menuNote: null,
   bound: null,

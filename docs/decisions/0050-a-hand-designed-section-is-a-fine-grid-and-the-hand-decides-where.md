@@ -214,6 +214,8 @@ saying that the third request was the product owner's and the answer was to make
 - No «bring to front» and no stacking order of the document's own: this sprint stacks in document
   order and says so; a later decision may add a control, and it will need a field.
 - No resizing by keyboard on the canvas: the panel's steppers are the keyboard's way to a width.
+  *Closed on sprint 41 día 6 (26 November 2026): `E` enters «estirando», where the arrows change the
+  width and the height, and `+` and `−` scale — [ADR 0082](0082-the-sides-stretch-the-box-and-the-corners-scale-what-is-inside.md)'s amendment.*
 - Nothing about a fixed canvas: it was offered, costed and refused.
 
 ## Consequences

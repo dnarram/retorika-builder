@@ -34045,3 +34045,130 @@ describe("sprint 41 día 5 — la foto toma el alto que le das", () => {
     }
   }, 240_000);
 });
+
+/**
+ * **Sprint 41 día 6 — `+`, `−` y `E`** (ADR 0082's amendment): the corner and the sides from the
+ * keyboard, because a pointer gesture ships with its keyboard in the same sprint. `+` and `−` scale the
+ * chosen element a tenth a press; `E` enters «estirando», where the arrows change its size.
+ */
+describe("sprint 41 día 6 — estirar y agrandar con el teclado", () => {
+  const VIEWPORT = { width: 1280, height: 900 };
+
+  async function handDesigned(page: Page): Promise<FrameLocator> {
+    await intoTheCanvas(page);
+    await studioToolsOn(page);
+    const frame = page.frameLocator(PREVIEW).first();
+    await frame.locator('[data-section="sec-cover"]').click();
+    await escalated(frame, async () => {
+      await frame.locator('.rb-action[aria-label="Diseñar a mano"]').first().click();
+      await frame.locator(".rb-escalate-yes").click();
+    });
+    await waitForBankPhoto(frame);
+    await fontsReady(frame);
+    return page.frameLocator(PREVIEW).first();
+  }
+
+  const placed = async (frame: FrameLocator, id: string) =>
+    (await placedIn(frame, "sec-cover")).find((e) => e.id === id);
+
+  /** A held key: `down` repeated arrives with `repeat`, and the one `up` ends the run. */
+  async function hold(page: Page, key: string, times: number): Promise<void> {
+    for (let i = 0; i < times; i += 1) await page.keyboard.down(key);
+    await page.keyboard.up(key);
+  }
+
+  it("+ sostenido agranda la letra y la caja en un paso, y E con flechas ensancha la foto sin moverla", async () => {
+    const context = await browser.newContext({ viewport: VIEWPORT });
+    const page = await context.newPage();
+    try {
+      const frame = await handDesigned(page);
+      const headline = frame.locator('[data-section="sec-cover"] [data-id="el-headline"]');
+      await headline.click();
+      await expect(headline).toHaveClass(/rb-chosen/);
+      await expect(page.getByTestId("help-line-quiet")).toContainText("E: estirarlo");
+      const before = await placed(frame, "el-headline");
+      const letterPx = () =>
+        headline.evaluate((el) => Number.parseFloat(getComputedStyle(el).fontSize));
+      expect(await letterPx()).toBe(40);
+
+      // ---- + held three times: one step, 40 × 1.1³ = 53 ----
+      const serial = await editSerialOf(page);
+      await afterTheEdit(page, () => hold(page, "+", 3));
+      expect(await editSerialOf(page)).toBe(serial + 1);
+      expect(await letterPx()).toBe(53);
+      const after = await placed(frame, "el-headline");
+      expect(
+        Math.abs((after?.columnSpan ?? 0) - Math.round((before?.columnSpan ?? 0) * (53 / 40))),
+      ).toBeLessThanOrEqual(1);
+      expect(after?.column).toBe(before?.column);
+      await expect(page.locator('p[role="status"]')).toHaveText(/^Letra: 53 px/);
+      // The keyboard is still on the headline: a second run needs no new choice.
+      await expect(headline).toBeFocused();
+      await afterTheEdit(page, () => hold(page, "-", 1));
+      expect(await letterPx()).toBe(48);
+      await afterTheEdit(page, () =>
+        page.getByRole("button", { name: "Deshacer", exact: true }).click(),
+      );
+      await afterTheEdit(page, () =>
+        page.getByRole("button", { name: "Deshacer", exact: true }).click(),
+      );
+      expect(await letterPx()).toBe(40);
+      expect(await placed(frame, "el-headline")).toEqual(before);
+
+      // ---- E on the photograph: the arrows widen it, the column stays, the line says how ----
+      const photo = frame.locator('[data-section="sec-cover"] [data-id="el-image"]');
+      await photo.focus();
+      await expect(photo).toHaveClass(/rb-chosen/);
+      const shot = await placed(frame, "el-image");
+      const box = await photo.boundingBox();
+      await page.keyboard.press("e");
+      await expect(page.getByTestId("help-line-quiet")).toContainText("Estirando");
+      await afterTheEdit(page, () => hold(page, "ArrowLeft", 8));
+      const narrower = await placed(frame, "el-image");
+      expect(narrower?.columnSpan).toBe((shot?.columnSpan ?? 0) - 8);
+      expect(narrower?.column).toBe(shot?.column);
+      // A photograph's side gives it a shape (ADR 0084): narrower, the same height.
+      const now = await photo.boundingBox();
+      expect(Math.abs((now?.height ?? 0) - (box?.height ?? 0))).toBeLessThanOrEqual(2);
+      expect(now?.width ?? 0).toBeLessThan((box?.width ?? 0) - 40);
+      await page.keyboard.press("Escape");
+      await expect(page.getByTestId("help-line-quiet")).not.toContainText("Estirando");
+      // Escape left the mode and nothing else: the photograph is still chosen, the arrows move it.
+      await expect(photo).toHaveClass(/rb-chosen/);
+    } finally {
+      await context.close();
+    }
+  }, 240_000);
+
+  it("escribiendo, «e+» son letras; y en una sección de serie la primera tecla pregunta", async () => {
+    const context = await browser.newContext({ viewport: VIEWPORT });
+    const page = await context.newPage();
+    try {
+      await intoTheCanvas(page);
+      await studioToolsOn(page);
+      const frame = page.frameLocator(PREVIEW).first();
+      const headline = frame.locator('[data-section="sec-cover"] [data-id="el-headline"]');
+
+      // ---- a section the catalog draws: + asks, and nothing moves ----
+      await headline.click();
+      await expect(headline).toHaveClass(/rb-chosen/);
+      const serial = await editSerialOf(page);
+      await page.keyboard.press("+");
+      await expect(frame.getByText("Esta sección viene colocada de serie")).toBeVisible();
+      expect(await editSerialOf(page)).toBe(serial);
+      await page.keyboard.press("Escape");
+      await expect(frame.getByText("Esta sección viene colocada de serie")).toHaveCount(0);
+
+      // ---- writing: the keys are letters, and the box does not change ----
+      await intoWriting(headline);
+      await page.keyboard.press("End");
+      await page.keyboard.type(" e+");
+      await expect(headline).toContainText(" e+");
+      expect(
+        await headline.evaluate((el) => Number.parseFloat(getComputedStyle(el).fontSize)),
+      ).toBe(40);
+    } finally {
+      await context.close();
+    }
+  }, 240_000);
+});
