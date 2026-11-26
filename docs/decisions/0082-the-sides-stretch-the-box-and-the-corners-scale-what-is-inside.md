@@ -155,3 +155,30 @@ scales.
   walk), the right side routed to scale (red in the walk), the factor reading `x` alone (red in the
   unit test; the walk pulls along the diagonal, where `x` alone agrees).
 - The record is `docs/design/REVIEW.md`, sprint 41 día 2.
+
+## Amendment — the keyboard: `+`, `−` and `E` (sprint 41 día 6, 26 November 2026)
+
+Decided by David planning the sprint: *«`+` y `−` escalan, `E` estira»*, after being told that no
+modifier is free for the arrows — Alt+arrows is back and forward on Windows, Control+arrows is Spaces
+on the Mac, ⌘+arrows the ends of a line, and Shift already means «eight at a time» (ADR 0050 día 6).
+
+- **`+` and `−` scale the chosen element a tenth a press** (`stretchKeys.ts`): what its corner scales,
+  by the same functions — a text's letter and box (`scaledLetter`, `scaledBox` from the south-east
+  corner, the north-west one still), a photograph with its shape, a list's or a field's box. `=` and
+  `_` are the same keys unshifted on a US layout, and the numeric pad's report `+` and `-`.
+- **`E` enters «estirando»**, where the arrows change the width and the height with the top-left
+  corner still, one unit or row a press and eight with Shift; `E`, Escape or Intro leave it, and so
+  does losing the focus. A photograph's stretch gives it a shape (ADR 0084). The help line says
+  «Estirando: ← → el ancho, ↑ ↓ el alto · Mayús: de 8 en 8 · Esc: terminar» while it lasts, and the
+  chosen element's hint gains «E: estirarlo · + y −: agrandarlo o empequeñecerlo».
+- **A run is one step**, written on `keyup`, after `RUN_IDLE_MS` of quiet or on blur, as a run of
+  moving arrows is; one sentence per run in the live child.
+- **Inside a text being written they are letters**: the canvas leaves a `contentEditable` alone
+  before asking. **In a section the catalog draws the first key asks**, the offer día 3's gesture
+  opens; the key lands nothing on «sí» — the hand presses again.
+
+Measured: `+` held three times on the generated cover's headline is one step, 40 → 53 px with the box
+following and the keyboard still on it; `−` 53 → 48; two «Deshacer» give back 40 and the placement.
+`E` and eight held left arrows on the photograph: eight units narrower, the same column, the same
+height within 2 px; Escape leaves the mode and the photograph stays chosen. ADR 0050's «no resizing
+by keyboard on the canvas» closes here.

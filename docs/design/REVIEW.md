@@ -11704,3 +11704,28 @@ ancho, `cover`.
 herramientas de diseño. En el lienzo sí las pide: una foto solo se elige con ellas encendidas (ADR 0049
 §5). La otra puerta —el punto en cada foto del panel «Fotos», sin herramientas y también para **la foto de
 una tarjeta**— no se construye; es el corte que el plan nombraba para este día. Medio día, para el cierre.
+
+### Día 6 — `+`, `−` y `E` (PR de `feat/estirar-y-agrandar-con-el-teclado`, enmienda en ADR 0082)
+
+**Lo que hay ahora.** Con un elemento elegido en una sección a mano, `+` y `−` lo agrandan o lo empequeñecen
+un décimo por pulsación —la letra y la caja de un texto, la foto con su forma, la caja de una lista—, con
+las mismas funciones que la esquina. `E` entra en «estirando»: las flechas cambian el ancho y el alto con la
+esquina superior izquierda quieta (Mayús de 8 en 8), y `E`, Esc, Intro o perder el foco salen. En una foto,
+estirar le da forma (ADR 0084). Una racha es un paso, escrita al soltar, a los 300 ms o al perder el foco.
+Escribiendo, son letras. En una sección de serie la primera tecla pregunta, como el arrastre. La línea de
+ayuda nombra las teclas junto a las flechas y dice «Estirando…» mientras dura.
+
+**Medido en la portada a mano a 1280.** `+` sostenido tres veces: un paso, 40 → 53 px, la caja con la letra,
+el teclado aún en el titular; `−`: 48; dos «Deshacer»: 40 y la colocación de antes. `E` y ocho flechas a la
+izquierda sostenidas en la foto: ocho unidades menos, la misma columna, el mismo alto (± 2 px); Esc sale y la
+foto sigue elegida. En la sección de serie, `+` abre la oferta sin escribir nada. Escribiendo, « e+» entra en
+las palabras y la letra sigue en 40.
+
+**Pruebas.** `stretchKeys.test.ts` (siete); `helpLine.test.ts` con la frase nueva. Dos caminatas, solo con
+teclado salvo el clic que elige. **Saboteos**, los tres rojos: las teclas antes del `isContentEditable`
+(escribiendo, la caja cambia), la racha escrita en cada tecla (tres pasos), Esc sin salir de «estirando».
+
+**Dos cosas del día.** La línea de ayuda observa el `<body>` del lienzo y no la raíz, así que la clase del
+modo va en el `<body>` (`rb-key-stretching`). Y ya existía `rb-stretching`, la del estirón del logo: una
+sustitución la tocó, las 22 caminatas del logo y la marca lo habrían visto, y la mía lleva otro nombre. El
+filtro `-t` de Vitest es una expresión regular: un nombre con «+» no encuentra su caminata.
