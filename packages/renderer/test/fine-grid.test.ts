@@ -84,7 +84,8 @@ describe("the fine grid's stylesheet", () => {
       .map(({ name }) => name)
       .sort();
     // `foto-con-forma` joined on sprint 41 día 4, a free cover with a shaped photograph.
-    expect(withIt).toEqual(["foto-con-forma", "hidden-and-embed", "physio-free-cover"]);
+    // And `capas` on día 7, a free cover with a stack of its own.
+    expect(withIt).toEqual(["capas", "foto-con-forma", "hidden-and-embed", "physio-free-cover"]);
   });
 });
 

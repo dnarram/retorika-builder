@@ -1,4 +1,5 @@
-import type { Placement, RetorikaDocument } from "./document.ts";
+import type { ContentElement, Placement, RetorikaDocument } from "./document.ts";
+import { stackingFor } from "./layout.ts";
 
 /**
  * **What overlaps what, and the one case worth telling an owner about** (ADR 0050 §6, sprint 25
@@ -107,4 +108,75 @@ export function overlappingTexts(doc: RetorikaDocument): OverlappingTexts[] {
 /** The words of a text value. Narrowed rather than cast: the filter above has already decided. */
 function wordsOf(value: { kind: string; text?: string } | undefined): string {
   return value?.kind === "text" ? (value.text ?? "") : "";
+}
+
+/**
+ * One thing a photograph paints over (ADR 0085, sprint 41 día 7, David's adjustment 2): its role and
+ * its words, so the review can say «el botón «Reservar»», and the photograph it is under.
+ */
+export interface CoveredByPhoto {
+  readonly pageId: string;
+  readonly sectionId: string;
+  readonly elementId: string;
+  readonly role: ContentElement["role"];
+  readonly words: string;
+  readonly photo: { readonly elementId: string; readonly alt: string };
+}
+
+/**
+ * **Everything a photograph paints over**, in document order (ADR 0085).
+ *
+ * Not only text, which is David's adjustment 2 approving the sprint: «El aviso antes de descargar
+ * cuenta también botones, enlaces, «Cómo llegar» y campos de formulario que quedan bajo una foto:
+ * siguen recibiendo el foco con el teclado y no se ven». So: **every visible placed element that is
+ * not a photograph** — a text, a button, a link, the map, a field, a list — whose area crosses a
+ * visible photograph's that paints above it (`stackingFor`). What matters is that it still takes
+ * the keyboard's focus or the reader's attention and cannot be seen, whatever it is.
+ *
+ * Without layers there is nothing to find: photographs paint under everything by default. A
+ * photograph under a photograph is design, and two texts are `overlappingTexts`'s.
+ */
+export function coveredByPhoto(doc: RetorikaDocument): CoveredByPhoto[] {
+  const found: CoveredByPhoto[] = [];
+  for (const page of doc.pages) {
+    for (const section of page.sections) {
+      const layout = section.layout;
+      if (!layout) continue;
+      const order = stackingFor(section);
+      const rank = new Map(order.map((id, index) => [id, index]));
+      const placementOf = (id: string) =>
+        layout.placements.find((candidate) => candidate.elementId === id);
+      const visible = section.content.filter((element) => !element.hidden && rank.has(element.id));
+      const photos = visible.filter((element) => element.value?.kind === "image");
+      for (const element of visible) {
+        if (element.value?.kind === "image") continue;
+        const area = placementOf(element.id);
+        if (!area) continue;
+        const over = photos.find((photo) => {
+          const photoArea = placementOf(photo.id);
+          return (
+            photoArea !== undefined &&
+            overlaps(area, photoArea) &&
+            (rank.get(photo.id) ?? 0) > (rank.get(element.id) ?? 0)
+          );
+        });
+        if (!over) continue;
+        found.push({
+          pageId: page.id,
+          sectionId: section.id,
+          elementId: element.id,
+          role: element.role,
+          words: labelOf(element),
+          photo: { elementId: over.id, alt: over.value?.kind === "image" ? over.value.alt : "" },
+        });
+      }
+    }
+  }
+  return found;
+}
+
+/** The words an owner knows an element by: its text, its link's words, the map's, a field's label. */
+function labelOf(element: ContentElement): string {
+  const value = element.value as { kind: string; text?: string; label?: string } | undefined;
+  return value?.text ?? value?.label ?? "";
 }

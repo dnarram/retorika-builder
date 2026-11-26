@@ -1499,6 +1499,7 @@ describe("1.12.0 — a free section is a fine grid", () => {
     // The two this migration converted, and `foto-con-forma` (sprint 41 día 4), written at 1.23.0
     // from `physio-free-cover`'s layout already in units.
     expect(withLayout.sort()).toEqual([
+      "capas.json",
       "foto-con-forma.json",
       "hidden-and-embed.json",
       "physio-free-cover.json",
@@ -1937,9 +1938,10 @@ describe("1.15.0 — the header is the owner's", () => {
       // 1.17.0 when its row became a position; `marca-grande` was written at 1.19.0, and
       // `logo-amarillo` at 1.20.0 with a bar in its fill (sprint 38 día 1).
       // `fondo-con-motivos` at 1.22.0 with a fixed bar over its motif (sprint 40 día 5).
-      // `letra-exacta-grande` (sprint 41 día 1a) and `foto-con-forma` (día 4) carry a header too.
+      // `letra-exacta-grande` (sprint 41 día 1a) and `foto-con-forma` (día 4) carry a header too, and
+      // `capas` (día 7) a fixed bar over a stack.
       expect(
-        ["1.15.0", "1.16.0", "1.17.0", "1.19.0", "1.20.0", "1.22.0", "1.23.0"],
+        ["1.15.0", "1.16.0", "1.17.0", "1.19.0", "1.20.0", "1.22.0", "1.23.0", "1.24.0"],
         file,
       ).toContain(raw.schemaVersion);
     }
@@ -2776,10 +2778,11 @@ describe("1.22.0 — a background with motifs", () => {
       const parsed = JSON.parse(raw) as { schemaVersion: string };
       if (!raw.includes('"background": {')) continue;
       found.push(file);
-      expect(parsed.schemaVersion, `${file} carries a background`).toBe("1.22.0");
+      expect(["1.22.0", "1.24.0"], `${file} carries a background`).toContain(parsed.schemaVersion);
     }
-    // `fondo-con-motivos` (sprint 40 día 5) is the one that does.
-    expect(found).toEqual(["fondo-con-motivos.json"]);
+    // `fondo-con-motivos` (sprint 40 día 5) is the one written for it; `capas` (sprint 41 día 7)
+    // carries one under its stack, which is half of what David's adjustment 1 asked to be proven.
+    expect(found.sort()).toEqual(["capas.json", "fondo-con-motivos.json"]);
   });
 });
 
@@ -2877,9 +2880,8 @@ describe("1.23.0 — a photograph has a shape and a point", () => {
     card: { x: 20, y: 40 },
   };
 
-  it("is registered, and it is the one the chain ends at", () => {
+  it("is registered", () => {
     expect(step("1.23.0").version).toBe("1.23.0");
-    expect(SCHEMA_VERSION).toBe("1.23.0");
   });
 
   // `step(…).up` and not `upTo`: this document's cover is a free section already on the fine grid,
@@ -2927,5 +2929,99 @@ describe("1.23.0 — a photograph has a shape and a point", () => {
     }
     // `foto-con-forma` (sprint 41 día 4) is the one that does.
     expect(found).toEqual(["foto-con-forma.json"]);
+  });
+});
+
+/**
+ * `0025` — an element has a place in the stack (ADR 0085, sprint 41 día 7): an optional `layer` on a
+ * placement. `up` seals; `down` drops every layer.
+ */
+describe("1.24.0 — an element has a place in the stack", () => {
+  const site = (version: string, layers?: [number, number]) => ({
+    schemaVersion: version,
+    id: "doc-capas",
+    siteName: "Taberna del Puerto",
+    theme,
+    collections: [],
+    pages: [
+      {
+        id: "home",
+        slug: "index",
+        title: "Taberna del Puerto",
+        sections: [
+          {
+            id: "sec-cover",
+            preset: { catalogId: "cover", variantId: "image-right" },
+            source: "free",
+            layout: {
+              grid: { columns: 96 },
+              placements: [
+                {
+                  elementId: "el-image",
+                  column: 1,
+                  columnSpan: 48,
+                  row: 1,
+                  rowSpan: 20,
+                  ...(layers ? { layer: layers[0] } : {}),
+                },
+                {
+                  elementId: "el-cta",
+                  column: 9,
+                  columnSpan: 24,
+                  row: 4,
+                  rowSpan: 4,
+                  ...(layers ? { layer: layers[1] } : {}),
+                },
+              ],
+              breakpoints: {},
+            },
+            content: [
+              {
+                id: "el-image",
+                role: "image",
+                hidden: false,
+                slot: "image",
+                value: { kind: "image", src: "foto.jpg", alt: "Una foto" },
+              },
+              {
+                id: "el-cta",
+                role: "button",
+                hidden: false,
+                slot: "primaryAction",
+                value: { kind: "link", text: "Reservar", href: "#contacto" },
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  });
+
+  it("is registered, and it is the one the chain ends at", () => {
+    expect(step("1.24.0").version).toBe("1.24.0");
+    expect(SCHEMA_VERSION).toBe("1.24.0");
+  });
+
+  it("seals a 1.23.0 document and moves nothing", () => {
+    const before = site("1.23.0");
+    expect(step("1.24.0").up(before)).toEqual({ ...before, schemaVersion: "1.24.0" });
+  });
+
+  it("parses a stack, and refuses a layer of zero or with a fraction", () => {
+    expect(() => parseDocument(site("1.24.0", [2, 1]))).not.toThrow();
+    expect(() => parseDocument(site("1.24.0", [0, 1]))).toThrow();
+    expect(() => parseDocument(site("1.24.0", [1.5, 1]))).toThrow();
+  });
+
+  /** **`down` is lossy, and this is the loss, named:** every layer goes. */
+  it("takes every layer away on the way down and keeps the rest", () => {
+    const back = step("1.24.0").down?.(site("1.24.0", [2, 1])) ?? {};
+    expect(back).toEqual(site("1.23.0"));
+    expect(() => parseDocument(back)).not.toThrow();
+  });
+
+  it("round-trips a document with no stack", () => {
+    const input = site("1.23.0");
+    expect(step("1.24.0").down?.(step("1.24.0").up(input))).toEqual(input);
   });
 });
