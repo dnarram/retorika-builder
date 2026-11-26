@@ -11760,3 +11760,28 @@ vuelta al defecto sin capas, lo tapado por papel, oculto y al lado no). Renderer
 tras añadir el caso sin fondo), `z-index` solo en la foto (el titular, tras medir en su borde sobre la foto y
 no en su centro, que cae fuera), lo tapado mirando solo textos (la unitaria), los verbos siempre presentes
 (la caminata). Las pruebas que cuentan fixtures con cabecera, sección a mano, fondo y panel cuentan `capas`.
+
+### Día 8 — una tarjeta se arrastra por su asa (PR de `feat/una-tarjeta-cambia-de-orden`, enmienda en ADR 0086)
+
+**Lo que hay ahora.** Seis puntos en el grupo de cada tarjeta, junto a «antes» y «después», con el cursor
+`grab`: la tarjeta se lleva a la que debe sustituir —la de centro más cercano, en dos dimensiones, así que
+una galería que se parte en filas funciona como una columna—, o se mueve de una en una con las flechas. Un
+gesto o una pulsación, un paso, y el asa conserva el teclado. Es orden y no colocación: funciona en una
+sección de serie y con las herramientas apagadas, y no pasa la sección a mano.
+
+**Tu ajuste 3, respondido.** El orden de una lista vinculada es el de la lista, uno solo (ADR 0033), así que
+arrastrar una tarjeta **la cambia en todas las secciones que la enseñan**. El asa está también en las
+tarjetas vinculadas y escribe `moveEntry`; mientras se sujeta, la línea de ayuda lo dice con una frase
+verdadera para cada número: «Cambias el orden de la lista «Qué hago»» o «…, que se ve en 2 secciones».
+Hasta hoy el lienzo no ofrecía ningún orden en una tarjeta vinculada.
+
+**Medido.** Galería de serie del restaurante sin herramientas: la tercera foto al primer hueco queda
+primera y la sección sigue de serie; una flecha a la derecha, con el teclado aún en el asa, la deja segunda;
+dos «Deshacer» devuelven el orden; la primera llevada a la tercera queda tercera. «Qué hago» vinculada y su
+sección duplicada: la línea dice «que se ve en 2 secciones», la tercera tarjeta a la primera queda primera
+**en las dos secciones**, y un «Deshacer» devuelve las dos.
+
+**Pruebas.** `listReorder.test.ts` (cinco). Dos caminatas. **Saboteos**: el hueco desplazado uno al llevar
+hacia delante —rojo solo después de añadir ese caso: la primera versión de la caminata solo llevaba hacia
+atrás, y un saboteo que necesitaba cambiar la caminata no demostraba nada—; el asa vinculada escribiendo
+`moveItem`; la frase de una sola sección siempre.
