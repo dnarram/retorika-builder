@@ -83,3 +83,32 @@ order changed.
   chooses the title and a second writes; «Poner esta línea después» works in the hand-designed section.
   Three sabotages, each red: no climb, capture on the press, no chrome guard.
 - The record is `docs/design/REVIEW.md`, sprint 41 día 1b.
+
+## Amendment — a card by its grip, and the bound list (sprint 41 día 8, 26 November 2026)
+
+**The grip.** Six dots in a card's cluster, beside «Poner esta línea antes» and «después», with the
+cursor `grab` (and `grabbing` while carried). Carried to the card it should take the place of — the
+card whose middle is nearest the hand, read in two dimensions so a gallery that wraps works as a column
+does (`cardDropIndex`), outlined while held — or moved one card at a time with the arrows (either pair),
+one step each, the grip keeping the keyboard across the patch. It is **order, not layout**: it writes
+`moveItem`, works in a section the catalog draws and with the design tools off, as the arrows beside it
+always have, and never escalates a section.
+
+**The bound list — David's adjustment 3, answered.** Asked «qué hace el arrastre de una tarjeta en una
+lista vinculada a otras secciones», the answer is in the model: a bound list's cards are entries of one
+collection, drawn in its one stored order (ADR 0033), so moving a card **moves it in every section that
+shows the list**. The grip is there on a bound card too and writes `moveEntry`; while it is held — by the
+pointer or the keyboard — the help line says so with a sentence true for every number:
+«Cambias el orden de la lista «Qué hago»» for one section, «…, que se ve en 2 secciones» for more. Until
+today the canvas offered no order at all on a bound card (no «antes/después»: it has `data-entry`, not
+`data-item`); the single-pointer alternative WCAG 2.5.7 asks for is the grip's arrows, and «Listas» as
+before.
+
+**Measured.** In the restaurant's catalog gallery with the tools off, the third photograph carried onto
+the first is first, the section still the catalog's; one right arrow on the grip, which kept the keyboard,
+makes it second; two «Deshacer» give the order back; the first carried onto the third is third. With
+«Qué hago» bound and its section duplicated, the grip says «que se ve en 2 secciones», the third card
+carried onto the first is first **in both sections**, and one «Deshacer» puts both back. Sabotaged: the
+forward drop off by one (red only once the walk carried a card forwards — it first carried backwards
+only, and a sabotage that needed the walk changed proved nothing); the bound grip writing `moveItem`; the
+sentence for one section always.

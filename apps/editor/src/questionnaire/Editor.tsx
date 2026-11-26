@@ -186,6 +186,7 @@ import {
 import { ACCEPTED_IMAGE_ACCEPT } from "../editor/imageBytes.ts";
 import { leave } from "../editor/leaving.ts";
 import { toolbarFamilyLabel } from "../editor/letterGallery.ts";
+import { cardDropIndex, cardKeyIndex } from "../editor/listReorder.ts";
 import { coloursOf, logoOfferFor, logoPalettesFor, originByValues } from "../editor/logoColours.ts";
 import { logoColoursOf, logoLuminanceOf } from "../editor/logoImage.ts";
 import { LOOK_AHEAD_DEADLINE_MS, lookAheadStep } from "../editor/lookAhead.ts";
@@ -539,7 +540,10 @@ interface ListLines {
  * «Opiniones» keep the shared label — both have shipped through two usability sessions with it,
  * and changing words those sessions saw is a product decision rather than a tidy-up.
  */
-function lineLabel(action: "add" | "remove" | "full" | "up" | "down", catalogId: string): string {
+function lineLabel(
+  action: "add" | "remove" | "full" | "up" | "down" | "grip",
+  catalogId: string,
+): string {
   const table = es as Record<string, string | undefined>;
   return table[`editor.line.${action}.${catalogId}`] ?? es[`editor.line.${action}`];
 }
@@ -1110,11 +1114,15 @@ export function Editor({
   /** The gesture of the control under the hand in «Menú» (sprint 39 día 3): the line says it. */
   const [gesture, setGesture] = useState<GestureHint | null>(null);
   const [help, setHelp] = useState<
-    Pick<HelpLineState, "keyboard" | "menuNote" | "bound" | "chosen" | "dragRefused" | "stretching">
+    Pick<
+      HelpLineState,
+      "keyboard" | "menuNote" | "bound" | "gripBound" | "chosen" | "dragRefused" | "stretching"
+    >
   >({
     keyboard: null,
     menuNote: null,
     bound: null,
+    gripBound: null,
     chosen: null,
     dragRefused: false,
     stretching: false,
@@ -1282,6 +1290,7 @@ export function Editor({
     onEscalateSection,
     onFillSlot,
     onInsertSection,
+    onMoveEntry,
     onMoveItem,
     onMoveSection,
     onMoveUpOnMobile,
@@ -1306,6 +1315,7 @@ export function Editor({
     onEscalateSection,
     onFillSlot,
     onInsertSection,
+    onMoveEntry,
     onMoveItem,
     onMoveSection,
     onMoveUpOnMobile,
@@ -4542,6 +4552,135 @@ export function Editor({
    * maximum is reached, and no "remove" on the last line, since a list with nothing in it renders
    * as nothing and would leave a heading with a hole under it.
    */
+  /**
+   * **A card's grip** (ADR 0086's día 8 amendment, sprint 41): six dots in the line's cluster beside
+   * «antes» and «después», a `grab` cursor, carried to the card it should take the place of — the
+   * card whose middle is nearest the hand is outlined while it is held — or moved one card at a time
+   * with the arrows. One gesture or one press, one step. It is order and not layout, so it works in a
+   * section the catalog draws and with the design tools off, like the arrows beside it.
+   *
+   * `bound`: on a list bound to a collection the order is the list's, one order in every section
+   * that shows it (`moveEntry`), and while the grip is held the help line says so — in how many
+   * sections, a sentence true for one and for many (David's adjustment 3).
+   */
+  function cardGrip(
+    iframeDoc: Document,
+    grip: {
+      readonly li: HTMLElement;
+      readonly cards: () => HTMLElement[];
+      readonly label: string;
+      readonly id: { readonly sectionId: string; readonly card: string };
+      readonly bound: { readonly places: number; readonly list: string } | null;
+      readonly onMove: (to: number) => void;
+    },
+  ): HTMLElement {
+    const button = chrome(iframeDoc, "button");
+    button.type = "button";
+    button.className = "rb-line-move rb-line-grip";
+    button.setAttribute("aria-label", grip.label);
+    button.innerHTML = `<svg ${screenIcon(11)} viewBox="0 0 24 24" fill="#0F172A" aria-hidden="true"><circle cx="9" cy="6" r="1.8"/><circle cx="15" cy="6" r="1.8"/><circle cx="9" cy="12" r="1.8"/><circle cx="15" cy="12" r="1.8"/><circle cx="9" cy="18" r="1.8"/><circle cx="15" cy="18" r="1.8"/></svg>`;
+    if (grip.bound) {
+      button.dataset["places"] = String(grip.bound.places);
+      button.dataset["list"] = grip.bound.list;
+    }
+    const indexNow = () => grip.cards().indexOf(grip.li);
+    const hold = (on: boolean) => {
+      if (grip.bound) button.classList.toggle("rb-grip-held", on);
+    };
+    const move = (to: number) => {
+      if (to === indexNow()) return;
+      focusGripAfter.current = grip.id;
+      grip.onMove(to);
+    };
+    let carrying: { target: number } | null = null;
+    const mark = (target: number | null) => {
+      for (const [index, card] of grip.cards().entries()) {
+        card.classList.toggle("rb-line-target", index === target && card !== grip.li);
+      }
+    };
+    button.addEventListener("click", (event) => event.stopPropagation());
+    button.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      event.stopPropagation();
+      button.setPointerCapture(event.pointerId);
+      carrying = { target: indexNow() };
+      grip.li.classList.add("rb-line-lifted");
+      iframeDoc.documentElement.classList.add("rb-dragging");
+      hold(true);
+    });
+    button.addEventListener("pointermove", (event) => {
+      if (!carrying) return;
+      const boxes = grip.cards().map((card) => card.getBoundingClientRect());
+      carrying.target = cardDropIndex(boxes, { x: event.clientX, y: event.clientY });
+      mark(carrying.target);
+    });
+    const end = (write: boolean) => {
+      const done = carrying;
+      carrying = null;
+      mark(null);
+      grip.li.classList.remove("rb-line-lifted");
+      iframeDoc.documentElement.classList.remove("rb-dragging");
+      hold(false);
+      flushQueuedPatch.current();
+      if (write && done) move(done.target);
+    };
+    button.addEventListener("pointerup", () => end(true));
+    button.addEventListener("pointercancel", () => end(false));
+    button.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && carrying) {
+        event.preventDefault();
+        end(false);
+        return;
+      }
+      const to = cardKeyIndex(indexNow(), grip.cards().length, event);
+      if (to === null) return;
+      event.preventDefault();
+      event.stopPropagation();
+      move(to);
+    });
+    button.addEventListener("focus", () => hold(true));
+    button.addEventListener("blur", () => hold(false));
+    const wanted = focusGripAfter.current;
+    if (wanted && wanted.sectionId === grip.id.sectionId && wanted.card === grip.id.card) {
+      focusGripAfter.current = null;
+      queueMicrotask(() => button.focus({ preventScroll: true }));
+    }
+    return button;
+  }
+
+  /** The grips of a list bound to a collection, whose cards are drawn per entry (ADR 0033 §10). */
+  function drawEntryGrips(iframeDoc: Document) {
+    for (const old of iframeDoc.querySelectorAll(".rb-line-grip")) old.remove();
+    for (const section of iframeDoc.querySelectorAll<HTMLElement>("[data-section]")) {
+      const sectionId = section.dataset.section;
+      if (!sectionId) continue;
+      const bound = boundListOf(docNow.current, sectionId);
+      if (!bound) continue;
+      const list = section.querySelector<HTMLElement>(".rb-list");
+      if (!list) continue;
+      const cards = () => [...list.querySelectorAll<HTMLElement>(":scope > [data-entry]")];
+      if (cards().length < 2) continue;
+      const collection = docNow.current.collections.find((c) => c.id === bound.collectionId);
+      const places = usesOfCollection(docNow.current, bound.collectionId).length;
+      for (const li of cards()) {
+        const entryId = li.dataset["entry"];
+        if (!entryId) continue;
+        li.classList.add("rb-line");
+        li.appendChild(
+          cardGrip(iframeDoc, {
+            li,
+            cards,
+            label: es["editor.line.grip.entry"],
+            id: { sectionId, card: entryId },
+            bound: { places, list: collection?.name ?? "" },
+            onMove: (to) => propsNow.current.onMoveEntry(bound.collectionId, entryId, to),
+          }),
+        );
+      }
+    }
+  }
+
   function drawLines(iframeDoc: Document) {
     // Clear-first, so a redraw after a patch draws each line's verbs once and not twice (día 3).
     for (const old of iframeDoc.querySelectorAll(
@@ -4549,6 +4688,7 @@ export function Editor({
     )) {
       old.remove();
     }
+    drawEntryGrips(iframeDoc);
     for (const section of iframeDoc.querySelectorAll<HTMLElement>("[data-section]")) {
       const sectionId = section.dataset.section;
       if (!sectionId) continue;
@@ -4608,6 +4748,16 @@ export function Editor({
           };
           if (index > 0) li.appendChild(move("up"));
           if (index < items.length - 1) li.appendChild(move("down"));
+          li.appendChild(
+            cardGrip(iframeDoc, {
+              li,
+              cards: () => [...list.querySelectorAll<HTMLElement>("[data-item]")],
+              label: lineLabel("grip", lines.catalogId),
+              id: { sectionId, card: itemId },
+              bound: null,
+              onMove: (to) => propsNow.current.onMoveItem(sectionId, lines.slot, itemId, to),
+            }),
+          );
         }
 
         if (lines.canRemove) {
@@ -6735,6 +6885,8 @@ export function Editor({
    * already used, so removing a line and adding another can hand the new one the id the removed one
    * had — an id that matches is not proof of identity across that pair.
    */
+  /** The card whose grip moved it, given the keyboard back once the list is drawn again. */
+  const focusGripAfter = useRef<{ sectionId: string; card: string } | null>(null);
   const focusAfterLines = useRef<{
     kind: "added" | "removed";
     sectionId: string;
@@ -9253,6 +9405,7 @@ export function Editor({
       queued = false;
       syncKeyboardPlace(iframeDoc);
       const badge = iframeDoc.querySelector<HTMLElement>(".rb-toolbar-badge");
+      const heldGrip = iframeDoc.querySelector<HTMLElement>(".rb-line-grip.rb-grip-held");
       patchHelp({
         menuNote: iframeDoc.querySelector(".rb-escalate-held")
           ? "escalateHeld"
@@ -9266,6 +9419,12 @@ export function Editor({
         stretching: iframeDoc.body.classList.contains("rb-key-stretching"),
         bound: badge
           ? { places: Number(badge.dataset["places"] ?? "1"), list: badge.dataset["list"] ?? "" }
+          : null,
+        gripBound: heldGrip
+          ? {
+              places: Number(heldGrip.dataset["places"] ?? "1"),
+              list: heldGrip.dataset["list"] ?? "",
+            }
           : null,
       });
     };
@@ -9979,6 +10138,11 @@ export function Editor({
       `.rb-line-down { right: ${screenPx(25)}; }`,
       ".rb-line:hover .rb-line-move, .rb-line-move:focus { opacity: 1; }",
       ".rb-line-move:hover { border-color: #156FE7; background: #F2F7FE; }",
+      // The card's grip (sprint 41 día 8): left of the two arrows, the same chrome, and the cursor
+      // that says it is carried. The card it is held over is outlined; the one carried is lifted.
+      `.rb-line-grip { right: ${screenPx(75)}; cursor: grab; touch-action: none; }`,
+      `.rb-line-target { outline: ${screenPx(2)} dashed #156FE7; outline-offset: ${screenPx(2)}; }`,
+      ".rb-line-lifted { opacity: 0.55; }",
 
       // The floating toolbar (mockup 17, band 1). Absolute inside the section, which is already
       // `position: relative` — never inside the element, whose `textContent` is what `wireEditing`

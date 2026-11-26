@@ -1,4 +1,5 @@
 import es from "../locales/es.json" with { type: "json" };
+import { boundOrderSentence } from "./listReorder.ts";
 
 /**
  * **What the help line says, and in which of its two voices** (ADR 0071, sprint 36 día 1).
@@ -76,6 +77,9 @@ export interface HelpLineState {
   menuNote: "composition" | "escalate" | "escalateHeld" | null;
   /** The text bar open over a text bound to a collection. */
   bound: { places: number; list: string } | null;
+  /** A bound list's card grip held — by the pointer or the keyboard — (sprint 41 día 8, David's
+   * adjustment 3): its order is the list's, so the line says in how many sections it moves. */
+  gripBound: { places: number; list: string } | null;
   /** A chosen element: whether it is a text, whether the arrows can move it, and whether it is a
    * link that leads somewhere in the site, so Ctrl/Cmd+Intro goes there (ADR 0079). */
   chosen: { text: boolean; movable: boolean; goes: boolean } | null;
@@ -235,6 +239,9 @@ export function quietSays(state: HelpLineState): HelpLineSays {
   if (state.menuNote === "escalate") return quiet(es["editor.section.escalate.body"]);
   // The offer asked by a gesture, with the element held where the hand left it (sprint 41 día 3).
   if (state.menuNote === "escalateHeld") return quiet(es["editor.section.escalate.bodyHeld"]);
+  if (state.gripBound) {
+    return quiet(boundOrderSentence(state.gripBound.places, state.gripBound.list));
+  }
   if (state.bound) return quiet(boundSentence(state.bound.places, state.bound.list));
   if (keys) return quiet(keys);
   // The gesture of the control the hand is on, then the open panel's one instruction: what a person
@@ -294,6 +301,7 @@ export const HELP_AT_REST: HelpLineState = {
   keyboard: null,
   menuNote: null,
   bound: null,
+  gripBound: null,
   chosen: null,
   placeholders: 0,
   touch: false,

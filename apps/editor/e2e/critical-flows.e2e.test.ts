@@ -34256,3 +34256,129 @@ describe("sprint 41 día 7 — traer al frente y enviar atrás", () => {
     }
   }, 240_000);
 });
+
+/**
+ * **Sprint 41 día 8 — una tarjeta se arrastra por su asa** (ADR 0086's amendment). The card's grip
+ * carries it to another place in its list, or the arrows do; it is order and not layout, so it works
+ * in a section the catalog draws with the design tools off. And on a list bound to a collection the
+ * order is the list's, one order in every section that shows it — the help line says so while the
+ * grip is held, and the change is read in both sections (David's adjustment 3).
+ */
+describe("sprint 41 día 8 — una tarjeta se arrastra por su asa", () => {
+  /** The ids of a list's cards, in order. */
+  const orderOf = (list: Locator, attribute: "data-item" | "data-entry") =>
+    list
+      .locator(`:scope > [${attribute}]`)
+      .evaluateAll(
+        (cards, name) => cards.map((card) => card.getAttribute(name as string) ?? ""),
+        attribute,
+      );
+
+  /** Hover the card so its cluster shows, then carry its grip to another card's middle. */
+  async function carryGrip(page: Page, card: Locator, onto: Locator): Promise<void> {
+    await page.mouse.move(...(Object.values(await pointIn(card)) as [number, number]));
+    const grip = card.locator(".rb-line-grip");
+    await expect(grip).toBeVisible();
+    const from = await pointIn(grip);
+    const to = await pointIn(onto);
+    await page.mouse.move(from.x, from.y);
+    await page.mouse.down();
+    await page.mouse.move(to.x, to.y, { steps: 12 });
+    await page.mouse.up();
+  }
+
+  it("en una galería de serie y sin herramientas, la tercera foto va al primer hueco por su asa y vuelve con las flechas", async () => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    const page = await context.newPage();
+    try {
+      await intoTheCanvas(page);
+      const frame = page.frameLocator(PREVIEW).first();
+      const gallery = frame.locator('[data-section="sec-gallery"]');
+      await gallery.scrollIntoViewIfNeeded();
+      const list = gallery.locator(".rb-list");
+      const before = await orderOf(list, "data-item");
+      expect(before.length, "la galería tiene menos de tres fotos").toBeGreaterThanOrEqual(3);
+      const cards = list.locator(":scope > [data-item]");
+      await expect(cards.nth(2).locator(".rb-line-grip")).toHaveCSS("cursor", "grab");
+
+      await afterTheEdit(page, () => carryGrip(page, cards.nth(2), cards.nth(0)));
+      const after = await orderOf(list, "data-item");
+      expect(after).toEqual([before[2], before[0], before[1], ...before.slice(3)]);
+      // Order and not layout: the section is still the catalog's.
+      await expect(gallery).not.toHaveClass(/rb-free/);
+
+      // The grip kept the keyboard: one arrow to the right puts it second, one step.
+      const moved = cards.nth(0).locator(".rb-line-grip");
+      await expect(moved).toBeFocused();
+      await afterTheEdit(page, () => page.keyboard.press("ArrowRight"));
+      expect(await orderOf(list, "data-item")).toEqual([
+        before[0],
+        before[2],
+        before[1],
+        ...before.slice(3),
+      ]);
+
+      // One «Deshacer» per gesture: the arrow, then the carry.
+      await afterTheEdit(page, () =>
+        page.getByRole("button", { name: "Deshacer", exact: true }).click(),
+      );
+      await afterTheEdit(page, () =>
+        page.getByRole("button", { name: "Deshacer", exact: true }).click(),
+      );
+      expect(await orderOf(list, "data-item")).toEqual(before);
+
+      // Forwards too: the first photograph carried onto the third takes its place, third.
+      await afterTheEdit(page, () => carryGrip(page, cards.nth(0), cards.nth(2)));
+      expect(await orderOf(list, "data-item")).toEqual([
+        before[1],
+        before[2],
+        before[0],
+        ...before.slice(3),
+      ]);
+    } finally {
+      await context.close();
+    }
+  }, 240_000);
+
+  it("en una lista vinculada que se ve en dos secciones, la línea lo dice y el orden cambia en las dos", async () => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    const page = await context.newPage();
+    try {
+      const frame = await withToolsAndList(page);
+      // A second section showing the same list: the duplicate keeps the binding.
+      const services = frame.locator('[data-section="sec-services"]');
+      await services.click({ position: { x: 8, y: 8 } });
+      await afterTheEdit(page, () =>
+        services.locator('.rb-action[aria-label="Duplicar esta sección"]').click(),
+      );
+      const lists = frame.locator("[data-section] .rb-list").filter({
+        has: frame.locator(":scope > [data-entry]"),
+      });
+      await expect(lists).toHaveCount(2);
+      const first = lists.nth(0);
+      const second = lists.nth(1);
+      const before = await orderOf(first, "data-entry");
+      expect(before).toHaveLength(3);
+      expect(await orderOf(second, "data-entry")).toEqual(before);
+
+      // Taking the grip says what it will do, true for two sections.
+      const cards = first.locator(":scope > [data-entry]");
+      await cards.nth(2).hover();
+      await cards.nth(2).locator(".rb-line-grip").focus();
+      await expect(page.getByTestId("help-line-quiet")).toContainText("que se ve en 2 secciones");
+
+      await afterTheEdit(page, () => carryGrip(page, cards.nth(2), cards.nth(0)));
+      const after = [before[2], before[0], before[1]];
+      expect(await orderOf(first, "data-entry")).toEqual(after);
+      expect(await orderOf(second, "data-entry")).toEqual(after);
+      // One «Deshacer» gives both sections their order back.
+      await afterTheEdit(page, () =>
+        page.getByRole("button", { name: "Deshacer", exact: true }).click(),
+      );
+      expect(await orderOf(first, "data-entry")).toEqual(before);
+      expect(await orderOf(second, "data-entry")).toEqual(before);
+    } finally {
+      await context.close();
+    }
+  }, 240_000);
+});
