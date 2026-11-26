@@ -328,3 +328,131 @@ export function pageToSection(doc: RetorikaDocument, pageId: string): RetorikaDo
       }),
   });
 }
+
+/**
+ * **A section moved to a page that already exists** (ADR 0087, sprint 41 día 9): «a una página
+ * existente», which until today was only «a una página nueva» (`sectionToPage`).
+ *
+ * The section keeps its id, its layout and its content; it leaves its page and lands on the other —
+ * at `index` when given, otherwise last, before a footer that closes the page. **One step**, one
+ * «Deshacer». Refused rather than guessed, as `sectionToPage` refuses: the cover, the footer and an
+ * avance (the same three, for the same reasons), a page drawn once per entry on either side (its
+ * sections read an entry, ADR 0040), the page it is already on, and a page that does not exist.
+ *
+ * **Every link keeps going where it promised**, both ways. A link elsewhere that said `#sec-x` on the
+ * section's old page now says `./destino.html#sec-x`; a link on the destination that reached it as
+ * `./origen.html#sec-x` now says `#sec-x`; and inside the moved section, an anchor to a section it
+ * left behind becomes `./origen.html#…`, and a link into its new page becomes a plain anchor.
+ * `listDeadDestinations` finds nothing new — which is the test of this function.
+ */
+export function moveSectionToPage(
+  doc: RetorikaDocument,
+  sectionId: string,
+  pageId: string,
+  index?: number,
+): RetorikaDocument {
+  const found = findSection(doc, sectionId);
+  if (!found) throw new Error(`moveSectionToPage: no section "${sectionId}"`);
+  const catalogId = found.section.preset.catalogId;
+  if (UNCONVERTIBLE.has(catalogId)) {
+    throw new Error(`moveSectionToPage: a "${catalogId}" section stays on its page`);
+  }
+  const destination = doc.pages.find((page) => page.id === pageId);
+  if (!destination) throw new Error(`moveSectionToPage: no page "${pageId}"`);
+  if (destination.id === found.page.id) {
+    throw new Error(`moveSectionToPage: "${sectionId}" is already on page "${pageId}"`);
+  }
+  for (const page of [found.page, destination]) {
+    if (page.binding) {
+      throw new Error(
+        `moveSectionToPage: page "${page.id}" is drawn once per entry of ` +
+          `"${page.binding.collectionId}"; its sections stay where they are`,
+      );
+    }
+  }
+
+  const source = found.page;
+  const anchor = `#${sectionId}`;
+  const into = `${hrefForPage(destination)}${anchor}`;
+  const sourceIds = new Set(source.sections.filter((s) => s.id !== sectionId).map((s) => s.id));
+  const destinationIds = new Set(destination.sections.map((s) => s.id));
+  const intoSource = (fragment: string) => `${hrefForPage(source)}${fragment}`;
+
+  const rewriteLinks = (section: Section, href: (current: string) => string): Section => {
+    const rewrite = (element: ContentElement): ContentElement => {
+      if (element.items) {
+        return {
+          ...element,
+          items: element.items.map((item) => ({ ...item, elements: item.elements.map(rewrite) })),
+        };
+      }
+      if (element.value?.kind !== "link") return element;
+      const next = href(element.value.href.trim());
+      return next === element.value.href.trim()
+        ? element
+        : { ...element, value: { ...element.value, href: next } };
+    };
+    return { ...section, content: section.content.map(rewrite) };
+  };
+
+  // The moved section: anchors it left behind go to the old page; links into its new page become
+  // plain anchors.
+  const moved = rewriteLinks(found.section, (href) => {
+    if (href.startsWith("#") && sourceIds.has(href.slice(1))) return intoSource(href);
+    const prefix = `${hrefForPage(destination)}#`;
+    if (href.startsWith(prefix) && destinationIds.has(href.slice(prefix.length))) {
+      return `#${href.slice(prefix.length)}`;
+    }
+    return href;
+  });
+
+  const landed = [...destination.sections];
+  const footerLast = landed.at(-1)?.preset.catalogId === "footer";
+  const at =
+    index === undefined
+      ? footerLast
+        ? landed.length - 1
+        : landed.length
+      : Math.max(0, Math.min(index, landed.length));
+  landed.splice(at, 0, moved);
+
+  return parseDocument({
+    ...doc,
+    pages: doc.pages.map((page) => {
+      if (page.id === source.id) {
+        return {
+          ...page,
+          sections: page.sections
+            .filter((s) => s.id !== sectionId)
+            .map((s) => rewriteLinks(s, (href) => (href === anchor ? into : href))),
+        };
+      }
+      if (page.id === destination.id) {
+        return {
+          ...page,
+          sections: landed.map((s) =>
+            s === moved
+              ? s
+              : rewriteLinks(s, (href) => (href === intoSource(anchor) ? anchor : href)),
+          ),
+        };
+      }
+      // Any other page reached it as `./origen.html#sec-x`, which is now `./destino.html#sec-x`.
+      return {
+        ...page,
+        sections: page.sections.map((s) =>
+          rewriteLinks(s, (href) => (href === intoSource(anchor) ? into : href)),
+        ),
+      };
+    }),
+  });
+}
+
+/** The pages a section may be moved to, in the document's order: every other page, unless the
+ * section is one of the three that stay or either page is drawn once per entry. What the editor
+ * offers is what `moveSectionToPage` accepts — the same questions, asked once. */
+export function pagesToMoveTo(doc: RetorikaDocument, sectionId: string): Page[] {
+  const found = findSection(doc, sectionId);
+  if (!found || UNCONVERTIBLE.has(found.section.preset.catalogId) || found.page.binding) return [];
+  return doc.pages.filter((page) => page.id !== found.page.id && !page.binding);
+}

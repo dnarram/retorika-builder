@@ -3,6 +3,8 @@ import {
   canFoldPage,
   foldsInto,
   MAX_PAGES,
+  moveSectionToPage,
+  pagesToMoveTo,
   pageToSection,
   sectionToPage,
   type TeaserFactory,
@@ -543,5 +545,138 @@ describe("a section on a page per entry (ADR 0040)", () => {
     expect(() => sectionToPage(doc, "sec-ficha-prices", makeTeaser)).toThrow(
       /is on page "page-ficha-servicios", which is drawn once per entry/,
     );
+  });
+});
+
+/**
+ * **A section moved to a page that already exists** (ADR 0087, sprint 41 día 9). The site the walk
+ * also uses: a home page with a cover, «Qué hago», a button to «Qué hago» and a link into the other
+ * page; and a «Horario» page with its own section and a footer.
+ */
+describe("moveSectionToPage", () => {
+  const link = (id: string, href: string, slot = "primaryAction"): ContentElement => ({
+    id,
+    role: "link",
+    hidden: false,
+    slot,
+    value: { kind: "link", text: "Ir", href },
+  });
+  const site = (): RetorikaDocument => ({
+    ...documentWith([
+      section("sec-cover", "cover", [
+        heading("el-cover", "Taberna"),
+        link("el-to-services", "#sec-services"),
+        link("el-to-horario", "./horario.html#sec-horario", "secondaryAction"),
+      ]),
+      section("sec-services", "services", [
+        heading("el-services", "Qué hago"),
+        link("el-back-cover", "#sec-cover"),
+        link("el-to-horario-2", "./horario.html#sec-horario", "intro"),
+      ]),
+    ]),
+    pages: [
+      ...documentWith([]).pages.map((page) => ({
+        ...page,
+        sections: [
+          section("sec-cover", "cover", [
+            heading("el-cover", "Taberna"),
+            link("el-to-services", "#sec-services"),
+            link("el-to-horario", "./horario.html#sec-horario", "secondaryAction"),
+          ]),
+          section("sec-services", "services", [
+            heading("el-services", "Qué hago"),
+            link("el-back-cover", "#sec-cover"),
+            link("el-to-horario-2", "./horario.html#sec-horario", "intro"),
+          ]),
+        ],
+      })),
+      {
+        id: "page-horario",
+        slug: "horario",
+        title: "Horario",
+        sections: [
+          section("sec-horario", "services", [
+            heading("el-horario", "Horario"),
+            link("el-to-services-there", "./index.html#sec-services"),
+          ]),
+          section("sec-footer", "footer", [heading("el-footer", "Taberna")]),
+        ],
+      },
+    ],
+  });
+  const hrefOf = (doc: RetorikaDocument, id: string) => {
+    for (const page of doc.pages) {
+      for (const s of page.sections) {
+        const el = s.content.find((e) => e.id === id);
+        if (el?.value?.kind === "link") return el.value.href;
+      }
+    }
+    return undefined;
+  };
+  const idsOf = (doc: RetorikaDocument, pageId: string) =>
+    doc.pages.find((p) => p.id === pageId)?.sections.map((s) => s.id);
+
+  it("moves the section before the footer of the other page, in one document", () => {
+    const moved = moveSectionToPage(site(), "sec-services", "page-horario");
+    expect(idsOf(moved, "home")).toEqual(["sec-cover"]);
+    expect(idsOf(moved, "page-horario")).toEqual(["sec-horario", "sec-services", "sec-footer"]);
+  });
+
+  it("puts it where it is told, clamped", () => {
+    expect(
+      idsOf(moveSectionToPage(site(), "sec-services", "page-horario", 0), "page-horario"),
+    ).toEqual(["sec-services", "sec-horario", "sec-footer"]);
+    expect(
+      idsOf(moveSectionToPage(site(), "sec-services", "page-horario", 99), "page-horario"),
+    ).toEqual(["sec-horario", "sec-footer", "sec-services"]);
+  });
+
+  it("keeps every link going where it promised, both ways, and leaves no destination dead", () => {
+    const before = listDeadDestinations(site());
+    expect(before).toEqual([]);
+    const moved = moveSectionToPage(site(), "sec-services", "page-horario");
+    // A button on the old page now crosses to the new one.
+    expect(hrefOf(moved, "el-to-services")).toBe("./horario.html#sec-services");
+    // A link on the new page that crossed to reach it is now a plain anchor.
+    expect(hrefOf(moved, "el-to-services-there")).toBe("#sec-services");
+    // Inside the moved section: what it left behind is across; what it joined is local.
+    expect(hrefOf(moved, "el-back-cover")).toBe("./index.html#sec-cover");
+    expect(hrefOf(moved, "el-to-horario-2")).toBe("#sec-horario");
+    // And what had nothing to do with it is untouched.
+    expect(hrefOf(moved, "el-to-horario")).toBe("./horario.html#sec-horario");
+    expect(listDeadDestinations(moved)).toEqual([]);
+  });
+
+  it("refuses the three that stay, the page it is on, a page that does not exist, and a page per entry", () => {
+    expect(() => moveSectionToPage(site(), "sec-cover", "page-horario")).toThrow(
+      /stays on its page/,
+    );
+    expect(() => moveSectionToPage(site(), "sec-footer", "home")).toThrow(/stays on its page/);
+    expect(() => moveSectionToPage(site(), "sec-services", "home")).toThrow(/already on page/);
+    expect(() => moveSectionToPage(site(), "sec-services", "page-nada")).toThrow(/no page/);
+    const bound = site();
+    const horario = bound.pages[1];
+    if (horario) horario.binding = { collectionId: "col-x" } as never;
+    expect(() => moveSectionToPage(bound, "sec-services", "page-horario")).toThrow(
+      /once per entry/,
+    );
+  });
+
+  it("offers exactly the pages it accepts", () => {
+    expect(pagesToMoveTo(site(), "sec-services").map((p) => p.id)).toEqual(["page-horario"]);
+    expect(pagesToMoveTo(site(), "sec-cover")).toEqual([]);
+    expect(pagesToMoveTo(site(), "sec-footer")).toEqual([]);
+    // And back: from the other page, home is offered.
+    const moved = moveSectionToPage(site(), "sec-services", "page-horario");
+    expect(pagesToMoveTo(moved, "sec-services").map((p) => p.id)).toEqual(["home"]);
+  });
+
+  it("goes back where it came from with the same verb, links included", () => {
+    const there = moveSectionToPage(site(), "sec-services", "page-horario");
+    const back = moveSectionToPage(there, "sec-services", "home", 1);
+    expect(idsOf(back, "home")).toEqual(["sec-cover", "sec-services"]);
+    expect(hrefOf(back, "el-to-services")).toBe("#sec-services");
+    expect(hrefOf(back, "el-back-cover")).toBe("#sec-cover");
+    expect(listDeadDestinations(back)).toEqual([]);
   });
 });
