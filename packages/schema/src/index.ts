@@ -161,17 +161,21 @@ export type { InvariantId } from "./invariants-catalog.ts";
 export { INVARIANTS, invariantTestName, PROVISIONAL_INVARIANTS } from "./invariants-catalog.ts";
 export type { MobilePatchEdit, MobileSlot, PlacementEdit, RevertImpact } from "./layout.ts";
 export {
+  bringToFront,
   escalateSection,
   isHandDesigned,
+  isLayered,
   mobilePatchFor,
   mobileSequence,
   moveUpOnMobile,
   revertImpact,
   revertPlanFor,
   revertSection,
+  sendToBack,
   setMobilePatch,
   setPhotoShape,
   setPlacement,
+  stackingFor,
 } from "./layout.ts";
 export { addressOf, MAP_ADDRESS_SLOT, mapHref } from "./map.ts";
 export type { Mark, MarkRange, MarkRun, TextEdit } from "./marks.ts";
@@ -191,8 +195,8 @@ export {
   shiftMarks,
   textEditBetween,
 } from "./marks.ts";
-export type { GridArea, OverlappingTexts } from "./overlapping.ts";
-export { overlappingTexts, overlaps } from "./overlapping.ts";
+export type { CoveredByPhoto, GridArea, OverlappingTexts } from "./overlapping.ts";
+export { coveredByPhoto, overlappingTexts, overlaps } from "./overlapping.ts";
 export { deletePage, movePage, renamePage, setPageInMenu } from "./pages.ts";
 export { DocumentValidationError, parseDocument, safeParseDocument } from "./parse.ts";
 export type { CatalogLayout, PresetShape, PresetSlot } from "./preset.ts";

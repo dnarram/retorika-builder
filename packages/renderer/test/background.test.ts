@@ -91,7 +91,8 @@ describe("a background with motifs, in the stylesheet", () => {
 
   it("emits nothing at all for a document without one, which is every document before 1.22.0", () => {
     for (const entry of corpus) {
-      if (entry.name === "fondo-con-motivos") continue;
+      // `capas` (sprint 41 día 7) carries a section background under its stack.
+      if (entry.name === "fondo-con-motivos" || entry.name === "capas") continue;
       expect(buildCss(entry.document, "html"), entry.name).not.toContain("background-image");
     }
   });

@@ -1,6 +1,8 @@
 import { GALLERY_PHOTOS } from "@retorika/catalog";
 import { ownFontsFor } from "@retorika/renderer";
 import {
+  type CoveredByPhoto,
+  coveredByPhoto,
   MAX_PAGES,
   type OverlappingTexts,
   overlappingTexts,
@@ -191,7 +193,13 @@ export type DownloadGate =
    * own labels, and David's decision of día 4 leaves it to the panel.
    */
   | { kind: "overflows"; findings: OverflowFinding[]; longButton?: string; fold?: LoudFold }
-  | { kind: "textOverText"; findings: OverlappingTexts[] }
+  /**
+   * Two texts on top of each other, **or anything a photograph paints over** (ADR 0085, David's
+   * adjustment 2): a button, a link, the map or a field under a photograph keeps the keyboard's focus
+   * and cannot be seen. One dialog for both, because both are the owner's own layout and both are a
+   * warning; `covered` joined on sprint 41 día 7.
+   */
+  | { kind: "textOverText"; findings: OverlappingTexts[]; covered: CoveredByPhoto[] }
   /**
    * A face of the owner's own font above 300 KB (David's condition 2): a slower page, not a broken
    * one, so a warning and the last of them — the import dialog already said so when the file came
@@ -297,7 +305,10 @@ export function downloadGateFor(
     // Asked of the document, like the contrast review and unlike the overflow measurement: two
     // placements on top of each other is a fact the document holds, with no browser needed.
     const stacked = overlappingTexts(doc);
-    if (stacked.length > 0) return { kind: "textOverText", findings: stacked };
+    const covered = coveredByPhoto(doc);
+    if (stacked.length > 0 || covered.length > 0) {
+      return { kind: "textOverText", findings: stacked, covered };
+    }
   }
   if (!accepted.has("fonts")) {
     const heavy = fonts.flatMap((font) =>

@@ -370,6 +370,111 @@ export function setPhotoShape(
 }
 
 // ---------------------------------------------------------------------------
+// The stack — ADR 0085
+// ---------------------------------------------------------------------------
+
+/**
+ * **The order a section's placed elements paint in, bottom first** (ADR 0085, sprint 41 día 7).
+ *
+ * With no `layer` anywhere it is the order every site has always drawn: **photographs under
+ * everything else**, each group in document order — the renderer's `.rb-panel ~ :not(img)` lifted
+ * every word above every picture long before anybody could reorder anything, and that is the
+ * default this keeps. With layers, an element with one sits at it; one without (a placement added
+ * after somebody reordered) keeps its default place, and ties fall back to that default — so the
+ * answer is total and deterministic whatever the document holds.
+ *
+ * Only elements that are both placed and present in the section: a placement is what puts an
+ * element in the stack.
+ */
+export function stackingFor(section: Section): string[] {
+  const layout = section.layout;
+  if (!layout) return [];
+  const placed = new Map(layout.placements.map((placement) => [placement.elementId, placement]));
+  const present = section.content.filter((element) => placed.has(element.id));
+  const byDefault = [
+    ...present.filter((element) => element.value?.kind === "image"),
+    ...present.filter((element) => element.value?.kind !== "image"),
+  ].map((element) => element.id);
+  const defaultRank = new Map(byDefault.map((id, index) => [id, index + 1]));
+  const rank = (id: string) => placed.get(id)?.layer ?? defaultRank.get(id) ?? 0;
+  return [...byDefault].sort(
+    (a, b) => rank(a) - rank(b) || (defaultRank.get(a) ?? 0) - (defaultRank.get(b) ?? 0),
+  );
+}
+
+/** Whether a section paints in an order somebody chose — any placement carrying a layer. */
+export function isLayered(section: Section): boolean {
+  return section.layout?.placements.some((placement) => placement.layer !== undefined) ?? false;
+}
+
+/** The section with its stack written as `order`, densely — or with no layers at all when `order`
+ * is the default, so a stack put back the way it was leaves nothing behind. */
+function withStack(
+  doc: RetorikaDocument,
+  sectionId: string,
+  order: readonly string[],
+  verb: string,
+) {
+  const found = sectionOrThrow(doc, sectionId, verb);
+  const layout = found.section.layout;
+  if (!layout) {
+    throw new Error(
+      `${verb}: section "${sectionId}" is drawn by the catalog, so it has no stack to change`,
+    );
+  }
+  const plain = {
+    ...found.section,
+    layout: { ...layout, placements: layout.placements.map(({ layer: _l, ...rest }) => rest) },
+  };
+  const isDefault = JSON.stringify(stackingFor(plain)) === JSON.stringify(order);
+  const position = new Map(order.map((id, index) => [id, index + 1]));
+  const placements = layout.placements.map((placement) => {
+    const { layer: _old, ...rest } = placement;
+    const layer = position.get(placement.elementId);
+    return isDefault || layer === undefined ? rest : { ...rest, layer };
+  });
+  if (JSON.stringify(placements) === JSON.stringify(layout.placements)) return doc;
+  return withSection(doc, found.page.id, sectionId, {
+    ...found.section,
+    layout: { ...layout, placements },
+  });
+}
+
+function stackOf(
+  doc: RetorikaDocument,
+  sectionId: string,
+  elementId: string,
+  verb: string,
+): string[] {
+  const found = sectionOrThrow(doc, sectionId, verb);
+  const order = stackingFor(found.section);
+  if (!order.includes(elementId)) {
+    throw new Error(`${verb}: element "${elementId}" has no placement in "${sectionId}"`);
+  }
+  return order.filter((id) => id !== elementId);
+}
+
+/** «Traer al frente»: the element paints over everything else in its section (ADR 0085). */
+export function bringToFront(doc: RetorikaDocument, sectionId: string, elementId: string) {
+  return withStack(
+    doc,
+    sectionId,
+    [...stackOf(doc, sectionId, elementId, "bringToFront"), elementId],
+    "bringToFront",
+  );
+}
+
+/** «Enviar atrás»: the element paints under everything else in its section (ADR 0085). */
+export function sendToBack(doc: RetorikaDocument, sectionId: string, elementId: string) {
+  return withStack(
+    doc,
+    sectionId,
+    [elementId, ...stackOf(doc, sectionId, elementId, "sendToBack")],
+    "sendToBack",
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Rule 7 — the three mobile adjustments
 // ---------------------------------------------------------------------------
 

@@ -18,7 +18,7 @@ import {
  * role or a token is additive and bumps the minor; removing or renaming one breaks and
  * bumps the major.
  */
-export const SCHEMA_VERSION = "1.23.0";
+export const SCHEMA_VERSION = "1.24.0";
 
 const idSchema = z.string().min(1).max(128);
 
@@ -247,6 +247,14 @@ export const placementSchema = z.strictObject({
       height: z.number().int().min(1).max(9999),
     })
     .optional(),
+  /**
+   * **Where this element sits in the stack** (ADR 0085, sprint 41 día 7, David's «traer al frente y
+   * enviar atrás»): 1 is the bottom. Absent on every placement of a section is the order every site
+   * has always drawn — photographs under everything else, each in document order (`stackingFor`).
+   * Written by `bringToFront` and `sendToBack`, densely, on every placement of the section at once;
+   * a section brought back to that order loses them all, so «nobody reordered» stays a stored fact.
+   */
+  layer: z.number().int().min(1).max(999).optional(),
 });
 export type Placement = z.infer<typeof placementSchema>;
 

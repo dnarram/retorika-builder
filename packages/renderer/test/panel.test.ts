@@ -127,7 +127,12 @@ describe("the panel behind text over an image", () => {
       const page = parse(render(document, "html").html);
       for (const el of page.querySelectorAll("section")) {
         if (panelOf(el)) panels.push(`${name}/${el.getAttribute("data-section")}`);
-        if (el.getAttribute("data-variant") === "image-right") {
+        // The catalog's image-right never stacks its words on its photograph; a section designed
+        // by hand may (`capas`, sprint 41 día 7, puts its headline over its photograph on purpose).
+        if (
+          el.getAttribute("data-variant") === "image-right" &&
+          !el.classList.contains("rb-free")
+        ) {
           expect(panelOf(el), `${name}/${el.getAttribute("data-section")}`).toBeNull();
         }
       }
@@ -135,6 +140,7 @@ describe("the panel behind text over an image", () => {
     // `fondo-con-motivos` (sprint 40 día 5) is `image-background-full`'s cover over its photograph
     // with a motif under the site: the panel is what keeps the words on the surface there too.
     expect(panels.sort()).toEqual([
+      "capas/sec-cover",
       "fondo-con-motivos/sec-cover-full",
       "hidden-and-embed/sec-cover",
       "image-background-full/sec-cover-full",

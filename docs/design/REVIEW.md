@@ -11729,3 +11729,34 @@ teclado salvo el clic que elige. **Saboteos**, los tres rojos: las teclas antes 
 modo va en el `<body>` (`rb-key-stretching`). Y ya existía `rb-stretching`, la del estirón del logo: una
 sustitución la tocó, las 22 caminatas del logo y la marca lo habrían visto, y la mía lleva otro nombre. El
 filtro `-t` de Vitest es una expresión regular: un nombre con «+» no encuentra su caminata.
+
+### Día 7 — traer al frente y enviar atrás (PR de `feat/traer-al-frente`, ADR 0085, esquema 1.24.0)
+
+**Lo que hay ahora.** Un `layer` opcional en la colocación. Sin él, el orden de siempre: las fotos debajo de
+todo lo demás, cada grupo en orden de documento (`stackingFor`). «Traer al frente» y «Enviar atrás», en
+«Colocación» solo para un elemento que se cruza con otro, escriben la pila entera de la sección; una pila
+devuelta al orden de siempre pierde todas las capas. El renderer da a cada colocado un `z-index` del doble
+de su puesto, el panel bajo solo lo que queda encima de la foto, y aísla la sección (`rb-layered`).
+
+**Los dos ajustes de David.** El techo: medido en Chromium sobre `capas` (barra fija con hoja de páginas, una
+portada con fondo con motivos, la foto encima de un botón y el titular encima de las dos): el puntero da con
+la foto sobre el botón, con el titular sobre la foto y con la foto donde está el velo; desplazada la página,
+con **la barra** sobre la foto; a 390 con la hoja abierta, con la hoja. Saboteado el aislamiento, la prueba
+de la barra **no se puso roja al principio**: el fondo de la sección ya la aislaba (ADR 0081). Ahora corre
+también sin fondo, y ahí sí se pone roja. La de la hoja aguanta sin techo porque la hoja se pone encima por
+su propia regla (ADR 0065): queda como guarda y el ADR lo dice. Lo tapado: `coveredByPhoto` cuenta todo lo
+que no es foto —texto, botón, enlace, «Cómo llegar», campo, lista—, y la revisión lo nombra: «El botón
+«…», debajo de la foto «…»». Avisa, nunca bloquea.
+
+**Medido en el editor a 1280.** Portada a mano: sin cruce, «Enviar atrás» no está; el botón llevado sobre la
+foto la pisa y los verbos aparecen; «Enviar atrás» y el puntero da con la foto, la sección `rb-layered`; la
+descarga, pasados los avisos de antes, dice «Hay algo tapado por una foto» y nombra el botón; «Traer al
+frente» lo devuelve y la pila vuelve a ser la de siempre, sin `rb-layered`; un «Deshacer» lo manda debajo
+otra vez.
+
+**Pruebas.** Esquema: el bloque de `0025` y `stacking.test.ts` (el orden por defecto, los dos verbos, la
+vuelta al defecto sin capas, lo tapado por papel, oculto y al lado no). Renderer: `stacking.test.ts` y
+`stacking.browser.test.ts`. Editor: la puerta con un botón tapado. **Saboteos**: sin aislamiento (la barra,
+tras añadir el caso sin fondo), `z-index` solo en la foto (el titular, tras medir en su borde sobre la foto y
+no en su centro, que cae fuera), lo tapado mirando solo textos (la unitaria), los verbos siempre presentes
+(la caminata). Las pruebas que cuentan fixtures con cabecera, sección a mano, fondo y panel cuentan `capas`.

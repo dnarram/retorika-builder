@@ -9,6 +9,7 @@ import {
   fineTrack,
   fineTrackSpan,
   GRID_COLUMNS,
+  isLayered,
   mapHref,
   mobileSequence,
   overlaps,
@@ -19,6 +20,7 @@ import {
   type Section,
   SORTED_TOKEN_KEYS,
   type StyleProperty,
+  stackingFor,
   tokenPx,
   tokenToCssVariable,
   type VeilColours,
@@ -393,16 +395,24 @@ function elementNode(
  */
 function panelArea(
   emitted: readonly { el: ContentElement; placement: Placement | undefined }[],
-): GridArea | undefined {
+  /** The stack somebody chose (ADR 0085): only what sits **above** a photograph it crosses gets a
+   * panel — a text sent behind one is covered, and the review says so. Absent, every word is above
+   * every photograph, as it has always been. */
+  rank?: ReadonlyMap<string, number>,
+): { area: GridArea; lowest: number } | undefined {
   const placed = emitted.filter(
     (entry): entry is { el: ContentElement; placement: Placement } => entry.placement !== undefined,
   );
   const images = placed.filter(({ el }) => el.value?.kind === "image");
+  const above = (text: string, image: string) =>
+    rank === undefined || (rank.get(text) ?? 0) > (rank.get(image) ?? 0);
   const over = placed.filter(
     ({ el, placement }) =>
-      el.value?.kind !== "image" && images.some((image) => overlaps(placement, image.placement)),
+      el.value?.kind !== "image" &&
+      images.some((image) => overlaps(placement, image.placement) && above(el.id, image.el.id)),
   );
   if (over.length === 0) return undefined;
+  const lowest = Math.min(...over.map(({ el }) => rank?.get(el.id) ?? 1));
 
   const column = Math.min(...over.map(({ placement }) => placement.column));
   const row = Math.min(...over.map(({ placement }) => placement.row));
@@ -410,7 +420,7 @@ function panelArea(
     ...over.map(({ placement }) => placement.column + placement.columnSpan),
   );
   const rowEnd = Math.max(...over.map(({ placement }) => placement.row + placement.rowSpan));
-  return { column, columnSpan: columnEnd - column, row, rowSpan: rowEnd - row };
+  return { area: { column, columnSpan: columnEnd - column, row, rowSpan: rowEnd - row }, lowest };
 }
 
 /**
@@ -492,6 +502,16 @@ function sectionNode(
   const layout = section.layout ?? preset.layoutFor(section.preset.variantId, elements);
   const fine = section.layout !== null;
   const placementById = new Map(layout.placements.map((p) => [p.elementId, p]));
+  /*
+   * **The stack somebody chose** (ADR 0085, sprint 41 día 7): in a section whose placements carry
+   * layers, every placed element paints at `z-index` twice its place — even numbers, so the panel
+   * behind a text can sit at the odd one under it — and the section is its own stacking context
+   * (`rb-layered`), so nothing brought to the front reaches over the fixed bar, the phone's menu
+   * sheet or the next section. A section nobody reordered emits none of it.
+   */
+  const layered = isLayered(section);
+  const stackRank = new Map(stackingFor(section).map((id, index) => [id, index + 1]));
+  const zOf = (id: string) => 2 * (stackRank.get(id) ?? 0);
 
   // The page's <h1> is the cover when there is one, and the page's first section when there is
   // not (sprint 5): a converted page carries no cover — the cover is one of the three sections
@@ -523,7 +543,10 @@ function sectionNode(
     }
 
     const placement = placementById.get(el.id);
-    if (placement) node.attributes["style"] = placementStyle(placement, fine);
+    if (placement) {
+      node.attributes["style"] =
+        placementStyle(placement, fine) + (layered ? `;z-index:${zOf(el.id)}` : "");
+    }
     emitted.push({ el, node, placement });
   }
 
@@ -538,13 +561,19 @@ function sectionNode(
       ]
     : [];
 
-  const panel = panelArea(emitted);
+  const panel = panelArea(emitted, layered ? stackRank : undefined);
   const children: RenderNode[] = [
     ...(panel
       ? [
           element(
             "div",
-            { "aria-hidden": "true", class: "rb-panel", style: placementStyle(panel, fine) },
+            {
+              "aria-hidden": "true",
+              class: "rb-panel",
+              style:
+                placementStyle(panel.area, fine) +
+                (layered ? `;z-index:${2 * panel.lowest - 1}` : ""),
+            },
             [],
           ),
         ]
@@ -581,7 +610,8 @@ function sectionNode(
       // prevent.
       class:
         `rb-section rb-${section.preset.catalogId} rb-${section.preset.variantId}` +
-        (fine ? " rb-free" : ""),
+        (fine ? " rb-free" : "") +
+        (layered ? " rb-layered" : ""),
     },
     children,
   );
@@ -977,6 +1007,24 @@ function elementStyleCss(doc: RetorikaDocument): string[] {
   ];
 }
 
+/**
+ * **A section with a stack of its own is its own stacking context** (ADR 0085, sprint 41 día 7,
+ * David's adjustment 1): «ningún elemento traído al frente se pinta sobre la barra fija, sobre la
+ * hoja del menú del móvil ni fuera de su sección». `isolation: isolate` with no `z-index` keeps the
+ * section at the page's own level, under the header's 2, whatever numbers its elements carry; a
+ * section with a background with motifs is isolated already (ADR 0081) and its veil stays under
+ * everything placed. Emitted only for a document with such a section.
+ */
+function layeredCss(doc: RetorikaDocument): string[] {
+  const any = doc.pages.some((page) => page.sections.some((section) => isLayered(section)));
+  if (!any) return [];
+  return [
+    "/* a section with a stack of its own (ADR 0085) */",
+    ".rb-section.rb-layered { isolation: isolate; }",
+    "",
+  ];
+}
+
 /** The narrowest and the widest a shaped photograph is drawn on a phone (ADR 0084): a tall strip at
  * the phone's full width would be three screens of one picture, and a thin band would be a line. */
 const PHONE_RATIO_MIN = { width: 3, height: 4 };
@@ -1354,6 +1402,7 @@ export function buildCss(doc: RetorikaDocument, target: "html" | "dom"): string 
     // override; source order settles nothing here, since the selectors already decide, but a
     // stylesheet should read in the order somebody would explain it.
     ...fineGridCss(doc),
+    ...layeredCss(doc),
     ...elementStyleCss(doc),
     ...photoShapeCss(doc),
     ...breakpointCss(doc),
