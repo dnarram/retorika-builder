@@ -53,6 +53,7 @@ import {
   moveItem as moveItemInDoc,
   movePage as movePageInDoc,
   moveSection as moveSectionFromDoc,
+  moveSectionToPage as moveSectionToPageInDoc,
   moveUpOnMobile as moveUpOnMobileInDoc,
   pageToSection as pageToSectionInDoc,
   parseDocument,
@@ -151,6 +152,9 @@ export type SnapshotCause =
    * happen together, so one «Deshacer» takes back all three. `sectionId` is the section that
    * left, which is what the toast names. */
   | { type: "sectionToPage"; sectionId: string; pageId: string }
+  /** A section moved to a page that already exists (ADR 0087): one cause, the section and its
+   * links together, naming the page it went to. */
+  | { type: "moveSectionToPage"; sectionId: string; pageId: string }
   /** Undoing the conversion, from the «Páginas» panel. It names the page that folded away rather
    * than the sections that came back: there may be several of them, and the page is what the
    * person pressed. */
@@ -410,6 +414,7 @@ export type HistoryAction =
       toIndex: number;
     }
   | { type: "sectionToPage"; variant: number; sectionId: string }
+  | { type: "moveSectionToPage"; variant: number; sectionId: string; pageId: string }
   | {
       type: "addEntryPage";
       variant: number;
@@ -1276,6 +1281,12 @@ function convertSection(history: History, sectionId: string): History {
   return step(history, document, { type: "sectionToPage", sectionId, pageId });
 }
 
+/** A section to a page that already exists, in one step with every link it carries (ADR 0087). */
+function moveToPage(history: History, sectionId: string, pageId: string): History {
+  const document = moveSectionToPageInDoc(history.present.document, sectionId, pageId);
+  return step(history, document, { type: "moveSectionToPage", sectionId, pageId });
+}
+
 /**
  * A page per entry, in one step (ADR 0040 §6) — the second way a page is born.
  *
@@ -1702,6 +1713,8 @@ function apply(history: History, action: HistoryAction): History {
       return moveItem(history, action.sectionId, action.slot, action.itemId, action.toIndex);
     case "sectionToPage":
       return convertSection(history, action.sectionId);
+    case "moveSectionToPage":
+      return moveToPage(history, action.sectionId, action.pageId);
     case "addEntryPage":
       return addEntryPage(history, action.collectionId, action.titleField, action.title);
     case "pageToSection":

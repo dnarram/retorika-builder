@@ -1625,6 +1625,34 @@ describe("sectionToPage, as one history step", () => {
   });
 });
 
+describe("moveSectionToPage, as one history step (ADR 0087)", () => {
+  it("moves a section to a page that exists, and one «Deshacer» brings it and its links back", () => {
+    const converted = run(start(), {
+      type: "sectionToPage",
+      variant: 0,
+      sectionId: "sec-services",
+    });
+    const before = converted[0]?.present.document;
+    const pageId = before?.pages[1]?.id ?? "";
+    const moved = run(converted, {
+      type: "moveSectionToPage",
+      variant: 0,
+      sectionId: "sec-gallery",
+      pageId,
+    });
+    const doc = moved[0]?.present.document;
+    expect(doc?.pages[1]?.sections.map((s) => s.id)).toContain("sec-gallery");
+    expect(doc?.pages[0]?.sections.map((s) => s.id)).not.toContain("sec-gallery");
+    expect(moved[0]?.past).toHaveLength(2);
+    expect(moved[0]?.present.cause).toEqual({
+      type: "moveSectionToPage",
+      sectionId: "sec-gallery",
+      pageId,
+    });
+    expect(run(moved, { type: "undo", variant: 0 })[0]?.present.document).toEqual(before);
+  });
+});
+
 /**
  * And the conversion undone from the «Páginas» panel — the other half of ADR 0022's «se puede
  * deshacer», which until today was written, tested and imported by nobody.

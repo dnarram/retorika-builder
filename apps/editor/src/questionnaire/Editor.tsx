@@ -49,6 +49,7 @@ import {
   type Placement,
   type PlacementEdit,
   type PresetShape,
+  pagesToMoveTo,
   type RetorikaDocument,
   type RevertImpact,
   ROW_STEP_PX,
@@ -694,6 +695,7 @@ export function Editor({
   pageId,
   onSelectPage,
   onSectionToPage,
+  onMoveSectionToPage,
   onRenameCollection,
   onDeleteCollection,
   onAddEntry,
@@ -897,6 +899,8 @@ export function Editor({
   /** This section becomes a page of its own (ADR 0022). One history step, so one «Deshacer»
    * takes back the page, the move and the avance together. */
   onSectionToPage: (sectionId: string) => void;
+  /** This section moves to a page that already exists (ADR 0087), its links following it. */
+  onMoveSectionToPage: (sectionId: string, pageId: string) => void;
   onRenameCollection: (collectionId: string, name: string) => void;
   onDeleteCollection: (collectionId: string) => void;
   onAddEntry: (collectionId: string, fields: Record<string, EntryField>) => void;
@@ -1296,6 +1300,7 @@ export function Editor({
     onMoveUpOnMobile,
     onRemoveItem,
     onSectionToPage,
+    onMoveSectionToPage,
     onSelectPage,
     onSetElementStyle,
     onSetEntryField,
@@ -1321,6 +1326,7 @@ export function Editor({
     onMoveUpOnMobile,
     onRemoveItem,
     onSectionToPage,
+    onMoveSectionToPage,
     onSelectPage,
     onSetElementStyle,
     onSetEntryField,
@@ -3520,6 +3526,51 @@ export function Editor({
     }
 
     /**
+     * **Where this section may go** (ADR 0087, sprint 41 día 9): «A una página nueva» while a page
+     * can still be made, then each page `moveSectionToPage` accepts, by its name. A choice closes the
+     * list and writes one step; the section leaves this page, so there is nothing to come back to.
+     * `null` when there is nowhere to go, which the button never asks for.
+     */
+    function pageMenu(sectionId: string): HTMLElement | null {
+      const pages = pagesToMoveTo(docNow.current, sectionId);
+      const canNew = canConvert(docNow.current, sectionId);
+      if (pages.length === 0) return null;
+      const panel = chrome(iframeDoc, "div");
+      panel.className = "rb-compositions rb-to-page";
+
+      const title = chrome(iframeDoc, "p");
+      title.className = "rb-menu-title";
+      title.textContent = es["editor.toPage.title"];
+      panel.appendChild(title);
+
+      const choose = (label: string, go: () => void) => {
+        const choice = chrome(iframeDoc, "button");
+        choice.type = "button";
+        choice.className = "rb-menu-choice";
+        const name = chrome(iframeDoc, "span");
+        name.className = "rb-menu-name";
+        name.textContent = label;
+        choice.appendChild(name);
+        choice.addEventListener("click", (event) => {
+          event.stopPropagation();
+          panel.remove();
+          compositionMenuOpen.current = false;
+          go();
+        });
+        panel.appendChild(choice);
+      };
+      if (canNew) {
+        choose(es["editor.toPage.new"], () => propsNow.current.onSectionToPage(sectionId));
+      }
+      for (const page of pages) {
+        choose(es["editor.toPage.existing"].replace("{page}", page.title), () =>
+          propsNow.current.onMoveSectionToPage(sectionId, page.id),
+        );
+      }
+      return panel;
+    }
+
+    /**
      * The offer to design this section by hand — mockup 16 band 2, and the promise it has to make
      * before anybody accepts: «No se mueve nada al empezar, y puedes volver a la original cuando
      * quieras.» Both halves are true and neither is a figure of speech: `escalate` copies the layout
@@ -3866,16 +3917,40 @@ export function Editor({
       // Three kinds of section are never offered it (the cover is the page's h1 and its promise,
       // the footer is chrome, an avance is already a reference to a page), and neither is anything
       // once the site has the five pages the download route accepts.
-      if (canConvert(docNow.current, sectionId)) {
+      //
+      // **And to a page that already exists** (ADR 0087, sprint 41 día 9). While there is no other
+      // page to go to there is nothing to choose, and the button makes the page as it always has;
+      // once there is, it opens the list — «A una página nueva», when a page can still be made, and
+      // each page the section may go to, exactly the ones `moveSectionToPage` accepts.
+      const destinations = pagesToMoveTo(docNow.current, sectionId);
+      const canNew = canConvert(docNow.current, sectionId);
+      if (canNew || destinations.length > 0) {
         actions.appendChild(
           action(
             "to-page",
-            es["editor.sectionToPage"],
+            destinations.length > 0 ? es["editor.toPage.open"] : es["editor.sectionToPage"],
             es["editor.verb.toPage"],
             "move",
             false,
             `<svg ${screenIcon(VERB_SCALE.icon)} viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h8"/><path d="M14 3v6h6"/><path d="M14 3l6 6"/><path d="M11 13h9"/><path d="M17 10l3 3-3 3"/></svg>`,
-            () => propsNow.current.onSectionToPage(sectionId),
+            destinations.length > 0
+              ? (button) => {
+                  const open = target.querySelector(".rb-to-page");
+                  if (open) {
+                    leave(open, "popup");
+                    open.remove();
+                    compositionMenuOpen.current = false;
+                    return;
+                  }
+                  const menu = pageMenu(sectionId);
+                  if (!menu) return;
+                  menu.classList.add(ARRIVES);
+                  target.appendChild(menu);
+                  anchorPopup(menu, target);
+                  compositionMenuOpen.current = true;
+                  wirePopup(menu, button);
+                }
+              : () => propsNow.current.onSectionToPage(sectionId),
           ),
         );
       }
@@ -4147,8 +4222,20 @@ export function Editor({
            * which is the behaviour that was there before.
            */
           const offerWasOpen = target.querySelector(".rb-escalate") !== null;
+          const pagesWereOpen = target.querySelector(".rb-to-page") !== null;
           select(target, "restore");
-          if (
+          if (compositionMenuOpen.current && pagesWereOpen) {
+            // The pages list, which a redraw that kept the section (a window resized) brings back.
+            const menu = pageMenu(remembered);
+            const opener = target.querySelector<HTMLElement>('.rb-actions [data-action="to-page"]');
+            if (menu && opener) {
+              target.appendChild(menu);
+              anchorPopup(menu, target);
+              wirePopup(menu, opener);
+            } else {
+              compositionMenuOpen.current = false;
+            }
+          } else if (
             compositionMenuOpen.current &&
             offerWasOpen &&
             designToolsNow.current &&

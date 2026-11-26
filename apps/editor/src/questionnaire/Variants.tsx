@@ -2013,6 +2013,10 @@ export function Variants({
             dismissToast();
             dispatch({ type: "sectionToPage", variant: openIndex, sectionId });
           }}
+          onMoveSectionToPage={(sectionId, pageId) => {
+            dismissToast();
+            dispatch({ type: "moveSectionToPage", variant: openIndex, sectionId, pageId });
+          }}
           onAddEntry={(collectionId, fields) => {
             dismissToast();
             dispatch({ type: "addEntry", variant: openIndex, collectionId, fields });
