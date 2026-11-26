@@ -63,10 +63,10 @@ describe("the quiet child, which goes with the focus", () => {
       es["editor.canvas.chosenHint"],
     );
     expect(chosenHint({ text: false, movable: true, goes: false })).toBe(
-      es["editor.canvas.moveHint"],
+      `${es["editor.canvas.moveHint"]} · ${es["editor.canvas.shapeHint"]}`,
     );
     expect(chosenHint({ text: true, movable: true, goes: false })).toBe(
-      `${es["editor.canvas.chosenHint"]} · ${es["editor.canvas.moveHint"]}`,
+      `${es["editor.canvas.chosenHint"]} · ${es["editor.canvas.moveHint"]} · ${es["editor.canvas.shapeHint"]}`,
     );
     // A photograph the tools cannot move: nothing to say, so the idle hint stays.
     expect(quietSays(at({ chosen: { text: false, movable: false, goes: false } })).text).toBe(
@@ -408,7 +408,7 @@ describe("a chosen link that leads into the site (sprint 40 día 2, ADR 0079)", 
       `${es["editor.canvas.chosenHint"]} · ${es["editor.canvas.goHint"]}`,
     );
     expect(chosenHint({ text: true, movable: true, goes: true }, "mac")).toBe(
-      `${es["editor.canvas.chosenHint"]} · ${es["editor.canvas.goHintMac"]} · ${es["editor.canvas.moveHint"]}`,
+      `${es["editor.canvas.chosenHint"]} · ${es["editor.canvas.goHintMac"]} · ${es["editor.canvas.moveHint"]} · ${es["editor.canvas.shapeHint"]}`,
     );
     expect(quietSays(at({ chosen: { text: true, movable: false, goes: true } })).text).toBe(
       `${es["editor.canvas.chosenHint"]} · ${es["editor.canvas.goHint"]}`,

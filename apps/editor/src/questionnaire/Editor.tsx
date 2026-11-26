@@ -268,6 +268,7 @@ import {
   slidingIds,
 } from "../editor/sectionSlide.ts";
 import { keepsItsOwnUndo, shortcutFor } from "../editor/shortcuts.ts";
+import { scaleOf, stretchedBox, stretchKey } from "../editor/stretchKeys.ts";
 import { reviewLogo } from "../editor/styleReview.ts";
 import { insertedTextFor, liveFrameOf, offsetFor, textFrameOf } from "../editor/textEdits.ts";
 import { hasAnyControl, toolbarFor } from "../editor/textToolbar.ts";
@@ -1106,8 +1107,15 @@ export function Editor({
   /** The gesture of the control under the hand in «Menú» (sprint 39 día 3): the line says it. */
   const [gesture, setGesture] = useState<GestureHint | null>(null);
   const [help, setHelp] = useState<
-    Pick<HelpLineState, "keyboard" | "menuNote" | "bound" | "chosen" | "dragRefused">
-  >({ keyboard: null, menuNote: null, bound: null, chosen: null, dragRefused: false });
+    Pick<HelpLineState, "keyboard" | "menuNote" | "bound" | "chosen" | "dragRefused" | "stretching">
+  >({
+    keyboard: null,
+    menuNote: null,
+    bound: null,
+    chosen: null,
+    dragRefused: false,
+    stretching: false,
+  });
   const patchHelp = (patch: Partial<typeof help>) =>
     setHelp((current) => {
       let changed = false;
@@ -8324,6 +8332,31 @@ export function Editor({
     pressed: HTMLElement | null;
     run: ArrowRun | null;
     runTimer: number | undefined;
+    /** «Estirando» (sprint 41 día 6): the arrows change the size until E or Escape leave it. */
+    stretching: boolean;
+    /**
+     * A run of `+`, `−` or stretching arrows (sprint 41 día 6, ADR 0082): the presses so far, and
+     * what the element looked like before the first one, so the preview can be put back exactly.
+     */
+    shape: {
+      readonly kind: "scale" | "stretch";
+      steps: number;
+      columns: number;
+      rows: number;
+      readonly box: DOMRect;
+      readonly basePx: number;
+      readonly current: StyleValue | undefined;
+      readonly inline: {
+        readonly fontSize: string;
+        readonly aspectRatio: string;
+        readonly objectFit: string;
+        readonly gridColumn: string;
+        readonly gridRow: string;
+      };
+      edit: PlacementEdit;
+      letter: ScaledLetter | null;
+      ratio: { width: number; height: number } | null;
+    } | null;
   }
 
   /**
@@ -8370,6 +8403,8 @@ export function Editor({
           pressed: null,
           run: null,
           runTimer: undefined,
+          stretching: false,
+          shape: null,
         };
         states.set(el, state);
       }
@@ -8701,6 +8736,60 @@ export function Editor({
       });
     };
 
+    /**
+     * **A run of `+`, `−` or stretching arrows, written** (sprint 41 día 6): on `keyup`, after
+     * `RUN_IDLE_MS` of quiet or on blur, as a run of moving arrows is — one run, one step.
+     */
+    const flushShape = (el: HTMLElement) => {
+      const state = states.get(el);
+      const run = state?.shape;
+      if (!state || !run) return;
+      window.clearTimeout(state.runTimer);
+      state.shape = null;
+      const shown = el.getBoundingClientRect();
+      el.style.fontSize = run.inline.fontSize;
+      el.style.aspectRatio = run.inline.aspectRatio;
+      el.style.objectFit = run.inline.objectFit;
+      el.style.gridColumn = run.inline.gridColumn;
+      el.style.gridRow = run.inline.gridRow;
+      iframeDoc.documentElement.classList.remove("rb-arrowing");
+      flushQueuedPatch.current();
+      const at = placedAt(el);
+      if (!at) return;
+      const writesLetter = run.letter !== null;
+      const sameLetter = JSON.stringify(run.letter?.value) === JSON.stringify(run.current);
+      if (Object.keys(run.edit).length === 0 && (!writesLetter || sameLetter) && !run.ratio) return;
+      keepChosenFocus.current = true;
+      propsNow.current.onShapeElement(
+        at.sectionId,
+        at.elementId,
+        run.edit,
+        { writes: writesLetter, value: run.letter?.value },
+        run.ratio ?? undefined,
+      );
+      const ref = run.letter?.value && "ref" in run.letter.value ? run.letter.value.ref : null;
+      announce(
+        run.letter
+          ? ref
+            ? es["editor.scale.letterRef"].replace(
+                "{name}",
+                (es as Record<string, string | undefined>)[`editor.toolbar.sizeOf.${ref}`] ?? ref,
+              )
+            : es["editor.scale.letter"].replace("{px}", String(run.letter.px))
+          : es[el.tagName === "IMG" ? "editor.scale.photo" : "editor.stretch.box"]
+              .replace("{w}", String(Math.round(shown.width)))
+              .replace("{h}", String(Math.round(shown.height))),
+      );
+    };
+
+    /** «Estirando» ends: the run written, the mode and its line gone. */
+    const leaveStretching = (el: HTMLElement) => {
+      const state = states.get(el);
+      flushShape(el);
+      if (state) state.stretching = false;
+      iframeDoc.body.classList.remove("rb-key-stretching");
+    };
+
     delegate(iframeDoc, "keydown", "[data-id]", (el, event) => {
       if (designToolsNow.current !== true) return;
       if (el.isContentEditable) return;
@@ -8710,6 +8799,113 @@ export function Editor({
         chosenText.current?.sectionId === at.sectionId &&
         chosenText.current?.elementId === at.elementId;
       if (!isChosen) return;
+      /*
+       * **`+`, `−` and `E`** (sprint 41 día 6, ADR 0082's amendment): the corner and the sides from
+       * the keyboard. Asked first, so that while stretching the arrows change the size and Escape
+       * leaves the mode rather than letting the element go.
+       */
+      const keyState = stateOf(el);
+      const shapeKey = stretchKey(
+        {
+          key: event.key,
+          shiftKey: event.shiftKey,
+          altKey: event.altKey,
+          ctrlKey: event.ctrlKey,
+          metaKey: event.metaKey,
+        },
+        keyState.stretching,
+      );
+      if (shapeKey.kind !== "none") {
+        event.preventDefault();
+        const layout = findSection(docNow.current, at.sectionId)?.section.layout ?? null;
+        if (layout === null) {
+          // A section the catalog draws asks first, as a drag or a pull there does (día 3).
+          if (shapeKey.kind === "scale" || shapeKey.kind === "enter") {
+            openEscalateOffer.current?.(at.sectionId, el);
+          }
+          return;
+        }
+        const placement = layout.placements.find((p) => p.elementId === at.elementId);
+        if (!placement) return;
+        if (shapeKey.kind === "enter") {
+          keyState.stretching = true;
+          iframeDoc.body.classList.add("rb-key-stretching");
+          return;
+        }
+        if (shapeKey.kind === "leave") {
+          leaveStretching(el);
+          return;
+        }
+        if (keyState.shape && keyState.shape.kind !== shapeKey.kind) flushShape(el);
+        const view = iframeDoc.defaultView;
+        const element = findSection(docNow.current, at.sectionId)?.section.content.find(
+          (candidate) => candidate.id === at.elementId,
+        );
+        if (!view || !element) return;
+        keyState.shape ??= {
+          kind: shapeKey.kind,
+          steps: 0,
+          columns: 0,
+          rows: 0,
+          box: el.getBoundingClientRect(),
+          basePx: Number.parseFloat(view.getComputedStyle(el).fontSize) || 16,
+          current: element.style?.fontSize,
+          inline: {
+            fontSize: el.style.fontSize,
+            aspectRatio: el.style.aspectRatio,
+            objectFit: el.style.objectFit,
+            gridColumn: el.style.gridColumn,
+            gridRow: el.style.gridRow,
+          },
+          edit: {},
+          letter: null,
+          ratio: null,
+        };
+        const run = keyState.shape;
+        iframeDoc.documentElement.classList.add("rb-arrowing");
+        const meaning = cornerMeaning(element.role);
+        if (shapeKey.kind === "scale") {
+          run.steps += shapeKey.steps;
+          let factor = scaleOf(run.steps);
+          if (meaning === "letter") {
+            run.letter = scaledLetter({
+              basePx: run.basePx,
+              factor,
+              theme: docNow.current.theme,
+              current: run.current,
+            });
+            factor = run.letter.factor;
+            el.style.fontSize = `${run.letter.px}px`;
+          }
+          run.edit = scaledBox(placement, "se", factor);
+        } else {
+          run.columns += shapeKey.columns;
+          run.rows += shapeKey.rows;
+          run.edit = stretchedBox(placement, run.columns, run.rows);
+        }
+        const next = { ...placement, ...run.edit };
+        el.style.gridColumn = `${fineTrack(next.column)}/span ${fineTrackSpan(
+          next.column,
+          next.columnSpan,
+        )}`;
+        el.style.gridRow = `${next.row}/span ${next.rowSpan}`;
+        if (shapeKey.kind === "stretch" && meaning === "photo") {
+          // A photograph's sides give it a shape (ADR 0084): the grid's width, read back, and the
+          // height by eight pixels a row.
+          const width = el.getBoundingClientRect().width;
+          run.ratio = shapeOf(
+            width,
+            Math.max(ROW_STEP_PX, run.box.height + run.rows * ROW_STEP_PX),
+          );
+          if (run.ratio) {
+            el.style.aspectRatio = `${run.ratio.width} / ${run.ratio.height}`;
+            el.style.objectFit = "cover";
+          }
+        }
+        window.clearTimeout(keyState.runTimer);
+        keyState.runTimer = window.setTimeout(() => flushShape(el), RUN_IDLE_MS);
+        return;
+      }
       if (event.key === "Escape" && !EDITABLE_TAGS.has(el.tagName)) {
         event.preventDefault();
         markChosen(iframeDoc, null);
@@ -8758,10 +8954,19 @@ export function Editor({
       state.runTimer = window.setTimeout(() => flushRun(el), RUN_IDLE_MS);
     });
     delegate(iframeDoc, "keyup", "[data-id]", (el, event) => {
+      if (states.get(el)?.shape) {
+        if (["+", "=", "-", "_"].includes(event.key) || event.key.startsWith("Arrow")) {
+          flushShape(el);
+        }
+        return;
+      }
       if (event.key.startsWith("Arrow")) flushRun(el);
     });
     delegate(iframeDoc, "focusout", "[data-id]", (el) => {
-      if (states.has(el)) flushRun(el);
+      if (!states.has(el)) return;
+      flushRun(el);
+      if (states.get(el)?.stretching) leaveStretching(el);
+      else flushShape(el);
     });
 
     prepareDraggables(iframeDoc);
@@ -9054,6 +9259,8 @@ export function Editor({
               ? "composition"
               : null,
         dragRefused: iframeDoc.querySelector(".rb-ghost-no") !== null,
+        // On the body, which is what this watcher observes; the root's classes it does not see.
+        stretching: iframeDoc.body.classList.contains("rb-key-stretching"),
         bound: badge
           ? { places: Number(badge.dataset["places"] ?? "1"), list: badge.dataset["list"] ?? "" }
           : null,
