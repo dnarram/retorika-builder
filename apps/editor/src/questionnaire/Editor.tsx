@@ -9360,6 +9360,10 @@ export function Editor({
       // does (`canvasStillness.ts`, ADR 0051 §3, sprint 32 adjustment 2).
       ...CANVAS_STILLNESS,
       "[data-section] { position: relative; cursor: pointer; }",
+      // A section with a stack of its own is isolated (ADR 0085): the menus and the offer that hang
+      // from it would be covered by the next section. While it is chosen it rises one level — still
+      // under the bar's 2, so the bar stays above it as it does on the page.
+      "[data-section].rb-layered.rb-selected { z-index: 1; }",
       /*
        * **A choice fades in** (sprint 35 día 7): the section's and the header's outline is always
        * there, transparent, and choosing colours it over `--ui-fast` — the outline appears where it
