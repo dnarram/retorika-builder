@@ -34326,6 +34326,15 @@ describe("sprint 41 día 8 — una tarjeta se arrastra por su asa", () => {
         page.getByRole("button", { name: "Deshacer", exact: true }).click(),
       );
       expect(await orderOf(list, "data-item")).toEqual(before);
+
+      // Forwards too: the first photograph carried onto the third takes its place, third.
+      await afterTheEdit(page, () => carryGrip(page, cards.nth(0), cards.nth(2)));
+      expect(await orderOf(list, "data-item")).toEqual([
+        before[1],
+        before[2],
+        before[0],
+        ...before.slice(3),
+      ]);
     } finally {
       await context.close();
     }
