@@ -28,8 +28,17 @@ const doc: RetorikaDocument = parseDocument(
   JSON.parse(readFileSync(join(DOCUMENTS_DIR, "capas.json"), "utf8")),
 );
 
-async function open(width: number): Promise<Page> {
-  const html = render(doc, "html").html;
+/** `capas` without its section's background: the background isolates the section on its own (ADR
+ * 0081), so only here is the stack's own `isolation` the one thing between the photograph and the bar. */
+const bare: RetorikaDocument = (() => {
+  const raw = JSON.parse(JSON.stringify(doc)) as RetorikaDocument;
+  const cover = raw.pages[0]?.sections[0];
+  if (cover) delete cover.background;
+  return parseDocument(raw);
+})();
+
+async function open(width: number, which: RetorikaDocument = doc): Promise<Page> {
+  const html = render(which, "html").html;
   const context = await browser.newContext({
     viewport: { width, height: 700 },
     reducedMotion: "reduce",
@@ -52,19 +61,24 @@ async function open(width: number): Promise<Page> {
   return page;
 }
 
-/** What the visitor's pointer meets at the middle of an element's box, by its id or its class. */
-function topAt(page: Page, selector: string) {
-  return page.evaluate((sel) => {
-    const el = document.querySelector<HTMLElement>(sel);
-    if (!el) throw new Error(`nothing at ${sel}`);
-    const box = el.getBoundingClientRect();
-    const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
-    return {
-      id: hit?.closest<HTMLElement>("[data-id]")?.dataset["id"] ?? null,
-      inHeader: hit?.closest(".rb-header") !== null,
-      inSheet: hit?.closest(".rb-nav-narrow") !== null,
-    };
-  }, selector);
+/** What the visitor's pointer meets at a point of an element's box — its middle unless `dx` pixels
+ * from its left edge are asked for — by the id of what is there, or whether it is the bar or the sheet. */
+function topAt(page: Page, selector: string, dx?: number) {
+  return page.evaluate(
+    ([sel, offset]) => {
+      const el = document.querySelector<HTMLElement>(sel as string);
+      if (!el) throw new Error(`nothing at ${sel}`);
+      const box = el.getBoundingClientRect();
+      const x = offset === null ? box.left + box.width / 2 : box.left + (offset as number);
+      const hit = document.elementFromPoint(x, box.top + box.height / 2);
+      return {
+        id: hit?.closest<HTMLElement>("[data-id]")?.dataset["id"] ?? null,
+        inHeader: hit?.closest(".rb-header") !== null,
+        inSheet: hit?.closest(".rb-nav-narrow") !== null,
+      };
+    },
+    [selector, dx ?? null] as const,
+  );
 }
 
 describe("the stack, painted (ADR 0085)", () => {
@@ -72,7 +86,9 @@ describe("the stack, painted (ADR 0085)", () => {
     const page = await open(1280);
     try {
       expect((await topAt(page, '[data-id="el-cta"]')).id).toBe("el-image");
-      expect((await topAt(page, '[data-id="el-headline"]')).id).toBe("el-headline");
+      // Ten pixels in from the headline's left edge, which is over the photograph: the headline's
+      // middle is past the photograph's right edge and would say nothing about the stack.
+      expect((await topAt(page, '[data-id="el-headline"]', 10)).id).toBe("el-headline");
       // The veil is the section's `::before`: a point it painted over would answer the section
       // itself, not the photograph.
       expect((await topAt(page, '[data-id="el-image"]')).id).toBe("el-image");
@@ -81,32 +97,39 @@ describe("the stack, painted (ADR 0085)", () => {
     }
   });
 
-  it("never paints over the fixed bar when the page is scrolled under it", async () => {
-    const page = await open(1280);
-    try {
-      await page.evaluate(() => window.scrollBy(0, 160));
-      await page.waitForFunction(() =>
-        document.querySelector(".rb-header")?.hasAttribute("data-scrolled"),
-      );
-      // The photograph (z-index 4) is now under the bar (2): the bar is what the pointer meets.
-      const at = await topAt(page, ".rb-header");
-      expect(at.inHeader).toBe(true);
-    } finally {
-      await page.context().close();
+  it("never paints over the fixed bar when the page is scrolled under it, with or without a background", async () => {
+    for (const which of [doc, bare]) {
+      const page = await open(1280, which);
+      try {
+        await page.evaluate(() => window.scrollBy(0, 160));
+        await page.waitForFunction(() =>
+          document.querySelector(".rb-header")?.hasAttribute("data-scrolled"),
+        );
+        // The photograph (z-index 4) is now under the bar (2): the bar is what the pointer meets.
+        const at = await topAt(page, ".rb-header");
+        expect(at.inHeader).toBe(true);
+      } finally {
+        await page.context().close();
+      }
     }
   });
 
-  it("never paints over the phone's menu sheet", async () => {
-    const page = await open(390);
-    try {
-      await page.locator("details.rb-nav-narrow > summary").click();
-      await expect
-        .poll(() => page.locator("details.rb-nav-narrow").getAttribute("open"))
-        .not.toBeNull();
-      const at = await topAt(page, "details.rb-nav-narrow .rb-nav");
-      expect(at.inSheet).toBe(true);
-    } finally {
-      await page.context().close();
+  it("never paints over the phone's menu sheet, with or without a background", async () => {
+    for (const which of [doc, bare]) {
+      const page = await open(390, which);
+      try {
+        // Scrolled first, so the photograph is under the bar and the sheet that hangs from it: at the
+        // top of the page nothing placed is there, and the case would hold with no ceiling at all.
+        await page.evaluate(() => window.scrollBy(0, 120));
+        await page.locator("details.rb-nav-narrow > summary").click();
+        await expect
+          .poll(() => page.locator("details.rb-nav-narrow").getAttribute("open"))
+          .not.toBeNull();
+        const at = await topAt(page, "details.rb-nav-narrow .rb-nav");
+        expect(at.inSheet).toBe(true);
+      } finally {
+        await page.context().close();
+      }
     }
   });
 });
