@@ -18935,7 +18935,7 @@ describe("sprint 25 día 4 — los bordes estiran la caja", () => {
     }
   }, 240_000);
 
-  it("agranda el área de una foto por su borde inferior sin estirar la foto", async () => {
+  it("agranda el área de una foto por su borde inferior, y desde el sprint 41 la foto crece con ella, recortada", async () => {
     const context = await browser.newContext({ viewport: VIEWPORT });
     await probeOn(context);
     const page = await context.newPage();
@@ -18981,13 +18981,20 @@ describe("sprint 25 día 4 — los bordes estiran la caja", () => {
       expect(after?.column).toBe(before?.column);
       expect(after?.columnSpan).toBe(before?.columnSpan);
       /**
-       * **Y la foto mide lo que medía**, que es la mitad que el ADR nombra: `.rb-section img` lleva
-       * `width: 100%; height: auto`, así que el alto de una imagen lo decide su propia proporción y
-       * no el área que la contiene. Agrandar el área no estira la foto; le deja sitio.
+       * **Y la foto crece con su área, recortada y no estirada** (ADR 0084, sprint 41 día 5). Hasta
+       * el sprint 41 esta caminata afirmaba lo contrario —«la foto mide lo que medía»—, porque el alto
+       * de una imagen lo decidía su proporción y agrandar el área solo le dejaba sitio. David pidió
+       * «la foto toma el alto que le des»: ahora el borde le da una forma, el mismo ancho, cuarenta y
+       * ocho píxeles más de alto, y `object-fit: cover` en vez de una foto deformada.
        */
       const grown = frame.locator('[data-section="sec-cover"] [data-id="el-image"]');
       const nowBox = await grown.boundingBox();
-      expect(nowBox?.height, "la foto se estiró con su área").toBeCloseTo(box?.height ?? 0, 0);
+      expect(
+        Math.abs((nowBox?.height ?? 0) - (box?.height ?? 0) - 48),
+        "la foto no creció con su área",
+      ).toBeLessThanOrEqual(8);
+      expect(Math.abs((nowBox?.width ?? 0) - (box?.width ?? 0))).toBeLessThanOrEqual(1);
+      expect(await grown.evaluate((el) => getComputedStyle(el).objectFit)).toBe("cover");
     } finally {
       await context.close();
     }
@@ -33831,6 +33838,208 @@ describe("sprint 41 día 3 — la puerta donde está la mano", () => {
       );
       await expect(cover).not.toHaveClass(/rb-free/);
       expect(await letterPx()).toBe(40);
+    } finally {
+      await context.close();
+    }
+  }, 240_000);
+});
+
+/**
+ * **Sprint 41 día 5 — la foto toma el alto que le das** (ADR 0084). David's words planning the sprint:
+ * «La foto toma el alto que le des». A side of a photograph in a hand-designed section now gives it a
+ * shape the page keeps at every width; its corner keeps that shape; the point its crop keeps is
+ * dragged on the photograph or moved with the arrows; and «Forma original» gives the catalog's back.
+ */
+describe("sprint 41 día 5 — la foto toma el alto que le das", () => {
+  const VIEWPORT = { width: 1280, height: 900 };
+
+  async function handDesigned(page: Page): Promise<FrameLocator> {
+    await intoTheCanvas(page);
+    await studioToolsOn(page);
+    const frame = page.frameLocator(PREVIEW).first();
+    await frame.locator('[data-section="sec-cover"]').click();
+    await escalated(frame, async () => {
+      await frame.locator('.rb-action[aria-label="Diseñar a mano"]').first().click();
+      await frame.locator(".rb-escalate-yes").click();
+    });
+    await waitForBankPhoto(frame);
+    await fontsReady(frame);
+    return page.frameLocator(PREVIEW).first();
+  }
+
+  /** What the session stores for the cover photograph: its shape and its point. */
+  function storedPhoto(page: Page) {
+    return page.evaluate(() => {
+      const raw = localStorage.getItem("retorika.session.v1");
+      if (!raw) return null;
+      const session = JSON.parse(raw) as {
+        openIndex: number;
+        documents: {
+          pages: {
+            sections: {
+              id: string;
+              layout: { placements: { elementId: string; ratio?: unknown }[] } | null;
+              content: { id: string; value?: { focus?: unknown } }[];
+            }[];
+          }[];
+        }[];
+      };
+      const cover = session.documents[session.openIndex]?.pages[0]?.sections.find(
+        (s) => s.id === "sec-cover",
+      );
+      return {
+        ratio: cover?.layout?.placements.find((p) => p.elementId === "el-image")?.ratio ?? null,
+        focus: cover?.content.find((e) => e.id === "el-image")?.value?.focus ?? null,
+      };
+    });
+  }
+
+  it("el borde inferior le da alto de verdad, la esquina conserva la forma, y «Forma original» la devuelve", async () => {
+    const context = await browser.newContext({ viewport: VIEWPORT });
+    const page = await context.newPage();
+    try {
+      const frame = await handDesigned(page);
+      const photo = frame.locator('[data-section="sec-cover"] [data-id="el-image"]');
+      await photo.focus();
+      await expect(photo).toHaveClass(/rb-chosen/);
+      const before = await photo.boundingBox();
+      if (!before) throw new Error("la foto no está dibujada");
+      expect((await storedPhoto(page))?.ratio).toBeNull();
+
+      // ---- the bottom side: eighty pixels taller, the same width, cropped not squashed ----
+      const bottom = { x: before.x + before.width / 2, y: before.y + before.height - 2 };
+      await page.mouse.move(bottom.x, bottom.y);
+      await expect.poll(() => cursorOn(photo)).toBe("ns-resize");
+      await afterTheEdit(page, () => pull(page, bottom, 0, 80));
+      const taller = await photo.boundingBox();
+      if (!taller) throw new Error("la foto no está dibujada");
+      expect(Math.abs(taller.height - before.height - 80), "no creció ochenta").toBeLessThanOrEqual(
+        8,
+      );
+      expect(Math.abs(taller.width - before.width)).toBeLessThanOrEqual(1);
+      expect(await photo.evaluate((el) => getComputedStyle(el).objectFit)).toBe("cover");
+      // From the document, the inline preview gone.
+      expect(await photo.evaluate((el) => (el as HTMLElement).style.aspectRatio)).toBe("");
+      await expect.poll(async () => (await storedPhoto(page))?.ratio).not.toBeNull();
+      const ratio = taller.width / taller.height;
+      await expect(page.locator('p[role="status"]')).toHaveText(/^Foto: \d+ × \d+ px/);
+
+      // ---- the same shape at another width, and on a phone (inside 3:4 – 3:1, so unclamped) ----
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await expect
+        .poll(async () => {
+          const box = await photo.boundingBox();
+          return box ? Math.abs(box.width / box.height - ratio) : 1;
+        })
+        .toBeLessThanOrEqual(0.02);
+      await page.setViewportSize(VIEWPORT);
+      // The canvas re-lays out at the new zoom; a box read before it settles is beside the hand.
+      await motionSettled(page);
+      await expect
+        .poll(async () => (await photo.boundingBox())?.width ?? 0)
+        .toBeCloseTo(taller.width, 0);
+
+      // ---- the corner keeps the shape it was given ----
+      const shaped = await photo.boundingBox();
+      if (!shaped) throw new Error("la foto no está dibujada");
+      const corner = { x: shaped.x + shaped.width - 2, y: shaped.y + shaped.height - 2 };
+      await page.mouse.move(corner.x, corner.y);
+      await expect.poll(() => cursorOn(photo)).toBe("nwse-resize");
+      await afterTheEdit(page, () => pull(page, corner, -shaped.width / 4, -shaped.height / 4));
+      const smaller = await photo.boundingBox();
+      if (!smaller) throw new Error("la foto no está dibujada");
+      expect(smaller.width).toBeLessThan(shaped.width - 40);
+      expect(Math.abs(smaller.width / smaller.height - ratio)).toBeLessThanOrEqual(0.03);
+
+      // ---- one «Deshacer» per gesture: the corner, then the side ----
+      await afterTheEdit(page, () =>
+        page.getByRole("button", { name: "Deshacer", exact: true }).click(),
+      );
+      await afterTheEdit(page, () =>
+        page.getByRole("button", { name: "Deshacer", exact: true }).click(),
+      );
+      await expect.poll(async () => (await storedPhoto(page))?.ratio).toBeNull();
+      await afterTheEdit(page, () =>
+        page.getByRole("button", { name: "Rehacer", exact: true }).click(),
+      );
+      await expect.poll(async () => (await storedPhoto(page))?.ratio).not.toBeNull();
+
+      // ---- «Forma original», present only on a shaped photograph, gives the catalog's 4:3 back ----
+      await page.getByRole("button", { name: "Diseño", exact: true }).click();
+      // The panel steps its first row until one is chosen: the photograph's is «Foto».
+      await page.locator("aside").getByRole("button", { name: "Foto", exact: true }).click();
+      // «Colocación» starts folded.
+      await page
+        .locator("aside")
+        .getByRole("button", { name: /^Colocación/ })
+        .click();
+      const original = page.getByRole("button", { name: "Forma original" });
+      await expect(original).toBeVisible();
+      await afterTheEdit(page, () => original.click());
+      await expect.poll(async () => (await storedPhoto(page))?.ratio).toBeNull();
+      await expect(original).toHaveCount(0);
+      const back = await photo.boundingBox();
+      expect(Math.abs((back?.width ?? 0) / (back?.height ?? 1) - 4 / 3)).toBeLessThanOrEqual(0.02);
+    } finally {
+      await context.close();
+    }
+  }, 240_000);
+
+  it("el punto se arrastra sobre la foto y se mueve con las flechas, un paso por gesto", async () => {
+    const context = await browser.newContext({ viewport: VIEWPORT });
+    const page = await context.newPage();
+    try {
+      const frame = await handDesigned(page);
+      const photo = frame.locator('[data-section="sec-cover"] [data-id="el-image"]');
+      await photo.focus();
+      await expect(photo).toHaveClass(/rb-chosen/);
+      const point = frame.locator('[data-section="sec-cover"] .rb-focus');
+      await expect(point).toHaveCount(1);
+      await expect(point).toHaveAccessibleName("Punto que se conserva de la foto");
+      const box = await photo.boundingBox();
+      const at = await point.boundingBox();
+      if (!box || !at) throw new Error("ni foto ni punto");
+      // Drawn at the middle, which is where a photograph with no point is cropped.
+      expect(Math.abs(at.x + at.width / 2 - (box.x + box.width / 2))).toBeLessThanOrEqual(2);
+      expect(await photo.evaluate((el) => getComputedStyle(el).objectPosition)).toBe("50% 50%");
+
+      // ---- dragged to a fifth across and four fifths down ----
+      const from = { x: at.x + at.width / 2, y: at.y + at.height / 2 };
+      const to = { x: box.x + box.width * 0.2, y: box.y + box.height * 0.8 };
+      await afterTheEdit(page, async () => {
+        await page.mouse.move(from.x, from.y);
+        await page.mouse.down();
+        await page.mouse.move(to.x, to.y, { steps: 10 });
+        await page.mouse.up();
+      });
+      await expect.poll(async () => (await storedPhoto(page))?.focus).toEqual({ x: 20, y: 80 });
+      expect(await photo.evaluate((el) => getComputedStyle(el).objectPosition)).toBe("20% 80%");
+      await expect(page.locator('p[role="status"]')).toHaveText(
+        /^Se conserva lo que está a 20 % desde la izquierda y 80 % desde arriba/,
+      );
+
+      // ---- a held arrow — three presses, one release — is one step, and the point keeps the keyboard ----
+      await point.focus();
+      await afterTheEdit(page, async () => {
+        // `down` three times is a held key: the second and third arrive with `repeat`, and only the
+        // one `up` writes.
+        await page.keyboard.down("ArrowRight");
+        await page.keyboard.down("ArrowRight");
+        await page.keyboard.down("ArrowRight");
+        await page.keyboard.up("ArrowRight");
+      });
+      await expect.poll(async () => (await storedPhoto(page))?.focus).toEqual({ x: 23, y: 80 });
+      await expect(point).toBeFocused();
+
+      // ---- «Deshacer» takes the arrows back, then the drag ----
+      await afterTheEdit(page, () =>
+        page.getByRole("button", { name: "Deshacer", exact: true }).click(),
+      );
+      await expect.poll(async () => (await storedPhoto(page))?.focus).toEqual({ x: 20, y: 80 });
+      await afterTheEdit(page, () =>
+        page.getByRole("button", { name: "Deshacer", exact: true }).click(),
+      );
+      await expect.poll(async () => (await storedPhoto(page))?.focus).toBeNull();
     } finally {
       await context.close();
     }

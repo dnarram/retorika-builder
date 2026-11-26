@@ -70,9 +70,11 @@ import {
   setEntryField as setEntryFieldInDoc,
   setHeaderAction as setHeaderActionInDoc,
   setHeader as setHeaderInDoc,
+  setImageFocus as setImageFocusInDoc,
   setMenuLabel as setMenuLabelInDoc,
   setMobilePatch as setMobilePatchInDoc,
   setPageInMenu as setPageInMenuInDoc,
+  setPhotoShape as setPhotoShapeInDoc,
   setPlacement as setPlacementInDoc,
   setSectionInMenu as setSectionInMenuInDoc,
   setTheme as setThemeInDoc,
@@ -335,6 +337,22 @@ export type HistoryAction =
       fontSize?: StyleValue | undefined;
       /** Whether `fontSize` was decided at all — `undefined` in it means «take the size away». */
       writesLetter: boolean;
+      /** A photograph's shape after a side pull (ADR 0084, sprint 41 día 5), in the same step. */
+      ratio?: { readonly width: number; readonly height: number } | undefined;
+    }
+  | {
+      /** The point a photograph's crop keeps (ADR 0084): one drag or one run of arrows, one step. */
+      type: "setImageFocus";
+      variant: number;
+      address: ElementAddress;
+      focus: { readonly x: number; readonly y: number } | undefined;
+    }
+  | {
+      /** «Forma original»: a photograph given back the catalog's shape (ADR 0084). */
+      type: "clearPhotoShape";
+      variant: number;
+      sectionId: string;
+      elementId: string;
     }
   | {
       type: "setMobilePatch";
@@ -1067,12 +1085,14 @@ function shapeElement(
   elementId: string,
   edit: PlacementEdit,
   letter: { readonly writes: boolean; readonly value: StyleValue | undefined },
+  ratio?: { readonly width: number; readonly height: number },
 ): History {
   const before = history.present.document;
   let document = setPlacementInDoc(before, sectionId, elementId, edit);
   if (letter.writes) {
     document = setElementStyleInDoc(document, { sectionId, elementId }, "fontSize", letter.value);
   }
+  if (ratio) document = setPhotoShapeInDoc(document, sectionId, elementId, ratio);
   if (document === before) return history;
   return step(history, document, { type: "setPlacement", sectionId });
 }
@@ -1620,10 +1640,34 @@ function apply(history: History, action: HistoryAction): History {
     case "setPlacement":
       return setPlacement(history, action.sectionId, action.elementId, action.edit);
     case "shapeElement":
-      return shapeElement(history, action.sectionId, action.elementId, action.edit, {
-        writes: action.writesLetter,
-        value: action.fontSize,
+      return shapeElement(
+        history,
+        action.sectionId,
+        action.elementId,
+        action.edit,
+        { writes: action.writesLetter, value: action.fontSize },
+        action.ratio,
+      );
+    case "setImageFocus": {
+      // A photograph's point is not where it sits: no content cause, no placement cause. Its own
+      // step, so one «Deshacer» gives the crop back as it was.
+      const document = setImageFocusInDoc(history.present.document, action.address, action.focus);
+      if (document === history.present.document) return history;
+      return step(history, document, {
+        type: "setElementStyle",
+        sectionId: action.address.sectionId,
       });
+    }
+    case "clearPhotoShape": {
+      const document = setPhotoShapeInDoc(
+        history.present.document,
+        action.sectionId,
+        action.elementId,
+        undefined,
+      );
+      if (document === history.present.document) return history;
+      return step(history, document, { type: "setPlacement", sectionId: action.sectionId });
+    }
     case "setMobilePatch":
       return setMobilePatch(history, action.sectionId, action.elementId, action.edit);
     case "setElementStyle":
