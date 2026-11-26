@@ -18935,7 +18935,7 @@ describe("sprint 25 día 4 — los bordes estiran la caja", () => {
     }
   }, 240_000);
 
-  it("agranda el área de una foto por su borde inferior sin estirar la foto", async () => {
+  it("agranda el área de una foto por su borde inferior, y desde el sprint 41 la foto crece con ella, recortada", async () => {
     const context = await browser.newContext({ viewport: VIEWPORT });
     await probeOn(context);
     const page = await context.newPage();
@@ -18981,13 +18981,20 @@ describe("sprint 25 día 4 — los bordes estiran la caja", () => {
       expect(after?.column).toBe(before?.column);
       expect(after?.columnSpan).toBe(before?.columnSpan);
       /**
-       * **Y la foto mide lo que medía**, que es la mitad que el ADR nombra: `.rb-section img` lleva
-       * `width: 100%; height: auto`, así que el alto de una imagen lo decide su propia proporción y
-       * no el área que la contiene. Agrandar el área no estira la foto; le deja sitio.
+       * **Y la foto crece con su área, recortada y no estirada** (ADR 0084, sprint 41 día 5). Hasta
+       * el sprint 41 esta caminata afirmaba lo contrario —«la foto mide lo que medía»—, porque el alto
+       * de una imagen lo decidía su proporción y agrandar el área solo le dejaba sitio. David pidió
+       * «la foto toma el alto que le des»: ahora el borde le da una forma, el mismo ancho, cuarenta y
+       * ocho píxeles más de alto, y `object-fit: cover` en vez de una foto deformada.
        */
       const grown = frame.locator('[data-section="sec-cover"] [data-id="el-image"]');
       const nowBox = await grown.boundingBox();
-      expect(nowBox?.height, "la foto se estiró con su área").toBeCloseTo(box?.height ?? 0, 0);
+      expect(
+        Math.abs((nowBox?.height ?? 0) - (box?.height ?? 0) - 48),
+        "la foto no creció con su área",
+      ).toBeLessThanOrEqual(8);
+      expect(Math.abs((nowBox?.width ?? 0) - (box?.width ?? 0))).toBeLessThanOrEqual(1);
+      expect(await grown.evaluate((el) => getComputedStyle(el).objectFit)).toBe("cover");
     } finally {
       await context.close();
     }

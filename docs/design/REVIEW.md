@@ -11691,6 +11691,11 @@ teclado aún en el punto; dos «Deshacer» devuelven el arrastre y luego ningún
 escribiendo solo las filas («no creció ochenta»), el punto escrito en cada tecla (tres pasos), «Forma
 original» siempre presente.
 
+**La suite entera lo vio.** De 385 caminatas, una en rojo: la del sprint 25 día 4 afirmaba que el borde
+inferior «agranda el área sin estirar la foto» —la foto medía lo mismo—, que es justo lo que el día cambia.
+Ahora asevera lo nuevo: el área crece cinco o seis filas como antes, y la foto 48 ± 8 px más alta, el mismo
+ancho, `cover`.
+
 **Dos cosas de la caminata.** El panel «Diseño» elige su primera fila hasta que se pulsa otra, y
 «Colocación» empieza plegada: la caminata elige «Foto» y la abre. Y una flecha sostenida en Playwright es
 `keyboard.down` repetido —llega con `repeat`— y un solo `up`; pulsar y soltar tres veces son tres gestos.
