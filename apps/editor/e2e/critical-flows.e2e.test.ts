@@ -34796,13 +34796,14 @@ describe("sprint 41 día 11 — las secciones se arrastran en el lienzo", () => 
       const line = frame.locator(".rb-section-line");
       const scrollY = () => frame.locator("body").evaluate(() => window.scrollY);
 
-      // 1. Escape half-way: the section dims, the line shows, and nothing is written.
+      // 1. Escape half-way: the section dims, the line is drawn, and nothing is written. A short
+      //    carry, well inside the canvas, so this step does not lean on the canvas scrolling.
       let hold = await pointIn(grip);
       await page.mouse.move(hold.x, hold.y);
       await page.mouse.down();
-      await page.mouse.move(hold.x, hold.y + 120, { steps: 8 });
+      await page.mouse.move(hold.x, hold.y + 40, { steps: 6 });
       await expect(services).toHaveClass(/rb-section-lifted/);
-      await expect(line).toBeVisible();
+      await expect(line).toHaveCount(1);
       await page.keyboard.press("Escape");
       await expect(line).toHaveCount(0);
       await page.mouse.up();
