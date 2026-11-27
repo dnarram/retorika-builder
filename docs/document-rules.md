@@ -82,6 +82,17 @@ left implicit.
    > width, cropped around a **point** stored on the photograph. A height in pixels would crop
    > differently at every width the page is drawn at; a shape is the same everywhere, and on a
    > phone it is held between 3:4 and 3:1. Still no `x`, no `y`, no width or height in pixels.
+   >
+   > *And the whole of sprint 41, 27 November 2026 — David asked again, «estirar, agrandar,
+   > empequeñecer y mover todos los elementos», and it still held.* Twelve days of gestures, and every
+   > one of them writes a word the grid already had or one more of the same kind: a corner scales a
+   > letter into a size (rule 6's reference or marked exception, ADR 0082) and the box into spans; a side
+   > gives a photograph a shape, not a height (above); «Traer al frente» writes a **rank** among the
+   > section's own elements, not a `z` on the page (ADR 0085), drawn in the section's own stacking
+   > context so nothing climbs out of it; a card and a section change **order** — in their list, in
+   > their page, or to another page (ADR 0086, 0087) — never position. The gesture lands where the hand
+   > lets go by finding the nearest unit and row, and stores those. Still no `x`, no `y`, and the
+   > phone still derives from the grid.
 
 5. **There are no orphan elements: every element belongs to a section, every section to a
    page.** This closes the hole free placement would otherwise open — there is no floating layer

@@ -11884,3 +11884,110 @@ arriba; al soltar, «Qué ponemos» queda dos puestos más abajo; un «Deshacer�
 hueco encima de la portada; sin desplazamiento automático — rojo, pero primero en el paso de Escape, que sin
 querer dependía de él; lo hice independiente y entonces rojo donde se mide el desplazamiento —; Escape
 ignorado. La auditoría del menú no lee el racimo; se corre igualmente.
+
+### Día 12 — lo que quedó corto y el cierre (PR de `test/el-cierre-del-sprint-41`)
+
+**Lo que quedó corto, primero: el punto desde «Fotos».** El día 5 no cumplió el valor por defecto *j* del
+plan —el punto sin herramientas de diseño—: en el lienzo una foto solo se elige con las herramientas
+encendidas, y las fotos de tarjeta no se eligen. Su PR nombró la puerta que faltaba, medio día. Hecha: el
+inventario de fotos sabe cuáles recorta la página —portada, galería, equipo y las que tienen forma dada a
+mano; nunca el logo ni el marcador gris— y cada una de esas filas de «Fotos» despliega «Punto»: la foto
+entera con el punto encima, que se arrastra o se mueve con las flechas (Mayús, de 10 en 10), un paso al soltar
+o al parar las teclas, y «Al centro». Sin herramientas y también para las fotos de tarjeta. Nota de cierre en
+la [ADR 0084](../decisions/0084-a-photograph-has-a-shape-and-a-point-its-crop-keeps.md). Caminata y tres
+saboteos en rojo (la galería sin contar como recorte, un paso por tecla, la mano que no escribe).
+
+**Lo que encontró la gira, y su arreglo.** Solo con el teclado, en la portada de serie: `+` sobre el titular
+elegido abre la oferta, como dice el día 6; su «sí» con el teclado mandaba el foco a la sección —el verbo «A
+mano» al que volvía ya no se dibuja— y el siguiente `+` no llegaba a nada. Ahora el elemento que pidió la oferta
+recupera el teclado, sigue elegido, y el `+` siguiente lo agranda (40 → 44 px). Nota en la
+[ADR 0082](../decisions/0082-the-sides-stretch-the-box-and-the-corners-scale-what-is-inside.md); caminata,
+saboteada a la vuelta antigua: roja en el foco.
+
+**Medido, no arreglado: la letra exacta de la propia cabecera en el móvil** (lo que el día 1a dejó para el
+cierre). La web del logo con el nombre de la marca a 200 px exactos: la barra mide 318 px en un teléfono de 390
+(98 sin ella; 214 a 120 px), sin desplazamiento horizontal y con el nombre recortado con puntos suspensivos. El
+tope de la ADR 0083 no llega a la cabecera. Corregirlo toca el renderer y las estimaciones de la barra que la
+auditoría mide: al backlog del 42, costado en medio día a uno.
+
+**La web publicada no cambia un byte para las 26 del corpus.** Construidas con `zip-corpus41.ts` en `f0000ae`,
+el principio del sprint, y en la rama: **149 ficheros en 26 webs, cero diferencias; los 26 ZIP con el mismo
+hash**. Solo se añaden `letra-exacta-grande`, `foto-con-forma` y `capas`, con 16 ficheros. (El guion del 40 se
+paraba en `letra-propia`: ahora lee los bytes de la fuente del dueño de `fixtures/fonts`, como
+`build-sample-site.ts`.)
+
+**El navegador real**, con el servidor del editor: Chromium a 1024, 1280 y 1440 con el teclado (el ratón solo
+para elegir), un iPad emulado y un teléfono emulado con el dedo: **39 comprobaciones en verde**.
+
+- El asa de la sección está, fuera del orden de Tab, y el racimo cabe en su sección; «Bajar» con Intro baja la
+  galería.
+- El asa de una tarjeta con ← ←: la tercera foto queda primera y el teclado sigue en el asa.
+- «A página» en la galería lista «A una página nueva» y «A «Qué ponemos»», y ↓ Intro la lleva allí.
+- «Páginas»: «Bajar «…»» con Intro baja la fila en el panel y en el lienzo, con el teclado aún en «Bajar».
+- «Fotos» → «Punto» → → → Mayús+↑: el lienzo conserva `53% 40%`.
+- `+` en la portada de serie pregunta; tras el «sí», `+ + +` lleva el titular de 40 a 53 px; `E` y Mayús+← ×4
+  lo estrechan a la mitad.
+- A 1440, el borde del nombre de la marca, dos líneas abajo: «heading».
+- «Páginas» y «Fotos» leídos palabra a palabra: ninguna palabra de oficio, ningún hueco `{…}`. Ningún
+  desplazamiento horizontal a ningún ancho.
+- En el iPad, un dedo lleva «Qué ponemos» por su asa un puesto abajo y mueve el punto de una foto en «Fotos».
+- **En el teléfono, un dedo sobre los puntos de una fila de la hoja de «Páginas» la lleva encima de la
+  anterior** — lo que el día 10a dejó dicho sin medir; medido.
+
+**Las suites, cada una sola, con `caffeinate -i`:**
+
+| Suite | Resultado |
+|---|---|
+| `typecheck` | verde |
+| `lint` | verde, **84** avisos: uno más que al cierre del 40, `noImgElement` en la foto entera del «Punto» de «Fotos», la misma regla que ya avisa en la miniatura de al lado |
+| `test` | 4 690 en 220 ficheros |
+| `test:invariants` | 27 |
+| `test:golden` | 33, idénticas |
+| `renderer:deps` | 2 dependencias permitidas |
+| `schema:guard f0000ae..HEAD` | 1.23.0 y 1.24.0, cada una con su migración, su prueba y su versión |
+| `secrets:scope` | 154 módulos, 35 de cliente, 2 solo de servidor, ningún cruce |
+| `size` | todas dentro del presupuesto; `capas` 5,9 KB la página más pesada |
+| `test:a11y` | 2 391 en 223 s |
+| `lighthouse` | 27 de 27 a la primera, en 59 s |
+| `test:db` | 85, contra un Postgres propio con scram |
+| `e2e` | 397 y 1 omitida, en 1 914 s, a la primera |
+| auditoría de menús | 918 combinaciones hechas, ninguna en rojo, en 6 245 s |
+
+**La CI, por PR**: las catorce, en verde; la #408 a la segunda (la primera, roja en la caminata de fotogramas
+del sprint 39 día 6, abajo). Desde la #409 el paso e2e va en dos trozos, con un tope de 40 minutos por trabajo.
+
+| PR | e2e (min) |
+|---|---|
+| #407, día 1a | 36,9 |
+| #408, día 1b | 39,5 (segundo intento) |
+| #409, el e2e en dos | 19,2 · 18,5 |
+| #410–#420, días 2–11 | entre 18,3 y 21,4 por trozo |
+
+**`document-rules.md`**: ninguna regla cambia; una nota más bajo la regla 4, la del sprint entero: cada
+gesto escribe una palabra que la rejilla ya tenía (unidades, filas, una forma, un rango en la pila, un orden),
+nunca `x` ni `y`. **Firmas**: 45, 0042, 0043 y 0045–0087. El paquete gana el lote F (0082–0087), que se firma
+con el A o después, y las notas del sprint en 0048, 0050 y 0069. En la 0087 quedan tres decisiones de
+desarrollo para el veto de David.
+
+#### Lo que el sprint 41 deja abierto
+
+1. **Cuarenta y cinco firmas**: 0042, 0043, 0045–0087, con su paquete al día. En la 0087, para el veto de
+   David: «A página» hace la página de una pulsación mientras no hay otra a la que ir (y cambia de nombre
+   cuando abre la lista); «Secciones» plegado hasta que se pide; en el lienzo el pie conserva su sitio como la
+   portada (el plan nombraba solo la portada).
+2. **Las nueve fotos**: la exención cae el **1 de diciembre de 2026**, en 4 días.
+3. **La llegada de los paneles (`ui-blur-in`) frente a la CPU×4 de la CI**: el primer intento de la #408 se
+   puso rojo en la caminata de fotogramas del sprint 39 día 6 (2 de 5 aperturas en caliente perdieron un
+   fotograma, 33,4 ms); el segundo, verde, y las doce PR tras partir el e2e, verdes. Mantenerla con una
+   tolerancia escrita o quitarla, de David. La aserción no se ha relajado.
+4. **La letra exacta de la propia cabecera en el móvil**, medida (arriba): 318 px de barra con 200 px de
+   nombre. Propuesta para el 42: el mismo tope de la ADR 0083 para las partes de la cabecera en el móvil, con
+   sus estimaciones y una auditoría de menús, de medio día a uno.
+5. **Cortado en el sprint y sin construir**: las asas de dedo en una sección de serie (día 3: allí, ratón y
+   teclado); las asas laterales en cajas bajas para el dedo (0,25 días, día 2); un camino de teclado del texto
+   de una tarjeta a su lista (día 1b).
+6. **Fuera del sprint, con nombre en su plan**: mover un elemento a otra sección; el interior de la tarjeta
+   como plantilla (3–4 días, ADR); mover sin el interruptor; foto por entrada (ADR 0033); el mapa como imagen;
+   un cubo de tableta; lo que dejó el 39.
+7. **El editor sigue sin verse fuera de Chromium**; la web publicada sí, en tres motores.
+8. **El sprint 42, sin planificar.**

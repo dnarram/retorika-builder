@@ -182,3 +182,13 @@ following and the keyboard still on it; `−` 53 → 48; two «Deshacer» give b
 `E` and eight held left arrows on the photograph: eight units narrower, the same column, the same
 height within 2 px; Escape leaves the mode and the photograph stays chosen. ADR 0050's «no resizing
 by keyboard on the canvas» closes here.
+
+## Close note — «sí» to an offer a key asked for (sprint 41 día 12, 27 November 2026)
+
+Found by the close's tour, keyboard only: `+` on a chosen headline of a catalog cover opens the offer, as
+día 6 says; its «sí», pressed with the keyboard, armed the return to the section's «A mano» verb — which is
+not drawn once the section is hand-designed — so the keyboard fell to the section, and the next `+`
+reached nothing. The headline was still chosen; nothing said where the keyboard had gone. The element that
+asked is remembered now (`offerAskedBy`), and «sí» gives the keyboard back to it, still chosen, so the next
+`+` grows it (40 → 44 px). The pointer's door (día 3) was never affected: a held element keeps its own
+return. A walk asserts it; sabotaged back to the old return, it is red at the focus.

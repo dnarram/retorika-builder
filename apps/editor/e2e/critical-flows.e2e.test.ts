@@ -34878,3 +34878,111 @@ describe("sprint 41 día 11 — las secciones se arrastran en el lienzo", () => 
     }
   }, 300_000);
 });
+
+/**
+ * **Sprint 41 cierre — el punto que se conserva, desde «Fotos»** (ADR 0084's close note): the cut of día
+ * 5, done. Without the design tools, a gallery card's photograph — which the canvas never chooses —
+ * gets its point from the panel: dragged, or moved with the arrows, one step each; the canvas draws
+ * the crop from it; «Al centro» gives the middle back.
+ */
+describe("sprint 41 cierre — el punto que se conserva, desde «Fotos»", () => {
+  it("sin herramientas, la foto 2 de la galería: arrastrar el punto, las flechas, y «Al centro»", async () => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    const page = await context.newPage();
+    try {
+      await intoTheCanvas(page);
+      const frame = page.frameLocator(PREVIEW).first();
+      await page.getByRole("button", { name: "Fotos", exact: true }).click();
+      const panel = page.getByRole("region", { name: /fotos/i });
+      const open = panel.getByRole("button", { name: /^Elegir qué se conserva de Foto 2/ });
+      await expect(open).toHaveAttribute("aria-expanded", "false");
+      await open.click();
+      await expect(open).toHaveAttribute("aria-expanded", "true");
+      const box = panel.locator("[data-photo-point]");
+      const elementId = await box.getAttribute("data-photo-point");
+      const photo = frame.locator(`[data-section="sec-gallery"] [data-id="${elementId}"]`);
+      await expect(photo).toHaveCSS("object-position", "50% 50%");
+      const serial = await editSerialOf(page);
+
+      // The hand: from the middle to a fifth from the left and four fifths down, one step. The
+      // photograph brought into view first: a hand that leaves the window is not where it aimed.
+      await box.scrollIntoViewIfNeeded();
+      const area = await box.locator("img").boundingBox();
+      if (!area) throw new Error("no photograph in the panel");
+      const point = box.getByRole("button", { name: "Punto que se conserva de la foto" });
+      const from = await pointIn(point);
+      await page.mouse.move(from.x, from.y);
+      await page.mouse.down();
+      await page.mouse.move(area.x + area.width * 0.2, area.y + area.height * 0.8, { steps: 10 });
+      await page.mouse.up();
+      const said = async () => {
+        const text = (await panel.textContent()) ?? "";
+        const match =
+          /Se conserva lo que está a (\d+) % desde la izquierda y (\d+) % desde arriba/.exec(text);
+        return match ? { x: Number(match[1]), y: Number(match[2]) } : null;
+      };
+      await expect.poll(async () => (await said())?.x).toBeGreaterThanOrEqual(19);
+      const dropped = await said();
+      if (!dropped) throw new Error("the panel does not say the point");
+      expect(Math.abs(dropped.x - 20)).toBeLessThanOrEqual(1);
+      expect(Math.abs(dropped.y - 80)).toBeLessThanOrEqual(1);
+      // The canvas draws exactly what the panel says.
+      await expect(photo).toHaveCSS("object-position", `${dropped.x}% ${dropped.y}%`);
+      expect(await editSerialOf(page)).toBe(serial + 1);
+
+      // The keys: three to the right and one ten down, written once they stop — one step.
+      await point.focus();
+      for (const key of ["ArrowRight", "ArrowRight", "ArrowRight", "Shift+ArrowDown"]) {
+        await page.keyboard.press(key);
+        await page.waitForTimeout(60);
+      }
+      await expect(photo).toHaveCSS(
+        "object-position",
+        `${dropped.x + 3}% ${Math.min(100, dropped.y + 10)}%`,
+      );
+      expect(await editSerialOf(page)).toBe(serial + 2);
+
+      // «Al centro»: the middle again, stored as nothing.
+      await panel.getByRole("button", { name: "Al centro", exact: true }).click();
+      await expect(photo).toHaveCSS("object-position", "50% 50%");
+      expect(await editSerialOf(page)).toBe(serial + 3);
+      await expect(panel.getByRole("button", { name: "Al centro", exact: true })).toHaveCount(0);
+    } finally {
+      await context.close();
+    }
+  }, 240_000);
+});
+
+/**
+ * **Sprint 41 cierre — el «sí» pedido por una tecla devuelve el teclado** (found by the close's tour).
+ * `+` on a chosen headline of a catalog cover opens the offer; its «sí», pressed with the keyboard, used
+ * to leave the keyboard on the section, where the next `+` reached nothing. It goes back to the
+ * headline, still chosen, and the next `+` grows it.
+ */
+describe("sprint 41 cierre — el «sí» pedido por una tecla devuelve el teclado", () => {
+  it("+ en la portada de serie pregunta; Intro en «sí» y el siguiente + agranda el titular", async () => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    const page = await context.newPage();
+    try {
+      await intoTheCanvas(page);
+      await studioToolsOn(page);
+      const frame = page.frameLocator(PREVIEW).first();
+      const headline = frame.locator('[data-section="sec-cover"] [data-id="el-headline"]');
+      await headline.click();
+      await expect(headline).toHaveClass(/rb-chosen/);
+      await page.keyboard.press("+");
+      const yes = frame.locator(".rb-escalate-yes");
+      await expect(yes).toBeFocused();
+      await afterTheEdit(page, () => page.keyboard.press("Enter"));
+      await expect(frame.locator('[data-section="sec-cover"]')).toHaveClass(/rb-free/);
+      await expect(headline).toBeFocused();
+      await expect(headline).toHaveClass(/rb-chosen/);
+      await afterTheEdit(page, () => page.keyboard.press("+"));
+      expect(
+        await headline.evaluate((el) => Number.parseFloat(getComputedStyle(el).fontSize)),
+      ).toBe(44);
+    } finally {
+      await context.close();
+    }
+  }, 240_000);
+});

@@ -12,7 +12,56 @@ drift, and the facilitator's script already says findings go to the decision the
 a separate document nobody reads again». So an item with an ADR points at the ADR; an item with
 an issue points at the issue; and only the things with no other home are described here at all.
 
-Last reviewed: 22 November 2026, **closing sprint 40 — «El logo entero, el enlace que se edita y el
+Last reviewed: 27 November 2026, **closing sprint 41 — «Estirar, agrandar y mover».** David asked for
+«las opciones para estirar, agrandar, empequeñecer y mover todos los elementos textuales y no textuales dentro
+de las secciones». Twelve days in fifteen PRs: #407–#420 — #409 being the e2e split in two, at David's
+request — and the close. What
+changed for somebody visiting a site: **nothing for the 26 corpus sites — byte-identical to the sprint's
+start** (149 files, the 26 ZIPs the same hash); an element's exact letter above the heading comes down to it on
+a phone ([ADR 0083](../decisions/0083-an-exact-letter-above-the-heading-comes-down-to-it-on-a-phone.md), the
+one written decision by which a saved site changes). For the owner:
+- the sides stretch the box and the corners scale the letter, the photograph or the box
+  ([ADR 0082](../decisions/0082-the-sides-stretch-the-box-and-the-corners-scale-what-is-inside.md), day 2), and
+  `+`, `−` and `E` do the same from the keyboard (day 6)
+- in a catalog section the gesture asks, and on «sí» it stays where the hand left it (notes in ADR 0048 §7 and
+  0025 §7, day 3)
+- a photograph takes the height it is given, as a shape, and a point its crop keeps — on the canvas and, with
+  no design tools, from «Fotos» for a card's photographs too
+  ([ADR 0084](../decisions/0084-a-photograph-has-a-shape-and-a-point-its-crop-keeps.md), schema 1.23.0, days 4, 5 and the close)
+- «Traer al frente» and «Enviar atrás», under the section's own ceiling, and what a photograph covers warned
+  before the download by what it is ([ADR 0085](../decisions/0085-an-element-has-a-place-in-the-stack-under-a-ceiling.md), schema 1.24.0, day 7)
+- a list is taken by any card, a card changes order by its grip or its arrows, and a bound list says in how
+  many sections it moves ([ADR 0086](../decisions/0086-a-list-is-taken-by-its-cards-and-a-card-by-its-grip.md), days 1b and 8)
+- a section goes to a page that already exists, is carried in «Páginas» and on the canvas, the canvas
+  scrolling under the hand ([ADR 0087](../decisions/0087-a-section-changes-page-and-is-dragged-where-both-show.md), days 9–11)
+- the business's name stretched by its edge through its three words (note in ADR 0069, day 10b)
+
+The record is `docs/design/REVIEW.md`, sprint 41.
+
+**What sprint 41 leaves open** — the full text is the last section of REVIEW's sprint 41:
+
+1. **Forty-five signatures**: 0042, 0043, 0045–0087, all `proposed`; the pack gains batch F (0082–0087) and the
+   sprint's notes in 0048, 0050 and 0069, [`docs/decisions/signing-2026-11.md`](../decisions/signing-2026-11.md).
+   In 0087, three calls development made are named for David's veto.
+2. **The nine photographs**: the exemption fails on **1 December 2026**, in 4 days.
+   [`docs/tasks/las-nueve-fotos.md`](las-nueve-fotos.md) and `pnpm photos:replace`.
+3. **The arrival of the panels (`ui-blur-in`) against CI's CPU×4**: PR #408's first attempt went red on sprint
+   39 día 6's frame walk (2 of 5 warm openings missed one frame, 33.4 ms); the rerun was green, and the twelve
+   PRs after the split all passed. Keep it with a written tolerance, or drop the arrival — David's.
+4. **The header's own exact letter on a phone, measured**: the logo site with its brand at 200 px exact draws
+   a 318 px bar on a 390 phone (98 px without; 214 at 120 px), no horizontal scroll, the name ellipsised.
+   ADR 0083's cap does not reach the header. Proposed for sprint 42: the same cap for the header's parts on a
+   phone, with the bar's estimates and a menu audit — 0.5–1 day.
+5. **Cut in the sprint, and not built**: a finger's handles in a catalog section (día 3: mouse and keyboard
+   only there); side handles on short boxes for a finger (0.25 day, día 2); a keyboard path from a card's text
+   to its list (día 1b).
+6. **Outside the sprint, by name in its plan**: moving an element to another section; the inside of a card as
+   a template (3–4 days, ADR); moving without the switch; a photograph per list entry (ADR 0033); the map as an
+   image; a tablet breakpoint; sprint 39's leftovers (item 5 of sprint 40's list below, still open).
+7. **The editor has still not been seen outside Chromium**; the published site has, in three engines.
+8. **Sprint 42, unplanned.**
+
+The review before that: 22 November 2026, **closing sprint 40 — «El logo entero, el enlace que se edita y el
 mapa».** David brought six things: four defects (a logo's second colour lost, links that left the canvas
 instead of being written, a lists offer that ended in «Algo ha fallado», and no way to stretch or move what
 he expected to), and two features (a map, a background with motifs). Seven days in seven PRs (#400–#405

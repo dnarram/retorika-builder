@@ -13,6 +13,7 @@ import {
   sectionToPage,
   setElementImageSrc,
   setHeader,
+  setImageFocus,
 } from "@retorika/schema";
 import { describe, expect, it } from "vitest";
 import { countPhotos, listPhotos } from "../src/editor/photoInventory.ts";
@@ -287,5 +288,34 @@ describe("a site with no photographs at all", () => {
 
     expect(listPhotos(withoutCover)).toEqual([]);
     expect(countPhotos(withoutCover)).toEqual({ empty: 0, sample: 0, own: 0, total: 0 });
+  });
+});
+
+describe("which photographs the page crops, and the point it keeps (sprint 41 close)", () => {
+  it("crops the cover's and the gallery's, never the logo, never the grey marker", () => {
+    const doc = setHeader(generated(), { brand: { logo: { src: "logo-3f9a7c21.png" } } });
+    const photos = listPhotos(doc);
+    expect(photos.find((photo) => photo.kind === "logo")?.crops).toBe(false);
+    const elements = photos.filter((photo) => photo.kind === "element");
+    expect(elements.length).toBeGreaterThan(1);
+    expect(elements.every((photo) => photo.crops)).toBe(true);
+    const empty = listPhotos(generatedWithoutBank()).filter((photo) => photo.state === "empty");
+    expect(empty.length).toBeGreaterThan(0);
+    expect(empty.every((photo) => !photo.crops)).toBe(true);
+  });
+
+  it("carries the stored point, and none where it is the middle", () => {
+    const doc = generated();
+    const gallery = listPhotos(doc).find((photo) => photo.itemNumber === 2);
+    if (!gallery) throw new Error("no second gallery photograph");
+    expect(gallery.focus).toBeUndefined();
+    const address = { sectionId: gallery.sectionId, elementId: gallery.elementId };
+    const moved = setImageFocus(doc, address, { x: 20, y: 80 });
+    expect(listPhotos(moved).find((photo) => photo.elementId === gallery.elementId)?.focus).toEqual(
+      {
+        x: 20,
+        y: 80,
+      },
+    );
   });
 });
