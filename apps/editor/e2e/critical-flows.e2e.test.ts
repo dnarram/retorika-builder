@@ -34563,6 +34563,32 @@ describe("sprint 41 día 10a — las secciones se arrastran en «Páginas»", ()
         page.getByRole("button", { name: "Deshacer", exact: true }).click(),
       );
       await expect(frame.locator('[data-section="sec-gallery"]')).toHaveCount(1);
+
+      // «Bajar» is the case React detaches the row for: the keyboard must come back to «Bajar».
+      const downOf = (id: string) =>
+        panel.locator(`[data-outline-row="${id}"]`).getByRole("button", { name: /^Bajar «/ });
+      await downOf(second).focus();
+      await afterTheEdit(page, () => page.keyboard.press("Enter"));
+      await expect(downOf(second)).toBeFocused();
+
+      // And «A otra página» from the keyboard: the row lands on the other page, unfolded, with the
+      // keyboard on it.
+      const toPage = panel
+        .locator('[data-outline-row="sec-gallery"]')
+        .getByRole("button", { name: /a otra página/ });
+      await toPage.focus();
+      await page.keyboard.press("Enter");
+      await expect(toPage).toHaveAttribute("aria-expanded", "true");
+      await page.keyboard.press("Tab");
+      await afterTheEdit(page, () => page.keyboard.press("Enter"));
+      await expect(
+        panel.locator(`[data-outline-page="${otherId}"][data-outline-row="sec-gallery"]`),
+      ).toHaveCount(1);
+      expect(
+        await page.evaluate(() =>
+          document.activeElement?.closest("[data-outline-row]")?.getAttribute("data-outline-row"),
+        ),
+      ).toBe("sec-gallery");
     } finally {
       await context.close();
     }
