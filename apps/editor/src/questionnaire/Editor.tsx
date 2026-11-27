@@ -254,6 +254,7 @@ import {
   scaledLetter,
   scaleFactor,
 } from "../editor/scaleBox.ts";
+import { autoScrollStep, sectionDropIndex, sectionGapAt } from "../editor/sectionDrop.ts";
 import { sectionFields } from "../editor/sectionFields.ts";
 import {
   placeAfterRebuild,
@@ -518,6 +519,12 @@ function canConvert(doc: RetorikaDocument, sectionId: string): boolean {
 }
 
 const UNCONVERTIBLE: ReadonlySet<string> = new Set([COVER_ID, FOOTER_ID, TEASER_ID]);
+
+/** How near the canvas's top or bottom, in screen pixels, a carried section starts it scrolling, and
+ * how far it scrolls a frame at the very edge (sprint 41 día 11): divided by the zoom where used, so
+ * the band is the same under the hand at every zoom. */
+const CARRY_BAND = 56;
+const CARRY_SPEED = 18;
 
 /**
  * The list a section holds, if it holds one: which slot it is in, the lines in it, and whether
@@ -3351,6 +3358,156 @@ export function Editor({
     }
 
     /**
+     * **The section's own grip** (ADR 0087's día 11 amendment, sprint 41; decision i): beside «Subir»
+     * and «Bajar», the order's two buttons, and not the bar's «Mover», which moves the bar — one
+     * meaning per grip. Held and carried, the section dims where it is and a line marks the gap it
+     * would land in; near the canvas's top or bottom the canvas scrolls on its own, and the wheel
+     * scrolls it too, the gap following; Escape lets go writing nothing; letting go writes one
+     * `moveSection`, one step.
+     *
+     * **A pointer's convenience, out of the keyboard's way**: `tabindex="-1"` and `aria-hidden`, so
+     * every Tab count in the walks stays what it was, and the alternative WCAG 2.5.7 asks for is the
+     * two buttons it stands beside. Absent on the cover and the footer, which keep their places, and
+     * where there is no other gap to go to.
+     */
+    function sectionCarrier(host: HTMLElement, sectionId: string): HTMLElement | null {
+      const found = findSection(docNow.current, sectionId);
+      if (!found) return null;
+      const kinds = found.page.sections.map((section) => section.preset.catalogId);
+      const own = found.section.preset.catalogId;
+      if (own === COVER_ID || own === FOOTER_ID) return null;
+      const ends = { coverFirst: kinds[0] === COVER_ID, footerLast: kinds.at(-1) === FOOTER_ID };
+      const movable = kinds.length - (ends.coverFirst ? 1 : 0) - (ends.footerLast ? 1 : 0);
+      if (movable < 2) return null;
+
+      const wrapper = action(
+        "carry",
+        es["editor.section.carry"],
+        es["editor.verb.carry"],
+        "move",
+        false,
+        `<svg ${screenIcon(VERB_SCALE.icon)} viewBox="0 0 24 24" fill="#FFFFFF" aria-hidden="true"><circle cx="9" cy="5" r="1.8"/><circle cx="15" cy="5" r="1.8"/><circle cx="9" cy="12" r="1.8"/><circle cx="15" cy="12" r="1.8"/><circle cx="9" cy="19" r="1.8"/><circle cx="15" cy="19" r="1.8"/></svg>`,
+        () => {},
+      );
+      const grip = wrapper.querySelector("button") as HTMLButtonElement;
+      grip.classList.add("rb-section-grip");
+      grip.tabIndex = -1;
+      grip.setAttribute("aria-hidden", "true");
+
+      const win = iframeDoc.defaultView;
+      let held: {
+        pointerId: number;
+        from: Point;
+        y: number;
+        dragging: boolean;
+        index: number;
+        drop: number | null;
+        line: HTMLElement | null;
+        frame: number;
+      } | null = null;
+
+      const update = () => {
+        if (!held?.dragging || !held.line) return;
+        const sections = sectionsNow();
+        const boxes = sections.map((section) => {
+          const box = section.getBoundingClientRect();
+          return { id: section.dataset.section ?? "", top: box.top, bottom: box.bottom };
+        });
+        const gap = sectionGapAt(boxes, held.y, ends);
+        held.drop = gap ? sectionDropIndex(held.index, gap) : null;
+        if (!gap || held.drop === null) {
+          held.line.hidden = true;
+          return;
+        }
+        const box = host.getBoundingClientRect();
+        held.line.hidden = false;
+        held.line.style.top = `${gap.y + (win?.scrollY ?? 0)}px`;
+        held.line.style.left = `${box.left + (win?.scrollX ?? 0)}px`;
+        held.line.style.width = `${box.width}px`;
+      };
+      const scrollLoop = () => {
+        if (!held?.dragging || !win) return;
+        const zoom = zoomOf(iframeDoc);
+        const step = autoScrollStep(held.y, win.innerHeight, CARRY_BAND / zoom, CARRY_SPEED / zoom);
+        if (step === 0) {
+          held.frame = 0;
+          return;
+        }
+        win.scrollBy(0, step);
+        update();
+        held.frame = win.requestAnimationFrame(scrollLoop);
+      };
+      const onScroll = () => update();
+      const end = (write: boolean) => {
+        const done = held;
+        held = null;
+        if (!done) return;
+        if (done.frame && win) win.cancelAnimationFrame(done.frame);
+        if (grip.hasPointerCapture(done.pointerId)) grip.releasePointerCapture(done.pointerId);
+        win?.removeEventListener("scroll", onScroll);
+        iframeDoc.removeEventListener("keydown", onKey, true);
+        done.line?.remove();
+        host.classList.remove("rb-section-lifted");
+        iframeDoc.documentElement.classList.remove("rb-dragging");
+        flushQueuedPatch.current();
+        if (write && done.dragging && done.drop !== null) {
+          propsNow.current.onMoveSection(sectionId, done.drop);
+        }
+      };
+      const onKey = (event: KeyboardEvent) => {
+        if (event.key !== "Escape" || !held?.dragging) return;
+        event.preventDefault();
+        event.stopPropagation();
+        end(false);
+      };
+
+      grip.addEventListener("pointerdown", (event) => {
+        if (event.button !== 0) return;
+        // No focus for a control the keyboard never reaches, and no section chosen under it.
+        event.preventDefault();
+        event.stopPropagation();
+        grip.setPointerCapture(event.pointerId);
+        held = {
+          pointerId: event.pointerId,
+          from: { x: event.clientX, y: event.clientY },
+          y: event.clientY,
+          dragging: false,
+          index: sectionsNow().indexOf(host),
+          drop: null,
+          line: null,
+          frame: 0,
+        };
+      });
+      grip.addEventListener("pointermove", (event) => {
+        if (!held) return;
+        held.y = event.clientY;
+        if (!held.dragging) {
+          const now = { x: event.clientX, y: event.clientY };
+          if (!isDragBeyond(held.from, now, DRAG_THRESHOLD / zoomOf(iframeDoc))) return;
+          held.dragging = true;
+          host.classList.add("rb-section-lifted");
+          iframeDoc.documentElement.classList.add("rb-dragging");
+          const line = chrome(iframeDoc, "div");
+          line.className = "rb-section-line";
+          line.setAttribute("aria-hidden", "true");
+          line.hidden = true;
+          iframeDoc.body.appendChild(line);
+          held.line = line;
+          win?.addEventListener("scroll", onScroll);
+          iframeDoc.addEventListener("keydown", onKey, true);
+        }
+        update();
+        if (!held.frame && win) held.frame = win.requestAnimationFrame(scrollLoop);
+      });
+      grip.addEventListener("pointerup", () => end(true));
+      grip.addEventListener("pointercancel", () => end(false));
+      grip.addEventListener("lostpointercapture", () => {
+        if (held?.dragging) end(false);
+      });
+      return wrapper;
+    }
+
+    /**
      * The handle the bar is moved by: last in the row, and the only part of it that drags.
      *
      * **Last and not first.** The verbs are the news — that is the argument sprint 17 day 3 made
@@ -3841,6 +3998,8 @@ export function Editor({
           () => propsNow.current.onMoveSection(sectionId, index + 1),
         ),
       );
+      const carrier = sectionCarrier(target, sectionId);
+      if (carrier) actions.appendChild(carrier);
       // Sixth button, and it only appears when there is a choice to make: a section carrying its
       // own layout, or one the catalog gives a single composition, gets no button rather than a
       // dead one. Placed after the two moves because it answers the same kind of question — where
@@ -9841,6 +10000,12 @@ export function Editor({
        * happens to be over, which during a drag is the client's own page.
        */
       ".rb-dragging, .rb-dragging * { user-select: none; cursor: grabbing !important; }",
+      // The section's grip (sprint 41 día 11): a verb's disc that says it is held, not pressed; the
+      // section carried dims where it is, and the line marks the gap it would land in.
+      ".rb-section-grip { cursor: grab; touch-action: none; }",
+      ".rb-section-lifted { opacity: 0.45; }",
+      `.rb-section-line { position: absolute; z-index: 12; height: ${screenPx(4)}; margin-top: ${screenPx(-2)};`,
+      `  background: ${CHROME_SCALE.brand}; border-radius: ${screenPx(2)}; pointer-events: none; }`,
       // While an edge is being pulled, the cursor is set on the root **inline** (it is one of four,
       // and which one is the gesture's own business), so the only thing a class is needed for is
       // keeping a text from selecting itself as the hand travels across it.

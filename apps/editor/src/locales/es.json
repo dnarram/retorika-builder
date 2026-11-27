@@ -907,6 +907,8 @@
   "editor.verb.background": "Fondo",
   "editor.verb.delete": "Borrar",
   "editor.verb.grip": "Mover",
+  "editor.verb.carry": "Arrastrar",
+  "editor.section.carry": "Arrastrar esta sección a otro sitio de la página",
   "editor.bar.grip": "Mover esta barra",
   "editor.addSectionHere": "Añadir sección aquí",
   "editor.addSection.title": "¿Qué sección añades?",
