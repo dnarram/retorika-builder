@@ -12,10 +12,20 @@ import {
   logoDropOutcome,
   logoDropText,
   logoStep,
+  nameDropOutcome,
+  nameDropText,
+  nameSizesOf,
+  nameStep,
+  nameStepOf,
   pulledHeight,
   stepOf,
 } from "../src/editor/brandDrag.ts";
-import { brandPlacePatch, headerStateFor, logoSizePatch } from "../src/editor/headerState.ts";
+import {
+  brandPlacePatch,
+  headerStateFor,
+  logoSizePatch,
+  nameSizePatch,
+} from "../src/editor/headerState.ts";
 import { zoneAt } from "../src/editor/menuDrag.ts";
 import { DESKTOP_LAYOUT_WIDTH, NARROWEST_WIDTH } from "../src/editor/overflowCheck.ts";
 import es from "../src/locales/es.json" with { type: "json" };
@@ -162,6 +172,74 @@ describe("logoStep", () => {
       size: "md",
       patch: logoSizePatch(large, "md"),
     });
+  });
+});
+
+describe("nameStep (sprint 41 día 10b)", () => {
+  // The default scale's three words, as the page draws them on a wide screen.
+  const SIZES = { body: 16, subheading: 24, heading: 40 } as const;
+  const BOX = 21; // the name's line box at the reading size
+
+  it("lands on the word nearest the size the pull reached, ties to the larger", () => {
+    expect(nameStep(SIZES, 16, BOX, 0).size).toBe("body");
+    // 21 + 10 = 31 of 21: 16 × 1.48 = 23.8, the middle word.
+    expect(nameStep(SIZES, 16, BOX, 10).size).toBe("subheading");
+    expect(nameStep(SIZES, 16, BOX, 40).size).toBe("heading");
+    expect(nameStep(SIZES, 40, 52, -20).size).toBe("subheading");
+    expect(nameStep(SIZES, 40, 52, -30).size).toBe("body");
+    // Exactly between 16 and 24 is 20: 16 × (20 + 5) / 20, a tie the larger word takes.
+    expect(nameStep(SIZES, 16, 20, 5).size).toBe("subheading");
+  });
+
+  it("holds the extremes, and a name with no height stays where it is", () => {
+    expect(nameStep(SIZES, 16, BOX, 999).size).toBe("heading");
+    expect(nameStep(SIZES, 40, 52, -999).size).toBe("body");
+    expect(nameStep(SIZES, 24, 0, 50).size).toBe("subheading");
+  });
+
+  it("follows the bar's «small» reading size, which is the page's body at 0.875", () => {
+    expect(nameSizesOf(SIZES, false)).toEqual(SIZES);
+    const small = nameSizesOf(SIZES, true);
+    expect(small).toEqual({ body: 14, subheading: 24, heading: 40 });
+    expect(nameStep(small, 14, 18, 0)).toEqual(nameStepOf("body", 14));
+    expect(nameStep(small, 14, 18, 7).size).toBe("subheading");
+    // What tells the two scales apart is the middle: a hand that reached 19 px is as near 14 as 24
+    // (the tie the larger word takes) on a small bar, and plainly at 16 on a plain one.
+    expect(nameStep(small, 14, 20, 20 * (19 / 14 - 1)).size).toBe("subheading");
+    expect(nameStep(SIZES, 16, 20, 20 * (19 / 16 - 1)).size).toBe("body");
+  });
+
+  it("says the word and the pixels, in Spanish", () => {
+    expect(nameStepOf("heading", 40).label).toBe("Nombre: Grande · 40 px");
+    expect(nameStepOf("body", 14).label).toBe("Nombre: Normal · 14 px");
+    expect(nameStepOf("subheading", 24).label).toBe("Nombre: Mediano · 24 px");
+  });
+
+  it("writes the word's patch, and nothing at the word the name has", () => {
+    const named = with_(doc, { brand: { ...doc.header?.brand, name: true } });
+    const brand = brandOf(named);
+    expect(nameDropOutcome(null, brand, named)).toEqual({ kind: "none" });
+    expect(nameDropOutcome(nameStepOf("body", 16), brand, named)).toEqual({ kind: "none" });
+    expect(nameDropOutcome(nameStepOf("heading", 40), brand, named)).toEqual({
+      kind: "write",
+      nameSize: "heading",
+      patch: nameSizePatch(named, "heading"),
+    });
+    // Back to the reading size drops the key, as the panel's «Normal» does.
+    const big = with_(named, {
+      brand: { ...named.header?.brand, name: true, nameSize: "heading" },
+    });
+    expect(nameDropOutcome(nameStepOf("body", 16), brandOf(big), big)).toEqual({
+      kind: "write",
+      nameSize: "body",
+      patch: nameSizePatch(big, "body"),
+    });
+  });
+
+  it("names the new word in the panel's own words", () => {
+    expect(nameDropText("heading")).toBe("Nombre: grande");
+    expect(nameDropText("subheading")).toBe("Nombre: mediano");
+    expect(nameDropText("body")).toBe("Nombre: normal");
   });
 });
 

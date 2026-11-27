@@ -28323,6 +28323,127 @@ describe("sprint 35 día 6 — la marca se arrastra y se estira", () => {
       await context.close();
     }
   }, 240_000);
+
+  /** The name's word as saved, `""` when it is the reading size (the key is absent). */
+  const nameWordOf = (page: Page) =>
+    page.evaluate(() => {
+      const raw = localStorage.getItem("retorika.session.v1") ?? "";
+      if (raw === "") return "unsaved";
+      const session = JSON.parse(raw) as {
+        openIndex: number;
+        documents: { header?: { brand?: { nameSize?: string } } }[];
+      };
+      return session.documents[session.openIndex]?.header?.brand?.nameSize ?? "";
+    });
+
+  it("sprint 41 día 10b: el borde del nombre lo pasa por «Mediano» y «Grande» y vuelta; Escape no escribe; en el móvil no hay borde", async () => {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 950 } });
+    const page = await context.newPage();
+    try {
+      const frame = await withLogo(page);
+      const header = frame.locator("header.rb-header");
+      const name = header.locator(":scope > .rb-brand .rb-brand-name");
+      const ghost = frame.locator(".rb-menu-ghost");
+      const said = page.locator('p[role="status"]');
+      const serial = await editSerialOf(page);
+      const { zoom } = await frameOnScreen(page);
+
+      /** The name's bottom edge, a pixel inside it. */
+      const edgeOfName = async () => {
+        const box = await name.boundingBox();
+        if (!box) throw new Error("no name");
+        return { x: box.x + box.width / 2, y: box.y + box.height - 1, height: box.height };
+      };
+
+      // 0. The hand is told: the resize cursor on the name's edge, and the reading size to start.
+      const first = await edgeOfName();
+      await page.mouse.move(first.x, first.y);
+      expect(await name.evaluate((el) => getComputedStyle(el).cursor)).toBe("ns-resize");
+      await expect(header).not.toHaveAttribute("data-name-size", /.*/);
+
+      // 1. Half a line down is the middle word: the ghost says «Mediano», drawn at the page's own
+      //    subheading size before the hand lets go; Escape half-way writes nothing.
+      await page.mouse.down();
+      await page.mouse.move(first.x, first.y + first.height * 0.5, { steps: 8 });
+      await expect(frame.locator(".rb-logo-ghost")).toHaveCount(1);
+      await expect(ghost).toContainText("Nombre: Mediano");
+      const subheading = await frame.locator("body").evaluate((el) => {
+        const probe = document.createElement("div");
+        probe.style.cssText = "position:absolute;visibility:hidden;height:var(--size-subheading)";
+        el.appendChild(probe);
+        const px = probe.getBoundingClientRect().height;
+        probe.remove();
+        return px;
+      });
+      const drawn = await frame.locator(".rb-logo-ghost").boundingBox();
+      const nameBox = await name.boundingBox();
+      const fontNow = await name.evaluate((el) => Number.parseFloat(getComputedStyle(el).fontSize));
+      expect(Math.round((drawn?.height ?? 0) / zoom)).toBe(
+        Math.round(((nameBox?.height ?? 0) / zoom) * (subheading / fontNow)),
+      );
+      await page.keyboard.press("Escape");
+      await expect(frame.locator(".rb-logo-ghost")).toHaveCount(0);
+      await page.mouse.up();
+      expect(await nameWordOf(page)).toBe("");
+      expect(await editSerialOf(page)).toBe(serial);
+
+      // 2. For real, two lines down: «Grande», written once and said.
+      const second = await edgeOfName();
+      await page.mouse.move(second.x, second.y);
+      await page.mouse.down();
+      await page.mouse.move(second.x, second.y + second.height * 2.2 * zoom, { steps: 10 });
+      await expect(ghost).toContainText("Nombre: Grande");
+      expect(await name.evaluate((el) => el.style.fontSize)).toBe("");
+      await page.mouse.up();
+      await expect(header).toHaveAttribute("data-name-size", "heading");
+      await expect.poll(() => nameWordOf(page)).toBe("heading");
+      await expect(said).toHaveText("Nombre: grande");
+      expect(await editSerialOf(page)).toBe(serial + 1);
+      await motionSettled(page);
+      const heading = await frame.locator("body").evaluate((el) => {
+        const probe = document.createElement("div");
+        probe.style.cssText = "position:absolute;visibility:hidden;height:var(--size-heading)";
+        el.appendChild(probe);
+        const px = probe.getBoundingClientRect().height;
+        probe.remove();
+        return px;
+      });
+      expect(
+        Math.round(await name.evaluate((el) => Number.parseFloat(getComputedStyle(el).fontSize))),
+      ).toBe(Math.round(heading));
+
+      // 3. And back: pulling the edge up most of the way is the reading size, which drops the key.
+      const third = await edgeOfName();
+      await page.mouse.move(third.x, third.y);
+      await page.mouse.down();
+      await page.mouse.move(third.x, third.y - third.height * 0.85 * zoom, { steps: 10 });
+      await expect(ghost).toContainText("Nombre: Normal");
+      await page.mouse.up();
+      await expect(header).not.toHaveAttribute("data-name-size", /.*/);
+      await expect.poll(() => nameWordOf(page)).toBe("");
+      await expect(said).toHaveText("Nombre: normal");
+      expect(await editSerialOf(page)).toBe(serial + 2);
+
+      // 4. One «Deshacer» per gesture.
+      await page.getByRole("button", { name: "Deshacer", exact: true }).click();
+      await expect(header).toHaveAttribute("data-name-size", "heading");
+
+      // 5. The phone view: no edge on the name, no ghost.
+      await page.getByRole("button", { name: "Ver en móvil" }).click();
+      await deviceArrived(page, NARROWEST_WIDTH);
+      await motionSettled(page);
+      const phone = await edgeOfName();
+      await page.mouse.move(phone.x, phone.y);
+      expect(await name.evaluate((el) => getComputedStyle(el).cursor)).not.toBe("ns-resize");
+      await page.mouse.down();
+      await page.mouse.move(phone.x, phone.y + 30, { steps: 6 });
+      await expect(frame.locator(".rb-logo-ghost")).toHaveCount(0);
+      await page.mouse.up();
+      await expect(header).toHaveAttribute("data-name-size", "heading");
+    } finally {
+      await context.close();
+    }
+  }, 300_000);
 });
 
 /**

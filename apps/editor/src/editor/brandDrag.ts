@@ -1,8 +1,15 @@
 import { LOGO_HEIGHTS } from "@retorika/renderer";
-import { type Header, LOGO_SIZES, type LogoSize, type RetorikaDocument } from "@retorika/schema";
+import {
+  BRAND_NAME_SIZES,
+  type BrandNameSize,
+  type Header,
+  LOGO_SIZES,
+  type LogoSize,
+  type RetorikaDocument,
+} from "@retorika/schema";
 import es from "../locales/es.json" with { type: "json" };
 import type { Point } from "./barPosition.ts";
-import { type BrandState, brandPlacePatch, logoSizePatch } from "./headerState.ts";
+import { type BrandState, brandPlacePatch, logoSizePatch, nameSizePatch } from "./headerState.ts";
 import type { Rect, ZoneRectOf } from "./menuDrag.ts";
 import { PHONE_BREAKPOINT } from "./overflowCheck.ts";
 
@@ -140,6 +147,78 @@ export function logoDropOutcome(
 export function logoDropText(size: LogoSize): string {
   const word = es[`editor.menuPanel.logoSize.${size}`];
   return es["editor.brandDrag.logoDropped"].replace("{size}", word.toLowerCase());
+}
+
+export interface NameStep {
+  readonly size: BrandNameSize;
+  /** The font size the page draws that word at, on a wide screen. */
+  readonly px: number;
+  /** The ghost's word: «Grande · 48 px». */
+  readonly label: string;
+}
+
+/**
+ * **The name's edge steps through its three words, as the logo's does through its three heights**
+ * (sprint 41 día 10b, ADR 0069's note; `logoStep`'s sister, the second use — a third would earn the
+ * shared shape).
+ *
+ * The hand's pull is read as a stretch of the name's own box: its height grows by `delta`, so the
+ * font size the hand has reached is the drawn one scaled by the same ratio, and the word is the one
+ * whose size is nearest — `sizes` being the pixels the page draws the three words at, measured by the
+ * caller (the reading size is 0.875 of itself on a «small» bar). Ties go to the larger word, the
+ * direction a hand that has moved at all is moving in.
+ */
+export function nameStep(
+  sizes: Readonly<Record<BrandNameSize, number>>,
+  drawnPx: number,
+  boxHeight: number,
+  delta: number,
+): NameStep {
+  const reached = boxHeight > 0 ? (drawnPx * (boxHeight + delta)) / boxHeight : drawnPx;
+  let best: BrandNameSize = BRAND_NAME_SIZES[0];
+  for (const size of BRAND_NAME_SIZES) {
+    const better = Math.abs(sizes[size] - reached);
+    const sofar = Math.abs(sizes[best] - reached);
+    if (better < sofar || (better === sofar && sizes[size] > sizes[best])) best = size;
+  }
+  return nameStepOf(best, sizes[best]);
+}
+
+/**
+ * The three words' pixels from the page's own tokens: the reading size is 0.875 of itself on a
+ * «small» bar, as the stylesheet's `data-size` rule draws it, and the other two are the scale's.
+ */
+export function nameSizesOf(
+  tokens: Readonly<Record<BrandNameSize, number>>,
+  small: boolean,
+): Record<BrandNameSize, number> {
+  return { ...tokens, body: small ? tokens.body * 0.875 : tokens.body };
+}
+
+export function nameStepOf(size: BrandNameSize, px: number): NameStep {
+  return {
+    size,
+    px,
+    label: es["editor.brandDrag.nameStep"]
+      .replace("{size}", es[`editor.menuPanel.nameSize.${size}`])
+      .replace("{px}", String(Math.round(px))),
+  };
+}
+
+/** What letting go of the name's edge writes: nothing at the word it has, the word's patch otherwise. */
+export function nameDropOutcome(
+  step: NameStep | null,
+  brand: BrandState,
+  doc: RetorikaDocument,
+): { kind: "none" } | { kind: "write"; nameSize: BrandNameSize; patch: Partial<Header> } {
+  if (step === null || step.size === brand.nameSize) return { kind: "none" };
+  return { kind: "write", nameSize: step.size, patch: nameSizePatch(doc, step.size) };
+}
+
+/** What the live region says once the name has its word: «Nombre: grande». */
+export function nameDropText(size: BrandNameSize): string {
+  const word = es[`editor.menuPanel.nameSize.${size}`];
+  return es["editor.brandDrag.nameDropped"].replace("{size}", word.toLowerCase());
 }
 
 /** A point's distance below and right of a box's bottom-right corner — what a pull of the logo's

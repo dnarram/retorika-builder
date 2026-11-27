@@ -11838,3 +11838,27 @@ página» desde el teclado. En ventana de 390 × 844, la tercera fila sobre la s
 (rojo la unitaria y la caminata); Escape ignorado (rojo); sin devolver el teclado — verde con «Subir» y
 «Bajar», porque React conserva la fila enfocada al reordenar, y rojo al llevar la fila a otra página, donde
 es un elemento nuevo.
+
+### Día 10b — el nombre se estira por su borde (PR de `feat/el-nombre-se-estira`, nota en ADR 0069)
+
+**Lo que hay ahora.** El borde inferior, el derecho y la esquina del nombre de la cabecera lo pasan por sus
+tres palabras —«Normal», «Mediano», «Grande»—, como el logo por sus tres alturas. El fantasma es la caja
+discontinua del logo sobre el nombre, al tamaño de la palabra que viene, con «Nombre: Grande · 40 px» junto a
+la mano; Escape lo suelta sin escribir; al soltar se escribe el mismo parche que el segmento «Tamaño del
+nombre» del panel (`Normal` quita la clave), un paso, y la línea viva dice «Nombre: grande».
+
+**Dónde no.** Solo con ratón y en la vista de escritorio: con el dedo el borde es más estrecho que el dedo y
+en el móvil el nombre grande ya se dibuja del tamaño mediano. El panel sigue siendo el camino del teclado y
+del teléfono. La línea de ayuda de la marca dice ahora «estirar el logo o el nombre por su borde».
+
+**Medido.** A 1440 en la web del logo: el cursor de redimensionar en el borde del nombre; media línea
+hacia abajo dice «Mediano», con el fantasma a la altura que da el tamaño de subtítulo; Escape a medio
+gesto no escribe; dos líneas hacia abajo, «Grande» (`data-name-size="heading"`, el nombre a
+`--size-heading`); hacia arriba casi todo, «Normal» y la clave desaparece; un «Deshacer» por gesto; en el
+móvil, ni cursor ni fantasma.
+
+**Pruebas.** Cinco en `brandDrag.test.ts` (la palabra más cercana y el empate, los extremos, la barra
+«pequeña», las palabras, el parche). Una caminata. **Saboteos**: la guarda del móvil quitada (rojo); el
+estiramiento leído al revés (tres pruebas y la caminata); la escala de la barra pequeña quitada — **verde la
+primera vez**, porque era una línea dentro del cableado del gesto que ninguna prueba veía; la saqué a
+`nameSizesOf`, con su prueba, y entonces rojo.

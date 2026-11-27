@@ -107,3 +107,34 @@ Schema 1.19.0 with migration `0020` (`up` seals; `down` drops the three words an
 the logo). `motion.test.ts`'s count of the two sheets' differences is unchanged: the block is in both.
 The editor's half — the three segments in «Menú», the notes that read `LOGO_HEIGHTS`, the preview on
 hover, the logo's edge drag — is sprint 35's días 5 and 6.
+
+## Note — the name's edge (sprint 41 día 10b, 27 November 2026)
+
+The logo's bottom, right and corner have stretched it through its three heights since sprint 35 (the
+logo's section above). The name had the panel's «Tamaño del nombre» and nothing on the canvas, which
+left the two halves of the brand with two different ways to be sized. Its edge now steps through its
+three words the same way, and **nothing in the document changes**: the release writes `nameSizePatch`,
+the very patch the panel's segment writes — `body` drops the key — so a saved site is what it was and
+the schema stays 1.24.0.
+
+- **The pull is a stretch of the name's own box.** The font size the hand has reached is the drawn one
+  scaled by the box's growth (`nameStep`), and the word is the one whose size is nearest, ties to the
+  larger. The three sizes are measured from the page's own tokens, the reading size at 0.875 of itself
+  on a «small» bar (`nameSizesOf`), so the ghost — the logo's dashed box over the real name, drawn at
+  the next word's size, with «Nombre: Grande · 40 px» beside the hand — is the page's.
+- **Mouse and the desktop view only**, as the logo's edge: a finger is wider than the edge, and on a
+  phone the heading-sized name is drawn at the subheading's (§3), so a pull there would promise a size
+  the page does not draw. The panel is the keyboard's and the phone's way, as for the logo; the bar's
+  help line says «estirar el logo o el nombre por su borde».
+- Second use of the shape `logoStep` made (`nameStep`, the same ghost and the same release); a third
+  would earn a shared one.
+
+**Measured** at 1440 on the logo site, the name at its reading size: the resize cursor on its bottom
+edge; half a line down says «Nombre: Mediano», the ghost the height the subheading's size gives the
+box, and Escape half-way writes nothing; two lines down says «Grande», written once (`data-name-size
+="heading"`, the name drawn at `--size-heading`, the live region «Nombre: grande»); pulling the edge up
+most of the way says «Normal» and drops the key; one «Deshacer» per gesture. In the phone view no
+resize cursor and no ghost. **Sabotaged**: the phone guard removed (the walk red); the pull read the
+wrong way (three unit tests and the walk red); the small bar's scale removed (red once it was a helper
+with a witness — it was a line inside the gesture's wiring no test could see, and the first sabotage
+passed).
