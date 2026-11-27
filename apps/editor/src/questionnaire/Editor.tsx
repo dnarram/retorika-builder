@@ -16,6 +16,7 @@ import {
   type Background,
   type BackgroundPaint,
   type BackgroundScope,
+  type BrandNameSize,
   bindList,
   canFoldPage,
   type ElementAddress,
@@ -112,6 +113,10 @@ import {
   logoDropOutcome,
   logoDropText,
   logoStep,
+  type NameStep,
+  nameDropOutcome,
+  nameDropText,
+  nameStep,
   pulledHeight,
   stepOf,
 } from "../editor/brandDrag.ts";
@@ -7346,7 +7351,7 @@ export function Editor({
      * states, the same Escape, the same swallowed click.
      */
     interface MenuDrag {
-      kind: "menu" | "brand" | "logo";
+      kind: "menu" | "brand" | "logo" | "name";
       menu: Menu | null;
       grip: HTMLElement;
       pointerId: number;
@@ -7362,6 +7367,12 @@ export function Editor({
       edge: "bottom" | "right" | "se" | null;
       logoBox: DOMRect | null;
       step: LogoStep | null;
+      /** The name's edge held (sprint 41 día 10b): its box and font size at the press, the three
+       * words' pixels, and the word the ghost is drawn at. */
+      nameBox: DOMRect | null;
+      nameDrawn: number;
+      nameSizes: Readonly<Record<BrandNameSize, number>> | null;
+      nameStepNow: NameStep | null;
     }
     let drag: MenuDrag | null = null;
     // A click right after a drag is the drag's own release, not a choice (ADR 0048 §2).
@@ -7507,11 +7518,64 @@ export function Editor({
       }
     };
 
+    /**
+     * **The name's edge steps through its three words** (sprint 41 día 10b, ADR 0069's note): the
+     * logo's gesture over `.rb-brand-name`, with the same ghost — a dashed box over the real one,
+     * chrome, never a `font-size` the next patch would lose — at the next word's size, and the word
+     * and its pixels beside the hand. The three sizes are measured from the page's own tokens, the
+     * reading size being 0.875 of itself on a «small» bar, so the ghost is the page's.
+     */
+    const beginName = (state: MenuDrag, header: HTMLElement) => {
+      const name = state.grip.querySelector<HTMLElement>(".rb-brand-name");
+      const view = iframeDoc.defaultView;
+      if (!name || !view || !state.edge) return;
+      const small = header.dataset["size"] === "small";
+      const body = resolved(iframeDoc.body, "--size-body");
+      state.nameSizes = {
+        body: small ? body * 0.875 : body,
+        subheading: resolved(iframeDoc.body, "--size-subheading"),
+        heading: resolved(iframeDoc.body, "--size-heading"),
+      };
+      state.nameDrawn = Number.parseFloat(view.getComputedStyle(name).fontSize);
+      state.nameBox = name.getBoundingClientRect();
+      state.dragging = true;
+      iframeDoc.documentElement.classList.add("rb-stretching");
+      const box = chrome(iframeDoc, "div");
+      box.className = "rb-logo-ghost";
+      box.setAttribute("aria-hidden", "true");
+      iframeDoc.body.appendChild(box);
+      ghostWith("");
+      followName(state, state.from);
+    };
+    const followName = (state: MenuDrag, at: Point) => {
+      const box = state.nameBox;
+      if (!box || !state.edge || !state.nameSizes) return;
+      const step = nameStep(
+        state.nameSizes,
+        state.nameDrawn,
+        box.height,
+        pulledHeight(state.from, at, box, state.edge),
+      );
+      if (step.size === state.nameStepNow?.size) return;
+      state.nameStepNow = step;
+      const ghost = iframeDoc.querySelector<HTMLElement>(".rb-logo-ghost");
+      if (ghost) {
+        const scale = state.nameDrawn > 0 ? step.px / state.nameDrawn : 1;
+        ghost.style.left = `${box.left}px`;
+        ghost.style.top = `${box.top + box.height / 2 - (box.height * scale) / 2}px`;
+        ghost.style.height = `${box.height * scale}px`;
+        ghost.style.width = `${box.width * scale}px`;
+      }
+      const word = iframeDoc.querySelector<HTMLElement>(".rb-menu-ghost > span");
+      if (word) word.textContent = step.label;
+    };
+
     const begin = (state: MenuDrag) => {
       const view = iframeDoc.defaultView;
       const header = iframeDoc.querySelector<HTMLElement>("header.rb-header");
       if (!view || !header) return;
       if (state.kind === "brand") beginBrand(state, header);
+      else if (state.kind === "name") beginName(state, header);
       else if (state.kind === "logo") beginLogo(state);
       else if (state.menu) {
         const places = headerStateFor(docNow.current, pageIdNow.current);
@@ -7572,6 +7636,8 @@ export function Editor({
     const follow = (state: MenuDrag, at: Point) => {
       if (state.kind === "logo") {
         followLogo(state, at);
+      } else if (state.kind === "name") {
+        followName(state, at);
       } else if (state.kind === "brand") {
         const hot = zoneAt(at, state.brandRects);
         if (hot !== state.brandHot) {
@@ -7616,13 +7682,15 @@ export function Editor({
       // A finger drags the header's menus only once the header is chosen (ADR 0049).
       if (event.pointerType === "touch" && !headerChosen.current) return;
       const at = { x: event.clientX, y: event.clientY };
-      const edge = brand ? logoEdgeUnder(event, brand) : null;
-      // The logo's edge is a mouse's gesture: a finger is wider than the edge, and the panel is its way.
+      const logoEdge = brand ? logoEdgeUnder(event, brand) : null;
+      const nameEdge = brand && !logoEdge ? nameEdgeUnder(event, brand) : null;
+      const edge = logoEdge ?? nameEdge;
+      // The edges are a mouse's gestures: a finger is wider than the edge, and the panel is its way.
       if (edge && event.pointerType === "touch") return;
       const menu = brand ? null : menuOfGrip(grip, at);
       if (!brand && !menu) return;
       drag = {
-        kind: brand ? (edge ? "logo" : "brand") : "menu",
+        kind: brand ? (logoEdge ? "logo" : nameEdge ? "name" : "brand") : "menu",
         menu,
         grip,
         pointerId: event.pointerId,
@@ -7637,6 +7705,10 @@ export function Editor({
         edge,
         logoBox: null,
         step: null,
+        nameBox: null,
+        nameDrawn: 0,
+        nameSizes: null,
+        nameStepNow: null,
       };
     });
 
@@ -7661,6 +7733,24 @@ export function Editor({
       });
       return edge === "bottom" || edge === "right" || edge === "se" ? edge : null;
     };
+    /** **The name's edges, as the logo's** (sprint 41 día 10b): `edgeAt` over the drawn `.rb-brand-name`,
+     * the bottom, the right and the corner, in the desktop view only — on a phone the heading-sized
+     * name is drawn at the subheading's (ADR 0069 §3), so a pull there would promise a size the
+     * page does not draw. */
+    const nameEdgeUnder = (
+      event: PointerEvent,
+      brand: HTMLElement,
+    ): "bottom" | "right" | "se" | null => {
+      if (deviceNow.current === "mobile") return null;
+      const name = brand.querySelector<HTMLElement>(".rb-brand-name");
+      if (!name) return null;
+      const zoom = zoomOf(iframeDoc);
+      const edge = edgeAt({ x: event.clientX, y: event.clientY }, name.getBoundingClientRect(), {
+        outside: EDGE_ZONE / zoom,
+        inside: EDGE_ZONE / zoom,
+      });
+      return edge === "bottom" || edge === "right" || edge === "se" ? edge : null;
+    };
     const showLogoCursor = (logo: HTMLElement, edge: "bottom" | "right" | "se" | null) => {
       for (const name of [...logo.classList]) {
         if (name.startsWith("rb-cursor-")) logo.classList.remove(name);
@@ -7674,15 +7764,16 @@ export function Editor({
         target?.nodeType === target?.ELEMENT_NODE ? (target as Element) : target?.parentElement;
       const brand = from?.closest<HTMLElement>(BRAND_GRIP) ?? null;
       const logo = brand?.querySelector<HTMLElement>("img.rb-logo");
-      if (!logo) {
-        for (const el of iframeDoc.querySelectorAll<HTMLElement>(
-          'img.rb-logo[class*="rb-cursor-"]',
-        )) {
-          showLogoCursor(el, null);
-        }
-        return;
+      const name = brand?.querySelector<HTMLElement>(".rb-brand-name");
+      for (const el of iframeDoc.querySelectorAll<HTMLElement>(
+        '.rb-logo[class*="rb-cursor-"], .rb-brand-name[class*="rb-cursor-"]',
+      )) {
+        if (el !== logo && el !== name) showLogoCursor(el, null);
       }
-      showLogoCursor(logo, brand ? logoEdgeUnder(event, brand) : null);
+      const logoEdge = logo && brand ? logoEdgeUnder(event, brand) : null;
+      const nameEdge = name && brand && !logoEdge ? nameEdgeUnder(event, brand) : null;
+      if (logo) showLogoCursor(logo, logoEdge);
+      if (name) showLogoCursor(name, nameEdge);
     });
 
     iframeDoc.addEventListener("pointermove", (event) => {
@@ -7701,7 +7792,7 @@ export function Editor({
 
     const release = () => {
       if (!drag) return;
-      const { dragging, kind, menu, hot, brandHot, step } = drag;
+      const { dragging, kind, menu, hot, brandHot, step, nameStepNow } = drag;
       // Read before `clear` takes the zones away (sprint 35 día 3): the zone that receives the menu
       // acknowledges it once, and the label that followed the hand fades instead of vanishing.
       const brand = headerStateFor(docNow.current, pageIdNow.current).brand;
@@ -7709,11 +7800,13 @@ export function Editor({
         ? null
         : kind === "brand"
           ? brandDropOutcome(brandHot, brand, docNow.current)
-          : kind === "logo"
-            ? logoDropOutcome(step, brand, docNow.current)
-            : menu
-              ? dropOutcome(menu, hot, docNow.current)
-              : null;
+          : kind === "name"
+            ? nameDropOutcome(nameStepNow, brand, docNow.current)
+            : kind === "logo"
+              ? logoDropOutcome(step, brand, docNow.current)
+              : menu
+                ? dropOutcome(menu, hot, docNow.current)
+                : null;
       if (outcome?.kind === "write") leave(iframeDoc.querySelector(".rb-zone[data-hot]"), "zone");
       // Straight before its copy is taken: what is let go of stops leaning.
       tilt.end();
@@ -7724,13 +7817,15 @@ export function Editor({
       if (outcome.kind !== "write") return;
       propsNow.current.onSetHeader(outcome.patch);
       announce(
-        "size" in outcome
-          ? logoDropText(outcome.size)
-          : kind === "brand"
-            ? brandDropText(outcome.zone as BrandPlace)
-            : menu
-              ? dropText(menu, outcome.zone as Zone)
-              : "",
+        "nameSize" in outcome
+          ? nameDropText(outcome.nameSize)
+          : "size" in outcome
+            ? logoDropText(outcome.size)
+            : kind === "brand"
+              ? brandDropText(outcome.zone as BrandPlace)
+              : menu
+                ? dropText(menu, outcome.zone as Zone)
+                : "",
       );
     };
     iframeDoc.addEventListener("pointerup", release);
