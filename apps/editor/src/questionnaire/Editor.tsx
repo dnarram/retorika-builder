@@ -900,7 +900,7 @@ export function Editor({
    * takes back the page, the move and the avance together. */
   onSectionToPage: (sectionId: string) => void;
   /** This section moves to a page that already exists (ADR 0087), its links following it. */
-  onMoveSectionToPage: (sectionId: string, pageId: string) => void;
+  onMoveSectionToPage: (sectionId: string, pageId: string, index?: number) => void;
   onRenameCollection: (collectionId: string, name: string) => void;
   onDeleteCollection: (collectionId: string) => void;
   onAddEntry: (collectionId: string, fields: Record<string, EntryField>) => void;
@@ -11164,6 +11164,8 @@ export function Editor({
             onMovePage={onMovePage}
             onDeletePage={onDeletePage}
             onPageToSection={onPageToSection}
+            onMoveSection={onMoveSection}
+            onMoveSectionToPage={onMoveSectionToPage}
             onOpenMenuFor={(target) => openMenuPanelAt.current(target)}
             canFold={(id) => canFoldPage(doc, id)}
             linksTo={(id) => listLinksTo(doc, id).length}

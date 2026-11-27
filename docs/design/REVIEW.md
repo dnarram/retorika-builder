@@ -11812,3 +11812,29 @@ portada y de su menú, y la galería está en la otra página; un «Deshacer» l
 caminatas que convertían una segunda sección pasan por el ayudante `toNewPage`. **Saboteos**: sin reescribir
 los enlaces de la página de origen; sin reescribir las anclas de la sección movida; la página existente
 haciendo una nueva.
+
+### Día 10a — las secciones se arrastran en «Páginas» (PR de `feat/las-secciones-en-paginas`, enmienda en ADR 0087)
+
+**Lo que hay ahora.** Cada página de «Páginas» tiene «Secciones (n)», plegado hasta que se pide. Al
+desplegarlo, cada sección es una fila con su nombre, seis puntos, «Subir», «Bajar» y, si puede ir a otra
+página, «A otra página». La fila se lleva por los puntos (cursor de agarrar; `touch-action: none` para que
+el dedo en la hoja del teléfono lleve la fila — medido solo con ratón, el dedo va a la gira del cierre en el
+iPad) y una línea marca el hueco donde caería: en su página o en otra, encima
+del pie si la página lo tiene. Escape la suelta sin escribir nada. Cada gesto es un paso.
+
+**El teclado.** Los puntos son comodidad del puntero; el camino del teclado son los tres botones, con el
+nombre de su fila («Subir «Galería»»). Tras mover, el teclado vuelve a la fila; si la fila se fue a otra
+página, esa página se despliega y el teclado aterriza allí. Portada y pie no tienen «A otra página».
+
+**De paso.** La frase de ayuda del asa de la barra de texto decía «mover la sección»; ahora dice «mover
+esta barra · Esc: volver al texto».
+
+**Medido.** A 1280 con «Qué ponemos» hecha página: la segunda fila soltada encima de la quinta queda
+cuarta, en el panel y en el lienzo; Escape a medio arrastre no mueve nada; la galería llevada encima de «Qué
+ponemos» queda primera allí y sale de la portada; un «Deshacer» la devuelve; «Subir», «Bajar» y «A otra
+página» desde el teclado. En ventana de 390 × 844, la tercera fila sobre la segunda queda segunda.
+
+**Pruebas.** `sectionOutline.test.ts` (siete). Dos caminatas. **Saboteos**: sin descontar la fila llevada
+(rojo la unitaria y la caminata); Escape ignorado (rojo); sin devolver el teclado — verde con «Subir» y
+«Bajar», porque React conserva la fila enfocada al reordenar, y rojo al llevar la fila a otra página, donde
+es un elemento nuevo.

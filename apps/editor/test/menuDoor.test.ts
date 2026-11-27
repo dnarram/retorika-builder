@@ -146,6 +146,8 @@ describe("«Páginas» reads the switch and opens the door, and draws no switch 
       onMovePage: noop,
       onDeletePage: noop,
       onPageToSection: noop,
+      onMoveSection: noop,
+      onMoveSectionToPage: noop,
       onOpenMenuFor: noop,
       canFold: () => false,
       linksTo: () => 0,

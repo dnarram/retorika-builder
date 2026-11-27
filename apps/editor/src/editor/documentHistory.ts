@@ -414,7 +414,14 @@ export type HistoryAction =
       toIndex: number;
     }
   | { type: "sectionToPage"; variant: number; sectionId: string }
-  | { type: "moveSectionToPage"; variant: number; sectionId: string; pageId: string }
+  | {
+      type: "moveSectionToPage";
+      variant: number;
+      sectionId: string;
+      pageId: string;
+      /** Where on that page — the gap a row was let go at in «Páginas»; absent, last before a footer. */
+      index?: number;
+    }
   | {
       type: "addEntryPage";
       variant: number;
@@ -1282,8 +1289,13 @@ function convertSection(history: History, sectionId: string): History {
 }
 
 /** A section to a page that already exists, in one step with every link it carries (ADR 0087). */
-function moveToPage(history: History, sectionId: string, pageId: string): History {
-  const document = moveSectionToPageInDoc(history.present.document, sectionId, pageId);
+function moveToPage(
+  history: History,
+  sectionId: string,
+  pageId: string,
+  index: number | undefined,
+): History {
+  const document = moveSectionToPageInDoc(history.present.document, sectionId, pageId, index);
   return step(history, document, { type: "moveSectionToPage", sectionId, pageId });
 }
 
@@ -1714,7 +1726,7 @@ function apply(history: History, action: HistoryAction): History {
     case "sectionToPage":
       return convertSection(history, action.sectionId);
     case "moveSectionToPage":
-      return moveToPage(history, action.sectionId, action.pageId);
+      return moveToPage(history, action.sectionId, action.pageId, action.index);
     case "addEntryPage":
       return addEntryPage(history, action.collectionId, action.titleField, action.title);
     case "pageToSection":

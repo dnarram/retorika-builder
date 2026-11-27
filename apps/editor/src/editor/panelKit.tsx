@@ -226,17 +226,25 @@ export function SmallButton({
   onClick,
   disabled = false,
   danger = false,
+  name,
+  expanded,
 }: {
   label: string;
   onClick: () => void;
   disabled?: boolean;
   danger?: boolean;
+  /** The accessible name, where the visible word repeats down a list («Subir «Galería»»). */
+  name?: string;
+  /** For a button that unfolds what follows it. */
+  expanded?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
+      {...(name === undefined ? {} : { "aria-label": name })}
+      {...(expanded === undefined ? {} : { "aria-expanded": expanded })}
       className={`ui-interactive rounded-ui-sm px-2 py-1 text-[12px] font-semibold ${
         danger ? "text-ui-danger-deep" : "text-ui-muted"
       } ${disabled ? "opacity-40" : "cursor-pointer hover:bg-ui-bg hover:text-ui-ink"}`}

@@ -34439,3 +34439,186 @@ describe("sprint 41 día 9 — una sección va a una página que ya existe", () 
     }
   }, 240_000);
 });
+
+/**
+ * **Sprint 41 día 10a — las secciones se arrastran en «Páginas»** (ADR 0087's amendment). Each page
+ * unfolds its sections; a row is carried by its dots to a gap in its page or in another, Escape lets
+ * go writing nothing, and «Subir», «Bajar» and «A otra página» are the keyboard's way to the same.
+ */
+describe("sprint 41 día 10a — las secciones se arrastran en «Páginas»", () => {
+  /** The section ids of a page's rows, in order. */
+  const rowsOf = (panel: Locator, pageId: string) =>
+    panel
+      .locator(`[data-outline-page="${pageId}"][data-outline-row]`)
+      .evaluateAll((rows) => rows.map((row) => row.getAttribute("data-outline-row") ?? ""));
+
+  /** The canvas's sections, in order. */
+  const canvasOrder = (frame: FrameLocator) =>
+    frame
+      .locator("[data-section]")
+      .evaluateAll((sections) => sections.map((s) => s.getAttribute("data-section") ?? ""));
+
+  /** Carry a row by its dots to just inside the top of another row — the gap above it — at a
+   * person's pace, and let go (or not). */
+  async function carryRow(
+    page: Page,
+    panel: Locator,
+    sectionId: string,
+    above: string,
+    release: "up" | "escape" = "up",
+  ): Promise<void> {
+    const grip = panel.locator(`[data-outline-row="${sectionId}"] [data-outline-grip]`);
+    const from = await pointIn(grip);
+    const target = await panel.locator(`[data-outline-row="${above}"]`).boundingBox();
+    if (!target) throw new Error(`no row ${above}`);
+    await page.mouse.move(from.x, from.y);
+    await page.mouse.down();
+    await page.mouse.move(from.x, target.y + 2, { steps: 12 });
+    await expect(panel.getByTestId("outline-gap")).toHaveCount(1);
+    if (release === "escape") await page.keyboard.press("Escape");
+    await page.mouse.up();
+  }
+
+  async function twoPagesWithOutline(page: Page) {
+    await intoTheCanvas(page);
+    const frame = page.frameLocator(PREVIEW).first();
+    await frame.locator('[data-section="sec-services"]').click();
+    await afterTheEdit(page, () => toNewPage(frame, "sec-services"));
+    await page.getByRole("button", { name: "Páginas", exact: true }).click();
+    const panel = page.getByRole("region", { name: "Páginas de tu web" });
+    await expect(panel).toBeVisible();
+    return { frame, panel };
+  }
+
+  it("a 1280: reordena por los puntos, Esc no escribe, suelta en otra página y el teclado hace lo mismo", async () => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    const page = await context.newPage();
+    try {
+      const { frame, panel } = await twoPagesWithOutline(page);
+      const unfold = panel.getByRole("button", { name: /^Secciones \(/ });
+      await expect(unfold).toHaveCount(2);
+      await expect(unfold.first()).toHaveAttribute("aria-expanded", "false");
+      await unfold.first().click();
+      const homeId = await panel
+        .locator("[data-outline-page]")
+        .first()
+        .getAttribute("data-outline-page");
+      if (!homeId) throw new Error("no home rows");
+      const before = await rowsOf(panel, homeId);
+      expect(await canvasOrder(frame)).toEqual(before);
+
+      // Down: the second row let go above the fifth ends fourth — the carried row counted out.
+      const [, second, , , fifth] = before;
+      if (!second || !fifth) throw new Error("the home page has fewer than five sections");
+      await afterTheEdit(page, () => carryRow(page, panel, second, fifth));
+      const down = [before[0], before[2], before[3], second, ...before.slice(4)];
+      expect(await rowsOf(panel, homeId)).toEqual(down);
+      expect(await canvasOrder(frame)).toEqual(down);
+
+      // Escape while carrying: nothing written.
+      await carryRow(page, panel, second, before[0] ?? "", "escape");
+      await expect(panel.getByTestId("outline-gap")).toHaveCount(0);
+      expect(await rowsOf(panel, homeId)).toEqual(down);
+
+      // The keyboard: «Subir «…»» moves it one up and keeps the keyboard on «Subir».
+      const up = panel.locator(`[data-outline-row="${second}"]`).getByRole("button", {
+        name: /^Subir «/,
+      });
+      await up.focus();
+      await afterTheEdit(page, () => page.keyboard.press("Enter"));
+      expect(await rowsOf(panel, homeId)).toEqual([
+        before[0],
+        before[2],
+        second,
+        before[3],
+        ...before.slice(4),
+      ]);
+      await expect(
+        panel.locator(`[data-outline-row="${second}"]`).getByRole("button", { name: /^Subir «/ }),
+      ).toBeFocused();
+
+      // The cover and the footer offer no other page; the gallery does.
+      await expect(
+        panel
+          .locator('[data-outline-row="sec-cover"]')
+          .getByRole("button", { name: /a otra página/ }),
+      ).toHaveCount(0);
+      await expect(
+        panel
+          .locator('[data-outline-row="sec-gallery"]')
+          .getByRole("button", { name: /a otra página/ }),
+      ).toHaveCount(1);
+
+      // To the other page, by the dots: above «Qué ponemos», first on that page.
+      await unfold.nth(1).click();
+      await afterTheEdit(page, () => carryRow(page, panel, "sec-gallery", "sec-services"));
+      const otherId = await panel
+        .locator('[data-outline-row="sec-services"]')
+        .getAttribute("data-outline-page");
+      expect(await rowsOf(panel, otherId ?? "")).toEqual(["sec-gallery", "sec-services"]);
+      await expect(frame.locator('[data-section="sec-gallery"]')).toHaveCount(0);
+
+      // One «Deshacer» per gesture: the gallery goes home, where it was.
+      await afterTheEdit(page, () =>
+        page.getByRole("button", { name: "Deshacer", exact: true }).click(),
+      );
+      await expect(frame.locator('[data-section="sec-gallery"]')).toHaveCount(1);
+
+      // «Bajar» is the case React detaches the row for: the keyboard must come back to «Bajar».
+      const downOf = (id: string) =>
+        panel.locator(`[data-outline-row="${id}"]`).getByRole("button", { name: /^Bajar «/ });
+      await downOf(second).focus();
+      await afterTheEdit(page, () => page.keyboard.press("Enter"));
+      await expect(downOf(second)).toBeFocused();
+
+      // And «A otra página» from the keyboard: the row lands on the other page, unfolded, with the
+      // keyboard on it.
+      const toPage = panel
+        .locator('[data-outline-row="sec-gallery"]')
+        .getByRole("button", { name: /a otra página/ });
+      await toPage.focus();
+      await page.keyboard.press("Enter");
+      await expect(toPage).toHaveAttribute("aria-expanded", "true");
+      await page.keyboard.press("Tab");
+      await afterTheEdit(page, () => page.keyboard.press("Enter"));
+      await expect(
+        panel.locator(`[data-outline-page="${otherId}"][data-outline-row="sec-gallery"]`),
+      ).toHaveCount(1);
+      expect(
+        await page.evaluate(() =>
+          document.activeElement?.closest("[data-outline-row]")?.getAttribute("data-outline-row"),
+        ),
+      ).toBe("sec-gallery");
+    } finally {
+      await context.close();
+    }
+  }, 300_000);
+
+  it("en una ventana de teléfono, el panel como hoja: una fila se lleva por sus puntos", async () => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    const page = await context.newPage();
+    try {
+      await intoTheCanvas(page);
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.getByRole("button", { name: "Páginas", exact: true }).click();
+      const panel = page.getByRole("region", { name: "Páginas de tu web" });
+      await expect(panel).toBeVisible();
+      await panel
+        .getByRole("button", { name: /^Secciones \(/ })
+        .first()
+        .click();
+      const homeId =
+        (await panel.locator("[data-outline-page]").first().getAttribute("data-outline-page")) ??
+        "";
+      const before = await rowsOf(panel, homeId);
+      const [first, second, third] = before;
+      if (!first || !second || !third)
+        throw new Error("the home page has fewer than three sections");
+      // The third row above the second: up, nothing counted out.
+      await afterTheEdit(page, () => carryRow(page, panel, third, second));
+      expect(await rowsOf(panel, homeId)).toEqual([first, third, second, ...before.slice(3)]);
+    } finally {
+      await context.close();
+    }
+  }, 240_000);
+});
