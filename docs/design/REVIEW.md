@@ -11862,3 +11862,25 @@ móvil, ni cursor ni fantasma.
 estiramiento leído al revés (tres pruebas y la caminata); la escala de la barra pequeña quitada — **verde la
 primera vez**, porque era una línea dentro del cableado del gesto que ninguna prueba veía; la saqué a
 `nameSizesOf`, con su prueba, y entonces rojo.
+
+### Día 11 — las secciones se arrastran en el lienzo (PR de `feat/las-secciones-se-arrastran`, enmienda en ADR 0087)
+
+**Lo que hay ahora.** Un asa propia en el racimo de la sección, justo después de «Bajar», con la palabra
+«Arrastrar»; la de «Mover» sigue moviendo la barra (decisión i). Al llevarla, la sección se atenúa donde está
+y una línea marca el hueco donde caería: nunca encima de la portada ni debajo del pie. Cerca del borde de
+arriba o de abajo el lienzo se desplaza solo, más deprisa cuanto más dentro está la mano, y la rueda también
+lo desplaza, con la línea siguiendo al desplazamiento. Escape lo suelta sin escribir; al soltar, un paso.
+
+**El teclado.** El asa es comodidad del puntero: fuera del orden de Tab y oculta a los lectores, porque
+«Subir» y «Bajar», a su lado, son el camino del teclado. Ninguna cuenta de Tab de las caminatas cambia. No
+aparece en la portada ni en el pie, ni donde no hay otro hueco.
+
+**Medido.** A 1280 en el restaurante: la portada sin asa, «Qué ponemos» con la suya tras «Bajar»; Escape a
+medio gesto no escribe; arriba, encima de la portada, no hay línea y soltar no escribe; abajo, el lienzo baja
+más de 200 px solo; la rueda trae la sección de tres más abajo bajo la mano y la línea está en su borde de
+arriba; al soltar, «Qué ponemos» queda dos puestos más abajo; un «Deshacer» la devuelve.
+
+**Pruebas.** `sectionDrop.test.ts` (siete). Una caminata. **Saboteos**: sin descontar la sección llevada; un
+hueco encima de la portada; sin desplazamiento automático — rojo, pero primero en el paso de Escape, que sin
+querer dependía de él; lo hice independiente y entonces rojo donde se mide el desplazamiento —; Escape
+ignorado. La auditoría del menú no lee el racimo; se corre igualmente.

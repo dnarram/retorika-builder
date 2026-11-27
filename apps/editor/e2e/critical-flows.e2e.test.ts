@@ -34743,3 +34743,138 @@ describe("sprint 41 día 10a — las secciones se arrastran en «Páginas»", ()
     }
   }, 240_000);
 });
+
+/**
+ * **Sprint 41 día 11 — las secciones se arrastran en el lienzo** (ADR 0087's amendment). The section's
+ * own grip, beside «Subir» and «Bajar»: carried, the section dims and a line marks the gap; near the
+ * canvas's bottom the canvas scrolls on its own and the wheel scrolls it too; Escape writes nothing;
+ * nothing is let go of above the cover.
+ */
+describe("sprint 41 día 11 — las secciones se arrastran en el lienzo", () => {
+  const order = (frame: FrameLocator) =>
+    frame
+      .locator("[data-section]")
+      .evaluateAll((sections) => sections.map((s) => s.getAttribute("data-section") ?? ""));
+
+  it("dos puestos más abajo con el lienzo desplazándose solo; la rueda; Esc no escribe; la portada no se pasa", async () => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    const page = await context.newPage();
+    try {
+      await intoTheCanvas(page);
+      const frame = page.frameLocator(PREVIEW).first();
+      const before = await order(frame);
+      const from = before.indexOf("sec-services");
+      const target = before[from + 3];
+      expect(from, "«Qué ponemos» no está justo bajo la portada").toBe(1);
+      if (!target) throw new Error("not enough sections under «Qué ponemos»");
+      const serial = await editSerialOf(page);
+
+      // The cover and the footer have no grip; «Qué ponemos» has one, beside «Bajar», and the
+      // keyboard never lands on it.
+      const services = frame.locator('[data-section="sec-services"]');
+      await services.click({ position: { x: 8, y: 8 } });
+      const grip = services.locator(".rb-actions .rb-section-grip");
+      await expect(grip).toHaveCount(1);
+      await expect(grip).toHaveCSS("cursor", "grab");
+      await expect(grip).toHaveAttribute("tabindex", "-1");
+      expect(
+        await services
+          .locator(".rb-actions button")
+          .evaluateAll((buttons) => buttons.map((b) => (b as HTMLElement).dataset.action)),
+      ).toEqual(expect.arrayContaining(["move-up", "move-down", "carry"]));
+      const actionsOrder = await services
+        .locator(".rb-actions button")
+        .evaluateAll((buttons) => buttons.map((b) => (b as HTMLElement).dataset.action));
+      expect(actionsOrder.indexOf("carry")).toBe(actionsOrder.indexOf("move-down") + 1);
+      await frame.locator('[data-section="sec-cover"]').click({ position: { x: 8, y: 8 } });
+      await expect(frame.locator('[data-section="sec-cover"] .rb-section-grip')).toHaveCount(0);
+      await services.click({ position: { x: 8, y: 8 } });
+
+      const canvas = await page.locator(PREVIEW).first().boundingBox();
+      if (!canvas) throw new Error("no canvas");
+      const bottom = Math.min(canvas.y + canvas.height, 900) - 6;
+      const line = frame.locator(".rb-section-line");
+      const scrollY = () => frame.locator("body").evaluate(() => window.scrollY);
+
+      // 1. Escape half-way: the section dims, the line is drawn, and nothing is written. A short
+      //    carry, well inside the canvas, so this step does not lean on the canvas scrolling.
+      let hold = await pointIn(grip);
+      await page.mouse.move(hold.x, hold.y);
+      await page.mouse.down();
+      await page.mouse.move(hold.x, hold.y + 40, { steps: 6 });
+      await expect(services).toHaveClass(/rb-section-lifted/);
+      await expect(line).toHaveCount(1);
+      await page.keyboard.press("Escape");
+      await expect(line).toHaveCount(0);
+      await page.mouse.up();
+      expect(await order(frame)).toEqual(before);
+      expect(await editSerialOf(page)).toBe(serial);
+
+      // 2. Up past the cover: the line never goes above the cover's bottom, and letting go there
+      //    writes nothing — the gap above the cover does not exist, and the one under it is its own.
+      await services.click({ position: { x: 8, y: 8 } });
+      hold = await pointIn(grip);
+      await page.mouse.move(hold.x, hold.y);
+      await page.mouse.down();
+      await page.mouse.move(hold.x, canvas.y + 4, { steps: 10 });
+      await expect.poll(scrollY).toBe(0);
+      // «Qué ponemos» is right under the cover, so the only gap up there is its own: no line, and
+      // letting go — not Escape — writes nothing.
+      await expect(line).toBeHidden();
+      await page.mouse.up();
+      await motionSettled(page);
+      expect(await order(frame)).toEqual(before);
+      expect(await editSerialOf(page)).toBe(serial);
+
+      // 3. For real: held at the bottom of the canvas, the canvas scrolls on its own until the target
+      //    section is in sight; the wheel scrolls it further, the line following; let go above the
+      //    section three below, «Qué ponemos» ends two places down — one step.
+      await frame.locator("body").evaluate(() => window.scrollTo(0, 0));
+      await services.click({ position: { x: 8, y: 8 } });
+      hold = await pointIn(grip);
+      await page.mouse.move(hold.x, hold.y);
+      await page.mouse.down();
+      await page.mouse.move(hold.x, bottom, { steps: 12 });
+      const start = await scrollY();
+      await expect.poll(scrollY, { timeout: 10_000 }).toBeGreaterThan(start + 200);
+      // The hand back in the middle, where the canvas is still; then the wheel, a person's notch at a
+      // time, until the target's top is under the hand — the line follows the scroll, not the hand.
+      const middle = canvas.y + canvas.height / 2;
+      await page.mouse.move(hold.x, middle, { steps: 6 });
+      const targetSection = frame.locator(`[data-section="${target}"]`);
+      const zoomed = (await frameOnScreen(page)).zoom;
+      const topOnScreen = async () =>
+        canvas.y + (await targetSection.evaluate((el) => el.getBoundingClientRect().top)) * zoomed;
+      for (let notch = 0; notch < 40 && (await topOnScreen()) > middle + 60; notch += 1) {
+        const was = await scrollY();
+        await page.mouse.wheel(0, 120);
+        await expect.poll(scrollY).toBeGreaterThan(was);
+      }
+      const targetTop = await topOnScreen();
+      expect(
+        Math.abs(targetTop - middle),
+        "the wheel did not bring the target under the hand",
+      ).toBeLessThan(200);
+      await page.mouse.move(hold.x, targetTop + 3, { steps: 6 });
+      await expect(line).toBeVisible();
+      const lineTop =
+        canvas.y + (await line.evaluate((el) => el.getBoundingClientRect().top)) * zoomed;
+      expect(Math.abs(lineTop + 2 * zoomed - targetTop)).toBeLessThan(4);
+      await afterTheEdit(page, () => page.mouse.up());
+      const after = [...before];
+      after.splice(from, 1);
+      after.splice(from + 2, 0, "sec-services");
+      expect(await order(frame)).toEqual(after);
+      expect(await editSerialOf(page)).toBe(serial + 1);
+      await expect(line).toHaveCount(0);
+
+      // One «Deshacer» puts it back.
+      await afterTheEdit(page, () =>
+        page.getByRole("button", { name: "Deshacer", exact: true }).click(),
+      );
+      expect(await order(frame)).toEqual(before);
+    } finally {
+      await context.close();
+    }
+  }, 300_000);
+});
