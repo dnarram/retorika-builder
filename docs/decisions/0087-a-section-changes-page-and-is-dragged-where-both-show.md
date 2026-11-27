@@ -104,3 +104,39 @@ sheet, the third row carried by the mouse above the second is second. **Sabotage
 out (the unit test and the walk red); Escape ignored (red); the keyboard not given back — green for
 «Subir» and «Bajar», because React keeps a focused row in the document when it reorders a list, and
 red once the walk sent a row to another page, where it is a new element.
+
+## Amendment — the section carried on the canvas (sprint 41 día 11, 27 November 2026)
+
+**Its own grip** (decision i): six dots on a verb's disc, beside «Subir» and «Bajar» — the order's two
+buttons — and not the bar's «Mover», which moves the bar: one meaning per grip. Its word under the hand
+is «Arrastrar». It is a pointer's convenience: `tabindex="-1"` and `aria-hidden`, so every Tab count in
+the walks is what it was, and the alternative WCAG 2.5.7 asks for is the two buttons it stands beside.
+**Absent** on the cover and the footer, which keep their places, and where the page has no other gap
+to go to.
+
+**The section does not travel.** It is taller than the screen more often than not, so the gesture
+means «change the order», as on a phone (ADR 0049 §7): past the threshold the section dims where it is
+and a line marks the gap it would land in — the gap nearest the hand (`sectionGapAt`), **none above a
+cover that opens the page and none below a footer that closes it**. At either of its own two gaps the
+line is not drawn and letting go writes nothing.
+
+**The canvas scrolls under the hand.** Near its top or bottom — a band of 56 screen pixels, divided
+by the zoom so it is the same under the hand at every zoom — the canvas scrolls on its own, faster the
+deeper the hand is, up to 18 screen pixels a frame (`autoScrollStep`); the wheel scrolls it too, and
+the gap follows the scroll rather than waiting for the hand to move.
+
+**Escape**, a cancelled pointer or a lost capture let go writing nothing; letting go writes **one**
+`moveSection`, the carried section counted out below itself (`sectionDropIndex`).
+
+**Measured** at 1280 on the restaurant: the cover has no grip, «Qué ponemos» has one right after
+«Bajar», `grab` and out of the Tab order; carried a little and Escape, it dims, the line is drawn,
+nothing is written; carried up over the cover, with nothing but its own gap up there, no line, and
+letting go writes nothing; held at the canvas's bottom the canvas scrolls over 200 px on its own; the
+wheel, a notch at a time, brings the section three below under the hand, and the line is there, at its
+top; let go, «Qué ponemos» is two places down, one step; one «Deshacer» puts it back. **Sabotaged**:
+the section not counted out (two unit tests and the walk red); a gap above the cover (red: the line
+drawn over the cover); no autoscroll (red at the scroll — first at the Escape step, which leaned on the
+canvas scrolling, and was made a short carry well inside the canvas); Escape ignored (red).
+
+The menu audit (`pnpm audit:menus`) reads the header and never the section's cluster (no
+`.rb-actions` in `apps/editor/audit/`); it is run anyway, as the plan says, and its line is in the PR.
