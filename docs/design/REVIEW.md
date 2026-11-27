@@ -11817,8 +11817,9 @@ haciendo una nueva.
 
 **Lo que hay ahora.** Cada página de «Páginas» tiene «Secciones (n)», plegado hasta que se pide. Al
 desplegarlo, cada sección es una fila con su nombre, seis puntos, «Subir», «Bajar» y, si puede ir a otra
-página, «A otra página». La fila se lleva por los puntos (cursor de agarrar; con el dedo en la hoja del
-teléfono, sin desplazar la hoja) y una línea marca el hueco donde caería: en su página o en otra, encima
+página, «A otra página». La fila se lleva por los puntos (cursor de agarrar; `touch-action: none` para que
+el dedo en la hoja del teléfono lleve la fila — medido solo con ratón, el dedo va a la gira del cierre en el
+iPad) y una línea marca el hueco donde caería: en su página o en otra, encima
 del pie si la página lo tiene. Escape la suelta sin escribir nada. Cada gesto es un paso.
 
 **El teclado.** Los puntos son comodidad del puntero; el camino del teclado son los tres botones, con el

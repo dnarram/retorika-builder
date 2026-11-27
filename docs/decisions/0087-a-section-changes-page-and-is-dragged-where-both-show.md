@@ -73,7 +73,8 @@ a list of pages; unfolded, each section is a row with its name — the owner's o
 of its kind — six dots, «Subir», «Bajar» and, where `pagesToMoveTo` offers any, «A otra página».
 
 **Carried by its dots.** The dots take the `grab` cursor (and `grabbing` while carried) and
-`touch-action: none`, so a finger on the phone's sheet carries the row rather than scrolling. While
+`touch-action: none`, meant to let a finger on the phone's sheet carry the row rather than scroll —
+measured only with a mouse in a phone-sized window, so the finger is the close's tour on the iPad. While
 carried the row is dimmed and a line marks the gap it would land in — the gap nearest the hand,
 above any row or below a page's last (`gapAt`). Let go, it writes one step: `moveSection` within its
 page, **the carried row counted out** below itself (the gap under the next row is one place down,
@@ -99,7 +100,7 @@ it one up with the keyboard still on «Subir»; the cover offers no other page a
 the gallery carried above «Qué ponemos» is first on that page and gone from the home's canvas; one
 «Deshacer» brings it home; «Bajar» keeps the keyboard; «A otra página» → «A «Qué ponemos»» from the
 keyboard lands the row on the other page with the keyboard on it. In a 390 × 844 window, the panel a
-sheet, the third row carried above the second is second. **Sabotaged**: the carried row not counted
+sheet, the third row carried by the mouse above the second is second. **Sabotaged**: the carried row not counted
 out (the unit test and the walk red); Escape ignored (red); the keyboard not given back — green for
 «Subir» and «Bajar», because React keeps a focused row in the document when it reorders a list, and
 red once the walk sent a row to another page, where it is a new element.
