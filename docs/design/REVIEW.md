@@ -11933,3 +11933,61 @@ para elegir), un iPad emulado y un teléfono emulado con el dedo: **39 comprobac
 - En el iPad, un dedo lleva «Qué ponemos» por su asa un puesto abajo y mueve el punto de una foto en «Fotos».
 - **En el teléfono, un dedo sobre los puntos de una fila de la hoja de «Páginas» la lleva encima de la
   anterior** — lo que el día 10a dejó dicho sin medir; medido.
+
+**Las suites, cada una sola, con `caffeinate -i`:**
+
+| Suite | Resultado |
+|---|---|
+| `typecheck` | verde |
+| `lint` | verde, **84** avisos: uno más que al cierre del 40, `noImgElement` en la foto entera del «Punto» de «Fotos», la misma regla que ya avisa en la miniatura de al lado |
+| `test` | 4 690 en 220 ficheros |
+| `test:invariants` | 27 |
+| `test:golden` | 33, idénticas |
+| `renderer:deps` | 2 dependencias permitidas |
+| `schema:guard f0000ae..HEAD` | 1.23.0 y 1.24.0, cada una con su migración, su prueba y su versión |
+| `secrets:scope` | 154 módulos, 35 de cliente, 2 solo de servidor, ningún cruce |
+| `size` | todas dentro del presupuesto; `capas` 5,9 KB la página más pesada |
+| `test:a11y` | 2 391 en 223 s |
+| `lighthouse` | 27 de 27 a la primera, en 59 s |
+| `test:db` | 85, contra un Postgres propio con scram |
+| `e2e` | 397 y 1 omitida, en 1 914 s, a la primera |
+| auditoría de menús | 918 combinaciones hechas, ninguna en rojo, en 6 245 s |
+
+**La CI, por PR**: las catorce, en verde; la #408 a la segunda (la primera, roja en la caminata de fotogramas
+del sprint 39 día 6, abajo). Desde la #409 el paso e2e va en dos trozos, con un tope de 40 minutos por trabajo.
+
+| PR | e2e (min) |
+|---|---|
+| #407, día 1a | 36,9 |
+| #408, día 1b | 39,5 (segundo intento) |
+| #409, el e2e en dos | 19,2 · 18,5 |
+| #410–#420, días 2–11 | entre 18,3 y 21,4 por trozo |
+
+**`document-rules.md`**: ninguna regla cambia; una nota más bajo la regla 4, la del sprint entero: cada
+gesto escribe una palabra que la rejilla ya tenía (unidades, filas, una forma, un rango en la pila, un orden),
+nunca `x` ni `y`. **Firmas**: 45, 0042, 0043 y 0045–0087. El paquete gana el lote F (0082–0087), que se firma
+con el A o después, y las notas del sprint en 0048, 0050 y 0069. En la 0087 quedan tres decisiones de
+desarrollo para el veto de David.
+
+#### Lo que el sprint 41 deja abierto
+
+1. **Cuarenta y cinco firmas**: 0042, 0043, 0045–0087, con su paquete al día. En la 0087, para el veto de
+   David: «A página» hace la página de una pulsación mientras no hay otra a la que ir (y cambia de nombre
+   cuando abre la lista); «Secciones» plegado hasta que se pide; en el lienzo el pie conserva su sitio como la
+   portada (el plan nombraba solo la portada).
+2. **Las nueve fotos**: la exención cae el **1 de diciembre de 2026**, en 4 días.
+3. **La llegada de los paneles (`ui-blur-in`) frente a la CPU×4 de la CI**: el primer intento de la #408 se
+   puso rojo en la caminata de fotogramas del sprint 39 día 6 (2 de 5 aperturas en caliente perdieron un
+   fotograma, 33,4 ms); el segundo, verde, y las doce PR tras partir el e2e, verdes. Mantenerla con una
+   tolerancia escrita o quitarla, de David. La aserción no se ha relajado.
+4. **La letra exacta de la propia cabecera en el móvil**, medida (arriba): 318 px de barra con 200 px de
+   nombre. Propuesta para el 42: el mismo tope de la ADR 0083 para las partes de la cabecera en el móvil, con
+   sus estimaciones y una auditoría de menús, de medio día a uno.
+5. **Cortado en el sprint y sin construir**: las asas de dedo en una sección de serie (día 3: allí, ratón y
+   teclado); las asas laterales en cajas bajas para el dedo (0,25 días, día 2); un camino de teclado del texto
+   de una tarjeta a su lista (día 1b).
+6. **Fuera del sprint, con nombre en su plan**: mover un elemento a otra sección; el interior de la tarjeta
+   como plantilla (3–4 días, ADR); mover sin el interruptor; foto por entrada (ADR 0033); el mapa como imagen;
+   un cubo de tableta; lo que dejó el 39.
+7. **El editor sigue sin verse fuera de Chromium**; la web publicada sí, en tres motores.
+8. **El sprint 42, sin planificar.**
