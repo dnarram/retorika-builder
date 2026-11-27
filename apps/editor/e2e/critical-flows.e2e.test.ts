@@ -34952,3 +34952,37 @@ describe("sprint 41 cierre — el punto que se conserva, desde «Fotos»", () =>
     }
   }, 240_000);
 });
+
+/**
+ * **Sprint 41 cierre — el «sí» pedido por una tecla devuelve el teclado** (found by the close's tour).
+ * `+` on a chosen headline of a catalog cover opens the offer; its «sí», pressed with the keyboard, used
+ * to leave the keyboard on the section, where the next `+` reached nothing. It goes back to the
+ * headline, still chosen, and the next `+` grows it.
+ */
+describe("sprint 41 cierre — el «sí» pedido por una tecla devuelve el teclado", () => {
+  it("+ en la portada de serie pregunta; Intro en «sí» y el siguiente + agranda el titular", async () => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    const page = await context.newPage();
+    try {
+      await intoTheCanvas(page);
+      await studioToolsOn(page);
+      const frame = page.frameLocator(PREVIEW).first();
+      const headline = frame.locator('[data-section="sec-cover"] [data-id="el-headline"]');
+      await headline.click();
+      await expect(headline).toHaveClass(/rb-chosen/);
+      await page.keyboard.press("+");
+      const yes = frame.locator(".rb-escalate-yes");
+      await expect(yes).toBeFocused();
+      await afterTheEdit(page, () => page.keyboard.press("Enter"));
+      await expect(frame.locator('[data-section="sec-cover"]')).toHaveClass(/rb-free/);
+      await expect(headline).toBeFocused();
+      await expect(headline).toHaveClass(/rb-chosen/);
+      await afterTheEdit(page, () => page.keyboard.press("+"));
+      expect(
+        await headline.evaluate((el) => Number.parseFloat(getComputedStyle(el).fontSize)),
+      ).toBe(44);
+    } finally {
+      await context.close();
+    }
+  }, 240_000);
+});

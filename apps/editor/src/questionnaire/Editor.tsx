@@ -1412,6 +1412,12 @@ export function Editor({
     | null
   >(null);
   /**
+   * **The element whose key asked** (sprint 41 close, found by the tour): `+`, `−` or `E` on a chosen
+   * element of a catalog section opens the offer with nothing held. Its «sí» used to send the keyboard
+   * to the section, where the next `+` reached nothing; it goes back to the element now, still chosen.
+   */
+  const offerAskedBy = useRef<{ sectionId: string; elementId: string } | null>(null);
+  /**
    * How far this section's floating text bar has been pushed from where it would otherwise go.
    *
    * **A displacement and not a position.** The bar is computed afresh for every element it opens
@@ -3809,7 +3815,14 @@ export function Editor({
           });
           return;
         }
-        armReturn(sectionId, '.rb-actions [data-action="handmade"]');
+        const asked = offerAskedBy.current;
+        offerAskedBy.current = null;
+        if (asked?.sectionId === sectionId) {
+          // Asked by a key on a chosen element: the keyboard goes back to it, so the next `+` lands.
+          keepChosenFocus.current = true;
+        } else {
+          armReturn(sectionId, '.rb-actions [data-action="handmade"]');
+        }
         // `iframeDoc` and not `liveDoc()`: this handler lives in the document it has to measure,
         // and was wired into it before it became the visible one.
         propsNow.current.onEscalateSection(sectionId, measurePlaced(iframeDoc, sectionId));
@@ -3855,6 +3868,8 @@ export function Editor({
       }
       const offer = escalateOffer(sectionId);
       offer.classList.add(ARRIVES);
+      const asking = held ? undefined : opener.dataset["id"];
+      offerAskedBy.current = asking ? { sectionId, elementId: asking } : null;
       if (held) {
         offer.classList.add("rb-escalate-held");
         door.current?.clear();
