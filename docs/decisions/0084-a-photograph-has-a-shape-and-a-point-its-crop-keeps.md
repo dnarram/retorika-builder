@@ -140,3 +140,28 @@ by Tab chooses it, and Tab reaches a photograph only with the tools). The other 
 dragged on each photograph in the «Fotos» panel, which needs no tools and reaches **a card's
 photograph** too — is not built; the plan's cut rule named the card's point as the half to cut, and
 it is the half that went. Costed for the close: half a day.
+
+## Close note — the point from «Fotos» (sprint 41 día 12, 27 November 2026)
+
+**The cut of día 5, done.** The plan's default *j* — «el punto focal no pide herramientas de diseño» — was not
+kept on día 5: a photograph is chosen on the canvas only with the design tools on, and a card's photographs
+are not chosen there at all, so the point reached neither. Día 5's pull request named the door that would:
+«Fotos», half a day, for the close.
+
+- **The inventory knows which photographs the page crops** (`photoInventory.ts`, `crops`): the catalog's own
+  crops — `.rb-cover img`, `.rb-gallery .rb-item img`, `.rb-team .rb-item img`, each `object-fit: cover` —
+  and a shape given by hand. Never the logo, which is shown whole, nor the grey marker, which is not a
+  photograph yet. The point is offered nowhere it would move nothing anybody sees. It also carries the
+  stored point.
+- **Each such row unfolds «Punto»**: the photograph drawn whole with the point over it where its `focus` is,
+  dragged or moved with the arrows (Shift ten), the sentence «Se conserva lo que está a … desde la izquierda
+  y … desde arriba» under it; written once the hand lets go or the keys stop (`RUN_IDLE_MS`), one step;
+  «Al centro» gives the middle back, which is stored as nothing. No design tools, card photographs included.
+
+**Measured**: with the tools off, the restaurant's second gallery photograph — a card's — from «Fotos»: the
+point dragged to a fifth from the left and four fifths down, and the canvas draws exactly what the panel
+says (within a unit of the aim: the photograph was brought into view first, a hand that leaves the window
+is not where it aimed), one step; three → and one Mayús+↓ written as one step after the keys stop; «Al
+centro» back to `50% 50%`. In the close's tour, by the arrows at 1024, 1280 and 1440 and by a finger on an
+emulated iPad. **Sabotaged**: the gallery not counted as cropping (the unit test red, and the walk finds no
+«Punto»); a step per key (red at the serial); the hand writing nothing (red at the canvas).
