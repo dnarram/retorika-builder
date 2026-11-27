@@ -116,6 +116,7 @@ import {
   type NameStep,
   nameDropOutcome,
   nameDropText,
+  nameSizesOf,
   nameStep,
   pulledHeight,
   stepOf,
@@ -7529,13 +7530,14 @@ export function Editor({
       const name = state.grip.querySelector<HTMLElement>(".rb-brand-name");
       const view = iframeDoc.defaultView;
       if (!name || !view || !state.edge) return;
-      const small = header.dataset["size"] === "small";
-      const body = resolved(iframeDoc.body, "--size-body");
-      state.nameSizes = {
-        body: small ? body * 0.875 : body,
-        subheading: resolved(iframeDoc.body, "--size-subheading"),
-        heading: resolved(iframeDoc.body, "--size-heading"),
-      };
+      state.nameSizes = nameSizesOf(
+        {
+          body: resolved(iframeDoc.body, "--size-body"),
+          subheading: resolved(iframeDoc.body, "--size-subheading"),
+          heading: resolved(iframeDoc.body, "--size-heading"),
+        },
+        header.dataset["size"] === "small",
+      );
       state.nameDrawn = Number.parseFloat(view.getComputedStyle(name).fontSize);
       state.nameBox = name.getBoundingClientRect();
       state.dragging = true;

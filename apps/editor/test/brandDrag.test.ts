@@ -14,6 +14,7 @@ import {
   logoStep,
   nameDropOutcome,
   nameDropText,
+  nameSizesOf,
   nameStep,
   nameStepOf,
   pulledHeight,
@@ -197,9 +198,15 @@ describe("nameStep (sprint 41 día 10b)", () => {
   });
 
   it("follows the bar's «small» reading size, which is the page's body at 0.875", () => {
-    const small = { ...SIZES, body: 14 };
+    expect(nameSizesOf(SIZES, false)).toEqual(SIZES);
+    const small = nameSizesOf(SIZES, true);
+    expect(small).toEqual({ body: 14, subheading: 24, heading: 40 });
     expect(nameStep(small, 14, 18, 0)).toEqual(nameStepOf("body", 14));
     expect(nameStep(small, 14, 18, 7).size).toBe("subheading");
+    // What tells the two scales apart is the middle: a hand that reached 19 px is as near 14 as 24
+    // (the tie the larger word takes) on a small bar, and plainly at 16 on a plain one.
+    expect(nameStep(small, 14, 20, 20 * (19 / 14 - 1)).size).toBe("subheading");
+    expect(nameStep(SIZES, 16, 20, 20 * (19 / 16 - 1)).size).toBe("body");
   });
 
   it("says the word and the pixels, in Spanish", () => {

@@ -184,6 +184,17 @@ export function nameStep(
   return nameStepOf(best, sizes[best]);
 }
 
+/**
+ * The three words' pixels from the page's own tokens: the reading size is 0.875 of itself on a
+ * «small» bar, as the stylesheet's `data-size` rule draws it, and the other two are the scale's.
+ */
+export function nameSizesOf(
+  tokens: Readonly<Record<BrandNameSize, number>>,
+  small: boolean,
+): Record<BrandNameSize, number> {
+  return { ...tokens, body: small ? tokens.body * 0.875 : tokens.body };
+}
+
 export function nameStepOf(size: BrandNameSize, px: number): NameStep {
   return {
     size,
