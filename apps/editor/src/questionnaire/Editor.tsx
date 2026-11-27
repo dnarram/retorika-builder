@@ -11404,6 +11404,7 @@ export function Editor({
             photosMissing={photosMissing}
             onReplacePhoto={replacePhoto}
             onChangeLogo={replaceLogo}
+            onSetImageFocus={onSetImageFocus}
             onGoToPhoto={(photo) => {
               // The panel is also a way of finding a photograph: show the page it is on and select
               // its section, which scrolls the canvas to it. The logo's place is «Menú», where its

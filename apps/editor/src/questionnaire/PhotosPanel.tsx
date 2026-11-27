@@ -1,8 +1,17 @@
 "use client";
 
 import type { ElementAddress, RetorikaDocument } from "@retorika/schema";
-import { useId } from "react";
-import { arriveSharp, Note, PanelHeader, panelFrame, panelRow } from "../editor/panelKit.tsx";
+import { type PointerEvent as ReactPointerEvent, useEffect, useId, useRef, useState } from "react";
+import { RUN_IDLE_MS } from "../editor/arrowRun.ts";
+import { type Focus, focusAt, focusKey, MIDDLE } from "../editor/focalPoint.ts";
+import {
+  arriveSharp,
+  Note,
+  PanelHeader,
+  panelFrame,
+  panelRow,
+  SmallButton,
+} from "../editor/panelKit.tsx";
 import {
   countPhotos,
   listPhotos,
@@ -29,6 +38,7 @@ export function PhotosPanel({
   onReplacePhoto,
   onChangeLogo,
   onGoToPhoto,
+  onSetImageFocus,
   photoUrls,
   photosMissing = null,
   onClose,
@@ -43,6 +53,8 @@ export function PhotosPanel({
   /** Show the page this photograph is on and scroll it into view, so the panel is also a way of
    * finding one — or, for the logo, open «Menú», where its block is. */
   onGoToPhoto: (photo: Pick<PhotoEntry, "kind" | "pageId" | "sectionId">) => void;
+  /** The point a cropped photograph keeps (ADR 0084), written once a gesture or a run of keys ends. */
+  onSetImageFocus: (address: ElementAddress, focus: Focus | undefined) => void;
   /** Object URLs for photographs already uploaded, keyed by the `src` the document carries —
    * the same map the preview needs, for the same reason: a bundle-relative path resolves against
    * the parent page inside a `srcDoc` iframe and 404s. */
@@ -72,6 +84,26 @@ export function PhotosPanel({
   // single-page site it is the same words under every row, which is noise wearing the costume of
   // information — and the rows are narrow enough that the space is worth more than the repetition.
   const showsPage = doc.pages.length > 1;
+  /** Which row's point is open, and where the point is while the hand or the keys move it. */
+  const [pointOpen, setPointOpen] = useState<string | null>(null);
+  const [draft, setDraft] = useState<Focus | null>(null);
+  const held = useRef<{ address: ElementAddress; box: HTMLElement } | null>(null);
+  const keysIdle = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (keysIdle.current) clearTimeout(keysIdle.current);
+    },
+    [],
+  );
+
+  /** The point under the hand, held inside the photograph's drawn box. */
+  const pointUnder = (event: ReactPointerEvent<HTMLElement>, box: HTMLElement): Focus => {
+    const rect = box.getBoundingClientRect();
+    return focusAt(
+      { x: event.clientX, y: event.clientY },
+      { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom },
+    );
+  };
 
   return (
     <section aria-labelledby={headingId} className={panelFrame}>
@@ -119,6 +151,7 @@ export function PhotosPanel({
           <ul className="flex flex-col gap-1.5">
             {photos.map((photo) => {
               const address = { sectionId: photo.sectionId, elementId: photo.elementId };
+              const rowKey = `${photo.sectionId}:${photo.elementId}`;
               const where = photo.itemNumber
                 ? es["editor.photos.whereInList"]
                     .replace("{n}", String(photo.itemNumber))
@@ -128,7 +161,7 @@ export function PhotosPanel({
               return (
                 <li
                   key={`${photo.sectionId}:${photo.elementId}`}
-                  className={`flex items-center gap-2 p-1.5 ${panelRow}`}
+                  className={`flex flex-wrap items-center gap-2 p-1.5 ${panelRow}`}
                 >
                   <button
                     type="button"
@@ -170,6 +203,99 @@ export function PhotosPanel({
                   >
                     {es["editor.photos.change"]}
                   </button>
+                  {photo.crops && (
+                    <SmallButton
+                      label={es["editor.photos.point"]}
+                      name={es["editor.photos.pointLabel"].replace("{where}", where)}
+                      expanded={pointOpen === rowKey}
+                      onClick={() => {
+                        setDraft(null);
+                        setPointOpen(pointOpen === rowKey ? null : rowKey);
+                      }}
+                    />
+                  )}
+                  {/* **The point that crop keeps, without the design tools** (ADR 0084's close note,
+                      sprint 41 — the cut of día 5: on the canvas a photograph is chosen only with the
+                      tools on, and a card's photographs are not chosen there at all). The photograph
+                      drawn whole, the point over it where its `focus` is: dragged, or moved with the
+                      arrows, and written once the hand lets go or the keys stop — one step. */}
+                  {photo.crops && pointOpen === rowKey && (
+                    <div className="basis-full px-1 pb-1">
+                      <Note>{es["editor.photos.pointHelp"]}</Note>
+                      <div
+                        data-photo-point={photo.elementId}
+                        className="relative mt-1.5 touch-none select-none"
+                        onPointerDown={(event) => {
+                          if (event.button !== 0) return;
+                          event.currentTarget.setPointerCapture(event.pointerId);
+                          held.current = { address, box: event.currentTarget };
+                          setDraft(pointUnder(event, event.currentTarget));
+                        }}
+                        onPointerMove={(event) => {
+                          if (held.current) setDraft(pointUnder(event, held.current.box));
+                        }}
+                        onPointerUp={(event) => {
+                          const done = held.current;
+                          held.current = null;
+                          if (!done) return;
+                          onSetImageFocus(done.address, pointUnder(event, done.box));
+                        }}
+                        onPointerCancel={() => {
+                          held.current = null;
+                          setDraft(null);
+                        }}
+                      >
+                        <img
+                          src={photoUrls.get(photo.src) ?? photo.src}
+                          alt=""
+                          draggable={false}
+                          className="block h-auto w-full rounded-ui-sm border border-ui-border"
+                        />
+                        {(() => {
+                          const at = draft ?? photo.focus ?? MIDDLE;
+                          return (
+                            <button
+                              type="button"
+                              aria-label={es["editor.photo.focus"]}
+                              aria-describedby={`${headingId}-${photo.elementId}-said`}
+                              className="absolute flex h-8 w-8 -translate-x-1/2 -translate-y-1/2 cursor-grab items-center justify-center rounded-full border-2 border-white bg-ui-brand shadow-md"
+                              style={{ left: `${at.x}%`, top: `${at.y}%` }}
+                              onKeyDown={(event) => {
+                                const next = focusKey(at, event);
+                                if (!next) return;
+                                event.preventDefault();
+                                setDraft(next);
+                                if (keysIdle.current) clearTimeout(keysIdle.current);
+                                keysIdle.current = setTimeout(() => {
+                                  keysIdle.current = null;
+                                  onSetImageFocus(address, next);
+                                }, RUN_IDLE_MS);
+                              }}
+                            >
+                              <span className="h-2 w-2 rounded-full bg-white" />
+                            </button>
+                          );
+                        })()}
+                      </div>
+                      <p
+                        id={`${headingId}-${photo.elementId}-said`}
+                        className="mt-1 text-[11px] text-ui-muted"
+                      >
+                        {es["editor.photo.focusSaid"]
+                          .replace("{x}", String((draft ?? photo.focus ?? MIDDLE).x))
+                          .replace("{y}", String((draft ?? photo.focus ?? MIDDLE).y))}
+                      </p>
+                      {photo.focus && (
+                        <SmallButton
+                          label={es["editor.photos.pointCenter"]}
+                          onClick={() => {
+                            setDraft(null);
+                            onSetImageFocus(address, undefined);
+                          }}
+                        />
+                      )}
+                    </div>
+                  )}
                 </li>
               );
             })}

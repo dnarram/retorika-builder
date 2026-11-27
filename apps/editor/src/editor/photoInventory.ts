@@ -1,4 +1,4 @@
-import { PLACEHOLDER_SAMPLE_ID, presetFor } from "@retorika/catalog";
+import { COVER_ID, GALLERY_ID, PLACEHOLDER_SAMPLE_ID, presetFor, TEAM_ID } from "@retorika/catalog";
 import catalogEs from "@retorika/catalog/locales/es" with { type: "json" };
 import { type ElementAddress, flattenElements, type RetorikaDocument } from "@retorika/schema";
 import es from "../locales/es.json" with { type: "json" };
@@ -46,7 +46,20 @@ export interface PhotoEntry extends ElementAddress {
   src: string;
   alt: string;
   state: PhotoState;
+  /**
+   * **The page crops it**, so the point that crop keeps means something (ADR 0084's close note,
+   * sprint 41): the catalog's own crops — the cover's 4:3, a gallery's 4:3, a team's square — and a
+   * shape given by hand. Never the logo, which is shown whole, nor the grey marker, which is not a
+   * photograph yet. A point offered where nothing is cropped would move nothing anybody sees.
+   */
+  crops: boolean;
+  /** The point the crop keeps, as stored; absent is the middle. */
+  focus?: { readonly x: number; readonly y: number };
 }
+
+/** The catalog's sections that draw their photographs cropped (`build.ts`: `.rb-cover img`,
+ * `.rb-gallery .rb-item img`, `.rb-team .rb-item img`, each `object-fit: cover`). */
+const CROPPING: ReadonlySet<string> = new Set([COVER_ID, GALLERY_ID, TEAM_ID]);
 
 function stateOf(sample: string | undefined): PhotoState {
   if (sample === undefined) return "own";
@@ -89,6 +102,7 @@ export function listPhotos(doc: RetorikaDocument): PhotoEntry[] {
       src: logo.src,
       alt: doc.siteName,
       state: "own",
+      crops: false,
     });
   }
 
@@ -114,6 +128,12 @@ export function listPhotos(doc: RetorikaDocument): PhotoEntry[] {
       for (const element of flattenElements(section.content)) {
         if (element.value?.kind !== "image") continue;
         const itemNumber = itemOf.get(element.id);
+        const state = stateOf(element.value.sample);
+        const shaped =
+          section.layout?.placements.some(
+            (placement) => placement.elementId === element.id && placement.ratio !== undefined,
+          ) ?? false;
+        const focus = element.value.focus;
         photos.push({
           kind: "element",
           pageId: page.id,
@@ -124,7 +144,9 @@ export function listPhotos(doc: RetorikaDocument): PhotoEntry[] {
           ...(itemNumber === undefined ? {} : { itemNumber }),
           src: element.value.src,
           alt: element.value.alt,
-          state: stateOf(element.value.sample),
+          state,
+          crops: state !== "empty" && (CROPPING.has(section.preset.catalogId) || shaped),
+          ...(focus === undefined ? {} : { focus }),
         });
       }
     }
