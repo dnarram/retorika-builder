@@ -1,9 +1,16 @@
 "use client";
 
 import { type Collection, MAX_PAGES, type RetorikaDocument } from "@retorika/schema";
-import { useEffect, useId, useRef, useState } from "react";
+import { type PointerEvent as ReactPointerEvent, useEffect, useId, useRef, useState } from "react";
 import { headerStateFor, menuLineFor } from "../editor/headerState.ts";
 import { Note, PanelHeader, panelFrame, panelRow, SmallButton } from "../editor/panelKit.tsx";
+import {
+  dropOf,
+  gapAt,
+  outlineOf,
+  type RowBox,
+  type SectionDrop,
+} from "../editor/sectionOutline.ts";
 import es from "../locales/es.json" with { type: "json" };
 import type { MenuFocusBlock } from "./MenuPanel.tsx";
 
@@ -48,6 +55,8 @@ export function PagesPanel({
   onMovePage,
   onDeletePage,
   onPageToSection,
+  onMoveSection,
+  onMoveSectionToPage,
   onOpenMenuFor,
   canFold,
   linksTo,
@@ -63,6 +72,10 @@ export function PagesPanel({
   onDeletePage: (pageId: string) => void;
   /** Fold the page back into the section it came from — ADR 0022's conversion, undone. */
   onPageToSection: (pageId: string) => void;
+  /** A section to another place on its page (`moveSection`), from its row. */
+  onMoveSection: (sectionId: string, toIndex: number) => void;
+  /** A section to another page, at a gap or last before its footer (ADR 0087). */
+  onMoveSectionToPage: (sectionId: string, pageId: string, index?: number) => void;
   /** Open «Menú» at this page's row, with the keyboard on its switch — or on the row itself when it
    * has none (Inicio, a page drawn per entry), whose note says why. */
   onOpenMenuFor: (target: MenuFocusBlock) => void;
@@ -106,6 +119,117 @@ export function PagesPanel({
     if (editing !== null) inputRef.current?.select();
   }, [editing]);
 
+  /*
+   * **The sections' rows** (sprint 41 día 10a). Which pages are unfolded, which row's «A otra página»
+   * is open, and the row being carried — a ref for the pointer's handlers, which run between renders,
+   * and state for what is drawn: the carried row dimmed and the line at the gap it would land in.
+   */
+  const outline = outlineOf(doc);
+  const [unfolded, setUnfolded] = useState<ReadonlySet<string>>(new Set());
+  const [choosing, setChoosing] = useState<string | null>(null);
+  const [carrying, setCarrying] = useState<{ sectionId: string; line: number | null } | null>(null);
+  const carry = useRef<{ sectionId: string; drop: SectionDrop | null } | null>(null);
+  const listRef = useRef<HTMLUListElement>(null);
+  /** The row the keyboard goes back to once the document has moved it, and the verb it pressed. */
+  const focusAfter = useRef<{ sectionId: string; verb: "up" | "down" | "row" } | null>(null);
+
+  const toggleUnfolded = (pageId: string) =>
+    setUnfolded((open) => {
+      const next = new Set(open);
+      if (next.has(pageId)) next.delete(pageId);
+      else next.add(pageId);
+      return next;
+    });
+
+  function moveWithin(sectionId: string, toIndex: number, verb: "up" | "down" | "row") {
+    focusAfter.current = { sectionId, verb };
+    onMoveSection(sectionId, toIndex);
+  }
+
+  function moveAcross(sectionId: string, pageId: string, index: number | undefined) {
+    focusAfter.current = { sectionId, verb: "row" };
+    setChoosing(null);
+    // The page it went to unfolds, so the row is still in sight and the keyboard has somewhere to go.
+    setUnfolded((open) => new Set(open).add(pageId));
+    onMoveSectionToPage(sectionId, pageId, index);
+  }
+
+  // The keyboard back on the row the document just moved: on the verb pressed while it still applies,
+  // otherwise on the row's first verb that does — a row moved to the top has no «Subir» to return to.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: runs when the document has changed.
+  useEffect(() => {
+    const wanted = focusAfter.current;
+    if (!wanted) return;
+    focusAfter.current = null;
+    const row = listRef.current?.querySelector(`[data-outline-row="${wanted.sectionId}"]`);
+    if (!row) return;
+    const verbs = [...row.querySelectorAll<HTMLButtonElement>("button:not([disabled])")];
+    const said =
+      wanted.verb === "row"
+        ? undefined
+        : es[wanted.verb === "up" ? "editor.pages.section.up" : "editor.pages.section.down"].split(
+            "{name}",
+          )[0];
+    const pressed = said
+      ? verbs.find((button) => button.getAttribute("aria-label")?.startsWith(said))
+      : undefined;
+    (pressed ?? verbs[0])?.focus();
+  }, [doc]);
+
+  function measure(): RowBox[] {
+    const rows = listRef.current?.querySelectorAll<HTMLElement>("[data-outline-row]") ?? [];
+    return [...rows].map((row) => {
+      const box = row.getBoundingClientRect();
+      return {
+        pageId: row.dataset.outlinePage ?? "",
+        sectionId: row.dataset.outlineRow ?? "",
+        top: box.top,
+        bottom: box.bottom,
+      };
+    });
+  }
+
+  function beginCarry(event: ReactPointerEvent<HTMLElement>, sectionId: string) {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    carry.current = { sectionId, drop: null };
+    setChoosing(null);
+    setCarrying({ sectionId, line: null });
+  }
+
+  function moveCarry(event: ReactPointerEvent<HTMLElement>) {
+    const held = carry.current;
+    if (!held) return;
+    const gap = gapAt(measure(), event.clientY);
+    held.drop = gap ? dropOf(doc, held.sectionId, gap) : null;
+    const top = listRef.current?.getBoundingClientRect().top ?? 0;
+    setCarrying({ sectionId: held.sectionId, line: gap && held.drop ? gap.y - top : null });
+  }
+
+  function endCarry(write: boolean) {
+    const held = carry.current;
+    carry.current = null;
+    setCarrying(null);
+    if (!write || !held?.drop) return;
+    if (held.drop.kind === "within") moveWithin(held.sectionId, held.drop.toIndex, "row");
+    else moveAcross(held.sectionId, held.drop.pageId, held.drop.index);
+  }
+
+  // Escape lets go without writing, wherever the keyboard is while the hand carries.
+  useEffect(() => {
+    if (!carrying) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      carry.current = null;
+      setCarrying(null);
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [carrying]);
+
   const full = doc.pages.length >= MAX_PAGES;
   // The rows as «Menú» sees them: what each line below says, and whether its door opens on a switch.
   const menuRows = headerStateFor(doc, currentPageId).pageRows;
@@ -126,7 +250,15 @@ export function PagesPanel({
         close={{ label: es["editor.pages.close"], onClick: onClose }}
       />
 
-      <ul className="flex flex-col gap-1.5">
+      <ul ref={listRef} className="relative flex flex-col gap-1.5">
+        {carrying?.line != null && (
+          <li
+            aria-hidden="true"
+            data-testid="outline-gap"
+            className="pointer-events-none absolute inset-x-1 h-0.5 -translate-y-px rounded-full bg-ui-brand"
+            style={{ top: carrying.line }}
+          />
+        )}
         {doc.pages.map((page, index) => {
           const isEntry = index === 0;
           const current = page.id === (currentPageId ?? doc.pages[0]?.id);
@@ -134,6 +266,7 @@ export function PagesPanel({
           const perEntry = perEntryOf(doc, page);
           const menuRow = menuRows.find((row) => row.pageId === page.id);
           const line = menuRow ? menuLineFor(menuRow) : undefined;
+          const outlined = outline.find((entry) => entry.pageId === page.id);
 
           return (
             <li key={page.id} className={panelRow}>
@@ -299,6 +432,107 @@ export function PagesPanel({
                     />
                   </div>
                 </div>
+              )}
+              {/* **The page's sections** (ADR 0087's día 10a amendment, sprint 41): folded until
+                  asked, so the panel stays a list of pages. Unfolded, each row is carried by its
+                  dots to a gap — in this page or another — and the keyboard has the same answers in
+                  «Subir», «Bajar» and «A otra página». What a row offers is what the verbs accept. */}
+              <div className="border-t border-ui-border px-1.5 py-1">
+                <SmallButton
+                  label={es["editor.pages.sections"].replace(
+                    "{n}",
+                    String(outlined?.rows.length ?? 0),
+                  )}
+                  expanded={unfolded.has(page.id)}
+                  onClick={() => toggleUnfolded(page.id)}
+                />
+              </div>
+              {unfolded.has(page.id) && outlined && (
+                <ul
+                  aria-label={es["editor.pages.sectionsOf"].replace("{page}", page.title)}
+                  className="flex flex-col gap-0.5 px-1.5 pb-1.5"
+                >
+                  {outlined.rows.map((row, at) => (
+                    <li
+                      key={row.sectionId}
+                      data-outline-row={row.sectionId}
+                      data-outline-page={page.id}
+                      className={`rounded-ui-sm bg-white ${
+                        carrying?.sectionId === row.sectionId ? "opacity-50" : ""
+                      }`}
+                    >
+                      <div className="flex items-center gap-1 px-1 py-0.5">
+                        <span
+                          aria-hidden="true"
+                          data-outline-grip=""
+                          onPointerDown={(event) => beginCarry(event, row.sectionId)}
+                          onPointerMove={moveCarry}
+                          onPointerUp={() => endCarry(true)}
+                          onPointerCancel={() => endCarry(false)}
+                          className={`flex h-7 w-6 shrink-0 touch-none items-center justify-center rounded-ui-sm text-ui-muted hover:bg-ui-bg ${
+                            carrying?.sectionId === row.sectionId
+                              ? "cursor-grabbing"
+                              : "cursor-grab"
+                          }`}
+                        >
+                          <svg
+                            width="12"
+                            height="12"
+                            viewBox="0 0 24 24"
+                            fill="currentColor"
+                            aria-hidden="true"
+                          >
+                            <circle cx="9" cy="5" r="1.8" />
+                            <circle cx="15" cy="5" r="1.8" />
+                            <circle cx="9" cy="12" r="1.8" />
+                            <circle cx="15" cy="12" r="1.8" />
+                            <circle cx="9" cy="19" r="1.8" />
+                            <circle cx="15" cy="19" r="1.8" />
+                          </svg>
+                        </span>
+                        <span className="min-w-0 flex-1 truncate text-[12px] text-ui-ink">
+                          {row.name}
+                        </span>
+                        <SmallButton
+                          label={es["editor.pages.moveUp"]}
+                          name={es["editor.pages.section.up"].replace("{name}", row.name)}
+                          disabled={at === 0}
+                          onClick={() => moveWithin(row.sectionId, at - 1, "up")}
+                        />
+                        <SmallButton
+                          label={es["editor.pages.moveDown"]}
+                          name={es["editor.pages.section.down"].replace("{name}", row.name)}
+                          disabled={at === outlined.rows.length - 1}
+                          onClick={() => moveWithin(row.sectionId, at + 1, "down")}
+                        />
+                        {row.pages.length > 0 && (
+                          <SmallButton
+                            label={es["editor.pages.section.toPage"]}
+                            name={es["editor.pages.section.toPageLabel"].replace(
+                              "{name}",
+                              row.name,
+                            )}
+                            expanded={choosing === row.sectionId}
+                            onClick={() =>
+                              setChoosing(choosing === row.sectionId ? null : row.sectionId)
+                            }
+                          />
+                        )}
+                      </div>
+                      {choosing === row.sectionId && (
+                        <div className="flex flex-wrap gap-1 border-t border-ui-border px-1 py-0.5">
+                          {row.pages.map((to) => (
+                            <SmallButton
+                              key={to.id}
+                              label={es["editor.toPage.existing"].replace("{page}", to.title)}
+                              onClick={() => moveAcross(row.sectionId, to.id, undefined)}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </li>
+                  ))}
+                </ul>
               )}
             </li>
           );
