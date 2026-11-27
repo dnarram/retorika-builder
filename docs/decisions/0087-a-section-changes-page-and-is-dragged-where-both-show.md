@@ -64,3 +64,42 @@ página nueva» beside «A «Qué ponemos»», Escape closes it on the button an
 on the other page; one «Deshacer» puts it back in both. **Sabotaged**: the old page's links not rewritten
 and the moved section's own anchors not rewritten (two red each); the existing page's choice making a new
 page (the walk red at the tab count).
+
+## Amendment — the sections in «Páginas» (sprint 41 día 10a, 27 November 2026)
+
+**Where both show.** «Páginas» lists every page, so it is the one place a section and the page it may
+go to are in sight together. Each page now has «Secciones (n)», folded until asked so the panel stays
+a list of pages; unfolded, each section is a row with its name — the owner's own word or the short name
+of its kind — six dots, «Subir», «Bajar» and, where `pagesToMoveTo` offers any, «A otra página».
+
+**Carried by its dots.** The dots take the `grab` cursor (and `grabbing` while carried) and
+`touch-action: none`, so a finger on the phone's sheet carries the row rather than scrolling. While
+carried the row is dimmed and a line marks the gap it would land in — the gap nearest the hand,
+above any row or below a page's last (`gapAt`). Let go, it writes one step: `moveSection` within its
+page, **the carried row counted out** below itself (the gap under the next row is one place down,
+since `moveSection` takes the index the section ends at), or `moveSectionToPage` at that gap on
+another page, held above a footer that closes it (`dropOf`). A gap on a page it may not go to draws
+no line and writes nothing. Escape lets go writing nothing.
+
+**The keyboard has the same answers** — the dots are a pointer's convenience and hidden from the
+accessibility tree, as the alternative WCAG 2.5.7 asks for is the three buttons beside them, named
+for their row («Subir «Galería»»). After a move the keyboard goes back to the row: to the verb
+pressed while it still applies, otherwise to the row's first verb that does; a row sent to another
+page unfolds that page and the keyboard lands there. The cover and the footer have no «A otra
+página» (absent, not disabled), as the canvas has none for them.
+
+**Also**: `editor.help.keys.grip` said «↑ ↓ mover la sección» on the grip that moves the text bar
+(`textGripKeyAction`); it says «↑ ↓ mover esta barra · Esc: volver al texto». And the help line for
+«Páginas» adds that sections are moved by their dots.
+
+**Measured.** At 1280 with «Qué ponemos» made a page: «Secciones» folded on both pages; the home's
+rows read in the canvas's order; the second row let go above the fifth ends fourth, in the panel and
+the canvas; Escape while carrying draws no line and moves nothing; «Subir «…»» from the keyboard moves
+it one up with the keyboard still on «Subir»; the cover offers no other page and the gallery does;
+the gallery carried above «Qué ponemos» is first on that page and gone from the home's canvas; one
+«Deshacer» brings it home; «Bajar» keeps the keyboard; «A otra página» → «A «Qué ponemos»» from the
+keyboard lands the row on the other page with the keyboard on it. In a 390 × 844 window, the panel a
+sheet, the third row carried above the second is second. **Sabotaged**: the carried row not counted
+out (the unit test and the walk red); Escape ignored (red); the keyboard not given back — green for
+«Subir» and «Bajar», because React keeps a focused row in the document when it reorders a list, and
+red once the walk sent a row to another page, where it is a new element.
