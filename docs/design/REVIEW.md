@@ -11785,3 +11785,30 @@ sección duplicada: la línea dice «que se ve en 2 secciones», la tercera tarj
 hacia delante —rojo solo después de añadir ese caso: la primera versión de la caminata solo llevaba hacia
 atrás, y un saboteo que necesitaba cambiar la caminata no demostraba nada—; el asa vinculada escribiendo
 `moveItem`; la frase de una sola sección siempre.
+
+### Día 9 — una sección va a una página que ya existe (PR de `feat/a-una-pagina-que-ya-existe`, ADR 0087)
+
+**Lo que hay ahora.** Un verbo nuevo en el esquema, `moveSectionToPage`: la sección conserva su id, su
+colocación y su contenido, y aterriza en la otra página, al final y antes de un pie si lo hay. Un paso, un
+«Deshacer», y sin avance: el dueño eligió adónde va y el menú la sigue. Rechaza lo mismo que la conversión
+(portada, pie y avance se quedan; tampoco entra ni sale de una página por ficha).
+
+**Los enlaces, en los dos sentidos.** Un botón de la portada que decía `#sec-galeria` pasa a
+`./que-ponemos.html#sec-galeria`; uno de la otra página que cruzaba para llegar pasa a ser un ancla
+local; y dentro de la sección movida, lo que dejó atrás cruza y lo que encontró se queda local. Ningún
+destino muerto nuevo. El botón de la cabecera no necesita reescritura: nombra la sección y el renderer
+construye el enlace al pintar (leído en `actionEntry`).
+
+**En el lienzo.** Mientras no hay otra página a la que ir, «A página» hace la página nueva de una
+pulsación, como siempre. Cuando la hay, se llama «Llevar esta sección a otra página» y abre la lista: «A
+una página nueva» (mientras quepa otra) y «A «Qué ponemos»» por cada página. Mismo cromo y teclado que el
+menú de composiciones; Escape vuelve al botón sin escribir nada.
+
+**Medido.** «Qué ponemos» convertida de una pulsación; en la galería, Intro abre la lista en «A una página
+nueva», Escape la cierra sin mover nada; «A «Qué ponemos»» deja dos pestañas, quita la galería de la
+portada y de su menú, y la galería está en la otra página; un «Deshacer» la devuelve a las dos cosas.
+
+**Pruebas.** Seis nuevas en `conversion.test.ts` y una en `documentHistory.test.ts`; una caminata; seis
+caminatas que convertían una segunda sección pasan por el ayudante `toNewPage`. **Saboteos**: sin reescribir
+los enlaces de la página de origen; sin reescribir las anclas de la sección movida; la página existente
+haciendo una nueva.

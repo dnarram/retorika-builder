@@ -601,6 +601,18 @@ async function escalated(frame: FrameLocator, act: () => Promise<void>): Promise
   });
 }
 
+/**
+ * «A página» on a section, to a page of its own (ADR 0087, sprint 41 día 9): straight away while the
+ * site has no other page to go to, through «A una página nueva» once it has.
+ */
+async function toNewPage(frame: FrameLocator, sectionId: string): Promise<void> {
+  await frame.locator(`[data-section="${sectionId}"] .rb-action[data-action="to-page"]`).click();
+  const list = frame.locator(`[data-section="${sectionId}"] .rb-to-page`);
+  if ((await list.count()) > 0) {
+    await list.getByRole("button", { name: "A una página nueva", exact: true }).click();
+  }
+}
+
 async function afterTheEdit(page: Page, act: () => Promise<void>): Promise<void> {
   // The canvas must be wired before the act, or there is no serial to move: a walk that opens the
   // editor and acts at once arrives here while the first document is still parsing (measured on
@@ -1757,11 +1769,7 @@ describe.journey(
       await expect(tabs).toHaveCount(2);
 
       await frame.locator('[data-section="sec-location"]').click();
-      await frame
-        .locator(
-          '[data-section="sec-location"] .rb-action[aria-label="Hacer página con esta sección"]',
-        )
-        .click();
+      await toNewPage(frame, "sec-location");
 
       await expect(tabs).toHaveCount(3);
       await expect(tabs.nth(2)).toHaveText("Dónde estamos");
@@ -2504,9 +2512,7 @@ describe("sprint 7 día 7 — dos hallazgos de esta semana, cerrados", () => {
       await waitForBankPhoto(frame);
       for (const id of ["sec-services", "sec-location"]) {
         await frame.locator(`[data-section="${id}"]`).click();
-        await frame
-          .locator(`[data-section="${id}"] .rb-action[aria-label="Hacer página con esta sección"]`)
-          .click();
+        await toNewPage(frame, id);
       }
       await expect(walkPage.locator('[data-testid="page-tabs"] button')).toHaveCount(3);
       // Autosave is what actually grows the right zone — its "Guardado" tick is what was
@@ -10698,15 +10704,13 @@ describe("la barra superior reparte su ancho entre el logo y las pestañas", () 
 
       for (const section of sections.slice(1, 5)) {
         const host = frame.locator(`[data-section="${section}"]`);
-        const verb = frame.locator(
-          `[data-section="${section}"] .rb-action[aria-label="Hacer página con esta sección"]`,
-        );
+        const verb = frame.locator(`[data-section="${section}"] .rb-action[data-action="to-page"]`);
         if ((await host.count()) === 0) continue;
         await host.click();
         if ((await verb.count()) === 0) continue;
         const wasShowing = await strip(walker);
         const tabsBefore = "error" in wasShowing ? 0 : wasShowing.tabCount;
-        await verb.click();
+        await toNewPage(frame, String(section));
         // The verb makes one more page, and that page is one more tab: the strip is measured once
         // the tab is in, not after 500 ms of silence (sprint 28 día 5). Before the first convert
         // there may be no bar at all, which counts as zero tabs.
@@ -23969,11 +23973,7 @@ describe("sprint 30 día 4 — el panel «Menú»", () => {
       // 3. Three pages, as an owner makes them: two sections converted from the canvas.
       for (const sectionId of ["sec-services", "sec-location"]) {
         await frame.locator(`[data-section="${sectionId}"]`).click();
-        await frame
-          .locator(
-            `[data-section="${sectionId}"] .rb-action[aria-label="Hacer página con esta sección"]`,
-          )
-          .click();
+        await toNewPage(frame, sectionId);
         await expect(frame.locator(`[data-section="${sectionId}"]`)).toHaveCount(0);
         await studio.locator('[data-testid="page-tabs"] button').first().click();
       }
@@ -25810,9 +25810,7 @@ describe("sprint 33 día 4 — un menú se arrastra a su zona", () => {
       // Two pages besides the home, so the pages' strip has a gap between two entries to hold.
       for (const id of ["sec-services", "sec-gallery"]) {
         await frame.locator(`[data-section="${id}"]`).click();
-        await frame
-          .locator(`[data-section="${id}"] .rb-action[aria-label="Hacer página con esta sección"]`)
-          .click();
+        await toNewPage(frame, id);
       }
       const entries = frame.locator('.rb-nav-wide nav[data-part="pagesLinks"] a');
       await expect(entries).toHaveCount(2);
@@ -26001,9 +25999,7 @@ async function placedSite(page: Page, header: Record<string, unknown>): Promise<
   const frame = page.frameLocator(PREVIEW).first();
   for (const id of ["sec-services", "sec-gallery"]) {
     await frame.locator(`[data-section="${id}"]`).click();
-    await frame
-      .locator(`[data-section="${id}"] .rb-action[aria-label="Hacer página con esta sección"]`)
-      .click();
+    await toNewPage(frame, id);
   }
   await expect(frame.locator('.rb-nav-wide nav[data-part="pagesLinks"] a')).toHaveCount(2);
   // The open document with its three pages, and not merely three slugs: the session the cards
@@ -34377,6 +34373,67 @@ describe("sprint 41 día 8 — una tarjeta se arrastra por su asa", () => {
       );
       expect(await orderOf(first, "data-entry")).toEqual(before);
       expect(await orderOf(second, "data-entry")).toEqual(before);
+    } finally {
+      await context.close();
+    }
+  }, 240_000);
+});
+
+/**
+ * **Sprint 41 día 9 — una sección va a una página que ya existe** (ADR 0087). «A página» converts at
+ * once while there is no other page; once there is, it opens the list — «A una página nueva» and each
+ * page — and a choice moves the section there in one step, the header's menu following it.
+ */
+describe("sprint 41 día 9 — una sección va a una página que ya existe", () => {
+  it("la galería va a «Qué ponemos», sale del menú de la portada, y un «Deshacer» la devuelve", async () => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    const page = await context.newPage();
+    try {
+      await intoTheCanvas(page);
+      const frame = page.frameLocator(PREVIEW).first();
+      const tabs = page.locator('[data-testid="page-tabs"] button');
+      // A second page, made the way it always was: one press, no list.
+      await frame.locator('[data-section="sec-services"]').click();
+      await afterTheEdit(page, () => toNewPage(frame, "sec-services"));
+      await expect(tabs).toHaveCount(2);
+
+      const gallery = frame.locator('[data-section="sec-gallery"]');
+      const inMenu = frame.locator(
+        '.rb-nav-wide nav[aria-label="Secciones"] a[href="#sec-gallery"]',
+      );
+      await expect(inMenu).toHaveCount(1);
+      await gallery.click({ position: { x: 8, y: 8 } });
+      const opener = gallery.locator('.rb-action[data-action="to-page"]');
+      await expect(opener).toHaveAttribute("aria-label", "Llevar esta sección a otra página");
+
+      // The keyboard first: the list opens on its first choice, and Escape leaves it writing nothing.
+      await opener.focus();
+      await page.keyboard.press("Enter");
+      const list = gallery.locator(".rb-to-page");
+      await expect(list.getByRole("button")).toHaveText(["A una página nueva", "A «Qué ponemos»"]);
+      await expect(list.getByRole("button").first()).toBeFocused();
+      await page.keyboard.press("Escape");
+      await expect(list).toHaveCount(0);
+      await expect(opener).toBeFocused();
+      await expect(gallery).toHaveCount(1);
+
+      // Then the hand: to the page that exists.
+      await opener.click();
+      await afterTheEdit(page, () =>
+        gallery.locator(".rb-to-page").getByRole("button", { name: "A «Qué ponemos»" }).click(),
+      );
+      await expect(tabs).toHaveCount(2);
+      await expect(frame.locator('[data-section="sec-gallery"]')).toHaveCount(0);
+      await expect(inMenu).toHaveCount(0);
+      await tabs.nth(1).click();
+      await expect(frame.locator('[data-section="sec-gallery"]')).toHaveCount(1);
+      await expect(frame.locator('[data-section="sec-services"]')).toHaveCount(1);
+
+      // One step: one «Deshacer» puts it back on the home page and in its menu.
+      await page.getByRole("button", { name: "Deshacer", exact: true }).click();
+      await tabs.nth(0).click();
+      await expect(frame.locator('[data-section="sec-gallery"]')).toHaveCount(1);
+      await expect(inMenu).toHaveCount(1);
     } finally {
       await context.close();
     }

@@ -31,7 +31,15 @@ export {
 } from "./collections.ts";
 export { AA_NORMAL_TEXT, contrastRatio, mixHex, relativeLuminance } from "./colour.ts";
 export type { TeaserFactory } from "./conversion.ts";
-export { canFoldPage, foldsInto, MAX_PAGES, pageToSection, sectionToPage } from "./conversion.ts";
+export {
+  canFoldPage,
+  foldsInto,
+  MAX_PAGES,
+  moveSectionToPage,
+  pagesToMoveTo,
+  pageToSection,
+  sectionToPage,
+} from "./conversion.ts";
 export type { DeadDestination } from "./destinations.ts";
 export {
   hrefForPage,
