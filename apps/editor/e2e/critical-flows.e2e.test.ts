@@ -35006,7 +35006,7 @@ describe("sprint 42 día 1 — un destino escrito a mano lleva a algún sitio", 
       (section) => section.id === "sec-cover",
     );
     const button = cover?.content.find((element) => element.slot === "primaryAction");
-    if (!button?.value || button.value.kind !== "link") throw new Error("no cover button");
+    if (button?.value?.kind !== "link") throw new Error("no cover button");
     if (href !== undefined) button.value.href = href;
     return JSON.stringify(session);
   };
