@@ -16556,7 +16556,8 @@ describe("nada sobresale en un móvil", () => {
     type Section_ = { id: string; content: Element_[]; layout?: Json | null } & Json;
     type Doc = { pages: { sections: Section_[] }[] } & Json;
 
-    const corpus = (name: string): Doc =>
+    /** The fixture as written — several carry a dead anchor on purpose, for the download route. */
+    const asWritten = (name: string): Doc =>
       JSON.parse(
         readFileSync(
           join(import.meta.dirname, "..", "..", "..", "fixtures", "documents", `${name}.json`),
@@ -16565,6 +16566,21 @@ describe("nada sobresale en un móvil", () => {
       ) as Doc;
     const sections = (doc: Doc) => doc.pages.flatMap((page) => page.sections);
     const elements = (doc: Doc) => sections(doc).flatMap((section) => section.content);
+    /**
+     * The fixture with every link pointed at its own section: since sprint 42 día 1 the gate judges
+     * destinations third, before any count, so a document meant to open a later door must carry no
+     * dead one. `barbershop-cover`, `letra-propia` and `estilo-por-elemento` each carry one.
+     */
+    const corpus = (name: string): Doc => {
+      const doc = asWritten(name);
+      for (const section of sections(doc)) {
+        for (const element of section.content) {
+          const value = element.value as { kind: string; href?: string } | undefined;
+          if (value?.kind === "link") value.href = `#${section.id}`;
+        }
+      }
+      return doc;
+    };
     /** Every photograph a bank one: the document only *names* it, as a generated one does. */
     const banked = (doc: Doc): Doc => {
       for (const element of elements(doc)) {
@@ -16614,6 +16630,14 @@ describe("nada sobresale en un móvil", () => {
         title: "Falta el archivo de tu fuente",
         doc: () => corpus("letra-propia"),
       },
+      // The cover's button to `#reservas`, a section the fixture never had (sprint 42 día 1): the
+      // block, third, before the count of photographs it also carries.
+      {
+        kind: "deadDestinations",
+        title: "Hay botones que no llevan a ningún sitio",
+        doc: () => banked(asWritten("barbershop-cover")),
+        samples: "serve",
+      },
       {
         kind: "tooManyPhotos",
         title: "Demasiadas fotos para descargar",
@@ -16624,10 +16648,17 @@ describe("nada sobresale en un móvil", () => {
           const [page] = doc.pages;
           const [cover] = page?.sections ?? [];
           if (!page || !cover) throw new Error("barbershop-cover has no cover");
-          page.sections = Array.from({ length: MAX_PHOTOS + 1 }, (_unused, index) => ({
-            ...structuredClone(cover),
-            id: `sec-cover-${index + 1}`,
-          }));
+          page.sections = Array.from({ length: MAX_PHOTOS + 1 }, (_unused, index) => {
+            const copy = structuredClone(cover);
+            const id = `sec-cover-${index + 1}`;
+            // Each copy's button at its own anchor: the original's would name a section that is
+            // no longer on the page, and the dead-destinations gate comes before this count.
+            for (const element of copy.content) {
+              const value = element.value as { kind: string; href?: string } | undefined;
+              if (value?.kind === "link") value.href = `#${id}`;
+            }
+            return { ...copy, id };
+          });
           return doc;
         },
         samples: "serve",
@@ -35016,6 +35047,9 @@ describe("sprint 42 día 1 — un destino escrito a mano lleva a algún sitio", 
     const page = await context.newPage();
     try {
       await intoTheCanvas(page);
+      // The autosave is debounced: the session is read once it holds the site (alone this walk
+      // never noticed; in the full run it read an empty store).
+      await sessionHolds(page, (raw) => raw !== "", "llegó a escribirse");
       // The site as it was saved before this day: «612 345 678», typed, stored, never judged.
       const typed = coverHref(await storedSession(page), "612 345 678");
       await page.evaluate((raw) => localStorage.setItem("retorika.session.v1", raw), typed);
