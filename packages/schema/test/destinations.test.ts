@@ -1,6 +1,16 @@
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { listAnchorsTo, listDeadDestinations, listLinksTo } from "../src/destinations.ts";
+import {
+  fixDestinations,
+  listAnchorsTo,
+  listDeadDestinations,
+  listLinksTo,
+  normaliseDestination,
+} from "../src/destinations.ts";
 import type { ContentElement, RetorikaDocument, Section } from "../src/document.ts";
+import { parseDocument } from "../src/parse.ts";
 import { type Theme, TOKEN_KEYS } from "../src/tokens.ts";
 
 const theme = Object.fromEntries(TOKEN_KEYS.map((key) => [key, `value-${key}`])) as Theme;
@@ -267,11 +277,185 @@ describe("listDeadDestinations, a link to another page", () => {
     expect(listDeadDestinations(doc)).toEqual([]);
   });
 
-  it("leaves a bare relative path alone, which nothing in this repository emits", () => {
-    // Named rather than handled: refusing a shape no generator, catalog or editor produces would
-    // block a download over something that has never existed. If one ever does, it belongs here.
+  it("kills a bare relative path, which «Campos» writes whenever the owner types one", () => {
+    // This test said the opposite for seventeen sprints — «nothing in this repository emits one» —
+    // while `FieldsPanel` stored whatever was typed into «A dónde lleva». From `file://` the
+    // visitor lands on `…/nuestra-carta.html`, which the bundle never holds.
     const doc = twoPageDocument([action("el-cta", "nuestra-carta.html")]);
+    expect(listDeadDestinations(doc)).toHaveLength(1);
+  });
+});
+
+describe("listDeadDestinations, the closed list of what is dead (sprint 42 día 1)", () => {
+  const dead = (href: string) => listDeadDestinations(documentWith([action("el-cta", href)]));
+
+  it.each([
+    "javascript:alert(1)",
+    "JavaScript:void(0)",
+    "data:text/html,hi",
+    "vbscript:x",
+    "file:///C:/x",
+  ])("kills %s, a scheme the renderer neutralises or the visitor's own disk", (href) => {
+    expect(dead(href)).toHaveLength(1);
+  });
+
+  it.each(["tel:", "mailto:", "sms:", "geo:"])("kills %s with nothing after the colon", (href) => {
+    expect(dead(href)).toHaveLength(1);
+  });
+
+  it.each([
+    "tel:+34612345678",
+    "mailto:hola@bar.es",
+    "sms:612345678",
+    "https://wa.me/34612345678",
+    "geo:36.7419,-5.1673",
+    "whatsapp://send?phone=34612345678",
+    "tg://resolve?domain=bar",
+    "facetime:612345678",
+    "http://example.com",
+  ])("lets %s through — a scheme not on the list, with something behind it", (href) => {
+    expect(dead(href)).toEqual([]);
+  });
+
+  it.each(["612 345 678", "hola@bar.es", "www.bar.es", "precios.html", "//example.com"])(
+    "kills «%s», a relative path the bundle never holds",
+    (href) => {
+      expect(dead(href)).toHaveLength(1);
+    },
+  );
+
+  it("does not count a hidden link whose href is dead — «Quitar esos enlaces» rests on this", () => {
+    const doc = documentWith([action("el-cta", "612 345 678", true)]);
     expect(listDeadDestinations(doc)).toEqual([]);
+  });
+
+  it("carries the href it judged, so a dialog can show it beside the button's words", () => {
+    expect(dead("  612 345 678 ")[0]).toMatchObject({
+      text: "Reserva tu cita",
+      href: "612 345 678",
+    });
+  });
+
+  it("offers a fix for the three shapes people type, and none for what it cannot read", () => {
+    expect(dead("612 345 678")[0]?.fix).toBe("tel:612345678");
+    expect(dead("hola@bar.es")[0]?.fix).toBe("mailto:hola@bar.es");
+    expect(dead("www.bar.es/carta")[0]?.fix).toBe("https://www.bar.es/carta");
+    expect(dead("precios.html")[0]?.fix).toBeUndefined();
+    expect(dead("javascript:alert(1)")[0]?.fix).toBeUndefined();
+    expect(dead("#")[0]?.fix).toBeUndefined();
+  });
+
+  it("changes the verdict of nothing in the corpus but xss-attempt's two javascript: buttons", () => {
+    // David's adjustment 1a asked for the count: a stricter gate blocks saved sites, so the
+    // sites it would newly block are named. Read from the fixtures the goldens are built from.
+    const dir = fileURLToPath(new URL("../../../fixtures/documents/", import.meta.url));
+    const counts = new Map<string, number>();
+    for (const file of readdirSync(dir)
+      .filter((f) => f.endsWith(".json"))
+      .sort()) {
+      const doc = parseDocument(JSON.parse(readFileSync(join(dir, file), "utf8")));
+      const n = listDeadDestinations(doc).length;
+      if (n > 0) counts.set(file.replace(/\.json$/, ""), n);
+    }
+    expect(Object.fromEntries(counts)).toEqual({
+      "barbershop-cover": 1,
+      "cover-and-services": 1,
+      "enlace-compartido": 1,
+      "estilo-por-elemento": 1,
+      "fondo-con-motivos": 3,
+      "image-background-full": 3,
+      "letra-propia": 1,
+      "marcas-en-el-texto": 1,
+      "tokens-quoted-fonts": 1,
+      "xss-attempt": 2,
+    });
+  });
+});
+
+describe("normaliseDestination", () => {
+  it.each([
+    ["612 345 678", "tel:612345678"],
+    ["+34 612 34 56 78", "tel:+34612345678"],
+    ["(91) 123-45-67", "tel:911234567"],
+    ["hola@bar.es", "mailto:hola@bar.es"],
+    ["  Hola.Reservas@la-taberna.com ", "mailto:Hola.Reservas@la-taberna.com"],
+    ["www.bar.es", "https://www.bar.es"],
+    ["bar.es/carta?dia=hoy", "https://bar.es/carta?dia=hoy"],
+    ["reservas.la-taberna.com", "https://reservas.la-taberna.com"],
+  ])("reads «%s» as %s", (raw, href) => {
+    expect(normaliseDestination(raw)).toBe(href);
+  });
+
+  it.each([
+    "",
+    "   ",
+    "#sec-contact",
+    "./carta.html",
+    "/carta",
+    "tel:612345678",
+    "https://bar.es",
+    "geo:36.7,-5.1",
+    "precios.html",
+    "carta.pdf",
+    "612",
+    "hola@bar",
+    "hola bar.es",
+    "Reservar mesa",
+    "javascript:alert(1)",
+  ])(
+    "leaves «%s» alone: a scheme, an anchor, a bundle path, or something it does not read",
+    (raw) => {
+      expect(normaliseDestination(raw)).toBeNull();
+    },
+  );
+});
+
+describe("fixDestinations", () => {
+  it("writes every fixable href and nothing else, and leaves the words and marks of the link", () => {
+    const marked: ContentElement = {
+      ...action("el-cta", "612 345 678"),
+      value: {
+        kind: "link",
+        text: "Llámanos",
+        href: "612 345 678",
+        marks: [{ mark: "strong", from: 0, to: 3 }],
+      },
+    };
+    const doc = documentWith([
+      marked,
+      action("el-two", "precios.html"),
+      action("el-ok", "#sec-contact"),
+    ]);
+    const fixed = fixDestinations(doc);
+    const [cta, two, ok] = fixed.pages[0]?.sections[0]?.content ?? [];
+    expect(cta?.value).toEqual({
+      kind: "link",
+      text: "Llámanos",
+      href: "tel:612345678",
+      marks: [{ mark: "strong", from: 0, to: 3 }],
+    });
+    expect(two?.value).toMatchObject({ href: "precios.html" });
+    expect(ok?.value).toMatchObject({ href: "#sec-contact" });
+    expect(listDeadDestinations(fixed).map((entry) => entry.elementId)).toEqual(["el-two"]);
+  });
+
+  it("returns the very same document when there is nothing to fix", () => {
+    const doc = documentWith([action("el-cta", "#sec-contact"), action("el-two", "precios.html")]);
+    expect(fixDestinations(doc)).toBe(doc);
+  });
+
+  it("reaches a card's own link inside a list item", () => {
+    const list: ContentElement = {
+      id: "el-list",
+      role: "list",
+      hidden: false,
+      slot: "items",
+      items: [{ id: "item-1", elements: [action("el-card", "hola@bar.es")] }],
+    };
+    const fixed = fixDestinations(documentWith([list]));
+    expect(fixed.pages[0]?.sections[0]?.content[0]?.items?.[0]?.elements[0]?.value).toMatchObject({
+      href: "mailto:hola@bar.es",
+    });
   });
 });
 

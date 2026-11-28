@@ -270,6 +270,16 @@ describe("the live child, which says what nobody saw coming", () => {
       text: es["editor.downloadError"],
     });
     expect(liveSays(at({ download: "busy" }), 0).text).toBe(es["editor.downloadBusy"]);
+    // A 400 is a fact about the document, never the network (sprint 42 día 1): no «vuelve a
+    // intentarlo», and the one refusal the owner can meet is named.
+    expect(liveSays(at({ download: "refused" }), 0)).toMatchObject({
+      tone: "error",
+      text: es["editor.downloadRefused"],
+    });
+    expect(liveSays(at({ download: "refusedDead" }), 0).text).toBe(
+      es["editor.downloadRefused.deadDestination"],
+    );
+    expect(es["editor.downloadRefused"]).not.toContain("intentarlo");
     expect(liveSays(at({ photoError: "La foto pesa demasiado." }), 0).text).toBe(
       "La foto pesa demasiado.",
     );

@@ -244,6 +244,112 @@ export function ThemeDialog({
   );
 }
 
+/** One dead button as the dialog says it: where it is, and what it leads to or will lead to. */
+export interface DeadRow {
+  key: string;
+  sectionId: string;
+  elementId: string;
+  where: string;
+  detail: string;
+}
+
+/**
+ * **The refusal the server has made since sprint 3, said before the request** (sprint 42 día 1).
+ * A button that leads nowhere blocks the download; until this day the owner met it as the 400's
+ * «No se ha podido descargar. Vuelve a intentarlo», a sentence about the network. Two lists: what
+ * the schema can read and will write as a link in one press — «Arreglarlos», one step of history,
+ * David's adjustment 1b — and what has to be changed by hand, with «Ir a «Campos»» on each row. No
+ * «Descargar igualmente»: the server would refuse, and a button that could only fail is worse than
+ * none.
+ */
+export function DeadDestinationsDialog({
+  fixable,
+  unfixable,
+  onFix,
+  onGoToFields,
+  onClose,
+}: {
+  fixable: readonly DeadRow[];
+  unfixable: readonly DeadRow[];
+  onFix: () => void;
+  onGoToFields: (row: DeadRow) => void;
+  onClose: () => void;
+}) {
+  const titleId = useId();
+  const container = useFocusTrap(true, onClose);
+  const list = (rows: readonly DeadRow[], withDoor: boolean) => (
+    <ul className="mt-2 mb-0 flex list-none flex-col gap-2 p-0">
+      {rows.map((row) => (
+        <li key={row.key} className="text-[13px] leading-snug text-ui-ink">
+          <span className="font-semibold">{row.where}</span> {row.detail}
+          {withDoor ? (
+            <button
+              type="button"
+              onClick={() => onGoToFields(row)}
+              className="ml-2 h-7 cursor-pointer rounded-[8px] border border-ui-border bg-white px-2.5 text-[12px] font-semibold text-ui-ink"
+            >
+              {es["editor.download.dead.goToFields"]}
+            </button>
+          ) : null}
+        </li>
+      ))}
+    </ul>
+  );
+  return (
+    <div className="fixed inset-0 z-20 flex items-center justify-center bg-[#0F172A]/45 p-5">
+      <div
+        ref={container}
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        tabIndex={-1}
+        className="max-h-full w-full max-w-[520px] overflow-y-auto rounded-2xl bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.28)]"
+      >
+        <h2 id={titleId} className="m-0 text-[17px] font-bold text-ui-ink">
+          {es["editor.download.dead.title"]}
+        </h2>
+        <p className="mt-2 mb-0 text-[14px] leading-snug text-ui-muted">
+          {es["editor.download.dead.body"]}
+        </p>
+        {fixable.length > 0 ? (
+          <>
+            <p className="mt-4 mb-0 text-[13px] leading-snug text-ui-muted">
+              {es["editor.download.dead.fixable"]}
+            </p>
+            {list(fixable, false)}
+          </>
+        ) : null}
+        {unfixable.length > 0 ? (
+          <>
+            <p className="mt-4 mb-0 text-[13px] leading-snug text-ui-muted">
+              {es["editor.download.dead.unfixable"]}
+            </p>
+            {list(unfixable, true)}
+          </>
+        ) : null}
+        <div className="mt-5 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="h-10 cursor-pointer rounded-[10px] border border-ui-border bg-white px-5 text-[14px] font-semibold text-ui-ink"
+          >
+            {es["editor.download.dead.close"]}
+          </button>
+          {fixable.length > 0 ? (
+            <button
+              type="button"
+              onClick={onFix}
+              className="h-10 cursor-pointer rounded-[10px] border-0 bg-ui-brand px-5 text-[14px] font-semibold text-white"
+            >
+              {es["editor.download.dead.fix"]}
+            </button>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /**
  * **The warning ADR 0011 asked for, doubled.** The ADR wrote one sentence, for a bank photograph;
  * an empty bank made a second one necessary — "no son de tu negocio" describes a photograph, and

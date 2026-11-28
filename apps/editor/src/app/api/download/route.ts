@@ -75,6 +75,14 @@ class RequestError extends Error {
   constructor(
     message: string,
     readonly status: number,
+    /**
+     * A name the editor can act on, carried in the `X-Retorika-Refusal` header (sprint 42 día 1):
+     * the body stays the sentence a person debugging reads, and the editor stops telling the owner
+     * «vuelve a intentarlo» about a refusal that retrying can never change. Only the refusal the
+     * owner can meet from the editor carries one; the rest are the editor's own defects or a
+     * hand-made request, and the generic sentence is the honest one for them.
+     */
+    readonly code?: "dead-destination",
   ) {
     super(message);
   }
@@ -166,6 +174,7 @@ function assertNoDeadDestinations(doc: RetorikaDocument): void {
     `section "${first.sectionId}": "${first.text}" (slot "${first.slot}") points nowhere` +
       (dead.length > 1 ? `, and ${dead.length - 1} more link(s) like it` : ""),
     400,
+    "dead-destination",
   );
 }
 
@@ -346,7 +355,10 @@ export async function POST(request: Request): Promise<Response> {
     ownFonts = await readFonts(form, document);
   } catch (error) {
     if (error instanceof RequestError) {
-      return new Response(error.message, { status: error.status });
+      return new Response(error.message, {
+        status: error.status,
+        ...(error.code === undefined ? {} : { headers: { "X-Retorika-Refusal": error.code } }),
+      });
     }
     if (error instanceof DocumentValidationError) {
       return new Response(error.message, { status: 400 });

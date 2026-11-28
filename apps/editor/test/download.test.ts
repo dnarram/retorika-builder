@@ -428,6 +428,24 @@ describe("POST /api/download", () => {
       expect(message).toContain("primaryAction");
     });
 
+    it("names the refusal in a header the editor can act on, and no other 400 does", async () => {
+      // Sprint 42 día 1: the editor used to read every 400 as «vuelve a intentarlo». The code is
+      // carried beside the sentence, not instead of it, so the body stays readable by a person.
+      const dead = await POST(request({ document: withContactHref("") }));
+      expect(dead.headers.get("X-Retorika-Refusal")).toBe("dead-destination");
+    });
+
+    it("refuses a phone typed without its scheme, which from file:// opens nothing", async () => {
+      const response = await POST(request({ document: withContactHref("612 345 678") }));
+      expect(response.status).toBe(400);
+      expect(response.headers.get("X-Retorika-Refusal")).toBe("dead-destination");
+    });
+
+    it("lets a scheme it does not know through when something follows the colon", async () => {
+      const response = await POST(request({ document: withContactHref("geo:36.7419,-5.1673") }));
+      expect(response.status).toBe(200);
+    });
+
     it("says how many more there are when several point nowhere", async () => {
       const dead = withContactHref("");
       const page = dead.pages[0];

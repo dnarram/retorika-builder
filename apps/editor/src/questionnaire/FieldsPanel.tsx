@@ -63,6 +63,9 @@ export interface FieldsPanelProps {
   /** Open «Menú» at this section's row, with the keyboard on its switch, or on the row when it has
    * none. */
   onOpenMenuFor: (target: MenuFocusBlock) => void;
+  /** The element whose «A dónde lleva» box takes the keyboard on open — the download gate's
+   * «Ir a «Campos»» (sprint 42 día 1). `null` or absent: the panel itself, as always. */
+  focusDestinationOf?: string | null | undefined;
 }
 
 /** What a row's two boxes become in the document. A link keeps both halves together: changing a
@@ -81,6 +84,7 @@ export function FieldsPanel({
   menuRow,
   onOpenMenuFor,
   footer,
+  focusDestinationOf = null,
 }: FieldsPanelProps) {
   const headingId = useId();
 
@@ -131,8 +135,11 @@ export function FieldsPanel({
    * panel re-rendering under it, which it does on every keystroke.
    */
   const panel = useRef<HTMLElement>(null);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: on open only, by design (above); the destination to land on is read once, as it opens
   useEffect(() => {
-    panel.current?.focus();
+    // Opened on one link's box from the download gate: that row's own effect takes the keyboard,
+    // and a child's effect runs before its parent's — so the panel steps aside rather than win.
+    if (focusDestinationOf === null) panel.current?.focus();
   }, []);
 
   return (
@@ -224,6 +231,7 @@ export function FieldsPanel({
           key={`${row.slot}:${row.occurrence}`}
           row={row}
           onCommit={commit}
+          focusDestination={focusDestinationOf}
         />
       ))}
 
@@ -240,7 +248,12 @@ export function FieldsPanel({
               stop. Size is what separates them; weight alone did not. */}
           <h3 className="m-0 text-[14px] font-bold text-ui-ink">{line.name}</h3>
           {line.rows.map((row) => (
-            <FieldRowInputs key={`${row.slot}:${row.occurrence}`} row={row} onCommit={commit} />
+            <FieldRowInputs
+              key={`${row.slot}:${row.occurrence}`}
+              row={row}
+              onCommit={commit}
+              focusDestination={focusDestinationOf}
+            />
           ))}
         </div>
       ))}
@@ -267,14 +280,26 @@ export function FieldsPanel({
 function FieldRowInputs({
   row,
   onCommit,
+  focusDestination = null,
 }: {
   row: FieldRow;
   onCommit: (row: FieldRow, text: string, href: string, anchored?: readonly MarkRun[]) => void;
+  focusDestination?: string | null;
 }) {
   const textId = useId();
   const hrefId = useId();
   const box = useRef<HTMLInputElement>(null);
   const hrefBox = useRef<HTMLInputElement>(null);
+
+  // Opened from the download gate on this very link: the keyboard lands in its «A dónde lleva»
+  // box rather than on the panel's heading, because the owner came to change that one thing.
+  // After the panel's own focus-on-open effect, so it wins.
+  useEffect(() => {
+    if (focusDestination !== null && focusDestination === row.elementId) {
+      hrefBox.current?.focus();
+      hrefBox.current?.select();
+    }
+  }, [focusDestination, row.elementId]);
 
   /**
    * The marks after every edit this focus has seen, the text they believe in, and whether every one

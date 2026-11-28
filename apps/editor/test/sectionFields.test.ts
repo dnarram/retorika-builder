@@ -230,6 +230,40 @@ describe("a section that is designed by hand", () => {
   });
 });
 
+describe("fieldValueFor — a destination typed without its scheme (sprint 42 día 1)", () => {
+  const row: FieldRow = {
+    slot: "cta",
+    occurrence: 0,
+    role: "button",
+    label: "Botón",
+    kind: "link",
+    elementId: "el-cta",
+    text: "Llamar",
+    href: "",
+    required: false,
+  };
+
+  it("writes a phone, an address or a domain as the link they were meant to be", () => {
+    expect(fieldValueFor(row, "Llamar", "612 345 678")).toEqual({
+      kind: "link",
+      text: "Llamar",
+      href: "tel:612345678",
+    });
+    expect(fieldValueFor(row, "Escribir", "hola@bar.es")).toMatchObject({
+      href: "mailto:hola@bar.es",
+    });
+    expect(fieldValueFor(row, "Reservar", "www.bar.es")).toMatchObject({
+      href: "https://www.bar.es",
+    });
+  });
+
+  it("keeps what already has a scheme, an anchor or a page, and what it cannot read", () => {
+    for (const href of ["tel:+34612345678", "#sec-contact", "./carta.html", "precios.html", ""]) {
+      expect(fieldValueFor(row, "Llamar", href)).toMatchObject({ href });
+    }
+  });
+});
+
 describe("fieldCommitFor — which of the three things a box's blur means", () => {
   /**
    * The bug this function exists for, measured on 1 October 2026: the panel sent **every** commit

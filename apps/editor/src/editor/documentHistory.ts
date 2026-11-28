@@ -43,6 +43,7 @@ import {
   escalateSection as escalateSectionInDoc,
   fillSlot as fillSlotInDoc,
   findSection,
+  fixDestinations as fixDestinationsInDoc,
   flattenElements,
   insertSection as insertSectionIntoDoc,
   type MeasuredBox,
@@ -179,6 +180,9 @@ export type SnapshotCause =
   /** The first cause that names no section, because a theme belongs to none of them: it restyles
    * every section at once, hand-designed ones included. `sectionOf` is what keeps that honest. */
   | { type: "setTheme" }
+  /** «Arreglarlos» in the download gate (sprint 42 día 1): hrefs across any number of sections,
+   * so it names none — a content change nobody will ask a section of. */
+  | { type: "fixDestinations" }
   /**
    * One half of the site's letter chosen in the letter chooser (sprint 29 día 1). Names no section,
    * like `setTheme`, and unlike it names the half — because **a chooser session is one step**: the
@@ -366,6 +370,13 @@ export type HistoryAction =
       variant: number;
       sectionId: string;
       elementId: string;
+    }
+  | {
+      /** «Arreglarlos» in the download gate (sprint 42 día 1): every dead destination the schema
+       * can read written as its fix — `612 345 678` → `tel:612345678` — in **one** step, across
+       * every section at once, so one «Deshacer» gives every href back. */
+      type: "fixDestinations";
+      variant: number;
     }
   | {
       type: "setMobilePatch";
@@ -1645,6 +1656,13 @@ function apply(history: History, action: HistoryAction): History {
       return setSectionInMenu(history, action.sectionId, action.inMenu);
     case "setTheme":
       return setTheme(history, action.theme, action.palette);
+    case "fixDestinations": {
+      // Names no section: it may touch several, and nothing that asks a cause for its section (the
+      // toast, `wasSectionEverEdited`) is about a link's href.
+      const document = fixDestinationsInDoc(history.present.document);
+      if (document === history.present.document) return history;
+      return step(history, document, { type: "fixDestinations" });
+    }
     case "chooseFamily":
       return chooseFamily(history, action.key, action.theme);
     case "settleChooser":

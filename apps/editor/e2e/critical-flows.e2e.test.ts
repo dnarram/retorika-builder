@@ -34986,3 +34986,135 @@ describe("sprint 41 cierre — el «sí» pedido por una tecla devuelve el tecla
     }
   }, 240_000);
 });
+
+describe("sprint 42 día 1 — un destino escrito a mano lleva a algún sitio", () => {
+  /** The cover's main button as the session holds it, read or written in place: a site saved
+   * before today with the href exactly as the owner typed it, which no gate ever judged. */
+  const coverHref = (raw: string, href?: string): string => {
+    const session = JSON.parse(raw) as {
+      openIndex: number;
+      documents: {
+        pages: {
+          sections: {
+            id: string;
+            content: { slot: string; value?: { kind: string; href?: string } }[];
+          }[];
+        }[];
+      }[];
+    };
+    const cover = session.documents[session.openIndex]?.pages[0]?.sections.find(
+      (section) => section.id === "sec-cover",
+    );
+    const button = cover?.content.find((element) => element.slot === "primaryAction");
+    if (!button?.value || button.value.kind !== "link") throw new Error("no cover button");
+    if (href !== undefined) button.value.href = href;
+    return JSON.stringify(session);
+  };
+
+  it("a saved site with a phone typed as the destination: «Arreglarlos» writes tel: in one step and the ZIP carries it", async () => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    const page = await context.newPage();
+    try {
+      await intoTheCanvas(page);
+      // The site as it was saved before this day: «612 345 678», typed, stored, never judged.
+      const typed = coverHref(await storedSession(page), "612 345 678");
+      await page.evaluate((raw) => localStorage.setItem("retorika.session.v1", raw), typed);
+      await page.goto(QUESTIONNAIRE_URL, { waitUntil: "networkidle" });
+      await sceneOver(page);
+      const frame = page.frameLocator(PREVIEW).first();
+      const button = frame.locator('[data-section="sec-cover"] [data-slot="primaryAction"]');
+      await expect(button).toHaveAttribute("href", "612 345 678");
+
+      await page.getByRole("button", { name: "Descargar" }).click();
+      const dialog = page.getByRole("alertdialog", {
+        name: "Hay botones que no llevan a ningún sitio",
+      });
+      await expect(dialog).toBeVisible();
+      // Named by its words and its section, with what it will lead to — never a route or an id.
+      await expect(dialog).toContainText("«Reservar mesa», en Portada");
+      await expect(dialog).toContainText(
+        "lleva escrito «612 345 678» y pasará a llamar al 612345678",
+      );
+      await expect(dialog.getByRole("button", { name: "Ir a «Campos»" })).toHaveCount(0);
+
+      // One press: the href is written, the gate runs again on the fixed site and reaches the
+      // photographs' door — the one every freshly generated site meets — and the ZIP calls.
+      await dialog.getByRole("button", { name: "Arreglarlos" }).click();
+      await expect(button).toHaveAttribute("href", "tel:612345678");
+      const downloadAnyway = page.getByRole("button", { name: "Descargar igualmente" });
+      await downloadAnyway.waitFor();
+      const [download, response] = await Promise.all([
+        page.waitForEvent("download"),
+        page.waitForResponse((candidate) => candidate.url().includes("/api/download")),
+        downloadAnyway.click(),
+      ]);
+      expect(response.status()).toBe(200);
+      const dir = mkdtempSync(join(tmpdir(), "retorika-e2e-"));
+      const zipPath = join(dir, download.suggestedFilename());
+      await download.saveAs(zipPath);
+      const html = new TextDecoder().decode(
+        extractFileBytes(new Uint8Array(readFileSync(zipPath)), "index.html"),
+      );
+      expect(html).toContain('href="tel:612345678"');
+      expect(html).not.toContain("612 345 678");
+
+      // One step: a single «Deshacer» gives the typed href back.
+      await page.getByRole("button", { name: "Deshacer", exact: true }).click();
+      await expect(button).toHaveAttribute("href", "612 345 678");
+    } finally {
+      await context.close();
+    }
+  }, 240_000);
+
+  it("what the schema cannot read blocks with «Ir a «Campos»», which lands in the box; what it reads is written as typed; the server still refuses on its own", async () => {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+    const page = await context.newPage();
+    try {
+      await intoTheCanvas(page);
+      const frame = page.frameLocator(PREVIEW).first();
+      const button = frame.locator('[data-section="sec-cover"] [data-slot="primaryAction"]');
+
+      // Typed in «Campos», a phone is written as the link it was meant to be.
+      await frame.locator('[data-section="sec-cover"]').click();
+      await frame.getByRole("button", { name: "Campos de esta sección" }).click();
+      const box = page.getByLabel("A dónde lleva").first();
+      await box.fill("612 345 678");
+      await box.blur();
+      await expect(button).toHaveAttribute("href", "tel:612345678");
+
+      // And what it cannot read is kept as typed, said in the row, and blocks the download.
+      await box.fill("#nada");
+      await box.blur();
+      await expect(button).toHaveAttribute("href", "#nada");
+      await expect(page.getByText("Este botón no lleva a ningún sitio.")).toBeVisible();
+      await page.getByRole("button", { name: "Cerrar los campos" }).click();
+
+      await page.getByRole("button", { name: "Descargar" }).click();
+      const dialog = page.getByRole("alertdialog", {
+        name: "Hay botones que no llevan a ningún sitio",
+      });
+      await expect(dialog).toContainText(
+        "«Reservar mesa», en Portada lleva escrito «#nada», que no es un teléfono, un correo ni una página",
+      );
+      await expect(dialog.getByRole("button", { name: "Arreglarlos" })).toHaveCount(0);
+      await expect(dialog.getByRole("button", { name: "Descargar igualmente" })).toHaveCount(0);
+      await dialog.getByRole("button", { name: "Ir a «Campos»" }).click();
+      await expect(dialog).toHaveCount(0);
+      const landed = page.getByLabel("A dónde lleva").first();
+      await expect(landed).toBeFocused();
+      await expect(landed).toHaveValue("#nada");
+
+      // The route is a public endpoint and the filter is the validation, not the trust: skipping
+      // the editor's door, a bare relative path is still refused, and the refusal is named.
+      const raw = coverHref(await storedSession(page), "precios.html");
+      const session = JSON.parse(raw) as { openIndex: number; documents: unknown[] };
+      const refused = await page.request.post(`${BASE_URL}/api/download`, {
+        multipart: { document: JSON.stringify(session.documents[session.openIndex]) },
+      });
+      expect(refused.status()).toBe(400);
+      expect(refused.headers()["x-retorika-refusal"]).toBe("dead-destination");
+    } finally {
+      await context.close();
+    }
+  }, 240_000);
+});

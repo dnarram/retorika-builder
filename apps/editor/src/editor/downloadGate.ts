@@ -3,6 +3,8 @@ import { ownFontsFor } from "@retorika/renderer";
 import {
   type CoveredByPhoto,
   coveredByPhoto,
+  type DeadDestination,
+  listDeadDestinations,
   MAX_PAGES,
   type OverlappingTexts,
   overlappingTexts,
@@ -160,6 +162,16 @@ export type DownloadGate =
    * remove the font and upload it again, or choose another letter.
    */
   | { kind: "fontsMissing"; families: string[] }
+  /**
+   * A button or a link that leads nowhere (sprint 42 día 1): the same refusal `/api/download` has
+   * made since sprint 3, said **here**, before the request, with the button's own words — until
+   * this day the server's 400 reached the owner as «No se ha podido descargar. Vuelve a intentarlo»,
+   * a sentence about the network for a fact about the document. A block, third, for the same reason
+   * as the two above: «Descargar igualmente» could only ever fail. `fixable` are the ones written
+   * as a phone, an address or a domain without their scheme, which «Arreglarlos» writes in one step
+   * (David's adjustment 1b); `unfixable` go to «Campos».
+   */
+  | { kind: "deadDestinations"; fixable: DeadDestination[]; unfixable: DeadDestination[] }
   | { kind: "tooManyPhotos"; count: number; max: number }
   /**
    * The theme's own colours do not clear a pair every palette is held to (sprint 38 día 3): a block,
@@ -264,6 +276,17 @@ export function downloadGateFor(
     return { kind: "fontsMissing", families: missing.map((font) => font.family) };
   }
 
+  // Third, and still before the photo count: the server refuses the document over one dead link
+  // regardless of anything else, so nothing after this could be acted on until it is fixed.
+  const dead = listDeadDestinations(doc);
+  if (dead.length > 0) {
+    return {
+      kind: "deadDestinations",
+      fixable: dead.filter((entry) => entry.fix !== undefined),
+      unfixable: dead.filter((entry) => entry.fix === undefined),
+    };
+  }
+
   const real = counts.own + counts.sample;
   if (real > MAX_PHOTOS) return { kind: "tooManyPhotos", count: real, max: MAX_PHOTOS };
 
@@ -340,6 +363,7 @@ export function downloadGateFor(
 export const DIALOG_KINDS = [
   "photosFailed",
   "fontsMissing",
+  "deadDestinations",
   "tooManyPhotos",
   "theme",
   "unreadable",

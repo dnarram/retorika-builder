@@ -66,7 +66,7 @@ export interface HelpLineState {
   coloursApplied: boolean;
   /** The last `announce()`, with the moment it was said; stale after `ANNOUNCEMENT_MS`. */
   announcement: { text: string; at: number } | null;
-  download: "idle" | "preparing" | "downloading" | "error" | "busy";
+  download: "idle" | "preparing" | "downloading" | "error" | "busy" | "refused" | "refusedDead";
   photoError: string | null;
   /** The phone's reorder gesture refusing a drop (`rb-ghost-no`). */
   dragRefused: boolean;
@@ -216,6 +216,12 @@ export function liveSays(state: HelpLineState, now: number): HelpLineSays {
     return { child: "live", text: es["editor.downloadError"], tone: "error" };
   if (state.download === "busy")
     return { child: "live", text: es["editor.downloadBusy"], tone: "error" };
+  // The server refused the document (a 400), which is a fact about the site and never about the
+  // network (sprint 42 día 1): said as what it is, with the one refusal the owner can meet named.
+  if (state.download === "refusedDead")
+    return { child: "live", text: es["editor.downloadRefused.deadDestination"], tone: "error" };
+  if (state.download === "refused")
+    return { child: "live", text: es["editor.downloadRefused"], tone: "error" };
   if (state.photoError) return { child: "live", text: state.photoError, tone: "error" };
   return EMPTY_LIVE;
 }

@@ -14,7 +14,7 @@ import { leave } from "./leaving.ts";
  *
  * David's adjustment of 4 October scoped that sprint's fix to its own new screens, leaving the
  * dialogs that already existed owed this as a backlog row. **Sprint 17 day 1 pays it:** every
- * `aria-modal` dialog calls this hook — thirteen of them since sprint 38 día 3 — and
+ * `aria-modal` dialog calls this hook — fourteen of them since sprint 42 día 1 — and
  * `test/modalTrap.test.ts` fails if the next one is written without it, naming every record that
  * carries the number. The row said «five» because the sixth, `PhotosFailedDialog`, was committed on 4
  * October 2026 — the same day as this hook, in a different commit — so nothing was wrong when it
