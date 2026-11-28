@@ -1858,6 +1858,10 @@ export function Variants({
             dismissToast();
             dispatch({ type: "clearPhotoShape", variant: openIndex, sectionId, elementId });
           }}
+          onFixDestinations={() => {
+            dismissToast();
+            dispatch({ type: "fixDestinations", variant: openIndex });
+          }}
           onSetMobilePatch={(sectionId, elementId, edit) => {
             dismissToast();
             dispatch({ type: "setMobilePatch", variant: openIndex, sectionId, elementId, edit });

@@ -11991,3 +11991,77 @@ desarrollo para el veto de David.
    un cubo de tableta; lo que dejó el 39.
 7. **El editor sigue sin verse fuera de Chromium**; la web publicada sí, en tres motores.
 8. **El sprint 42, sin planificar.**
+
+## Sprint 42 — «Todo lo que se pulsa lleva a algún sitio» (desde el 28 de noviembre de 2026)
+
+El encargo de David: un inventario antes de proponer nada —todo lo que se pulsa en el editor y en la web
+publicada, en navegador real a 1280, 1024 y 390 × 844, con ratón, teclado y dedo; el botón «Arrastrar»
+explicado; los defectos más allá de lo visible; la competencia con fuentes—, después las preguntas con
+opciones costadas y solo entonces el plan. El inventario midió 925 comprobaciones sobre las 29 webs del
+corpus abiertas desde disco y una gira del editor real; encontró que **un destino escrito a mano sin esquema
+se publica como enlace relativo muerto que la puerta nunca juzga**, que **la descarga con un destino muerto
+dice «Vuelve a intentarlo»**, que las fichas de una web sin cabecera no tienen vuelta, que el «Menú» del
+teléfono mide 21 px, que Esc no cierra un panel del raíl fijo, que «Subir» pasa sobre la portada, que el
+cromo de línea es invisible al dedo, y que «Arrastrar» no se entiende sin leer el código. Ocho respuestas
+de David y cuatro ajustes al rechazar el primer plan: la lista de lo muerto es cerrada y la puerta ofrece
+«Arreglarlos»; la portada libre se mide antes de soltarla; el PDF adjunto se va al 43 por el cubo de la
+cuenta; el día 7 corre con Opus y aserciones e2e. Ocho días, Fable los días 1 y 3. El plan está copiado
+íntegro en la memoria del proyecto. Criterios de todo el sprint: la publicada no cambia un byte salvo en
+las 29 páginas de la ADR 0088, y el ZIP del corpus lo demuestra al cierre; el script en 829 B; axe y
+teclado en verde; todo gesto con su teclado; palabras llanas.
+
+### Día 1 — un teléfono escrito a mano llama, y la descarga dice qué botón no lleva a ningún sitio (PR de `fix/un-destino-escrito-a-mano-lleva-a-algun-sitio`, nota en ADR 0079)
+
+**El defecto, medido.** «612 345 678» escrito en «A dónde lleva» se guardaba tal cual y salía en el ZIP como
+`href="612 345 678"`: desde `file://` el visitante aterrizaba en `…/612 345 678`. Nada avisaba en «Campos»
+y la descarga pasaba, porque `isDead` tenía escrito «todo lo demás nunca está muerto» y que una ruta relativa
+era «una forma que nada en este repositorio emite», cosa que «Campos» emite desde el sprint 3 (la ruta de
+descarga lo decía; el juez no). Y un destino que la puerta sí veía (`#nada`) llegaba al dueño como el 400 del
+servidor leído como fallo de red: «No se ha podido descargar. Vuelve a intentarlo». Aviso que bloquea: PR
+propia, primera y sola.
+
+**Lo que hay ahora.** La lista de lo muerto es **cerrada** (ajuste 1a de David): vacío, `#`, `javascript:`,
+`data:`, `vbscript:`, `file:`, un esquema sin nada tras los dos puntos, un ancla o un enlace del paquete que
+no resuelve, y una ruta relativa. Todo esquema con algo detrás vive —`geo:`, `whatsapp:`, `tg:`, `facetime:`,
+`sms:`, `https:`—. **Recuento sobre el corpus**: cambian de veredicto solo los dos `javascript:` de
+`xss-attempt`, y una prueba fija la tabla de las nueve webs con muertos. `normaliseDestination` lee **tres
+formas y nada más**: dígitos → `tel:` (con el `+` inicial, sin inventar prefijo de país, como el generador),
+una `@` → `mailto:`, un dominio → `https://`; «Campos» escribe ya el enlace normalizado. La puerta de
+descarga dice lo muerto **antes de pedir nada**, tercera entre los bloqueos, con las palabras de cada botón,
+su sección y su página, y a dónde lleva: lo que el esquema lee se ofrece como **«Arreglarlos»** (ajuste 1b),
+un paso de historial `fixDestinations` que recorre todas las secciones, tras el cual la puerta vuelve a correr
+sobre el documento ya arreglado; lo que no lee tiene «Ir a «Campos»», que abre el cajón con el teclado en la
+caja de ese enlace. Sin «Descargar igualmente». El servidor nombra su negativa en `X-Retorika-Refusal`, y un
+400 se dice como lo que es: «La web tiene un botón que no lleva a ningún sitio y no se ha construido», o «no
+es un fallo de la conexión»; «Vuelve a intentarlo» queda para la red y los 5xx. **Un enlace oculto no cuenta**
+(ajuste 1c): ya era así, y ahora lo asevera una prueba, porque el día 5 ocultará enlaces y la descarga debe
+seguir abierta. Sin esquema ni renderer: la web publicada no cambia un byte.
+
+**Medido en el editor a 1280.** Una web guardada con `href: "612 345 678"` (sesión escrita como antes de hoy):
+el lienzo lo lleva tal cual; «Descargar» abre «Hay botones que no llevan a ningún sitio» con «**«Reservar
+mesa», en Portada** lleva escrito «612 345 678» y pasará a llamar al 612345678» y sin «Ir a «Campos»»;
+«Arreglarlos» escribe `tel:612345678`, la puerta sigue sola hasta la de las fotos y el ZIP lleva
+`href="tel:612345678"` y ningún «612 345 678»; un «Deshacer» devuelve lo escrito. En «Campos», «612 345 678»
+pasa a `tel:612345678` al salir de la caja; `#nada` se queda, la fila lo dice en rojo, y al descargar la fila
+del diálogo dice «lleva escrito «#nada», que no es un teléfono, un correo ni una página», sin «Arreglarlos» ni
+«Descargar igualmente»; «Ir a «Campos»» deja el teclado **en la caja «A dónde lleva»** con `#nada` dentro. Y
+saltándose el editor, la ruta sigue negándose a `precios.html` con el 400 y su cabecera.
+Captura: [el diálogo](review/2026-11-lo-que-se-pulsa/dia1-dialogo.png).
+
+**Pruebas.** `destinations.test.ts` (la lista cerrada por esquema, las cinco rutas relativas, lo oculto, el
+`href` y el `fix` de cada entrada, la tabla de `normaliseDestination` con 8 formas leídas y 15 dejadas, el
+recuento del corpus, `fixDestinations` con marcas y dentro de una tarjeta); `downloadGate.test.ts` (antes de
+las fotos, las dos listas, lo oculto, listo tras arreglar; y las fixtures de la barra transparente con sus
+enlaces vivos, porque `image-background-full` lleva tres anclas muertas a propósito); `documentHistory.test.ts`
+(un paso, un «Deshacer», ningún paso sin nada que arreglar); `sectionFields.test.ts`; `helpLine.test.ts`;
+`download.test.ts` (la cabecera, `612 345 678` negado, `geo:` admitido); `modalTrap` cuenta catorce. Dos
+caminatas, «sprint 42 día 1». **Saboteos**, cinco rojos: la ruta relativa viva otra vez (ocho unitarias y
+**las dos caminatas**: el diálogo no aparece y la cabecera no llega); `geo:` en la lista de muertos; lo oculto
+contado (tres); «Arreglarlos» en dos pasos (el «Deshacer»); la puerta detrás de las fotos (el orden). **El
+sexto no lo sujeta ninguna aserción, y se dice**: el 400 leído como red (`Editor.tsx`) no tiene caminata,
+porque con la puerta del cliente delante ningún camino del editor llega hoy a ese 400; la frase la asevera
+`helpLine.test.ts` y el camino, no.
+
+**Lo que deja.** La caja de «A dónde lleva» enseña el `href` que se publicará (`tel:612345678`), no «Teléfono:
+612 345 678»: el día 6 le da a la caja sus cinco formas y esa palabra. El botón de la cabecera muerto sigue
+diciéndose con su propia fila («El botón de la barra de arriba») y «Ir a «Campos»» lo lleva a «Menú».

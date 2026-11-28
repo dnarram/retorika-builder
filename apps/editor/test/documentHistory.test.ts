@@ -785,6 +785,52 @@ describe("insertSection", () => {
   });
 });
 
+describe("fixDestinations — «Arreglarlos» in the download gate (sprint 42 día 1)", () => {
+  /** Variant 0 with the cover's button pointing where the owner typed it: a phone, no scheme. */
+  function withTypedPhone(): Histories {
+    const document = start()[0]?.present.document;
+    if (!document) throw new Error("no document");
+    const typed = {
+      ...document,
+      pages: document.pages.map((page) => ({
+        ...page,
+        sections: page.sections.map((section) =>
+          section.id !== "sec-cover"
+            ? section
+            : {
+                ...section,
+                content: section.content.map((element) =>
+                  element.value?.kind === "link" && element.slot === "primaryAction"
+                    ? { ...element, value: { ...element.value, href: "612 345 678" } }
+                    : element,
+                ),
+              },
+        ),
+      })),
+    };
+    return initHistories([typed]);
+  }
+  const hrefOf = (state: Histories) =>
+    state[0]?.present.document.pages[0]?.sections
+      .find((s) => s.id === "sec-cover")
+      ?.content.find((el) => el.slot === "primaryAction")?.value;
+
+  it("writes the fix as one step, and one «Deshacer» gives the typed href back", () => {
+    const before = withTypedPhone();
+    const after = run(before, { type: "fixDestinations", variant: 0 });
+    expect(hrefOf(after)).toMatchObject({ kind: "link", href: "tel:612345678" });
+    expect(after[0]?.past).toHaveLength((before[0]?.past.length ?? 0) + 1);
+    expect(after[0]?.present.cause).toEqual({ type: "fixDestinations" });
+    const undone = run(after, { type: "undo", variant: 0 });
+    expect(hrefOf(undone)).toMatchObject({ href: "612 345 678" });
+  });
+
+  it("is no step at all when nothing is fixable", () => {
+    const state = start();
+    expect(run(state, { type: "fixDestinations", variant: 0 })).toBe(state);
+  });
+});
+
 describe("setImage", () => {
   const COVER_IMAGE: ElementAddress = { sectionId: "sec-cover", elementId: "el-image" };
   // Narrowed rather than typed as the whole union: the throw case below spreads it and replaces

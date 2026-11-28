@@ -116,6 +116,7 @@ describe("listDeadDestinations, for a map", () => {
         slot: "map",
         role: "map",
         text: "Cómo llegar",
+        href: "",
       },
     ]);
   });

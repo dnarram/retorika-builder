@@ -5,6 +5,7 @@ import { EMPTY_ANSWERS, GALLERY_SAMPLE_COUNT, generate } from "@retorika/generat
 import { BAR_MEASURE, type HeaderWidths, headerWidths } from "@retorika/renderer";
 import {
   FINE_COLUMNS,
+  fixDestinations,
   MAX_PAGES,
   type OwnFont,
   parseDocument,
@@ -38,6 +39,28 @@ import { countPhotos, type PhotoCounts } from "../src/editor/photoInventory.ts";
 function counts(overrides: Partial<PhotoCounts>): PhotoCounts {
   const base: PhotoCounts = { empty: 0, sample: 0, own: 0, total: 0 };
   return { ...base, ...overrides };
+}
+
+/**
+ * Every link pointed at its own section, so a test about something else is not stopped at the
+ * dead-destinations gate (sprint 42 día 1, which judges links before anything the tests below are
+ * about). `image-background-full` carries three dead anchors on purpose, for the download route.
+ */
+function withLiveLinks(doc: RetorikaDocument): RetorikaDocument {
+  return parseDocument({
+    ...doc,
+    pages: doc.pages.map((page) => ({
+      ...page,
+      sections: page.sections.map((section) => ({
+        ...section,
+        content: section.content.map((element) =>
+          element.value?.kind === "link"
+            ? { ...element, value: { ...element.value, href: `#${section.id}` } }
+            : element,
+        ),
+      })),
+    })),
+  });
 }
 
 /** A real palette rather than placeholder strings: the review measures the theme's own colours, so
@@ -415,19 +438,21 @@ describe("the gate with the logo in it (ADR 0059)", () => {
  * bar really lies over a photograph.
  */
 describe("the gate with a transparent bar over a photograph", () => {
-  const overCover = parseDocument(
-    JSON.parse(
-      readFileSync(
-        join(
-          import.meta.dirname,
-          "..",
-          "..",
-          "..",
-          "fixtures",
-          "documents",
-          "image-background-full.json",
+  const overCover = withLiveLinks(
+    parseDocument(
+      JSON.parse(
+        readFileSync(
+          join(
+            import.meta.dirname,
+            "..",
+            "..",
+            "..",
+            "fixtures",
+            "documents",
+            "image-background-full.json",
+          ),
+          "utf8",
         ),
-        "utf8",
       ),
     ),
   );
@@ -780,7 +805,7 @@ describe("two texts on top of each other", () => {
                   role: "button",
                   hidden: false,
                   slot: "primaryAction",
-                  value: { kind: "link", text: "Reservar", href: "#contacto" },
+                  value: { kind: "link", text: "Reservar", href: "#sec-cover" },
                 },
               ],
               layout: {
@@ -841,6 +866,69 @@ describe("two texts on top of each other", () => {
       { exact: "#FDFDFD", exception: true },
     );
     expect(downloadGateFor(counts({}), illegible).kind).toBe("unreadable");
+  });
+});
+
+describe("the gate with the dead destinations in it (sprint 42 día 1)", () => {
+  const withHref = (href: string, hidden = false) =>
+    parseDocument({
+      ...docWith(),
+      pages: [
+        {
+          ...docWith().pages[0],
+          sections: [
+            {
+              ...section,
+              content: section.content.map((element) =>
+                element.id === "el-cta"
+                  ? { ...element, hidden, value: { kind: "link", text: "Llamar", href } }
+                  : element,
+              ),
+            },
+          ],
+        },
+      ],
+    });
+
+  it("blocks a link the schema cannot read, before the photo warning, naming it with its href", () => {
+    const gate = downloadGateFor(counts({ sample: 2, total: 2 }), withHref("precios.html"));
+    expect(gate).toEqual({
+      kind: "deadDestinations",
+      fixable: [],
+      unfixable: [
+        expect.objectContaining({ elementId: "el-cta", text: "Llamar", href: "precios.html" }),
+      ],
+    });
+  });
+
+  it("offers the fix for a phone typed without its scheme, and «Descargar igualmente» cannot pass it", () => {
+    const gate = downloadGateFor(
+      counts({ sample: 2, total: 2 }),
+      withHref("612 345 678"),
+      new Set(["photos", "contrast", "overflow", "layout", "fonts"]),
+    );
+    if (gate.kind !== "deadDestinations") throw new Error(JSON.stringify(gate));
+    expect(gate.fixable.map((entry) => entry.fix)).toEqual(["tel:612345678"]);
+    expect(gate.unfixable).toEqual([]);
+  });
+
+  it("comes after a font whose files are missing, which the route refuses first", () => {
+    // `fontsMissing` needs a named own font; the order is asserted where that fixture lives
+    // (below), and here only that a dead link is not reached past the photo cap: the cap is after.
+    const gate = downloadGateFor(
+      counts({ own: MAX_PHOTOS + 1, total: MAX_PHOTOS + 1 }),
+      withHref("#"),
+    );
+    expect(gate.kind).toBe("deadDestinations");
+  });
+
+  it("does not count a hidden link whose href is dead — «Quitar esos enlaces» rests on this", () => {
+    expect(downloadGateFor(counts({}), withHref("612 345 678", true)).kind).toBe("ready");
+  });
+
+  it("is ready once the fixes are written", () => {
+    const fixed = fixDestinations(withHref("612 345 678"));
+    expect(downloadGateFor(counts({}), fixed).kind).toBe("ready");
   });
 });
 

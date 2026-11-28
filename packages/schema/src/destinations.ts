@@ -1,4 +1,4 @@
-import type { Page, RetorikaDocument } from "./document.ts";
+import type { ContentElement, Page, RetorikaDocument } from "./document.ts";
 import { flattenElements } from "./invariants.ts";
 import { mapHref } from "./map.ts";
 import type { Role } from "./roles.ts";
@@ -22,6 +22,69 @@ import { SLUG_PATTERN } from "./slug.ts";
 /** `#` is what `safeUrl` neutralises a dangerous scheme to, and what a hand-written placeholder
  * href usually is. Either way it navigates nowhere. An empty href re-loads the current page. */
 const DEAD_HREFS: ReadonlySet<string> = new Set(["", "#"]);
+
+/**
+ * **The closed list of what is dead** (sprint 42 día 1, David's adjustment 1a): the schemes the
+ * renderer neutralises to `#` (`safeUrl`, `escape.ts`) and the one that cannot leave the visitor's
+ * own disk. Everything else with something after the colon is alive — `geo:`, `whatsapp:`, `tg:`,
+ * `facetime:`, `sms:`, an `https:` to another site — because the gate cannot resolve it and a list
+ * that said «everything else is dead» would block downloads that work today.
+ */
+const DEAD_SCHEMES: ReadonlySet<string> = new Set(["javascript", "data", "vbscript", "file"]);
+
+/** `scheme:` at the start of an href, as RFC 3986 spells a scheme: a letter, then letters, digits,
+ * `+`, `-` or `.`. `612 345 678` and `hola@bar.es` have none, which is how they are told apart. */
+const SCHEME = /^([a-z][a-z0-9+.-]*):/i;
+
+/** The file extensions a bundle or a disk could hold, so `precios.html` is a relative path and
+ * never a domain called «precios» in the «html» country. */
+const NOT_A_TLD: ReadonlySet<string> = new Set([
+  "html",
+  "htm",
+  "pdf",
+  "jpg",
+  "jpeg",
+  "png",
+  "gif",
+  "webp",
+  "svg",
+  "css",
+  "js",
+  "json",
+  "zip",
+  "txt",
+]);
+
+/**
+ * What a destination typed without a scheme was meant to be, in exactly three shapes — and
+ * nothing else (sprint 42 día 1, decision *a*: guessing more is guessing wrong):
+ *
+ * - digits, with `+`, spaces, dots, hyphens or parentheses between them → `tel:` and the digits,
+ *   the leading `+` kept — the generator's own spelling (`generator/src/destination.ts`), with no
+ *   country code invented;
+ * - one `@` with something on both sides and a dot after it → `mailto:`;
+ * - `dominio.tld`, with or without `www.` and a path → `https://`.
+ *
+ * `null` when the text already carries a scheme, is an anchor or a bundle link (nothing to
+ * normalise), or is not one of the three (nothing understood: `isDead` then calls it what it is).
+ */
+export function normaliseDestination(raw: string): string | null {
+  const text = raw.trim();
+  if (text === "" || text.startsWith("#") || text.startsWith("./") || text.startsWith("/")) {
+    return null;
+  }
+  if (SCHEME.test(text)) return null;
+
+  const digits = text.replace(/[\s().-]/g, "");
+  if (/^\+?\d{6,15}$/.test(digits)) return `tel:${digits}`;
+
+  if (/^[^\s@/]+@[^\s@/]+\.[^\s@/.]+$/.test(text)) return `mailto:${text}`;
+
+  const domain = /^(?:www\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)*\.([a-z]{2,})(?:[/?#]\S*)?$/i.exec(text);
+  if (domain && !NOT_A_TLD.has((domain[1] ?? "").toLowerCase())) return `https://${text}`;
+
+  return null;
+}
 
 /**
  * A link from one published page to another: `./precios.html`, optionally with a fragment.
@@ -83,10 +146,14 @@ function reachable(doc: RetorikaDocument): Reachable {
  *   whose page was deleted. `./precios.html#sec-x` is judged twice over — the page must exist and
  *   the section must be *on that page*.
  *
- * Everything else is still not ours to resolve: an `https:` to another site, a `tel:` or a
- * `mailto:` has no fragment and no bundle path to check. Deliberately not extended to bare
- * relative paths like `precios.html`: nothing in this repository emits one, and refusing them here
- * would block a download over a shape no test has ever produced.
+ * **A scheme is judged by the closed list** (`DEAD_SCHEMES`), and by whether anything follows
+ * the colon: `tel:+34612345678` and `geo:36.7,-5.1` are alive, `mailto:` alone is not. **A bare
+ * relative path is dead** (`precios.html`, `612 345 678`, `hola@bar.es`): the bundle holds no file
+ * under it, so from `file://` the visitor lands on `…/612 345 678`. This paragraph used to say the
+ * opposite — «nothing in this repository emits one» — and it was never true: «Campos» has written
+ * whatever the owner typed into «A dónde lleva» since sprint 3 día 4 (`route.ts` said so, this
+ * file did not). Sprint 42 día 1 measured it in the ZIP and closed the gap; `normaliseDestination`
+ * is the half that turns the three shapes people actually type into links that work.
  */
 function isDead(href: string, pageId: string, links: Reachable): boolean {
   const trimmed = href.trim();
@@ -96,8 +163,14 @@ function isDead(href: string, pageId: string, links: Reachable): boolean {
     return !links.sectionsByPage.get(pageId)?.has(trimmed.slice(1));
   }
 
+  const scheme = SCHEME.exec(trimmed);
+  if (scheme) {
+    if (DEAD_SCHEMES.has((scheme[1] ?? "").toLowerCase())) return true;
+    return trimmed.length === scheme[0].length;
+  }
+
   const internal = INTERNAL_PAGE.exec(trimmed);
-  if (!internal) return false;
+  if (!internal) return true;
 
   const slug = internal[1] ?? "";
   if (!SLUG_PATTERN.test(slug)) return true;
@@ -117,6 +190,15 @@ export interface DeadDestination {
   role: Role;
   /** The label the visitor would press, which is how a person recognises which button it is. */
   text: string;
+  /** What the link says it leads to, trimmed, so the dialog can show «612 345 678» beside the
+   * button's words. Empty for the header's button and for a map, whose href is derived. */
+  href: string;
+  /**
+   * The href `normaliseDestination` would write instead, when it understands the one written —
+   * «612 345 678» → `tel:612345678`. Present only on a link element; the download gate offers
+   * «Arreglarlos» for these and «Campos» for the rest (sprint 42 día 1, David's adjustment 1b).
+   */
+  fix?: string;
 }
 
 /**
@@ -141,6 +223,7 @@ function headerDestination(
     slot: "action",
     role: "button",
     text: "",
+    href: "",
   };
   if (action.kind === "section") {
     const owner = doc.pages.find((page) => page.sections.some((s) => s.id === action.sectionId));
@@ -176,11 +259,13 @@ export function listDeadDestinations(doc: RetorikaDocument): DeadDestination[] {
             slot: element.slot,
             role: element.role,
             text: value.label,
+            href: "",
           });
           continue;
         }
         if (value?.kind !== "link") continue;
         if (!isDead(value.href, page.id, links)) continue;
+        const fix = normaliseDestination(value.href);
         dead.push({
           pageId: page.id,
           sectionId: section.id,
@@ -188,11 +273,57 @@ export function listDeadDestinations(doc: RetorikaDocument): DeadDestination[] {
           slot: element.slot,
           role: element.role,
           text: value.text,
+          href: value.href.trim(),
+          // A fix is offered only when the fixed href would pass this very gate; the three shapes
+          // always do (a scheme with something after it), and the check keeps that a fact rather
+          // than a belief.
+          ...(fix !== null && !isDead(fix, page.id, links) ? { fix } : {}),
         });
       }
     }
   }
   return dead;
+}
+
+/**
+ * The document with every dead destination that has a `fix` written as its fix — «Arreglarlos» in
+ * the download gate (sprint 42 día 1). Pure, and the same document back when there is nothing to
+ * fix, so the history can tell a press that changed nothing from one that did. Only the href moves:
+ * the words and the marks of the link are untouched, which is why this writes the value directly
+ * rather than going through `fillSlot`, whose whole-value write is for a slot being created.
+ */
+export function fixDestinations(doc: RetorikaDocument): RetorikaDocument {
+  const fixes = new Map<string, string>();
+  for (const entry of listDeadDestinations(doc)) {
+    if (entry.fix !== undefined) fixes.set(`${entry.sectionId}/${entry.elementId}`, entry.fix);
+  }
+  if (fixes.size === 0) return doc;
+  const fixElement = (sectionId: string, element: ContentElement): ContentElement => {
+    const fix = fixes.get(`${sectionId}/${element.id}`);
+    if (fix !== undefined && element.value?.kind === "link") {
+      return { ...element, value: { ...element.value, href: fix } };
+    }
+    if (element.items) {
+      return {
+        ...element,
+        items: element.items.map((item) => ({
+          ...item,
+          elements: item.elements.map((child) => fixElement(sectionId, child)),
+        })),
+      };
+    }
+    return element;
+  };
+  return {
+    ...doc,
+    pages: doc.pages.map((page) => ({
+      ...page,
+      sections: page.sections.map((section) => ({
+        ...section,
+        content: section.content.map((element) => fixElement(section.id, element)),
+      })),
+    })),
+  };
 }
 
 /**
@@ -261,6 +392,7 @@ function linksMatching(
           slot: element.slot,
           role: element.role,
           text: value.text,
+          href: value.href.trim(),
         });
       }
     }

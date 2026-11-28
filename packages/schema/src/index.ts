@@ -42,10 +42,12 @@ export {
 } from "./conversion.ts";
 export type { DeadDestination } from "./destinations.ts";
 export {
+  fixDestinations,
   hrefForPage,
   listAnchorsTo,
   listDeadDestinations,
   listLinksTo,
+  normaliseDestination,
 } from "./destinations.ts";
 export type {
   BreakpointPatch,

@@ -7,6 +7,7 @@ import {
   type ListItem,
   listDeadDestinations,
   type MarkRun,
+  normaliseDestination,
   type PresetSlot,
   type RetorikaDocument,
   type Role,
@@ -386,7 +387,10 @@ export function fieldCommitFor(row: FieldRow, text: string, href: string): Field
  * the one a cleared «A dónde lleva, si no es la dirección» goes back to. A point the map had is kept.
  */
 export function fieldValueFor(row: FieldRow, text: string, href: string): ContentValue {
-  if (row.kind === "link") return { kind: "link", text, href };
+  // A phone, an address or a domain typed without its scheme is written as the link it was meant
+  // to be (sprint 42 día 1, ADR 0079's note): «612 345 678» → `tel:612345678`. What the schema
+  // does not read is kept as typed, and the row's red note then says it leads nowhere.
+  if (row.kind === "link") return { kind: "link", text, href: normaliseDestination(href) ?? href };
   if (row.kind === "map") {
     const place = href.trim();
     return {

@@ -19,6 +19,7 @@ import {
   type BrandNameSize,
   bindList,
   canFoldPage,
+  type DeadDestination,
   type ElementAddress,
   type EntryField,
   entryCountBlock,
@@ -26,6 +27,7 @@ import {
   findSection,
   fineTrack,
   fineTrackSpan,
+  fixDestinations,
   flattenElements,
   type Header,
   type HeaderAction,
@@ -290,6 +292,8 @@ import { CollectionsPanel } from "./CollectionsPanel.tsx";
 import { DesignPanel } from "./DesignPanel.tsx";
 import {
   ContrastDialog,
+  DeadDestinationsDialog,
+  type DeadRow,
   DownloadWarningDialog,
   FontFilesDialog,
   OverflowDialog,
@@ -312,7 +316,16 @@ import { StylePanel } from "./StylePanel.tsx";
  * Both draw the building screen (`BuildingScreen.tsx`). */
 /** `"busy"` is the shared limit of the two public routes (sprint 29 día 5): not a failure to try
  * again at once, but a minute to wait — and the sentence says which. */
-type DownloadState = "idle" | "preparing" | "downloading" | "error" | "busy";
+/** `"refused"` and `"refusedDead"` (sprint 42 día 1): the server answered 400 — the document, not
+ * the network — and the owner is told so rather than asked to try again. */
+type DownloadState =
+  | "idle"
+  | "preparing"
+  | "downloading"
+  | "error"
+  | "busy"
+  | "refused"
+  | "refusedDead";
 
 /** One key for a (section, element) pair. A `Map` keyed by an object would compare by identity and
  * never hit, and the two ids together are what makes an address unique — element ids are unique
@@ -701,6 +714,7 @@ export function Editor({
   onSetPlacement,
   onShapeElement,
   onSetImageFocus,
+  onFixDestinations,
   onClearPhotoShape,
   onStack,
   onSetMobilePatch,
@@ -888,6 +902,10 @@ export function Editor({
   ) => void;
   /** The point a photograph's crop keeps (ADR 0084, sprint 41 día 5); `undefined` is the middle. */
   onSetImageFocus: (address: ElementAddress, focus: Focus | undefined) => void;
+  /** «Arreglarlos» in the download gate (sprint 42 día 1): every dead destination the schema can
+   * read, written as its link in one step. The editor computes the fixed document itself to run
+   * the gate again at once; this only records the step. */
+  onFixDestinations: () => void;
   /** «Forma original»: a photograph given back the catalog's shape (ADR 0084). */
   onClearPhotoShape: (sectionId: string, elementId: string) => void;
   /** «Traer al frente» / «Enviar atrás» (ADR 0085, sprint 41 día 7). */
@@ -1553,6 +1571,9 @@ export function Editor({
   // selects the section too, and a form sliding in every time someone touches a sentence would
   // be in the way rather than at hand.
   const [fieldsFor, setFieldsFor] = useState<string | null>(null);
+  /** The link whose «A dónde lleva» box «Campos» opens on, from the download gate's «Ir a «Campos»»
+   * (sprint 42 día 1); cleared with the drawer. */
+  const [destinationFocus, setDestinationFocus] = useState<string | null>(null);
   /** Counts presses of the section's «Fondo» verb: each one takes the keyboard to the background
    * block of «Campos» (sprint 40 día 7), whether the panel was open already or not. */
   const [backgroundArrival, setBackgroundArrival] = useState(0);
@@ -1923,6 +1944,7 @@ export function Editor({
    * the panel belongs to.
    */
   function showFields(sectionId: string | null) {
+    if (sectionId === null) setDestinationFocus(null);
     if (sectionId === null && fieldsFor !== null) {
       focusTarget.current = {
         sectionId: fieldsFor,
@@ -10832,7 +10854,7 @@ export function Editor({
     return [...srcs];
   }
 
-  async function download() {
+  async function download(site: RetorikaDocument = doc) {
     setState("downloading");
     // The stages the screen says, each written as it starts (sprint 36 día 4): never by a timer.
     flushSync(() => setBuildingStage("photos"));
@@ -10843,7 +10865,7 @@ export function Editor({
       // src the document carries. The object URL is the handle to the bytes already in memory,
       // so nothing is re-read from storage to build this.
       const form = new FormData();
-      form.set("document", JSON.stringify(doc));
+      form.set("document", JSON.stringify(site));
       for (const src of referencedPhotos()) {
         const url = photoUrls.get(src);
         if (!url) continue;
@@ -10871,6 +10893,17 @@ export function Editor({
       if (response.status === 429) {
         setBuildingStage(null);
         setState("busy");
+        return;
+      }
+      if (response.status === 400) {
+        // A refusal is a fact about the document and retrying cannot change it: said as such,
+        // with the one refusal the owner can meet named by the header the route sets.
+        setBuildingStage(null);
+        setState(
+          response.headers.get("X-Retorika-Refusal") === "dead-destination"
+            ? "refusedDead"
+            : "refused",
+        );
         return;
       }
       if (!response.ok) throw new Error(`download failed: ${response.status}`);
@@ -10922,7 +10955,13 @@ export function Editor({
    * photograph off disk, which is what happens immediately afterwards, and a cached one would be
    * wrong exactly when it matters — after the owner has fixed the thing the dialog named.
    */
-  async function requestDownload(accepted: ReadonlySet<AcceptedWarning> = new Set()) {
+  async function requestDownload(
+    accepted: ReadonlySet<AcceptedWarning> = new Set(),
+    /** The document to judge and send: this render's, or the one «Arreglarlos» just wrote, which
+     * React's state has not caught up with yet (the contrast fix's lesson, below). Not named
+     * `document`: `download` builds an anchor with the global of that name. */
+    site: RetorikaDocument = doc,
+  ) {
     // The building screen from the press, so the measurement — the longest phase, and until
     // 13 October 2026 the one with no signal at all — is covered too.
     buildingStartedAt.current = performance.now();
@@ -10930,10 +10969,10 @@ export function Editor({
     // Each stage is on screen before it starts, not when React next renders: `flushSync` commits
     // the line, then the stage runs. The walk measures the line against the request it names.
     flushSync(() => setBuildingStage("measuring"));
-    const overflow = await measureOverflow(doc, { hostDocument: window.document, fontUrls });
+    const overflow = await measureOverflow(site, { hostDocument: window.document, fontUrls });
     const gate = downloadGateFor(
-      countPhotos(doc),
-      doc,
+      countPhotos(site),
+      site,
       accepted,
       overflow,
       failedSamples,
@@ -10941,7 +10980,7 @@ export function Editor({
       logoLuminance,
     );
     if (gate.kind === "ready") {
-      void download();
+      void download(site);
       return;
     }
     setBuildingStage(null);
@@ -10950,6 +10989,84 @@ export function Editor({
     setState("idle");
     setAcceptedWarnings(accepted);
     setDownloadDialog(gate);
+  }
+
+  /**
+   * «Arreglarlos» (sprint 42 día 1): the fixed document is computed here, recorded as one step by
+   * the history, and judged again at once — `doc` is this render's value and would still carry
+   * the dead hrefs, the same trap `restoreThemeColour` names below.
+   */
+  function fixDeadDestinations() {
+    const fixed = fixDestinations(doc);
+    onFixDestinations();
+    setDownloadDialog(null);
+    void requestDownload(acceptedWarnings, fixed);
+  }
+
+  /** «Ir a «Campos»» on a dead button the schema cannot read: the drawer of its section, with the
+   * keyboard in its «A dónde lleva» box. The header's own button lives in «Menú». */
+  function goToDeadDestination(row: DeadRow) {
+    setDownloadDialog(null);
+    if (row.sectionId === "header") {
+      showRail("menu");
+      return;
+    }
+    setDestinationFocus(row.elementId);
+    showFields(row.sectionId);
+  }
+
+  /** A dead button as the dialog says it: its words and its section (and page, when there is more
+   * than one), then what it leads to — or, for one the schema reads, what it will lead to. */
+  function deadRowOf(entry: DeadDestination): DeadRow {
+    const key = `${entry.sectionId}/${entry.elementId}`;
+    const base = { key, sectionId: entry.sectionId, elementId: entry.elementId };
+    if (entry.sectionId === "header") {
+      return { ...base, where: es["editor.download.dead.header"], detail: "" };
+    }
+    const section = sectionDisplayName(doc, entry.sectionId);
+    const page = doc.pages.find((candidate) => candidate.id === entry.pageId)?.title ?? "";
+    const where = (
+      doc.pages.length > 1
+        ? es["editor.download.dead.wherePage"].replace("{page}", page)
+        : es["editor.download.dead.where"]
+    )
+      .replace("{button}", entry.text)
+      .replace("{section}", section);
+    if (entry.role === "map") {
+      return {
+        ...base,
+        where: es["editor.download.dead.map"]
+          .replace("{button}", entry.text)
+          .replace("{section}", section),
+        detail: "",
+      };
+    }
+    const fix = entry.fix;
+    if (fix !== undefined) {
+      const scheme = fix.startsWith("tel:")
+        ? "tel"
+        : fix.startsWith("mailto:")
+          ? "mailto"
+          : "https";
+      const value = fix.slice(fix.indexOf(":") + 1).replace(/^\/\//, "");
+      return {
+        ...base,
+        where,
+        detail: es[`editor.download.dead.fixTo.${scheme}`]
+          .replace("{href}", entry.href)
+          .replace("{number}", value)
+          .replace("{address}", value)
+          .replace("{url}", value),
+      };
+    }
+    return {
+      ...base,
+      where,
+      detail:
+        entry.href === ""
+          ? es["editor.download.dead.empty"]
+          : es["editor.download.dead.written"].replace("{href}", entry.href),
+    };
   }
 
   /** Going past one warning asks the gate again rather than downloading, so a site with two things
@@ -11117,6 +11234,15 @@ export function Editor({
               fromAccount={fontsFromAccount}
               onDownloadAnyway={() => acceptAndContinue("fonts")}
               onCancel={() => setDownloadDialog(null)}
+            />
+          ) : null}
+          {downloadDialog?.kind === "deadDestinations" ? (
+            <DeadDestinationsDialog
+              fixable={downloadDialog.fixable.map(deadRowOf)}
+              unfixable={downloadDialog.unfixable.map(deadRowOf)}
+              onFix={fixDeadDestinations}
+              onGoToFields={goToDeadDestination}
+              onClose={() => setDownloadDialog(null)}
             />
           ) : null}
           {downloadDialog?.kind === "theme" ? (
@@ -11352,6 +11478,7 @@ export function Editor({
             // replacing too — so the marks arrive measured rather than guessed, exactly as they do
             // from the canvas. Absent still means the diff, the documented floor (ADR 0027 §4b).
             onEditText={onEditText}
+            focusDestinationOf={destinationFocus}
             onClose={() => showFields(null)}
             footer={(() => {
               // The section's background with motifs (ADR 0081): the same block as the site's, for
